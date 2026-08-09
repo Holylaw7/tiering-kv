@@ -2,6 +2,11 @@
 
 状态：Accepted（对应 ADR-0001 / ADR-0002 / ADR-0003）
 
+> 本文档为架构总览；分主题架构见
+> [storage-architecture.md](storage-architecture.md)、
+> [network-architecture.md](network-architecture.md)、
+> [concurrency-model.md](concurrency-model.md)。
+
 ## 1. 架构目标
 
 - 分层清晰、接口优先、依赖单向；

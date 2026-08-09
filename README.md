@@ -70,33 +70,65 @@ Bloom Filter、Memory Pool。
 
 ```text
 tiering-kv/
-├── .codex/
-│   ├── MASTER_PROMPT.md       # Codex 主控提示词（核心）
-│   ├── DEVELOPMENT_RULES.md   # 开发规范
-│   └── AGENT_CONTEXT.md       # 项目长期上下文
+├── .codex/                              # AI Agent 工程控制中心
+│   ├── MASTER_PROMPT.md                 # Agent 最高规则
+│   ├── DEVELOPMENT_RULES.md             # 开发规范
+│   ├── AGENT_CONTEXT.md                 # 当前项目状态
+│   ├── CODE_REVIEW_RULES.md             # AI 代码审查规则
+│   ├── RELEASE_RULES.md                 # 发布流程
+│   └── tasks/                           # 阶段任务文件
+│       ├── phase0-init.md
+│       ├── phase1-protocol.md
+│       ├── phase2-storage.md
+│       ├── phase3-cache.md
+│       └── phase4-benchmark.md
+│
 ├── docs/
-│   ├── requirements/          # 需求文档
-│   ├── architecture/          # 架构文档
-│   ├── adr/                   # 架构决策记录（ADR）
-│   ├── design/                # 详细设计
-│   ├── benchmark/             # 性能测试报告
-│   └── review/                # 评审记录
-├── src/                       # 主代码（src/main/java）
-├── tests/                     # 集成测试
-├── benchmarks/                # 压力 / 性能测试
-├── scripts/                   # 构建、部署脚本（原规范保留）
-├── config/                    # 运行时配置（原规范保留）
-├── pom.xml                    # Maven 构建（原规范保留）
+│   ├── requirements/                    # 需求（requirements + acceptance）
+│   ├── architecture/                    # 架构设计（overview / storage / network / concurrency）
+│   ├── adr/                             # 架构决策记录（ADR-0001 ~ 0005）
+│   ├── design/                          # 详细设计（protocol / memory / lsm / bitcask / eviction）
+│   ├── benchmark/                       # 性能报告（计划 + 报告占位）
+│   ├── review/                          # 技术评审
+│   └── operations/                      # 运维文档
+│
+├── src/
+│   ├── main/                            # 模块骨架：network / protocol / command / storage / cache / scheduler / memorypool / metrics / config
+│   └── test/
+│
+├── tests/                               # 自动化测试（unit / integration / stress / chaos）
+│
+├── benchmarks/                          # 性能测试（throughput / latency / memory / migration）
+│
+├── scripts/                             # 工程脚本（build / benchmark / stress-test / release）
+│
+├── config/                              # 配置（tiering-kv.yaml / benchmark.yaml）
+│
+├── examples/                            # 使用示例
+│
+├── tools/                               # 开发工具（profiler / analyzer）
+│
+├── .github/workflows/                   # CI/CD（build / test / benchmark）
+│
 ├── README.md
 ├── ROADMAP.md
-└── CHANGELOG.md
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── LICENSE
+└── .gitignore
 ```
+
+> `pom.xml`（Maven 构建）按最初目录规范保留；`src/main/<module>` 为框架骨架目录，
+> Java 代码落地时映射到 `src/main/java/io/tieringkv/<module>/`（TD-004）。
 
 ## Codex 工程控制文件
 
 - [MASTER_PROMPT.md](.codex/MASTER_PROMPT.md)：主控提示词，定义角色、目标与流程。
 - [DEVELOPMENT_RULES.md](.codex/DEVELOPMENT_RULES.md)：开发规范（ADR / Git / TDD / 安全机制）。
 - [AGENT_CONTEXT.md](.codex/AGENT_CONTEXT.md)：项目长期上下文，每次会话先读取。
+- [CODE_REVIEW_RULES.md](.codex/CODE_REVIEW_RULES.md)：代码审查规则与门禁。
+- [RELEASE_RULES.md](.codex/RELEASE_RULES.md)：发布流程（SemVer + tag + 回归门禁）。
+- [tasks/](.codex/tasks/)：阶段任务文件（phase0–phase4）。
 
 ## 开发流程
 
@@ -123,11 +155,19 @@ build / chore），每个阶段至少一次语义化提交。
 
 ## 文档
 
-- 需求：[requirements.md](docs/requirements/requirements.md)
-- 架构：[architecture.md](docs/architecture/architecture.md)
+- 需求：[requirements.md](docs/requirements/requirements.md) /
+  [acceptance.md](docs/requirements/acceptance.md)
+- 架构：[overview.md](docs/architecture/overview.md) 与
+  [storage](docs/architecture/storage-architecture.md) /
+  [network](docs/architecture/network-architecture.md) /
+  [concurrency](docs/architecture/concurrency-model.md)
+- 设计：[docs/design/](docs/design/)（protocol / memory / lsm / bitcask / eviction）
+- Benchmark：[benchmark-plan.md](docs/benchmark/benchmark-plan.md)，报告 Phase 9 填充
+- 评审：[docs/review/](docs/review/)；运维：[docs/operations/](docs/operations/)
 - 路线图：[ROADMAP.md](ROADMAP.md)
 - 变更记录：[CHANGELOG.md](CHANGELOG.md)
-- ADR 索引：[docs/adr/](docs/adr/)
+- ADR 索引：[docs/adr/](docs/adr/)（0001–0005）
+- 贡献：[CONTRIBUTING.md](CONTRIBUTING.md)；License：[LICENSE](LICENSE)
 
 ## 性能目标
 

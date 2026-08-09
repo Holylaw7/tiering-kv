@@ -1,0 +1,6 @@
+# 基准配置骨架（Phase 9 细化）
+connections: [1000, 10000, 100000]
+commands: [set, get, del]
+duration-seconds: 30
+target-p50-ms: 0.5
+memory-reduction-target-pct: [60, 80]

@@ -21,12 +21,14 @@
 
 ## Phase 0 — 工程初始化 ✅
 
-- 交付：Git 仓库（main/develop）、目录骨架、README、ROADMAP、CHANGELOG、
-  Maven 骨架、ADR-0001~0003。
-- 验收：`mvn test` 通过；git 历史含本次语义化提交；ADR 覆盖架构 / 存储 / 并发。
+- 交付：Git 仓库（main/develop）、目录骨架、`.codex/` 工程控制中心、
+  docs 知识库、Maven 骨架、CI 工作流、ADR-0001~0005。
+- 验收：`mvn test` 通过；git 历史为 Conventional Commit；布局与框架标准一致。
 - ADR：[0001](docs/adr/ADR-0001-project-architecture.md)、
-  [0002](docs/adr/ADR-0002-storage-strategy.md)、
-  [0003](docs/adr/ADR-0003-concurrency-model.md)
+  [0002](docs/adr/ADR-0002-storage-engine.md)、
+  [0003](docs/adr/ADR-0003-concurrency-model.md)、
+  [0004](docs/adr/ADR-0004-cache-policy.md)、
+  [0005](docs/adr/ADR-0005-persistence-format.md)
 
 ## Phase 1 — RESP 协议
 
@@ -44,19 +46,21 @@
 
 - 目标：访问采样、LFU 衰减、ARC 自适应列表、冷热判定阈值。
 - 交付：eviction / cache 模块、热度模拟测试。
-- 预计 ADR：淘汰算法选择。
+- ADR：[0004](docs/adr/ADR-0004-cache-policy.md)（已创建，实现阶段细化）。
 
 ## Phase 4 — Bitcask 持久化
 
 - 目标：追加写日志、全量内存索引、崩溃恢复、后台 merge。
 - 交付：wal / storage（BitcaskEngine）、恢复与合并测试。
 - 预计 ADR：WAL 一致性策略。
+- 格式基线：[ADR-0005](docs/adr/ADR-0005-persistence-format.md)。
 
 ## Phase 5 — LSM Tree
 
 - 目标：MemTable → SSTable、层级合并、Bloom Filter。
 - 交付：sstable / compaction 模块、读写放大观测。
 - 预计 ADR：LSM 层级策略与压缩策略。
+- 格式基线：[ADR-0005](docs/adr/ADR-0005-persistence-format.md)。
 
 ## Phase 6 — 冷热迁移
 
@@ -79,7 +83,8 @@
 ## Phase 9 — Benchmark
 
 - 目标：1k / 10k / 100k 连接、P50/P95/P99、内存对比 Redis。
-- 交付：benchmarks/ 压测套件与 docs/benchmark/ 报告。
+- 交付：benchmarks/ 压测套件与 docs/benchmark/ 报告（计划见
+  [benchmark-plan.md](docs/benchmark/benchmark-plan.md)）。
 
 ## Phase 10 — 生产化完善
 

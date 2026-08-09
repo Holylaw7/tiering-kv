@@ -82,3 +82,17 @@ README.md → ROADMAP.md → CHANGELOG.md → docs/adr/ → git log
 ```
 
 确认当前阶段、未完成任务与技术债后继续。
+
+## 10. 代码审查
+
+每次变更须对照 [CODE_REVIEW_RULES.md](CODE_REVIEW_RULES.md) 自审；
+合并 develop / main 前必须通过审查门禁（构建、测试、ADR、文档同步）。
+
+## 11. 发布流程
+
+发布遵循 [RELEASE_RULES.md](RELEASE_RULES.md)：SemVer 版本 + CHANGELOG +
+基准回归 + tag + 合并 main；禁止未验证发布。
+
+## 12. 任务文件
+
+各阶段任务记录于 [tasks/](tasks/)，开始阶段前先阅读对应任务文件并更新状态。

@@ -12,8 +12,9 @@ Bloom Filter、自研 Memory Pool。
 ## 2. 当前状态
 
 - 阶段：**Phase 0（工程初始化）✅ 已完成**；
-- 最近提交：`3f69a98 chore(init): bootstrap Tiering-KV project skeleton (Phase 0)`；
-- 分支：`main` = `develop` = `3f69a98`；tag：`phase-0`；
+- 最近提交：`chore(init): align repository to standardized framework layout`
+  （详见 git log）；
+- 基线提交：`3f69a98`（tag `phase-0`）；分支：`main` 基线稳定、`develop` 集成；
 - 工作树：干净；
 - 下一步：**Phase 1 RESP 协议**（等待用户指令）。
 
@@ -32,25 +33,34 @@ Bloom Filter、自研 Memory Pool。
 | ADR | 决策要点 |
 | --- | --- |
 | [ADR-0001](adr/ADR-0001-project-architecture.md) | Java 17 + Maven 单模块；分层单向依赖；main/develop/feature 分支 |
-| [ADR-0002](adr/ADR-0002-storage-strategy.md) | StorageEngine SPI；Bitcask 先行（Phase 4）、LSM-Tree 演进（Phase 5）；WAL 独立 |
+| [ADR-0002](adr/ADR-0002-storage-engine.md) | StorageEngine SPI；Bitcask 先行（Phase 4）、LSM-Tree 演进（Phase 5）；WAL 独立 |
 | [ADR-0003](adr/ADR-0003-concurrency-model.md) | Netty 事件循环 + key 分片执行 + 分段锁 + 异步迁移；禁止全局锁 |
+| [ADR-0004](adr/ADR-0004-cache-policy.md) | LFU + ARC 混合热度管理 + Bloom Filter 防击穿 |
+| [ADR-0005](adr/ADR-0005-persistence-format.md) | 自定义二进制持久化格式（版本化记录 + CRC32C） |
 
 ## 5. 仓库布局
 
 ```text
 tiering-kv/
-├── .codex/          # MASTER_PROMPT / DEVELOPMENT_RULES / AGENT_CONTEXT
+├── .codex/          # 工程控制中心（规则 + tasks/）
 ├── docs/
-│   ├── requirements/  # requirements.md
-│   ├── architecture/  # architecture.md
-│   ├── adr/           # ADR-0001 ~ 0003
-│   ├── design/        # 详细设计（Phase 2 起）
-│   ├── benchmark/     # 性能报告（Phase 9）
-│   └── review/        # 评审记录
-├── src/  tests/  benchmarks/
-├── scripts/  config/  pom.xml   # 原规范保留的构建/运维设施
-├── README.md  ROADMAP.md  CHANGELOG.md  .gitignore
+│   ├── requirements/  # requirements.md + acceptance.md
+│   ├── architecture/  # overview + storage/network/concurrency
+│   ├── adr/           # ADR-0001 ~ 0005
+│   ├── design/        # protocol/memory/lsm/bitcask/eviction
+│   ├── benchmark/     # 计划 + 报告占位
+│   ├── review/        # 评审记录
+│   └── operations/    # 部署/配置/故障
+├── src/main/          # 模块骨架（network/protocol/command/storage/cache/…）
+├── src/test/  tests/{unit,integration,stress,chaos}/
+├── benchmarks/{throughput,latency,memory,migration}/
+├── scripts/  config/  examples/  tools/  .github/workflows/
+├── pom.xml            # Maven 构建（框架树未列出，保留）
+├── README.md  ROADMAP.md  CHANGELOG.md  CONTRIBUTING.md  LICENSE  .gitignore
 ```
+
+> 注：`src/main/<module>` 为框架骨架目录；Phase 1 落地 Java 代码时映射到 Maven
+> 标准布局 `src/main/java/io/tieringkv/<module>/`（见 TD-004）。
 
 ## 6. Roadmap 状态
 
@@ -75,10 +85,13 @@ tiering-kv/
 | TD-001 | 单 Maven 模块；模块耦合升高时评估拆分多模块 | Phase 7 前评估 |
 | TD-002 | JDK 17 目标暂不采用虚拟线程 | Phase 7 评估 JDK 21 |
 | TD-003 | 尚未引入架构约束测试（ArchUnit） | Phase 1 评估 |
+| TD-004 | src/main 框架骨架目录与 Maven src/main/java 布局的映射 | Phase 1 统一 |
 
 ## 8. 会话启动清单
 
 1. `git status` + `git log --oneline -10`；
 2. 阅读 README.md、ROADMAP.md、CHANGELOG.md；
-3. 阅读 docs/adr/ 目录；
-4. 对照 ROADMAP 与本文档确认当前阶段、未完成任务与技术债。
+3. 阅读 .codex/DEVELOPMENT_RULES.md、.codex/CODE_REVIEW_RULES.md、
+   .codex/RELEASE_RULES.md；
+4. 阅读 docs/adr/ 目录与 .codex/tasks/ 对应任务文件；
+5. 对照 ROADMAP 与本文档确认当前阶段、未完成任务与技术债。

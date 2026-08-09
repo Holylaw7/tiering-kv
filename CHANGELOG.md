@@ -7,14 +7,24 @@
 
 ### Added
 
-- 新增 `.codex/` 工程控制文件：MASTER_PROMPT.md、DEVELOPMENT_RULES.md、
-  AGENT_CONTEXT.md。
-- 新增 docs/requirements/requirements.md、docs/architecture/architecture.md、
-  docs/review/。
+- `.codex/` 工程控制中心：MASTER_PROMPT / DEVELOPMENT_RULES / AGENT_CONTEXT /
+  CODE_REVIEW_RULES / RELEASE_RULES / tasks（phase0–phase4）。
+- docs 知识库：requirements/acceptance、architecture（overview + storage +
+  network + concurrency）、design（protocol/memory/lsm/bitcask/eviction）、
+  benchmark（计划 + 报告占位）、review、operations。
+- src/main 模块骨架（network/protocol/command/storage/cache/scheduler/
+  memorypool/metrics/config）、tests（unit/integration/stress/chaos）、
+  benchmarks（throughput/latency/memory/migration）。
+- 工程设施：scripts（build/benchmark/stress-test/release）、config
+  （tiering-kv.yaml/benchmark.yaml）、examples、tools、.github/workflows
+  （build/test/benchmark）。
+- 根级文档：CONTRIBUTING.md、LICENSE（待定占位）。
+- ADR-0004（缓存策略）、ADR-0005（持久化格式）。
 
 ### Changed
 
-- 目录结构与新布局对齐；ADR-0002 更名为 ADR-0002-storage-strategy.md。
+- 目录结构与标准框架对齐；ADR-0002 更名为 ADR-0002-storage-engine.md；
+  architecture.md 拆分为 overview + 三个分主题架构文档。
 
 ## [0.1.0] - 2026-08-09
 

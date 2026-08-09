@@ -1,0 +1,19 @@
+# Tiering-KV 运行时配置（骨架；键规范 kebab-case）
+server:
+  host: 0.0.0.0
+  port: 6379
+
+storage:
+  engine: memory            # memory | bitcask | lsm（Phase 4/5 启用）
+  data-dir: ./data
+
+memory:
+  max-bytes: 1073741824     # 热层内存配额，默认 1GiB（Phase 2 生效）
+
+cache:
+  policy: lfu+arc           # ADR-0004（Phase 3 生效）
+  sample-window-ms: 100
+
+wal:
+  enabled: false            # Phase 4 启用
+  fsync: everysec           # always | everysec | no
