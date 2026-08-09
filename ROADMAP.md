@@ -8,7 +8,7 @@
 | Phase | 目标 | 状态 |
 | --- | --- | --- |
 | 0 | 工程初始化 | ✅ 完成（2026-08-09） |
-| 1 | RESP 协议 | ⏳ 未开始 |
+| 1 | RESP 协议 | ✅ 完成（2026-08-09） |
 | 2 | 内存 KV 核心 | ⏳ 未开始 |
 | 3 | LFU / ARC 热度管理 | ⏳ 未开始 |
 | 4 | Bitcask 持久化 | ⏳ 未开始 |
@@ -30,11 +30,14 @@
   [0004](docs/adr/ADR-0004-cache-policy.md)、
   [0005](docs/adr/ADR-0005-persistence-format.md)
 
-## Phase 1 — RESP 协议
+## Phase 1 — RESP 协议 ✅
 
 - 目标：RESP2 编解码（SET / GET / DEL / PING / ECHO / EXISTS 等）、协议错误处理。
-- 交付：protocol 模块接口与实现、单元 + 集成测试。
-- 预计 ADR：序列化协议选择（RESP2 vs RESP3）、网络模型细化。
+- 交付：protocol（RespValue / Decoder / Encoder）、command（注册表 + 六命令）、
+  network（Netty TCP 服务）、单元 + 集成 + 延迟冒烟测试（47 用例全绿）。
+- ADR：[0006](docs/adr/ADR-0006-resp-protocol.md)（RESP2）。
+- 基线：本机回环 GET P50=0.064ms / P95=0.151ms / P99=0.216ms
+  （冒烟基准；Phase 9 以 JMH 建立正式基线）。
 
 ## Phase 2 — 内存 KV 核心
 

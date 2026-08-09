@@ -4,7 +4,7 @@
 
 | 编号 | 验收标准 | 验证方式 | 阶段 |
 | --- | --- | --- | --- |
-| FR-01 | redis-cli / redis-benchmark 可完成 SET/GET/DEL/PING/ECHO，错误响应符合 RESP 语义 | 集成测试 | Phase 1 |
+| FR-01 | redis-cli / redis-benchmark 可完成 SET/GET/DEL/PING/ECHO，错误响应符合 RESP 语义 | 集成测试 | Phase 1 ✅ 已完成 |
 | FR-02 | 热数据命中内存、冷数据落盘，读路径自动升热 | 集成测试 + 压测 | Phase 6 |
 | FR-03 | 热度采样/衰减生效，冷热判定符合配置阈值 | 单元测试 + 模拟 | Phase 3 |
 | FR-04 | 迁移期间读写不阻塞、可重试、数据最终一致 | 集成 + 故障注入 | Phase 6 |

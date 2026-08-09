@@ -2,7 +2,7 @@
 
 > Mini Redis 冷热分层存储引擎 —— 兼容 Redis RESP 协议的高性能键值存储系统。
 
-**阶段状态：Phase 0（工程初始化）✅**
+**阶段状态：Phase 1（RESP 协议）✅（Phase 0 工程初始化 ✅）**
 
 ## 项目定位
 
@@ -64,7 +64,7 @@ Bloom Filter、Memory Pool。
 | 语言 | Java 17（LTS，`maven.compiler.release=17`） |
 | 构建 | Maven 3.9+（pom.xml） |
 | 测试 | JUnit 5（单元） + 集成测试（tests/） + JMH 压力测试（benchmarks/） |
-| 网络 | Netty 事件循环模型（Phase 1 引入，见 ADR-0003） |
+| 网络 | Netty 4.1 事件循环模型（已引入，ADR-0003 / ADR-0006） |
 
 ## 目录结构
 
@@ -179,8 +179,10 @@ build / chore），每个阶段至少一次语义化提交。
 
 ## 快速开始
 
-当前为 Phase 0 骨架，尚无可用服务端；可执行构建验证：
-
 ```bash
-mvn test
+mvn test                  # 单元 + 集成 + 延迟冒烟测试（47 个用例）
+mvn -q exec:java          # 启动服务，默认 0.0.0.0:6379
+redis-cli -p 6379         # PING / ECHO / SET / GET / DEL / EXISTS
 ```
+
+当前支持命令：PING / ECHO / SET / GET / DEL / EXISTS（Phase 1，RESP2）。
