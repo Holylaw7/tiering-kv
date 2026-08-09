@@ -9,14 +9,15 @@ RESP 协议兼容、内存 + 磁盘冷热分层、LFU/ARC 热度管理、异步�
 Bitcask/LSM 持久化、高并发网络、mmap 零拷贝、分段锁/无锁、
 Bloom Filter、自研 Memory Pool。
 
+Phase 1 已交付命令：PING / ECHO / SET / GET / DEL / EXISTS（RESP2）。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 0（工程初始化）✅ 已完成**；
-- 最近提交：`chore(init): align repository to standardized framework layout`
-  （详见 git log）；
-- 基线提交：`3f69a98`（tag `phase-0`）；分支：`main` 基线稳定、`develop` 集成；
-- 工作树：干净；
-- 下一步：**Phase 1 RESP 协议**（等待用户指令）。
+- 阶段：**Phase 1（RESP 协议）✅ 已完成**（Phase 0 ✅）；
+- 最近提交：`feat(protocol): implement RESP2 protocol, commands and Netty
+  server (Phase 1)`（详见 git log）；
+- 基线：tag `phase-0`；分支策略：feature/* 合并入 develop，main 保持稳定；
+- 下一步：**Phase 2 内存 KV 核心**（等待用户指令）。
 
 ## 3. 技术栈
 
@@ -25,7 +26,7 @@ Bloom Filter、自研 Memory Pool。
 | 语言 | Java 17（LTS，`maven.compiler.release=17`） |
 | 构建 | Maven 3.9+（pom.xml，单模块起步） |
 | 测试 | JUnit 5（单元）；tests/（集成）；benchmarks/（JMH 压测） |
-| 网络 | Netty 事件循环（Phase 1 引入） |
+| 网络 | Netty 4.1.115 事件循环（已引入，ADR-0006） |
 | 包结构 | `io.tieringkv.{network,protocol,command,storage,memory,cache,eviction,wal,sstable,compaction,scheduler,metrics,benchmark}` |
 
 ## 4. 关键决策（ADR）
@@ -37,6 +38,7 @@ Bloom Filter、自研 Memory Pool。
 | [ADR-0003](adr/ADR-0003-concurrency-model.md) | Netty 事件循环 + key 分片执行 + 分段锁 + 异步迁移；禁止全局锁 |
 | [ADR-0004](adr/ADR-0004-cache-policy.md) | LFU + ARC 混合热度管理 + Bloom Filter 防击穿 |
 | [ADR-0005](adr/ADR-0005-persistence-format.md) | 自定义二进制持久化格式（版本化记录 + CRC32C） |
+| [ADR-0006](adr/ADR-0006-resp-protocol.md) | RESP2 线上协议；inline 兼容；Phase 1 连接内同步执行 |
 
 ## 5. 仓库布局
 
@@ -67,7 +69,7 @@ tiering-kv/
 | Phase | 目标 | 状态 |
 | --- | --- | --- |
 | 0 | 工程初始化 | ✅ |
-| 1 | RESP 协议 | 未开始 |
+| 1 | RESP 协议 | ✅ |
 | 2 | 内存 KV 核心 | 未开始 |
 | 3 | LFU / ARC | 未开始 |
 | 4 | Bitcask | 未开始 |
@@ -85,7 +87,7 @@ tiering-kv/
 | TD-001 | 单 Maven 模块；模块耦合升高时评估拆分多模块 | Phase 7 前评估 |
 | TD-002 | JDK 17 目标暂不采用虚拟线程 | Phase 7 评估 JDK 21 |
 | TD-003 | 尚未引入架构约束测试（ArchUnit） | Phase 1 评估 |
-| TD-004 | src/main 框架骨架目录与 Maven src/main/java 布局的映射 | Phase 1 统一 |
+| TD-004 | src/main 框架骨架目录与 Maven src/main/java 布局的映射 | ✅ 已关闭（Phase 1） |
 
 ## 8. 会话启动清单
 

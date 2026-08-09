@@ -51,3 +51,17 @@
 - RESP2 vs RESP3 选择；
 - WAL fsync 一致性级别；
 - 冷热迁移触发阈值与采样窗口。
+
+## 7. Phase 1 命令集（已交付）
+
+| 命令 | 语义 | 参数错误行为 |
+| --- | --- | --- |
+| PING | 无参返回 PONG；一参回显 bulk | 超一参报错 |
+| ECHO | 回显参数 | 非一参报错 |
+| SET key value | 写入，返回 OK | 非两参报错 |
+| GET key | 读值，未命中返回 nil bulk | 非一参报错 |
+| DEL key... | 返回实际删除数量 | 零参报错 |
+| EXISTS key... | 返回存在的键数量 | 零参报错 |
+
+未知命令返回 `ERR unknown command '<name>'`；命令名大小写不敏感；
+键与值为二进制安全。TTL / EX / PX 等参数在 Phase 2 引入。
