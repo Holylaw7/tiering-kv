@@ -25,7 +25,7 @@
   Maven 骨架、ADR-0001~0003。
 - 验收：`mvn test` 通过；git 历史含本次语义化提交；ADR 覆盖架构 / 存储 / 并发。
 - ADR：[0001](docs/adr/ADR-0001-project-architecture.md)、
-  [0002](docs/adr/ADR-0002-storage-engine-strategy.md)、
+  [0002](docs/adr/ADR-0002-storage-strategy.md)、
   [0003](docs/adr/ADR-0003-concurrency-model.md)
 
 ## Phase 1 — RESP 协议

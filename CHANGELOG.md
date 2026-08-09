@@ -3,6 +3,19 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Added
+
+- 新增 `.codex/` 工程控制文件：MASTER_PROMPT.md、DEVELOPMENT_RULES.md、
+  AGENT_CONTEXT.md。
+- 新增 docs/requirements/requirements.md、docs/architecture/architecture.md、
+  docs/review/。
+
+### Changed
+
+- 目录结构与新布局对齐；ADR-0002 更名为 ADR-0002-storage-strategy.md。
+
 ## [0.1.0] - 2026-08-09
 
 ### Added

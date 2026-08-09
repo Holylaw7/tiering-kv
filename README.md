@@ -70,22 +70,33 @@ Bloom Filter、Memory Pool。
 
 ```text
 tiering-kv/
+├── .codex/
+│   ├── MASTER_PROMPT.md       # Codex 主控提示词（核心）
+│   ├── DEVELOPMENT_RULES.md   # 开发规范
+│   └── AGENT_CONTEXT.md       # 项目长期上下文
 ├── docs/
-│   ├── requirements/   # 需求文档（Phase 1 填充）
-│   ├── architecture/   # 架构文档
-│   ├── adr/            # 架构决策记录（ADR）
-│   ├── design/         # 详细设计
-│   └── benchmark/      # 性能测试报告
-├── src/                # 主代码（src/main/java）
-├── tests/              # 集成测试
-├── benchmarks/         # 压力 / 性能测试
-├── scripts/            # 构建、部署脚本
-├── config/             # 运行时配置
-├── pom.xml
+│   ├── requirements/          # 需求文档
+│   ├── architecture/          # 架构文档
+│   ├── adr/                   # 架构决策记录（ADR）
+│   ├── design/                # 详细设计
+│   ├── benchmark/             # 性能测试报告
+│   └── review/                # 评审记录
+├── src/                       # 主代码（src/main/java）
+├── tests/                     # 集成测试
+├── benchmarks/                # 压力 / 性能测试
+├── scripts/                   # 构建、部署脚本（原规范保留）
+├── config/                    # 运行时配置（原规范保留）
+├── pom.xml                    # Maven 构建（原规范保留）
 ├── README.md
 ├── ROADMAP.md
 └── CHANGELOG.md
 ```
+
+## Codex 工程控制文件
+
+- [MASTER_PROMPT.md](.codex/MASTER_PROMPT.md)：主控提示词，定义角色、目标与流程。
+- [DEVELOPMENT_RULES.md](.codex/DEVELOPMENT_RULES.md)：开发规范（ADR / Git / TDD / 安全机制）。
+- [AGENT_CONTEXT.md](.codex/AGENT_CONTEXT.md)：项目长期上下文，每次会话先读取。
 
 ## 开发流程
 
@@ -112,6 +123,8 @@ build / chore），每个阶段至少一次语义化提交。
 
 ## 文档
 
+- 需求：[requirements.md](docs/requirements/requirements.md)
+- 架构：[architecture.md](docs/architecture/architecture.md)
 - 路线图：[ROADMAP.md](ROADMAP.md)
 - 变更记录：[CHANGELOG.md](CHANGELOG.md)
 - ADR 索引：[docs/adr/](docs/adr/)
