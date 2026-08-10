@@ -18,7 +18,7 @@ public final class FlushManager {
     private FlushManager() {
     }
 
-    public record FlushStats(long entriesFlushed, long entriesRemaining) {
+    public record FlushStats(long entriesFlushed, long bytesFlushed, long entriesRemaining) {
     }
 
     public static FlushStats flush(MemTable memTable, WALManager wal, ColdStorageEngine cold)
@@ -30,9 +30,13 @@ public final class FlushManager {
             }
         }
         if (snapshot.isEmpty()) {
-            return new FlushStats(0, memTable.size());
+            return new FlushStats(0, 0, memTable.size());
         }
         cold.writeTable(snapshot);
+        long bytesFlushed = 0;
+        for (KeyValueEntry entry : snapshot) {
+            bytesFlushed += entry.size();
+        }
         long removed = 0;
         for (KeyValueEntry entry : snapshot) {
             if (memTable.removePhysicalIfVersion(entry.key(), entry.version())) {
@@ -40,6 +44,6 @@ public final class FlushManager {
             }
         }
         wal.checkpoint(memTable);
-        return new FlushStats(snapshot.size(), memTable.size());
+        return new FlushStats(snapshot.size(), bytesFlushed, memTable.size());
     }
 }
