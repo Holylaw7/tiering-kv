@@ -54,18 +54,28 @@ Phase 11 已交付：分布式集群基础——16384 hash slot 路由（CRC16/C
 （不改存储核心）、ClusterNode/ClusterClient、3 节点集成与故障转移测试
 （51 项新测试）、集群基准（复制写 154K ops/s、选举 ≤310ms）。
 
+Phase 12 已交付：分布式生产化——RaftLog 文件分段持久化（CRC32C +
+SYNC/ASYNC/NONE + 尾部截断恢复）、RaftPersistentState（term/votedFor/
+commitIndex）、SnapshotManager（自动压缩 + InstallSnapshot + 重启重放）、
+Netty TCP RPC（RpcServer/RpcClient/RpcCodec/RequestId，连接复用 +
+超时 + 幂等重试）、CommitNotifier 复制优化（滞后 13–35ms → <1ms）、
+Slot 在线迁移（checkpoint 续传 + CRC 校验 + 原子切换）、3 节点真实
+TCP 集群集成（故障转移 + 重启恢复）。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 11（Distributed Cluster）✅ 已完成**（Phase 0–10 全部完成）；
-- 最近提交：Phase 11 集群实现（详见 git log）；
+- 阶段：**Phase 12（Distributed Productionization）✅ 已完成**
+  （Phase 0–11 全部完成）；
+- 最近提交：Phase 12 分布式生产化（详见 git log）；
 - 基线：tag `phase-0`；分支策略：feature/* 合并入 develop，main 保持稳定；
-- 下一步：Raft 日志持久化 + TCP RPC 传输 + 动态 slot 迁移（Phase 12，
-  等待用户指令）。
+- 下一步：批量/并行复制、迁移单次迭代游标、RPC TLS、元数据 Raft 化
+  （Phase 13，等待用户指令）。
 
-项目里程碑：**11 阶段路线图全部完成（2026-08-10）**；定位 = 单机完整冷热
-分层存储 + 分布式集群基础（RESP + Async Server + Shard + Memory + LFU +
+项目里程碑：**12 阶段路线图全部完成（2026-08-10）**；定位 = 单机完整冷热
+分层存储 + 分布式生产化（RESP + Async Server + Shard + Memory + LFU +
 WAL + LSM/SSTable + Bloom + Compaction + Migration + mmap + BlockCache +
-Production Runtime + Raft Cluster），能力矩阵全 ✅。
+Production Runtime + Raft 持久化 + TCP RPC + Snapshot + Slot 迁移），
+能力矩阵全 ✅。
 
 ## 3. 技术栈
 
@@ -85,6 +95,7 @@ Production Runtime + Raft Cluster），能力矩阵全 ✅。
 | 生产基准 | 三级基准 + 容量模型 + 部署画像（ADR-0029~0031） |
 | 生产化 | 批处理 + YAML 配置 + Metrics/INFO + 优雅停机（ADR-0032~0034） |
 | 分布式 | 16384 哈希槽路由 + 元数据服务 + 最小 Raft + 复制适配器（ADR-0035~0038） |
+| 分布式生产化 | RaftLog 持久化 + Snapshot + Netty RPC + 复制优化 + Slot 迁移（ADR-0039~0043） |
 | 包结构 | `io.tieringkv.{network,protocol,command,storage,memory,cache,eviction,wal,sstable,compaction,scheduler,metrics,benchmark}` |
 
 ## 4. 关键决策（ADR）
@@ -129,6 +140,11 @@ Production Runtime + Raft Cluster），能力矩阵全 ✅。
 | [ADR-0036](adr/ADR-0036-metadata-service-design.md) | 元数据服务：Raft 化设计（对比 ZK/静态配置） |
 | [ADR-0037](adr/ADR-0037-replication-model.md) | Raft 复制：日志复制 + 多数派提交（对比 async/semi-sync） |
 | [ADR-0038](adr/ADR-0038-failure-detection-strategy.md) | 心跳 + 随机化选举超时（100–180ms）故障检测 |
+| [ADR-0039](adr/ADR-0039-raft-log-storage-format.md) | RaftLog 二进制格式 + 分段 + CRC + SYNC/ASYNC/NONE |
+| [ADR-0040](adr/ADR-0040-raft-snapshot-strategy.md) | Snapshot 压缩 + InstallSnapshot + 重启重放 |
+| [ADR-0041](adr/ADR-0041-distributed-rpc-design.md) | Netty TCP RPC：帧/关联/超时/重试/连接复用 |
+| [ADR-0042](adr/ADR-0042-replication-lag-optimization.md) | CommitNotifier 立即补发，滞后 <5ms |
+| [ADR-0043](adr/ADR-0043-slot-migration-strategy.md) | 在线迁移状态机 + checkpoint 续传 + CRC 校验 |
 
 ## 5. 仓库布局
 
@@ -138,7 +154,7 @@ tiering-kv/
 ├── docs/
 │   ├── requirements/  # requirements.md + acceptance.md
 │   ├── architecture/  # overview + storage/network/concurrency
-│   ├── adr/           # ADR-0001 ~ 0038
+│   ├── adr/           # ADR-0001 ~ 0043
 │   ├── design/        # protocol/memory/lsm/bitcask/eviction
 │   ├── benchmark/     # 计划 + 报告占位
 │   ├── review/        # 评审记录
@@ -170,6 +186,7 @@ tiering-kv/
 | 9 | Benchmark | ✅ |
 | 10 | 生产化完善 | ✅ |
 | 11 | 分布式集群 | ✅ |
+| 12 | 分布式生产化 | ✅ |
 
 ## 7. 技术债
 
@@ -196,10 +213,14 @@ tiering-kv/
 | TD-019 | 生产容量模型（吞吐/延迟/内存/磁盘），替代 IO 微优化 | Phase 9 |
 | TD-020 | request→response 对象数优化（Future/Lambda/Callback 复用 + 批量写） | Phase 10 |
 | TD-021 | JFR allocation / GC 对比作为 Phase 10 优化验收 | Phase 10 |
-| TD-022 | Raft 日志内存态，无磁盘持久化 → Raft Log Store + Snapshot | Phase 12 |
-| TD-023 | Raft 消息进程内直调，无 TCP → RPC 层 + 超时/重试 | Phase 12 |
-| TD-024 | 复制滞后 ≤20ms（心跳周期）→ 提交后立即补发 commitIndex | Phase 12 |
-| TD-025 | 动态重分片（slot 迁移 / 数据搬迁） | Phase 12 |
+| TD-022 | Raft 日志内存态 → 文件分段 RaftLog + 快照 | ✅ 已关闭（Phase 12） |
+| TD-023 | 进程内直调 → Netty TCP RPC + 超时重试 | ✅ 已关闭（Phase 12） |
+| TD-024 | 复制滞后 13–35ms → CommitNotifier 立即补发（<1ms） | ✅ 已关闭（Phase 12） |
+| TD-025 | 动态分片（slot 迁移）→ 在线迁移 + checkpoint | ✅ 已关闭（Phase 12） |
+| TD-026 | 复制为同步串行 propose → 批量/并行 AppendEntries | Phase 13 |
+| TD-027 | 迁移每批重建源快照迭代 → 单次迭代 + 游标 checkpoint | Phase 13 |
+| TD-028 | RPC 无 TLS/认证/限流 | Phase 13 |
+| TD-029 | 元数据服务单机实现 → Raft 化落地 | Phase 13 |
 
 ## 8. 会话启动清单
 
