@@ -90,6 +90,8 @@
 - Phase 7 评审处置：定位升级为「高并发 Redis 协议兼容 LSM 冷热分层 KV
   存储引擎」；登记 TD-015（无锁读暂缓）、TD-016（Phase 9 三级基准）、
   TD-017（动态重分片）、TD-018（Hot Cache version check）。
+- Phase 8 评审处置：能力矩阵 21 项确认；登记 TD-019（Phase 9 生产容量模型，
+  停止 IO 微优化）；cold-cache 冷启动基准保持 TD-009。
 - Phase 8 IO 优化：MmapSSTableReader（零拷贝块读）+ FileChannel baseline、
   MemoryPool（DirectBuffer 大小类池 / BufferArena / BufferRecycler /
   AllocationTracker）、BlockCache（LRU + 池化缓冲 + invalidate/clear）、

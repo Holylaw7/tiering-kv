@@ -137,6 +137,9 @@
 - 目标：1k / 10k / 100k 连接、P50/P95/P99、内存对比 Redis。
 - 交付：benchmarks/ 压测套件与 docs/benchmark/ 报告（计划见
   [benchmark-plan.md](docs/benchmark/benchmark-plan.md)）。
+- 方向（Phase 8 评审）：三级基准 A（内存）/ B（服务端 pipeline 64）/
+  C（生产全链路）+ cold-cache 冷启动（TD-009）+ **生产容量模型**（TD-019）；
+  IO 微优化阶段结束。
 
 ## Phase 10 — 生产化完善
 
@@ -163,3 +166,4 @@
 | TD-016 | Phase 9 三级基准：A 内存 / B 服务端 / C 生产全链路 | ADR-0023 | Phase 9 |
 | TD-017 | 动态重分片（在线扩容） | ADR-0023 | Phase 10 |
 | TD-018 | Hot Cache version check（当前 TTL 兜底） | ADR-0025 | Phase 10 评估 |
+| TD-019 | 生产容量模型（吞吐/延迟/内存/磁盘），替代 IO 微优化 | ADR-0026 | Phase 9 |

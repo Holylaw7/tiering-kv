@@ -160,6 +160,7 @@ tiering-kv/
 | TD-016 | Phase 9 三级基准：A 内存 / B 服务端（pipeline 64）/ C 生产全链路 | Phase 9 |
 | TD-017 | 动态重分片（task migration / routing version / double write） | Phase 10 |
 | TD-018 | Hot Cache 增加 version check（当前 TTL 500ms 兜底） | Phase 10 评估 |
+| TD-019 | 生产容量模型（吞吐/延迟/内存/磁盘），替代 IO 微优化 | Phase 9 |
 
 ## 8. 会话启动清单
 

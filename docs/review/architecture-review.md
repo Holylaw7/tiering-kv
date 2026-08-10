@@ -154,3 +154,31 @@
 9. **能力矩阵（19 项全 ✅）**：定位升级为
    **高并发 Redis 协议兼容 LSM-based 冷热分层 KV 存储引擎**
    （README/AGENT_CONTEXT 已同步）。
+
+## Phase 8 评审结论（2026-08-10）
+
+1. **读取路径合理**：热读 = BlockCache → off-heap 解码（避免文件读取/对象创建/
+   GC）；冷读 = mmap → OS page cache → 延迟加载解码——现代存储系统常用方案。
+2. **ADR-0026 正确**：mmap + FileChannel fallback；mmap 减少用户态复制，
+   benchmark 提升 1.8–2.1× 符合预期。
+3. **MappedByteBuffer 分层清晰**（MappedFile → FileRegion →
+   MmapSSTableReader → BlockDecoder）；未用 Unsafe.invokeCleaner 是正确决定
+   （JVM 版本相关/崩溃风险/module 限制），GC 负责释放映射，工程安全性优先。
+4. **Block Cache 键设计正确**：`{tableId, blockOffset}`，对齐 RocksDB
+   Block Cache / Table Cache / Index Cache 分层思路。
+5. **Off-Heap Memory Pool 为亮点**：MemoryPool → BufferArena →
+   BufferRecycler → AllocationTracker，解决 byte[] 频繁创建与 GC 问题。
+6. **⚠️ page cache 口径**：mmap P99 0.012–0.048ms 为热缓存口径（已注明）；
+   Phase 9 必须补充真实冷启动（TD-009 cold-cache benchmark）。
+7. **Block Cache 效果显著**：命中率 94.8%，热读 P99 0.023–0.025ms
+   （内存级访问范围）。
+8. **IO 瓶颈已迁移**：不再微优化 IO；Phase 9 聚焦 benchmark methodology +
+   network stack + WAL fsync + compaction + **生产容量模型**（TD-019）。
+9. **能力矩阵（21 项全 ✅）**：RESP2/命令/异步命令/Key Sharding/MemTable/
+   TTL/Tombstone/LFU/ARC/WAL/恢复/SSTable/Bloom/Compaction/迁移/水位调度/
+   背压/热点缓存/请求合并/mmap/Block Cache/OffHeap Pool；
+   定位 = **Redis-compatible LSM-based Tiered KV Storage Engine**。
+
+### 技术债（新增）
+
+- TD-019：Phase 9 生产容量模型（吞吐/延迟/内存/磁盘容量模型，替代 IO 微优化）。
