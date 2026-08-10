@@ -135,6 +135,28 @@ class MvccGcPerformanceTest {
         table.close();
     }
 
+    @Test
+    void workerCountProducesIdenticalCollection() {
+        MvccStorageEngine engine = new MvccStorageEngine(MemTable.create());
+        for (int i = 0; i < 800; i++) {
+            for (int v = 1; v <= 15; v++) {
+                engine.putVersion(bytes("k" + i), bytes("v" + v),
+                        v, v * 10, WriteType.PUT);
+            }
+        }
+        BatchGcExecutor workers1 = new BatchGcExecutor(engine,
+                new GcConfig(128, 1, 64L << 20));
+        BatchGcExecutor workers4 = new BatchGcExecutor(engine,
+                new GcConfig(128, 4, 64L << 20));
+        workers1.updateSafePoint(new SafePoint(100));
+        workers4.updateSafePoint(new SafePoint(100));
+        assertThat(workers1.gc().collectedVersions()).isEqualTo(800L * 9);
+        assertThat(workers4.gc().collectedVersions()).isZero(); // 已清空
+        workers1.close();
+        workers4.close();
+        ((MemTable) engine.underlying()).close();
+    }
+
     private static double min(double[] values) {
         return java.util.Arrays.stream(values).min().orElse(0);
     }

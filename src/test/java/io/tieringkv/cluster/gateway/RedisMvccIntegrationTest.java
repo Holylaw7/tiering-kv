@@ -350,6 +350,144 @@ class RedisMvccIntegrationTest {
     }
 
     @Test
+    void getWrongArityRejected() {
+        Fixture fixture = singleShard();
+        assertThat(fixture.gateway.execute("get", List.of()))
+                .isInstanceOf(RespError.class);
+        fixture.close();
+    }
+
+    @Test
+    void delWrongArityRejected() {
+        Fixture fixture = singleShard();
+        assertThat(fixture.gateway.execute("del", List.of(
+                key("a"), key("b")))).isInstanceOf(RespError.class);
+        fixture.close();
+    }
+
+    @Test
+    void mgetEmptyRejected() {
+        Fixture fixture = singleShard();
+        assertThat(fixture.gateway.execute("mget", List.of()))
+                .isInstanceOf(RespError.class);
+        fixture.close();
+    }
+
+    @Test
+    void msetOddArgsRejected() {
+        Fixture fixture = singleShard();
+        assertThat(fixture.gateway.execute("mset", List.of(
+                key("a"), bytes("1"), key("b"))))
+                .isInstanceOf(RespError.class);
+        fixture.close();
+    }
+
+    @Test
+    void unknownCommandRejected() {
+        Fixture fixture = singleShard();
+        assertThat(fixture.gateway.execute("hgetall", List.of(key("k"))))
+                .isInstanceOf(RespError.class);
+        fixture.close();
+    }
+
+    @Test
+    void movedForRemoteKeyInTransactionalMode() {
+        MovedFixture fixture = movedFixture();
+        RespValue response = fixture.gateway.execute("get",
+                List.of(fixture.remoteKey));
+        assertThat(response).isInstanceOf(RespError.class);
+        assertThat(((RespError) response).message()).startsWith("MOVED");
+        ((MemTable) fixture.mvcc.underlying()).close();
+    }
+
+    @Test
+    void mgetWithRemoteKeyReturnsMoved() {
+        MovedFixture fixture = movedFixture();
+        RespValue response = fixture.gateway.execute("mget",
+                List.of(fixture.localKey, fixture.remoteKey));
+        assertThat(response).isInstanceOf(RespError.class);
+        assertThat(((RespError) response).message()).startsWith("MOVED");
+        ((MemTable) fixture.mvcc.underlying()).close();
+    }
+
+    @Test
+    void msetWithRemoteKeyReturnsMoved() {
+        MovedFixture fixture = movedFixture();
+        RespValue response = fixture.gateway.execute("mset", List.of(
+                fixture.localKey, bytes("1"), fixture.remoteKey, bytes("2")));
+        assertThat(response).isInstanceOf(RespError.class);
+        assertThat(((RespError) response).message()).startsWith("MOVED");
+        assertThat(fixture.mvcc.latestValue(fixture.localKey)).isNull();
+        ((MemTable) fixture.mvcc.underlying()).close();
+    }
+
+    @Test
+    void getAfterCommitVisibleImmediately() {
+        Fixture fixture = singleShard();
+        RespValue set = fixture.gateway.execute("set",
+                List.of(key("k"), bytes("v")));
+        assertThat(set).isEqualTo(new RespSimpleString("OK"));
+        RespValue get = fixture.gateway.execute("get", List.of(key("k")));
+        assertThat(((RespBulkString) get).bytes()).isEqualTo(bytes("v"));
+        fixture.close();
+    }
+
+    @Test
+    void midTransactionMgetHidesUncommitted() {
+        Fixture fixture = singleShard();
+        fixture.gateway.execute("set", List.of(key("a"), bytes("1")));
+        // 手动构造 a 的悬挂锁：mget 必须看到 a=null、b=已提交
+        new PrewriteExecutor().prewrite(fixture.mvcc, fixture.locks,
+                key("a"), bytes("pending"), false,
+                "other-txn", key("a"), 4_000_000_000_000_000_000L, 60_000,
+                System.currentTimeMillis(), java.util.Set.of());
+        fixture.gateway.execute("set", List.of(key("b"), bytes("2")));
+        RespValue response = fixture.gateway.execute("mget",
+                List.of(key("a"), key("b")));
+        List<RespValue> values = ((io.tieringkv.protocol.RespArray) response).values();
+        // 悬挂锁只隐藏“未提交的新值”，已提交旧值仍可见（快照读语义）
+        assertThat(((RespBulkString) values.get(0)).bytes()).isEqualTo(bytes("1"));
+        assertThat(((RespBulkString) values.get(1)).bytes()).isEqualTo(bytes("2"));
+        fixture.close();
+    }
+
+    @Test
+    void legacyInfoWithoutTransactionSections() {
+        MemTable table = MemTable.create();
+        RedisClusterGateway legacy = new RedisClusterGateway(1,
+                Map.of(0, "n1"), Map.of("n1", table),
+                Map.of("n1", new InetSocketAddress("127.0.0.1", 7001)), "n1");
+        RespValue response = legacy.execute("info", List.of());
+        String info = new String(((RespBulkString) response).bytes(),
+                StandardCharsets.UTF_8);
+        assertThat(info).contains("# Server");
+        assertThat(info).doesNotContain("# Transaction");
+        assertThat(info).doesNotContain("# MVCC");
+        table.close();
+    }
+
+    @Test
+    void transactionInfoHasLockCount() {
+        Fixture fixture = singleShard();
+        RespValue response = fixture.gateway.execute("info", List.of());
+        String info = new String(((RespBulkString) response).bytes(),
+                StandardCharsets.UTF_8);
+        assertThat(info).contains("lock_count:0");
+        fixture.close();
+    }
+
+    @Test
+    void deleteThenMgetNull() {
+        Fixture fixture = singleShard();
+        fixture.gateway.execute("set", List.of(key("k"), bytes("v")));
+        fixture.gateway.execute("del", List.of(key("k")));
+        RespValue response = fixture.gateway.execute("mget", List.of(key("k")));
+        List<RespValue> values = ((io.tieringkv.protocol.RespArray) response).values();
+        assertThat(values.get(0)).isEqualTo(RespNull.BULK_STRING);
+        fixture.close();
+    }
+
+    @Test
     void locksReleasedAfterCommit() {
         Fixture fixture = singleShard();
         fixture.gateway.execute("set", List.of(key("k"), bytes("v")));
@@ -428,6 +566,32 @@ class RedisMvccIntegrationTest {
         return Math.min(1, (int) ((long) slot * 2 / HashSlotRouter.SLOT_COUNT));
     }
 
+    /** 两节点网关：shard1 由 n2 持有 → 非本地键返回 MOVED。 */
+    private static MovedFixture movedFixture() {
+        TimestampOracle oracle = new TimestampOracle();
+        MvccStorageEngine mvcc = new MvccStorageEngine(MemTable.create());
+        LockTable locks = new LockTable();
+        AutoTransactionExecutor executor = new AutoTransactionExecutor(oracle,
+                new HybridLogicalClock(), new TransactionCoordinator(oracle, 60_000),
+                ignored -> new AutoTransactionExecutor.Participant("r0", mvcc, locks));
+        RedisClusterGateway gateway = new RedisClusterGateway(2,
+                Map.of(0, "n1", 1, "n2"), Map.of("n1", mvcc.underlying()),
+                Map.of("n1", new InetSocketAddress("127.0.0.1", 7001),
+                        "n2", new InetSocketAddress("127.0.0.1", 7002)),
+                "n1", executor, new GatewayMetricsRegistry());
+        byte[] local = null;
+        byte[] remote = null;
+        for (int i = 0; i < 10_000 && (local == null || remote == null); i++) {
+            byte[] candidate = key("moved:" + i);
+            if (shardOf(candidate) == 0 && local == null) {
+                local = candidate;
+            } else if (shardOf(candidate) == 1 && remote == null) {
+                remote = candidate;
+            }
+        }
+        return new MovedFixture(gateway, mvcc, local, remote);
+    }
+
     private static byte[] key(String value) {
         return bytes("gw:" + value);
     }
@@ -440,7 +604,25 @@ class RedisMvccIntegrationTest {
                            LockTable locks, MvccStorageEngine mvcc0,
                            MvccStorageEngine mvcc1, LockTable locks0,
                            LockTable locks1, byte[] shard0Key,
-                           byte[] shard1Key, GatewayMetricsRegistry gatewayMetrics) {
+                           byte[] shard1Key, GatewayMetricsRegistry gatewayMetrics)
+            implements AutoCloseable {
+        @Override
+        public void close() {
+            if (mvcc != null) {
+                ((MemTable) mvcc.underlying()).close();
+            }
+            if (mvcc0 != null) {
+                ((MemTable) mvcc0.underlying()).close();
+            }
+            if (mvcc1 != null) {
+                ((MemTable) mvcc1.underlying()).close();
+            }
+        }
+    }
+
+    private record MovedFixture(RedisClusterGateway gateway,
+                                MvccStorageEngine mvcc, byte[] localKey,
+                                byte[] remoteKey) {
     }
 
     /** 始终失败的底层存储：模拟 leader 故障导致 prewrite 失败。 */

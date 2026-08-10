@@ -322,6 +322,17 @@ class TxnReplayTest {
         fixture.close();
     }
 
+    @Test
+    void emptyMutationsRecordRoundTrip() {
+        TxnStateRecord record = record("t1", TxnStateRecord.State.PREWRITE,
+                1, 0, List.of());
+        TxnStateRecord decoded = PersistentTxnJournal.decode(
+                PersistentTxnJournal.encode(record));
+        assertThat(decoded.txnId()).isEqualTo("t1");
+        assertThat(decoded.mutations()).isEmpty();
+        assertThat(decoded.primary()).isEmpty();
+    }
+
     // ---------- helpers ----------
 
     private Fixture fixture() throws Exception {

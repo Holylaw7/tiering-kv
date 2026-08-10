@@ -2,8 +2,11 @@ package io.tieringkv.mvcc.gc;
 
 import io.tieringkv.mvcc.MvccGcManager;
 import io.tieringkv.mvcc.MvccEntry;
+import io.tieringkv.mvcc.LockTable;
 import io.tieringkv.mvcc.MvccStorageEngine;
 import io.tieringkv.mvcc.SafePoint;
+import io.tieringkv.mvcc.TimestampOracle;
+import io.tieringkv.mvcc.Transaction;
 import io.tieringkv.mvcc.WriteType;
 import io.tieringkv.storage.memory.MemTable;
 import org.junit.jupiter.api.Test;
@@ -190,6 +193,116 @@ class MvccGcConcurrencyTest {
         assertThat(metrics.snapshot().safePoint()).isEqualTo(100);
         assertThat(metrics.snapshot().versions()).isEqualTo(100);
         gc.close();
+        ((MemTable) engine.underlying()).close();
+    }
+
+    @Test
+    void parallelWorkersMatchSingleWorkerResult() {
+        MvccStorageEngine parallel = new MvccStorageEngine(MemTable.create());
+        MvccStorageEngine single = new MvccStorageEngine(MemTable.create());
+        for (int i = 0; i < 300; i++) {
+            for (int v = 1; v <= 12; v++) {
+                parallel.putVersion(bytes("k" + i), bytes("v" + v),
+                        v, v * 10, WriteType.PUT);
+                single.putVersion(bytes("k" + i), bytes("v" + v),
+                        v, v * 10, WriteType.PUT);
+            }
+        }
+        BatchGcExecutor parallelGc = new BatchGcExecutor(parallel,
+                new GcConfig(64, 4, 64L << 20));
+        BatchGcExecutor singleGc = new BatchGcExecutor(single,
+                new GcConfig(64, 1, 64L << 20));
+        parallelGc.updateSafePoint(new SafePoint(100));
+        singleGc.updateSafePoint(new SafePoint(100));
+        assertThat(parallelGc.gc().collectedVersions())
+                .isEqualTo(singleGc.gc().collectedVersions());
+        assertThat(parallel.versionCount()).isEqualTo(single.versionCount());
+        parallelGc.close();
+        singleGc.close();
+        ((MemTable) parallel.underlying()).close();
+        ((MemTable) single.underlying()).close();
+    }
+
+    @Test
+    void gcDuringRollbackNoPermanentLock() throws Exception {
+        MvccStorageEngine engine = new MvccStorageEngine(MemTable.create());
+        BatchGcExecutor gc = new BatchGcExecutor(engine, GcConfig.DEFAULT);
+        gc.updateSafePoint(new SafePoint(Long.MAX_VALUE / 2));
+        AtomicBoolean failed = new AtomicBoolean();
+        CountDownLatch start = new CountDownLatch(1);
+        List<Thread> threads = new ArrayList<>();
+        for (int w = 0; w < 4; w++) {
+            int writer = w;
+            Thread thread = new Thread(() -> {
+                try {
+                    start.await();
+                    for (int i = 0; i < 500; i++) {
+                        byte[] key = bytes("k" + (i % 50));
+                        LockTable locks = new LockTable();
+                        Transaction txn = new Transaction(
+                                "t" + writer + "-" + i, i + 1);
+                        txn.put(key, bytes("v"));
+                        try {
+                            txn.commit(engine, locks,
+                                    new TimestampOracle(), 60_000);
+                        } catch (RuntimeException conflict) {
+                            txn.rollback(engine, locks);
+                        }
+                    }
+                } catch (Throwable t) {
+                    failed.set(true);
+                }
+            });
+            threads.add(thread);
+            thread.start();
+        }
+        start.countDown();
+        for (int round = 0; round < 10; round++) {
+            gc.gc();
+            Thread.sleep(1);
+        }
+        for (Thread thread : threads) {
+            thread.join(30_000);
+        }
+        gc.close();
+        assertThat(failed).isFalse();
+        ((MemTable) engine.underlying()).close();
+    }
+
+    @Test
+    void concurrentGcAndCommitNoLostUpdate() throws Exception {
+        MvccStorageEngine engine = new MvccStorageEngine(MemTable.create());
+        BatchGcExecutor gc = new BatchGcExecutor(engine, GcConfig.DEFAULT);
+        gc.updateSafePoint(new SafePoint(1_000_000));
+        AtomicBoolean failed = new AtomicBoolean();
+        List<Thread> threads = new ArrayList<>();
+        for (int w = 0; w < 4; w++) {
+            int writer = w;
+            Thread thread = new Thread(() -> {
+                try {
+                    for (int i = 0; i < 1_000; i++) {
+                        Transaction txn = new Transaction(
+                                "w" + writer + "-" + i, i);
+                        txn.put(bytes("hot"), bytes("w" + writer + "-" + i));
+                        txn.commit(engine, new LockTable(),
+                                new TimestampOracle(), 60_000);
+                    }
+                } catch (Throwable t) {
+                    failed.set(true);
+                }
+            });
+            threads.add(thread);
+            thread.start();
+        }
+        for (int round = 0; round < 30; round++) {
+            gc.gc();
+        }
+        for (Thread thread : threads) {
+            thread.join(30_000);
+        }
+        gc.close();
+        assertThat(failed).isFalse();
+        assertThat(engine.latestValue(bytes("hot"))).isNotNull();
         ((MemTable) engine.underlying()).close();
     }
 

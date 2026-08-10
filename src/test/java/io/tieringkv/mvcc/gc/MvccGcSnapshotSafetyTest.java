@@ -143,6 +143,127 @@ class MvccGcSnapshotSafetyTest {
         ((MemTable) engine.underlying()).close();
     }
 
+    @Test
+    void mixedPutDeleteVersionsRetainedBySafePoint() {
+        MvccStorageEngine engine = new MvccStorageEngine(MemTable.create());
+        engine.putVersion(bytes("k"), bytes("v1"), 1, 10, WriteType.PUT);
+        engine.putVersion(bytes("k"), null, 2, 20, WriteType.DELETE);
+        engine.putVersion(bytes("k"), bytes("v3"), 3, 30, WriteType.PUT);
+        BatchGcExecutor gc = new BatchGcExecutor(engine, GcConfig.DEFAULT);
+        gc.updateSafePoint(new SafePoint(25));
+        gc.gc();
+        // v1(10)、v2(20) 均 < safePoint 且非最新 → 回收，仅保留 v3(30)
+        assertThat(engine.versions(bytes("k"))).hasSize(1);
+        assertThat(engine.latestValue(bytes("k"))).isEqualTo(bytes("v3"));
+        gc.close();
+        ((MemTable) engine.underlying()).close();
+    }
+
+    @Test
+    void noSafePointCollectsNothing() {
+        MvccStorageEngine engine = new MvccStorageEngine(MemTable.create());
+        for (int v = 1; v <= 4; v++) {
+            engine.putVersion(bytes("k"), bytes("v" + v), v, v * 10,
+                    WriteType.PUT);
+        }
+        BatchGcExecutor gc = new BatchGcExecutor(engine, GcConfig.DEFAULT);
+        assertThat(gc.gc().collectedVersions()).isZero();
+        assertThat(engine.versionCount()).isEqualTo(4);
+        gc.close();
+        ((MemTable) engine.underlying()).close();
+    }
+
+    @Test
+    void emptyEngineGcNoop() {
+        MvccStorageEngine engine = new MvccStorageEngine(MemTable.create());
+        BatchGcExecutor gc = new BatchGcExecutor(engine, GcConfig.DEFAULT);
+        gc.updateSafePoint(new SafePoint(Long.MAX_VALUE - 1));
+        assertThat(gc.gc().collectedVersions()).isZero();
+        gc.close();
+        ((MemTable) engine.underlying()).close();
+    }
+
+    @Test
+    void lockOnlyEngineUntouched() {
+        MvccStorageEngine engine = new MvccStorageEngine(MemTable.create());
+        LockTable locks = new LockTable();
+        new PrewriteExecutor().prewrite(engine, locks, bytes("k"), bytes("v"),
+                false, "txn", bytes("k"), 1, 60_000,
+                System.currentTimeMillis(), java.util.Set.of());
+        BatchGcExecutor gc = new BatchGcExecutor(engine, GcConfig.DEFAULT);
+        gc.updateSafePoint(new SafePoint(Long.MAX_VALUE - 1));
+        gc.gc();
+        assertThat(engine.versionCount()).isEqualTo(1);
+        assertThat(locks.size()).isEqualTo(1);
+        gc.close();
+        ((MemTable) engine.underlying()).close();
+    }
+
+    @Test
+    void safePointBelowFirstVersionCollectsNothing() {
+        MvccStorageEngine engine = new MvccStorageEngine(MemTable.create());
+        for (int v = 1; v <= 3; v++) {
+            engine.putVersion(bytes("k"), bytes("v" + v), v, v * 10,
+                    WriteType.PUT);
+        }
+        BatchGcExecutor gc = new BatchGcExecutor(engine, GcConfig.DEFAULT);
+        gc.updateSafePoint(new SafePoint(5));
+        assertThat(gc.gc().collectedVersions()).isZero();
+        assertThat(engine.versionCount()).isEqualTo(3);
+        gc.close();
+        ((MemTable) engine.underlying()).close();
+    }
+
+    @Test
+    void oldTombstoneCollectableLatestPutPreserved() {
+        MvccStorageEngine engine = new MvccStorageEngine(MemTable.create());
+        engine.putVersion(bytes("k"), bytes("v1"), 1, 10, WriteType.PUT);
+        engine.putVersion(bytes("k"), null, 2, 20, WriteType.DELETE);
+        engine.putVersion(bytes("k"), bytes("v3"), 3, 30, WriteType.PUT);
+        BatchGcExecutor gc = new BatchGcExecutor(engine, GcConfig.DEFAULT);
+        gc.updateSafePoint(new SafePoint(100));
+        gc.gc();
+        assertThat(engine.latestValue(bytes("k"))).isEqualTo(bytes("v3"));
+        assertThat(engine.versions(bytes("k"))).hasSize(1);
+        gc.close();
+        ((MemTable) engine.underlying()).close();
+    }
+
+    @Test
+    void manyKeysLatestPreservedAfterGc() {
+        MvccStorageEngine engine = new MvccStorageEngine(MemTable.create());
+        for (int i = 0; i < 500; i++) {
+            for (int v = 1; v <= 8; v++) {
+                engine.putVersion(bytes("k" + i), bytes("v" + v), v, v * 10,
+                        WriteType.PUT);
+            }
+        }
+        BatchGcExecutor gc = new BatchGcExecutor(engine, GcConfig.DEFAULT);
+        gc.updateSafePoint(new SafePoint(100));
+        gc.gc();
+        for (int i = 0; i < 500; i++) {
+            assertThat(engine.latestValue(bytes("k" + i)))
+                    .isEqualTo(bytes("v8"));
+        }
+        gc.close();
+        ((MemTable) engine.underlying()).close();
+    }
+
+    @Test
+    void deleteVersionThenGcIdempotent() {
+        MvccStorageEngine engine = new MvccStorageEngine(MemTable.create());
+        for (int v = 1; v <= 5; v++) {
+            engine.putVersion(bytes("k"), bytes("v" + v), v, v * 10,
+                    WriteType.PUT);
+        }
+        BatchGcExecutor gc = new BatchGcExecutor(engine, GcConfig.DEFAULT);
+        gc.updateSafePoint(new SafePoint(100));
+        gc.gc();
+        assertThat(gc.gc().collectedVersions()).isZero();
+        gc.close();
+        ((MemTable) engine.underlying()).close();
+    }
+
     private static byte[] bytes(String value) {
         return value.getBytes(StandardCharsets.UTF_8);
     }

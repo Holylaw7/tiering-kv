@@ -352,6 +352,38 @@ class MvccIndexPersistenceTest {
         storage.close();
     }
 
+    @Test
+    void unsupportedVersionDetected() throws Exception {
+        MvccStorageEngine engine = new MvccStorageEngine(MemTable.create());
+        engine.putVersion(bytes("k"), bytes("v"), 1, 10, WriteType.PUT);
+        Path file = dir.resolve("version.bin");
+        PersistentMvccIndex.save(file, PersistentMvccIndex.snapshot(engine));
+        byte[] data = Files.readAllBytes(file);
+        // MAGIC(7) 后第一个 int 是版本号，改为 99
+        data[7] = 0;
+        data[8] = 0;
+        data[9] = 0;
+        data[10] = 99;
+        Files.write(file, data);
+        assertThatThrownBy(() -> PersistentMvccIndex.load(file))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("version");
+        ((MemTable) engine.underlying()).close();
+    }
+
+    @Test
+    void nullValueRecordRoundTrip() throws Exception {
+        MvccStorageEngine engine = new MvccStorageEngine(MemTable.create());
+        engine.putVersion(bytes("k"), null, 2, 20, WriteType.DELETE);
+        Path file = dir.resolve("null.bin");
+        PersistentMvccIndex.save(file, PersistentMvccIndex.snapshot(engine));
+        MvccIndexSnapshot loaded = PersistentMvccIndex.load(file);
+        assertThat(loaded.versions().get(0).value()).isNull();
+        assertThat(loaded.versions().get(0).writeType())
+                .isEqualTo(WriteType.DELETE);
+        ((MemTable) engine.underlying()).close();
+    }
+
     private static MvccStorageEngine engineWithHistory() {
         MvccStorageEngine engine = new MvccStorageEngine(MemTable.create());
         for (int v = 1; v <= 5; v++) {
