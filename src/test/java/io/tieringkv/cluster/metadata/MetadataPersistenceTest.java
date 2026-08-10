@@ -195,11 +195,14 @@ class MetadataPersistenceTest {
         second.start();
         try {
             RaftNode leader = awaitLeader(second.nodes(), 5000);
+            // Raft：新 leader 提交旧 term 条目前需先追加自己的条目
+            new MetadataClient(second).join("after");
             long deadline = System.currentTimeMillis() + 5000;
             while (System.currentTimeMillis() < deadline) {
                 boolean all = true;
                 for (RaftNode node : second.nodes()) {
-                    if (!second.state(node.id()).nodes().contains("consistent")) {
+                    if (!second.state(node.id()).nodes().contains("consistent")
+                            || !second.state(node.id()).nodes().contains("after")) {
                         all = false;
                         break;
                     }
@@ -211,6 +214,7 @@ class MetadataPersistenceTest {
             }
             for (RaftNode node : second.nodes()) {
                 assertThat(second.state(node.id()).nodes().contains("consistent")).isTrue();
+                assertThat(second.state(node.id()).nodes().contains("after")).isTrue();
             }
         } finally {
             second.close();
