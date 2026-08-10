@@ -12,6 +12,7 @@ import io.tieringkv.storage.StorageIterator;
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -78,7 +79,35 @@ public final class ReplicatedStorageEngine implements StorageEngine {
 
     @Override
     public void put(byte[] key, byte[] value, long ttlMillis) {
-        propose(encode(CommandType.PUT, key, value, ttlMillis));
+        putAsync(key, value, ttlMillis).join();
+    }
+
+    /** 异步提案（ADR-0050）：返回 future，支持超时/取消与 leader 变更重试。 */
+    public CompletableFuture<Void> putAsync(byte[] key, byte[] value) {
+        return putAsync(key, value, NO_TTL);
+    }
+
+    public CompletableFuture<Void> putAsync(byte[] key, byte[] value, long ttlMillis) {
+        byte[] command = encode(CommandType.PUT, key, value, ttlMillis);
+        return proposeWithRetry(command, 0);
+    }
+
+    private CompletableFuture<Void> proposeWithRetry(byte[] command, int attempt) {
+        CompletableFuture<Long> propose = raft.propose(command);
+        return propose.handle((index, error) -> {
+            if (error == null) {
+                return CompletableFuture.completedFuture((Void) null);
+            }
+            if (attempt < 3 && error instanceof IllegalStateException) {
+                try {
+                    Thread.sleep(20);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+                return proposeWithRetry(command, attempt + 1);
+            }
+            return CompletableFuture.<Void>failedFuture(error);
+        }).thenCompose(future -> future);
     }
 
     @Override
