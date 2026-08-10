@@ -18,6 +18,7 @@
 | 8 | mmap / Memory Pool | ✅ 完成（2026-08-10） |
 | 9 | Benchmark 压力测试 | ✅ 完成（2026-08-10） |
 | 10 | 生产化完善 | ✅ 完成（2026-08-10） |
+| 11 | 分布式集群 | ✅ 完成（2026-08-10） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -157,6 +158,27 @@
   （TD-020）、ResponseSequencer 并发化、独立进程复测（预期 +20–40%）；
   以 JFR allocation/GC 为验收（TD-021）。
 
+## Phase 11 — 分布式集群 ✅
+
+- 目标：单机存储引擎演进为分布式 KV 基础（shard 集群 + 元数据 + Raft +
+  复制 + 故障转移）。
+- 交付：16384 hash slot 路由（HashSlotRouter / SlotTable / ShardGroup）、
+  元数据服务（NodeRegistry / ShardRegistry / TopologyManager）、最小真实
+  Raft（LeaderElection / ReplicationManager / RaftNode，Follower/Candidate/
+  Leader + 心跳 + 日志复制 + commit/apply）、ReplicatedStorageEngine 适配器
+  （不改 MemTable/WAL/SSTable）、ClusterNode / ClusterClient、3 节点集成
+  与故障转移测试。
+- ADR：[0035](docs/adr/ADR-0035-cluster-sharding-strategy.md)（哈希槽）、
+  [0036](docs/adr/ADR-0036-metadata-service-design.md)（Raft 元数据）、
+  [0037](docs/adr/ADR-0037-replication-model.md)（Raft 复制）、
+  [0038](docs/adr/ADR-0038-failure-detection-strategy.md)（心跳/选举）。
+- 测试：新增 51 项（Sharding 10 / Metadata 10 / Raft 21 / Failover 9 /
+  集成 1），全量回归 288 项全绿。
+- 基准：单分片复制写 154K ops/s（P99=0.027ms）、读 750K ops/s
+  （P99=4μs）；路由开销 23–36ns/op；复制滞后 ≤35ms（心跳周期约束）；
+  选举 124–310ms（目标 <5s ✅）；详见
+  [cluster-report.md](docs/benchmark/cluster-report.md)。
+
 ## 技术债登记
 
 | 编号 | 描述 | 来源 | 计划消除 |
@@ -180,3 +202,7 @@
 | TD-019 | 生产容量模型（吞吐/延迟/内存/磁盘），替代 IO 微优化 | ADR-0026 | Phase 9 |
 | TD-020 | request→response 对象数优化（Future/Lambda/Callback 复用 + 批量写） | ADR-0023 | Phase 10 |
 | TD-021 | Phase 10 以 JFR allocation / GC 对比为优化验收指标 | ADR-0029 | Phase 10 |
+| TD-022 | Raft 日志为内存态，无磁盘持久化；需 Raft Log Store + Snapshot | ADR-0037 | Phase 12 |
+| TD-023 | Raft 消息为进程内直接调用，无 TCP 传输；需 RPC 层 + 重试/超时 | ADR-0037 | Phase 12 |
+| TD-024 | 复制滞后受心跳周期约束（≤20ms）；提交后立即补发 commitIndex | ADR-0037 | Phase 12 |
+| TD-025 | 动态重分片（slot 迁移）与多 shard 数据搬迁 | ADR-0035 | Phase 12 |

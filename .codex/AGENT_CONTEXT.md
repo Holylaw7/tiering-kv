@@ -10,8 +10,8 @@ Bitcask/LSM 持久化、高并发网络、mmap 零拷贝、分段锁/无锁、
 Bloom Filter、自研 Memory Pool。
 
 当前定位：高并发 Redis 协议兼容的 LSM 冷热分层 KV 存储引擎（RESP + WAL +
-MemTable + SSTable + LFU/ARC + 自动调度 + Key Sharding，Phase 1–7 完成）；
-集群/pub/sub/正式性能基线为演进目标（Phase 8–10）。
+MemTable + SSTable + LFU/ARC + 自动调度 + Key Sharding + 分布式集群，
+Phase 1–11 完成）；pub/sub、RESP3、正式性能基线为后续演进目标。
 
 Phase 1 已交付命令：PING / ECHO / SET / GET / DEL / EXISTS（RESP2）。
 
@@ -48,19 +48,24 @@ C 级全链路 115–178K ops/s；瓶颈 = 网络/RESP/调度层。
 Phase 10 已交付：响应批处理（pipeline64×500 → 465K ✅）+ 回调式执行 +
 YAML 配置 + Metrics/INFO + ShutdownManager；Level C 154–326K 无回退。
 
+Phase 11 已交付：分布式集群基础——16384 hash slot 路由（CRC16/CCITT）、
+元数据服务（JOIN/拓扑/leader 变更）、最小真实 Raft（选举 + 心跳 + 日志
+复制 + commit/apply + 随机化超时）、ReplicatedStorageEngine 复制适配器
+（不改存储核心）、ClusterNode/ClusterClient、3 节点集成与故障转移测试
+（51 项新测试）、集群基准（复制写 154K ops/s、选举 ≤310ms）。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 10（Advanced Optimization & Productionization）✅ 已完成**
-  （Phase 0–9 全部完成）；
-- 最近提交：`feat: add graceful shutdown`（详见 git log）；
+- 阶段：**Phase 11（Distributed Cluster）✅ 已完成**（Phase 0–10 全部完成）；
+- 最近提交：Phase 11 集群实现（详见 git log）；
 - 基线：tag `phase-0`；分支策略：feature/* 合并入 develop，main 保持稳定；
-- 下一步：项目按 10 阶段路线图全部完成；可进入独立进程复测、集群扩展或
-  对外发布准备（等待用户指令）。
+- 下一步：Raft 日志持久化 + TCP RPC 传输 + 动态 slot 迁移（Phase 12，
+  等待用户指令）。
 
-项目里程碑：**10 阶段路线图全部完成（2026-08-10）**；最终定位 =
-完整冷热分层存储系统（RESP + Async Server + Shard + Memory + LFU + WAL +
-LSM/SSTable + Bloom + Compaction + Migration + mmap + BlockCache +
-Production Runtime），14 模块能力矩阵全 ✅。
+项目里程碑：**11 阶段路线图全部完成（2026-08-10）**；定位 = 单机完整冷热
+分层存储 + 分布式集群基础（RESP + Async Server + Shard + Memory + LFU +
+WAL + LSM/SSTable + Bloom + Compaction + Migration + mmap + BlockCache +
+Production Runtime + Raft Cluster），能力矩阵全 ✅。
 
 ## 3. 技术栈
 
@@ -79,6 +84,7 @@ Production Runtime），14 模块能力矩阵全 ✅。
 | IO | mmap 零拷贝 + BlockCache + Off-Heap MemoryPool（ADR-0026~0028） |
 | 生产基准 | 三级基准 + 容量模型 + 部署画像（ADR-0029~0031） |
 | 生产化 | 批处理 + YAML 配置 + Metrics/INFO + 优雅停机（ADR-0032~0034） |
+| 分布式 | 16384 哈希槽路由 + 元数据服务 + 最小 Raft + 复制适配器（ADR-0035~0038） |
 | 包结构 | `io.tieringkv.{network,protocol,command,storage,memory,cache,eviction,wal,sstable,compaction,scheduler,metrics,benchmark}` |
 
 ## 4. 关键决策（ADR）
@@ -119,6 +125,10 @@ Production Runtime），14 模块能力矩阵全 ✅。
 | [ADR-0032](adr/ADR-0032-response-batching-strategy.md) | 自适应响应批处理（batch=64 + 排空 flush） |
 | [ADR-0033](adr/ADR-0033-request-response-memory-model.md) | 回调式执行 + 缓冲复用（对象削减） |
 | [ADR-0034](adr/ADR-0034-production-service-lifecycle.md) | 启动/优雅停机生命周期（drain + WAL force + checkpoint） |
+| [ADR-0035](adr/ADR-0035-cluster-sharding-strategy.md) | 16384 hash slot（CRC16）路由；对比 consistent hash / range |
+| [ADR-0036](adr/ADR-0036-metadata-service-design.md) | 元数据服务：Raft 化设计（对比 ZK/静态配置） |
+| [ADR-0037](adr/ADR-0037-replication-model.md) | Raft 复制：日志复制 + 多数派提交（对比 async/semi-sync） |
+| [ADR-0038](adr/ADR-0038-failure-detection-strategy.md) | 心跳 + 随机化选举超时（100–180ms）故障检测 |
 
 ## 5. 仓库布局
 
@@ -128,7 +138,7 @@ tiering-kv/
 ├── docs/
 │   ├── requirements/  # requirements.md + acceptance.md
 │   ├── architecture/  # overview + storage/network/concurrency
-│   ├── adr/           # ADR-0001 ~ 0005
+│   ├── adr/           # ADR-0001 ~ 0038
 │   ├── design/        # protocol/memory/lsm/bitcask/eviction
 │   ├── benchmark/     # 计划 + 报告占位
 │   ├── review/        # 评审记录
@@ -159,7 +169,7 @@ tiering-kv/
 | 8 | mmap / Memory Pool | ✅ |
 | 9 | Benchmark | ✅ |
 | 10 | 生产化完善 | ✅ |
-| 10 | 生产化 | 未开始 |
+| 11 | 分布式集群 | ✅ |
 
 ## 7. 技术债
 
@@ -186,6 +196,10 @@ tiering-kv/
 | TD-019 | 生产容量模型（吞吐/延迟/内存/磁盘），替代 IO 微优化 | Phase 9 |
 | TD-020 | request→response 对象数优化（Future/Lambda/Callback 复用 + 批量写） | Phase 10 |
 | TD-021 | JFR allocation / GC 对比作为 Phase 10 优化验收 | Phase 10 |
+| TD-022 | Raft 日志内存态，无磁盘持久化 → Raft Log Store + Snapshot | Phase 12 |
+| TD-023 | Raft 消息进程内直调，无 TCP → RPC 层 + 超时/重试 | Phase 12 |
+| TD-024 | 复制滞后 ≤20ms（心跳周期）→ 提交后立即补发 commitIndex | Phase 12 |
+| TD-025 | 动态重分片（slot 迁移 / 数据搬迁） | Phase 12 |
 
 ## 8. 会话启动清单
 
