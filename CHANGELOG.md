@@ -65,6 +65,9 @@
 - 冷存储测试套件（Bloom/SSTable/Flush/Compaction/Engine/迁移集成）与
   冷存储基准（写 100K/1M、随机 GET、FPR、合并）。
 - ADR-0017（冷层策略）、ADR-0018（SSTable 格式）、ADR-0019（合并策略）。
+- Phase 5 评审处置：SSTable 写吞吐改为 Peak/Average 双口径；登记 page cache
+  影响与 cold-cache 基准计划（TD-009）；技术债 TD-010（pending 持久化）、
+  TD-011（自动 Flush）、TD-012（leveled compaction）。
 
 ### Changed
 

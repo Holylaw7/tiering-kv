@@ -80,3 +80,26 @@
 - TD-007：WAL 恢复单线程（1M ≈ 1s，可接受；Phase 7 评估 parallel replay）；
 - TD-008：Checkpoint 全量快照（Phase 5 演进为 Immutable MemTable →
   SSTable flush + Manifest，自然解决）。
+
+## Phase 5 评审结论（2026-08-10）
+
+1. **冷热链路闭环完成**：SET → WAL → MemTable → EvictionManager →
+   ColdMigration → SSTable → Manifest；GET → pending → 新表 → 旧表 →
+   Bloom → Index → Block → Value，接近 LevelDB/RocksDB/Cassandra 模型。
+2. **LSM + WAL 选择正确**：WAL → MemTable → SSTable 即 LevelDB 基础模型，
+   且更强调冷热分层（契合 Tiering-KV 定位）。
+3. **SSTable 格式标准**：Data/Index/Bloom/Footer + CRC，元数据支撑后续
+   Compaction / Recovery / TTL 清理。
+4. **Bloom 达标**：bits-per-key=10，FPR 0.82%（<1% ✅）；xxHash/Murmur3
+   留作后续可选优化。
+5. **Compaction 关键语义完整**：latest wins / tombstone 删除 / TTL 清理，
+   空间回收 73%。
+6. **Migration 接口正确**：ColdMigration + MigrationResult（SUCCESS/FAILED/
+   RETRY）已支持未来 disk full / IO error / checksum error。
+7. **⚠️ 基准表述已修正**：SSTable 写改为 Peak 104MB/s / Average 85MB/s
+   （冷启动 30MB/s 如实标注）。
+8. **⚠️ page cache 影响已登记**：随机 GET P99 0.021–0.053ms 为热缓存口径；
+   Phase 9 增加 cold-cache benchmark（TD-009）。
+9. **技术债**：TD-010 pending 持久化（Migration WAL / Pending Manifest，
+   Phase 6）；TD-011 自动 Flush（memory watermark + FlushScheduler，
+   Phase 6）；TD-012 leveled compaction（Phase 7）。

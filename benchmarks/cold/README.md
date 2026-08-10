@@ -18,4 +18,7 @@ mvn -Dtest=ColdBenchmarkTest test
 - Bloom Filter FPR（目标 <1%）；
 - 全量合并：输入/输出体积与吞吐。
 
+注：随机 GET 指标含 OS page cache 影响（热缓存口径）；Phase 9 增加
+cold-cache benchmark（drop cache 磁盘冷读）。
+
 结果报告：[docs/benchmark/cold-report.md](../../docs/benchmark/cold-report.md)

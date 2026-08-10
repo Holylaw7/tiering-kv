@@ -125,6 +125,10 @@ tiering-kv/
 | TD-006 | LFU 索引全局同步段 → Segment LFU + Async Buffer（Caffeine 思路） | Phase 7 |
 | TD-007 | WAL 恢复单线程 → Phase 7 评估 parallel replay | Phase 7 |
 | TD-008 | Checkpoint 全量快照 → Phase 5 演进 SSTable + Manifest | Phase 5 |
+| TD-009 | 随机 GET 基准含 page cache；Phase 9 cold-cache 基准 | Phase 9 |
+| TD-010 | pending 迁移缓冲未持久化 → Migration WAL / Pending Manifest | Phase 6 |
+| TD-011 | Flush 手动触发 → memory watermark + FlushScheduler | Phase 6 |
+| TD-012 | size-tiered 读放大 → 评估 leveled compaction | Phase 7 |
 
 ## 8. 会话启动清单
 
