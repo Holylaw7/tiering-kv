@@ -44,6 +44,16 @@
 - ADR-0010（热度跟踪）、ADR-0011（LFU 衰减）、ADR-0012（ARC 评估）。
 - 迁移接口升级：`MigrationCallback` → `TierMigration`（SUCCESS / FAILED /
   RETRY），淘汰遵循"先迁移、后删除"（ADR-0013）。
+- Phase 4 WAL 持久化层：WALManager / WALWriter / WALReader / LogSegment /
+  SegmentManager / ChecksumValidator（CRC32C）/ RecoveryManager /
+  CheckpointManager / WALStorageEngine。
+- 写路径接入：WAL append（默认 EVERY_SEC）→ MemTable → ack；淘汰删除也落
+  DELETE 记录；TTL 过期不落盘（由 PUT 推导）。
+- 崩溃恢复：校验 → 重放 → 截断残尾；checkpoint（快照 + offset）加速；
+  宕机期间过期的键不复活。
+- WAL 测试套件（条目/校验/读写/轮转/恢复/崩溃三用例/检查点/集成）与
+  WAL 基准（append 100K/1M、恢复 100K/1M）。
+- ADR-0014（写策略）、ADR-0015（记录格式）、ADR-0016（崩溃恢复）。
 
 ### Changed
 

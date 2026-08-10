@@ -100,6 +100,21 @@ EvictionManager
 - LFU 频率按可配置周期衰减（×0.5，懒计算）；
 - 超内存配额 → 选候选 → 迁移回调 → 物理移除；用户 DEL 仍走 tombstone。
 
+## 持久化层（Phase 4，WAL）
+
+```text
+Command → WALStorageEngine
+    ├── WALManager（append / flush / rotate / checkpoint）
+    ├── RecoveryManager（启动恢复：校验 → 重放 → 截断残尾）
+    └── MemTable
+```
+
+- 写路径：WAL append（默认 EVERY_SEC，≤1s 丢失窗口）→ MemTable → ack；
+- 记录格式：MAGIC / VERSION / TYPE / 时间戳 / 长度 / TTL / 版本 + CRC32C
+  （ADR-0015，禁用 Java 序列化）；
+- segment 滚动（`wal/%06d.log`，64MB）+ checkpoint（快照 + offset）加速恢复；
+- 恢复时按绝对过期点判定 TTL，宕机期间过期的键不复活。
+
 ## 技术栈
 
 | 层次 | 选型 |
