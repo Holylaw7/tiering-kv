@@ -42,7 +42,7 @@ public final class TransactionCoordinator {
         List<Participant> prepared = new ArrayList<>();
         boolean commitJournaled = false;
         try {
-            journal(TxnStateRecord.State.PREWRITE, txn, 0);
+            journalState(TxnStateRecord.State.PREWRITE, txn, 0);
             for (Participant participant : participants) {
                 prewriteOn(participant, txn);
                 prepared.add(participant);
@@ -50,8 +50,9 @@ public final class TransactionCoordinator {
             long commitTS = oracle.nextTimestamp();
             txn.markPrepared(commitTS);
             // COMMIT 决定先持久化：此后即使参与者失败也不回滚，交给恢复补完
-            journal(TxnStateRecord.State.COMMIT, txn, commitTS);
-            commitJournaled = true;
+            commitJournaled = journalAppend(
+                    TxnStateRecord.State.COMMIT, txn, commitTS);
+            journalPropose(TxnStateRecord.State.COMMIT, txn, commitTS);
             for (Participant participant : prepared) {
                 commitOn(participant, txn, commitTS);
             }
@@ -60,7 +61,7 @@ public final class TransactionCoordinator {
         } catch (RuntimeException e) {
             if (journal == null || !commitJournaled) {
                 try {
-                    journal(TxnStateRecord.State.ROLLBACK, txn, 0);
+                    journalState(TxnStateRecord.State.ROLLBACK, txn, 0);
                 } catch (RuntimeException journalFailure) {
                     // 回滚日志失败不掩盖原始异常；恢复阶段仍可依据锁超时清理
                 }
@@ -76,11 +77,34 @@ public final class TransactionCoordinator {
         }
     }
 
-    private void journal(TxnStateRecord.State state, Transaction txn,
-                         long commitTS) {
+    private void journalState(TxnStateRecord.State state, Transaction txn,
+                              long commitTS) {
         if (journal == null) {
             return;
         }
+        TxnStateRecord record = record(state, txn, commitTS);
+        journal.appendLocal(record);
+        journal.propose(record).join();
+    }
+
+    private boolean journalAppend(TxnStateRecord.State state, Transaction txn,
+                                  long commitTS) {
+        if (journal == null) {
+            return true;
+        }
+        return journal.appendLocal(record(state, txn, commitTS));
+    }
+
+    private void journalPropose(TxnStateRecord.State state, Transaction txn,
+                                long commitTS) {
+        if (journal == null) {
+            return;
+        }
+        journal.propose(record(state, txn, commitTS)).join();
+    }
+
+    private TxnStateRecord record(TxnStateRecord.State state, Transaction txn,
+                                  long commitTS) {
         List<TxnStateRecord.Mutation> mutations = new ArrayList<>();
         for (ByteKey key : txn.writeKeys()) {
             mutations.add(new TxnStateRecord.Mutation(
@@ -91,8 +115,8 @@ public final class TransactionCoordinator {
         }
         byte[] primary = txn.primaryKeyOr(mutations.isEmpty()
                 ? new byte[0] : mutations.get(0).key());
-        journal.recordState(new TxnStateRecord(txn.txnId(), state,
-                txn.startTS(), commitTS, primary, mutations)).join();
+        return new TxnStateRecord(txn.txnId(), state,
+                txn.startTS(), commitTS, primary, mutations);
     }
 
     private void prewriteOn(Participant participant, Transaction txn) {

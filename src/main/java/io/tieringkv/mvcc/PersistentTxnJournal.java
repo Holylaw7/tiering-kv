@@ -57,6 +57,21 @@ public final class PersistentTxnJournal implements AutoCloseable {
         }
     }
 
+    /** 仅本地追加（决策持久化判定用）：返回本地是否落盘成功。 */
+    public boolean appendLocal(TxnStateRecord record) {
+        try {
+            writeRecord(encode(record));
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    /** 仅 Raft 提案（决策已本地持久化后的传播，失败不致命）。 */
+    public CompletableFuture<Void> propose(TxnStateRecord record) {
+        return raftRecordWithRetry(encode(record), 0);
+    }
+
     /** Raft 提案重试（leader 变更瞬时失败）：与生产写路径语义一致。 */
     private CompletableFuture<Void> raftRecordWithRetry(byte[] payload,
                                                         int attempt) {
