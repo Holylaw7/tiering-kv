@@ -4,7 +4,7 @@
 > （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding +
 > Raft 持久化集群 + 批量复制 + 安全 RPC + 元数据 Raft + 游标迁移）。
 
-**阶段状态：Phase 17（Region 生命周期与分布式存储完善）✅（Phase 0–16 全部完成 ✅）**
+**阶段状态：Phase 18（分布式生产集成）✅（Phase 0–17 全部完成 ✅）**
 
 ## 项目定位
 
@@ -28,15 +28,19 @@ Region 抽象（键范围 + epoch 路由保护）、每 Region 独立 Raft 组
 滞后副本回填缺陷）（Phase 16）；以及 Region 生命周期闭环：自动分裂/
 合并（写缓冲保证并发写不丢失）、并行迁移（100B 209MB/s）、真实 Raft
 领导权交接（TimeoutNow，24ms）、Redis Cluster 网关（MOVED + CLUSTER
-SLOTS）、自动均衡计划（epoch 保护）（Phase 17）。
+SLOTS）、自动均衡计划（epoch 保护）（Phase 17）；以及分布式生产集成：
+统一 Region/Slot 单路由模型（epoch 守卫 + 缓存自刷新）、真实 TCP
+Redis Cluster 网关（GET 719K / SET 590K ops/s）、Split/Merge 与 Raft
+组联动（子组独立日志 + 回滚）、生产化迁移（限速 + 自适应调度 +
+Prometheus 指标）、三节点容器部署产物与跨机混沌（Phase 18）。
 
 **边界（如实声明）**：仍为教学/工程级实现，暂不宣称"高性能 Redis 替代品"；
 分布式为真实 TCP + 持久化原型，基准以进程内为主，跨机 `tc netem` 验证
 待 Linux+Docker 环境执行（部署产物已交付）；100B/1KB 零拷贝迁移
 （82.7/223.1 MB/s → 并行 209.1/986.0 MB/s）已达标；网关 CLUSTER 命令
-为子集（无 ASK/在线搬迁），split/merge 与独立 Raft 组数据搬迁联动为
-下一阶段；pub/sub、Lua、RESP3 与正式性能基线（内存降低 60%–80%）为
-后续演进方向。
+为子集；split/merge 与独立 Raft 组数据搬迁已联动；跨机容器混沌待
+Linux+Docker 执行（产物已交付）；pub/sub、Lua、RESP3 与正式性能基线
+（内存降低 60%–80%）为后续演进方向。
 
 ## 核心能力
 
@@ -352,6 +356,25 @@ RaftNode
   region_merge_count）；
 - 文档：[基准报告](docs/benchmark/phase17-region-report.md)、
   [评审报告](docs/review/phase17-region-lifecycle-review.md)。
+
+## 分布式生产集成（Phase 18）
+
+- **统一路由**（ADR-0066）：RoutingTable（键范围 + slot 区间 + epoch +
+  leader + raftGroup）+ RoutingCache（陈旧自刷新）+ RouteEpochGuard；
+  MOVED/ASK/TRYAGAIN 语义统一；
+- **真实 TCP 网关**（ADR-0068）：NettyClusterGateway（EventLoop →
+  RESP → CommandDispatcher → UnifiedRouter），pipeline 批量 flush；
+  GET 719K / SET 590K ops/s（>500K/200K ✅）；
+- **Split/Merge 与 Raft 联动**（ADR-0067）：RegionRaftMigrationManager
+  （子/合并组创建 + 路由原子切换 + 失败回滚 + 恢复幂等）；
+- **生产化迁移**：ByteRateLimiter（限速）+ MigrationScheduler（IO 压力/
+  backlog 自适应）+ migration_remaining/error 指标；100B 209MB/s；
+- **跨节点部署**（ADR-0069）：[docker-compose.cluster.yml](deploy/docker-compose.cluster.yml)
+  + CrossMachineChaosTest（20 项：击杀/分区/恢复/快照追赶/迁移中断）；
+- **可观测性**（ADR-0070）：MetricsExporter（Prometheus 格式）+
+  ProductionInfo（INFO CLUSTER 聚合 Region/Raft/Migration/Gateway）；
+- 文档：[基准报告](docs/benchmark/phase18-production-report.md)、
+  [评审报告](docs/review/phase18-production-integration-review.md)。
 
 ## 技术栈
 

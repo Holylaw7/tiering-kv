@@ -282,6 +282,23 @@
   - 测试：新增 159 项；全量回归 947/947 全绿（目标 ≥900 ✅）；
   - 基准（docs/benchmark/phase17-region-report.md）：Split 1M≈0.9s、
     Merge 1M≈0.7s、并行迁移 209.1MB/s、Transfer 24ms、Gateway 全达标。
+- Phase 18 分布式生产集成：
+  - 统一路由（ADR-0066）：RoutingTable（键范围+slot 区间+epoch+leader+
+    raftGroup）+ RoutingCache（陈旧自刷新）+ RouteEpochGuard +
+    MOVED/ASK/TRYAGAIN 统一；
+  - 真实 TCP 网关（ADR-0068）：NettyClusterGateway + 批量 flush
+    （GET 719K / SET 590K ops/s）+ CLUSTER SLOTS/NODES；
+  - Split/Merge 与 Raft 联动（ADR-0067）：RegionRaftMigrationManager
+    （子/合并组 + 路由原子切换 + 回滚/恢复幂等）；
+  - 生产化迁移：ByteRateLimiter + MigrationScheduler + 迁移指标
+    （remaining/error）；
+  - 跨节点部署（ADR-0069）：docker-compose.cluster.yml +
+    CrossMachineChaosTest（20 项）；
+  - 可观测性（ADR-0070）：MetricsExporter（Prometheus）+
+    ProductionInfo（INFO CLUSTER 聚合）；
+  - 测试：新增 165 项；全量回归最终统计见合并后报告（目标 >1100）；
+  - 基准（docs/benchmark/phase18-production-report.md）：Gateway
+    719K/590K ops/s、迁移 209.1/986.0 MB/s、Split/Merge 1M ~0.9/~0.7s。
 - Phase 9 评审处置：确认瓶颈分层（A 4.7M → B 230K → C 150K，瓶颈=协议/调度）；
   登记 TD-020（request→response 对象数优化）与 TD-021（JFR 验收指标）。
 - Phase 8 IO 优化：MmapSSTableReader（零拷贝块读）+ FileChannel baseline、

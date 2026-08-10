@@ -101,17 +101,23 @@ Phase 17 已交付：Region 生命周期闭环——SplitController（五阶段 
 （自动均衡计划 + epoch 保护）、INFO RAFT / INFO MIGRATION 可观测性、
 RegionChaosTest（10 项）；159 项新测试，全量回归 947/947 全绿。
 
+Phase 18 已交付：分布式生产集成——统一路由（RoutingTable + RoutingCache +
+RouteEpochGuard）、真实 TCP Redis Cluster 网关（GET 719K / SET 590K
+ops/s）、Split/Merge 与 Raft 组联动（RegionRaftMigrationManager +
+回滚/恢复）、生产化迁移（限速 + 自适应调度 + 指标）、三节点 compose +
+CrossMachineChaosTest（20 项）、MetricsExporter（Prometheus）+ INFO
+CLUSTER 聚合；165 项新测试。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 17（Region Lifecycle）✅ 已完成**
-  （Phase 0–16 全部完成）；
-- 最近提交：Phase 17 基准（详见 git log）；
+- 阶段：**Phase 18（Distributed Production Integration）✅ 已完成**
+  （Phase 0–17 全部完成）；
+- 最近提交：Phase 18 基准（详见 git log）；
 - 基线：tag `phase-0`；分支策略：feature/* 合并入 develop，main 保持稳定；
-- 下一步：split/merge 与独立 Raft 组数据搬迁联动（TD-037）、网关
-  CLUSTER 全量命令（TD-038）、双路由层统一（TD-039）、Linux+Docker
-  跨机混沌执行（TD-035）（Phase 18，等待用户指令）。
+- 下一步：网关 CLUSTER 全量命令（TD-038）、Linux+Docker 跨机混沌执行
+  （TD-040）、快照 RPC 跨机传输（Phase 19，等待用户指令）。
 
-项目里程碑：**17 阶段路线图全部完成（2026-08-10）**；定位 = 单机完整冷热
+项目里程碑：**18 阶段路线图全部完成（2026-08-10）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
 LFU + WAL + LSM/SSTable + Bloom + Compaction + Migration + mmap +
 BlockCache + Production Runtime + Raft 持久化 + TCP RPC + Snapshot +
@@ -205,6 +211,11 @@ Placement），能力矩阵全 ✅。
 | [ADR-0063](adr/ADR-0063-parallel-region-migration.md) | 并行迁移（按段分片 + chunk 检查点） |
 | [ADR-0064](adr/ADR-0064-real-leader-transfer.md) | 真实 leader 交接（TimeoutNow） |
 | [ADR-0065](adr/ADR-0065-placement-auto-balance.md) | 自动均衡计划（epoch 保护） |
+| [ADR-0066](adr/ADR-0066-unified-routing-model.md) | 统一路由（键范围 + slot + epoch） |
+| [ADR-0067](adr/ADR-0067-region-raft-migration-lifecycle.md) | Split/Merge 与 Raft 组联动 |
+| [ADR-0068](adr/ADR-0068-tcp-gateway-architecture.md) | 真实 TCP Redis Cluster 网关 |
+| [ADR-0069](adr/ADR-0069-cross-machine-deployment.md) | 三节点部署 + tc netem |
+| [ADR-0070](adr/ADR-0070-production-metrics.md) | Prometheus 指标 + INFO CLUSTER 聚合 |
 
 ## 5. 仓库布局
 
@@ -252,6 +263,7 @@ tiering-kv/
 | 15 | 生产验证 | ✅ |
 | 16 | Multi-Raft 架构演进 | ✅ |
 | 17 | Region 生命周期 | ✅ |
+| 18 | 分布式生产集成 | ✅ |
 
 ## 7. 技术债
 
@@ -296,6 +308,9 @@ tiering-kv/
 | TD-037 | Region split/merge 未与数据搬迁联动 | Phase 18 |
 | TD-038 | 网关 CLUSTER 命令子集 | Phase 18 |
 | TD-039 | Region 键范围与 slot 区间路由未统一 | Phase 18 |
+| TD-037 | Region split/merge 与数据搬迁联动 | ✅ 已关闭（Phase 18） |
+| TD-039 | Region 键范围与 slot 区间路由未统一 | ✅ 已关闭（Phase 18） |
+| TD-040 | 跨机容器混沌未执行（环境限制） | Phase 19 |
 
 ## 8. 会话启动清单
 
