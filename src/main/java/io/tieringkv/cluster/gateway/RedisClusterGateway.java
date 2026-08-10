@@ -1,6 +1,7 @@
 package io.tieringkv.cluster.gateway;
 
 import io.tieringkv.cluster.sharding.HashSlotRouter;
+import io.tieringkv.cluster.metrics.GatewayMetricsRegistry;
 import io.tieringkv.protocol.RespArray;
 import io.tieringkv.protocol.RespBulkString;
 import io.tieringkv.protocol.RespError;
@@ -28,17 +29,33 @@ public final class RedisClusterGateway {
     private final Map<String, StorageEngine> storages;
     private final Map<String, InetSocketAddress> addresses;
     private final String localNode;
+    private final AutoTransactionExecutor autoTxn;
+    private final TransactionCommandHandler txnHandler;
 
     public RedisClusterGateway(int shardCount,
                                Map<Integer, String> shardLeaders,
                                Map<String, StorageEngine> storages,
                                Map<String, InetSocketAddress> addresses,
                                String localNode) {
+        this(shardCount, shardLeaders, storages, addresses, localNode, null, null);
+    }
+
+    public RedisClusterGateway(int shardCount,
+                               Map<Integer, String> shardLeaders,
+                               Map<String, StorageEngine> storages,
+                               Map<String, InetSocketAddress> addresses,
+                               String localNode,
+                               AutoTransactionExecutor autoTxn,
+                               GatewayMetricsRegistry metrics) {
         this.shardCount = shardCount;
         this.shardLeaders = Map.copyOf(shardLeaders);
         this.storages = Map.copyOf(storages);
         this.addresses = Map.copyOf(addresses);
         this.localNode = localNode;
+        this.autoTxn = autoTxn;
+        this.txnHandler = autoTxn == null ? null
+                : new TransactionCommandHandler(autoTxn, metrics == null
+                ? new GatewayMetricsRegistry() : metrics);
     }
 
     public RespValue execute(String name, List<byte[]> args) {
@@ -116,6 +133,9 @@ public final class RedisClusterGateway {
         if (!isLocal(key)) {
             return moved(key);
         }
+        if (txnHandler != null) {
+            return txnHandler.get(key);
+        }
         byte[] value = storageFor(key).get(key);
         return value == null ? RespNull.BULK_STRING : new RespBulkString(value);
     }
@@ -124,6 +144,13 @@ public final class RedisClusterGateway {
         byte[] key = args.get(0);
         if (!isLocal(key)) {
             return moved(key);
+        }
+        if (txnHandler != null) {
+            if (args.size() >= 4) {
+                return new RespError(
+                        "ERR EX/PX not supported with transactional gateway");
+            }
+            return txnHandler.set(key, args.get(1));
         }
         long ttl = -1;
         if (args.size() >= 4) {
@@ -145,10 +172,21 @@ public final class RedisClusterGateway {
         if (!isLocal(key)) {
             return moved(key);
         }
+        if (txnHandler != null) {
+            return txnHandler.del(key);
+        }
         return new RespInteger(storageFor(key).delete(key) ? 1 : 0);
     }
 
     private RespValue localMget(List<byte[]> args) {
+        if (txnHandler != null) {
+            for (byte[] key : args) {
+                if (!isLocal(key)) {
+                    return moved(key);
+                }
+            }
+            return txnHandler.mget(args);
+        }
         List<RespValue> values = new ArrayList<>(args.size());
         for (byte[] key : args) {
             if (!isLocal(key)) {
@@ -166,6 +204,9 @@ public final class RedisClusterGateway {
             if (!isLocal(args.get(i))) {
                 return moved(args.get(i));
             }
+        }
+        if (txnHandler != null) {
+            return txnHandler.mset(args);
         }
         for (int i = 0; i < args.size(); i += 2) {
             storageFor(args.get(i)).put(args.get(i), args.get(i + 1));
