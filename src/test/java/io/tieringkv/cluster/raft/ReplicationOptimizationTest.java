@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static io.tieringkv.cluster.RaftTestSupport.awaitLeader;
+import static io.tieringkv.cluster.RaftTestSupport.awaitTrue;
 import static io.tieringkv.cluster.RaftTestSupport.closeAll;
 import static io.tieringkv.cluster.RaftTestSupport.group3;
 import static io.tieringkv.cluster.RaftTestSupport.startAll;
@@ -40,21 +41,34 @@ class ReplicationOptimizationTest {
     }
 
     @Test
-    void commitNotificationAppliesOnFollowersBeforeReturn() throws Exception {
+    void commitNotificationAppliesOnFollowersPromptly() throws Exception {
         List<String> applied = new ArrayList<>();
         RaftNode[] nodes = group3(applied);
         startAll(nodes);
         try {
             RaftNode leader = awaitLeader(List.of(nodes), 5000);
             leader.propose("v".getBytes(StandardCharsets.UTF_8)).get();
-            // CommitNotifier 立即补发 commitIndex：follower 在 propose 返回前已 apply
-            for (RaftNode node : nodes) {
-                if (node != leader) {
-                    assertThat(node.commitIndex()).isZero();
-                    assertThat(node.lastApplied()).isZero();
+            // 异步批量复制 + CommitNotifier：follower 在 commit 后很快 apply
+            long deadline = System.currentTimeMillis() + 2000;
+            while (System.currentTimeMillis() < deadline) {
+                boolean allApplied = true;
+                for (RaftNode node : nodes) {
+                    if (node != leader && node.lastApplied() < leader.commitIndex()) {
+                        allApplied = false;
+                        break;
+                    }
                 }
+                if (allApplied) {
+                    break;
+                }
+                Thread.sleep(5);
             }
             assertThat(applied).hasSize(3);
+            for (RaftNode node : nodes) {
+                if (node != leader) {
+                    assertThat(node.lastApplied()).isEqualTo(leader.commitIndex());
+                }
+            }
         } finally {
             closeAll(nodes);
         }
@@ -98,6 +112,14 @@ class ReplicationOptimizationTest {
             for (int i = 0; i < 5; i++) {
                 leader.propose(("cmd" + i).getBytes(StandardCharsets.UTF_8)).get();
             }
+            awaitTrue("followers apply all", () -> {
+                for (RaftNode node : nodes) {
+                    if (node.lastApplied() < 4) {
+                        return false;
+                    }
+                }
+                return true;
+            }, 5000);
             // applied 为三节点共享列表：每个命令恰好被三个节点各应用一次
             assertThat(applied).hasSize(15);
             for (RaftNode node : nodes) {

@@ -9,25 +9,27 @@ import io.tieringkv.storage.memory.KeyValueEntry;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.zip.CRC32C;
 
 /**
- * 在线 Slot 迁移（ADR-0043）：
- * INIT → COPYING（有序复制 + checkpoint）→ VERIFYING（CRC 校验）
- * → SWITCHING（SlotTable 原子切换）→ DONE（清理源）；失败/中断可从
- * checkpoint 续传。
+ * 游标 Slot 迁移（ADR-0045）：
+ * INIT → COPYING ⇄ PAUSED → VERIFYING → SWITCHING → DONE；
+ * 单个迭代器跨批次推进（MigrationCursor），checkpoint 持久化到
+ * migration/slot-{start}.cursor（CRC 保护），支持暂停/恢复/崩溃续传。
  */
 public final class SlotMigrationManager {
 
-    private static final int CHECKPOINT_MAGIC = 0x4D434B50; // 'MCKP'
-    private static final byte CHECKPOINT_VERSION = 1;
+    private static final int CURSOR_MAGIC = 0x4D435352; // 'MCSR'
+    private static final byte CURSOR_VERSION = 1;
 
     private final SlotTable slotTable;
     private final Path checkpointDir;
+    private final Map<String, StorageIterator> openIterators = new ConcurrentHashMap<>();
 
     public SlotMigrationManager(SlotTable slotTable, Path checkpointDir) {
         this.slotTable = slotTable;
@@ -37,8 +39,8 @@ public final class SlotMigrationManager {
     public MigrationState start(MigrationTask task) throws IOException {
         synchronized (task.lock()) {
             task.state(MigrationState.COPYING);
-            task.checkpoint(MigrationCheckpoint.empty()
-                    .withState(MigrationState.COPYING));
+            task.cursor(MigrationCursor.empty());
+            task.checkpoint(MigrationCheckpoint.empty().withState(MigrationState.COPYING));
             persist(task);
             return task.state();
         }
@@ -70,17 +72,53 @@ public final class SlotMigrationManager {
         }
     }
 
-    /** 从持久化 checkpoint 恢复未完成任务。 */
-    public MigrationTask resume(MigrationTask task) throws IOException {
+    /** 暂停：关闭迭代器并持久化游标。 */
+    public MigrationState pause(MigrationTask task) throws IOException {
         synchronized (task.lock()) {
-            MigrationCheckpoint saved = load(task.taskId());
+            if (task.state() != MigrationState.COPYING) {
+                return task.state();
+            }
+            closeIterator(task.taskId());
+            task.state(MigrationState.PAUSED);
+            task.checkpoint(task.checkpoint().withState(MigrationState.PAUSED));
+            persist(task);
+            return task.state();
+        }
+    }
+
+    /** 恢复：PAUSED → COPYING（迭代器在下一批次懒重建）。 */
+    public MigrationState resume(MigrationTask task) throws IOException {
+        synchronized (task.lock()) {
+            if (task.state() != MigrationState.PAUSED) {
+                return task.state();
+            }
+            task.state(MigrationState.COPYING);
+            task.checkpoint(task.checkpoint().withState(MigrationState.COPYING));
+            persist(task);
+            return task.state();
+        }
+    }
+
+    /** 从持久化游标恢复未完成任务（含崩溃恢复）。 */
+    public MigrationTask recover(MigrationTask task) throws IOException {
+        synchronized (task.lock()) {
+            CursorFile saved = load(task.slotStart());
             if (saved != null) {
-                task.checkpoint(saved);
-                task.state(saved.state() == MigrationState.DONE
-                        ? MigrationState.DONE : MigrationState.COPYING);
-                if (saved.state() == MigrationState.VERIFYING) {
-                    task.state(MigrationState.VERIFYING);
-                }
+                task.cursor(new MigrationCursor(saved.lastKey(), saved.lastVersion(),
+                        saved.checkpointOffset()));
+                task.checkpoint(new MigrationCheckpoint(saved.lastKey(),
+                        saved.copiedEntries(), saved.copiedBytes(), 0,
+                        saved.checkpointOffset(), saved.state()));
+                task.state(switch (saved.state()) {
+                    case DONE -> MigrationState.DONE;
+                    case VERIFYING -> MigrationState.VERIFYING;
+                    default -> MigrationState.COPYING;
+                });
+            } else {
+                // 无游标/游标损坏：从头开始
+                task.state(MigrationState.COPYING);
+                task.cursor(MigrationCursor.empty());
+                task.checkpoint(MigrationCheckpoint.empty().withState(MigrationState.COPYING));
             }
             return task;
         }
@@ -91,39 +129,52 @@ public final class SlotMigrationManager {
     }
 
     private void copyBatch(MigrationTask task, int batchSize) throws IOException {
+        StorageIterator iterator = openIterator(task);
+        MigrationCursor cursor = task.cursor();
         MigrationCheckpoint checkpoint = task.checkpoint();
         long entries = checkpoint.copiedEntries();
         long bytes = checkpoint.copiedBytes();
-        byte[] lastKey = checkpoint.lastKey();
         int copied = 0;
-        boolean completed = true;
-        try (StorageIterator iterator = task.source().iterator()) {
-            while (iterator.hasNext() && copied < batchSize) {
-                KeyValueEntry entry = iterator.next();
-                if (!inRange(task, entry.key()) || compare(entry.key(), lastKey) <= 0) {
-                    continue;
-                }
-                long ttl = entry.expireTimestamp() >= 0
-                        ? Math.max(0, entry.expireTimestamp() - System.currentTimeMillis())
-                        : StorageEngine.NO_TTL;
-                task.target().put(entry.key(), entry.value(), ttl);
-                lastKey = entry.key();
-                entries++;
-                bytes += entry.size();
-                copied++;
+        while (iterator.hasNext() && copied < batchSize) {
+            KeyValueEntry entry = iterator.next();
+            if (!inRange(task, entry.key())
+                    || compare(entry.key(), cursor.lastKey()) <= 0) {
+                continue;
             }
-            if (iterator.hasNext()) {
-                completed = false;
-            }
+            long ttl = entry.expireTimestamp() >= 0
+                    ? Math.max(0, entry.expireTimestamp() - System.currentTimeMillis())
+                    : StorageEngine.NO_TTL;
+            task.target().put(entry.key(), entry.value(), ttl);
+            cursor = cursor.advance(entry.key(), entry.version());
+            entries++;
+            bytes += entry.size();
+            copied++;
         }
+        boolean completed = !iterator.hasNext();
+        if (completed) {
+            closeIterator(task.taskId());
+        }
+        task.cursor(cursor);
         MigrationCheckpoint updated = new MigrationCheckpoint(
-                lastKey, entries, bytes, 0, MigrationState.COPYING);
+                cursor.lastKey(), entries, bytes, 0, cursor.checkpointOffset(),
+                MigrationState.COPYING);
         task.checkpoint(updated);
         if (completed) {
             task.state(MigrationState.VERIFYING);
             task.checkpoint(updated.withState(MigrationState.VERIFYING));
         }
         persist(task);
+    }
+
+    private StorageIterator openIterator(MigrationTask task) {
+        return openIterators.computeIfAbsent(task.taskId(), id -> task.source().iterator());
+    }
+
+    private void closeIterator(String taskId) {
+        StorageIterator iterator = openIterators.remove(taskId);
+        if (iterator != null) {
+            iterator.close();
+        }
     }
 
     private void verify(MigrationTask task) throws IOException {
@@ -164,7 +215,6 @@ public final class SlotMigrationManager {
         for (int slot = task.slotStart(); slot <= task.slotEnd(); slot++) {
             slotTable.reassign(slot, task.targetShardId());
         }
-        // 切换后清理源数据（先切换、后删除，避免流量指向空目标）
         try (StorageIterator iterator = task.source().iterator()) {
             while (iterator.hasNext()) {
                 KeyValueEntry entry = iterator.next();
@@ -186,15 +236,18 @@ public final class SlotMigrationManager {
     private void persist(MigrationTask task) throws IOException {
         Files.createDirectories(checkpointDir);
         MigrationCheckpoint checkpoint = task.checkpoint();
-        ByteBuffer payload = ByteBuffer.allocate(4 + 4 + 4 + checkpoint.lastKey().length
-                + 8 + 8 + 8 + 1).order(ByteOrder.BIG_ENDIAN);
+        MigrationCursor cursor = task.cursor();
+        ByteBuffer payload = ByteBuffer.allocate(
+                4 + 4 + 4 + cursor.lastKey().length + 8 + 8 + 8 + 8 + 1)
+                .order(ByteOrder.BIG_ENDIAN);
         payload.putInt(task.slotStart());
         payload.putInt(task.slotEnd());
-        payload.putInt(checkpoint.lastKey().length);
-        payload.put(checkpoint.lastKey());
+        payload.putInt(cursor.lastKey().length);
+        payload.put(cursor.lastKey());
+        payload.putLong(cursor.lastVersion());
+        payload.putLong(cursor.checkpointOffset());
         payload.putLong(checkpoint.copiedEntries());
         payload.putLong(checkpoint.copiedBytes());
-        payload.putLong(checkpoint.checksum());
         payload.put((byte) checkpoint.state().ordinal());
         byte[] payloadBytes = payload.array();
         CRC32C crc = new CRC32C();
@@ -202,26 +255,25 @@ public final class SlotMigrationManager {
 
         ByteBuffer out = ByteBuffer.allocate(4 + 1 + payloadBytes.length + 4)
                 .order(ByteOrder.BIG_ENDIAN);
-        out.putInt(CHECKPOINT_MAGIC);
-        out.put(CHECKPOINT_VERSION);
+        out.putInt(CURSOR_MAGIC);
+        out.put(CURSOR_VERSION);
         out.put(payloadBytes);
         out.putInt((int) crc.getValue());
-        Files.write(checkpointDir.resolve("checkpoint-" + task.taskId() + ".bin"),
-                out.array());
+        Files.write(checkpointDir.resolve(cursorFile(task.slotStart())), out.array());
     }
 
-    private MigrationCheckpoint load(String taskId) throws IOException {
-        Path file = checkpointDir.resolve("checkpoint-" + taskId + ".bin");
+    private CursorFile load(int slotStart) throws IOException {
+        Path file = checkpointDir.resolve(cursorFile(slotStart));
         if (!Files.exists(file)) {
             return null;
         }
         byte[] bytes = Files.readAllBytes(file);
         ByteBuffer buffer = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN);
-        if (buffer.getInt() != CHECKPOINT_MAGIC) {
+        if (buffer.getInt() != CURSOR_MAGIC) {
             return null;
         }
         byte version = buffer.get();
-        if (version != CHECKPOINT_VERSION) {
+        if (version != CURSOR_VERSION) {
             return null;
         }
         int payloadStart = buffer.position();
@@ -230,9 +282,10 @@ public final class SlotMigrationManager {
         int keyLength = buffer.getInt();
         byte[] lastKey = new byte[keyLength];
         buffer.get(lastKey);
-        long entries = buffer.getLong();
+        long lastVersion = buffer.getLong();
+        long checkpointOffset = buffer.getLong();
+        long copiedEntries = buffer.getLong();
         long copiedBytes = buffer.getLong();
-        long checksum = buffer.getLong();
         MigrationState state = MigrationState.values()[buffer.get()];
         int payloadEnd = buffer.position();
         int expectedCrc = buffer.getInt();
@@ -241,7 +294,12 @@ public final class SlotMigrationManager {
         if (crc.getValue() != (expectedCrc & 0xffffffffL)) {
             return null;
         }
-        return new MigrationCheckpoint(lastKey, entries, copiedBytes, checksum, state);
+        return new CursorFile(lastKey, lastVersion, checkpointOffset,
+                copiedEntries, copiedBytes, state);
+    }
+
+    private static String cursorFile(int slotStart) {
+        return "slot-" + slotStart + ".cursor";
     }
 
     private static int compare(byte[] a, byte[] b) {
@@ -249,5 +307,12 @@ public final class SlotMigrationManager {
     }
 
     private record CrcCount(long count, long checksum) {
+    }
+
+    private record CursorFile(byte[] lastKey, long lastVersion, long checkpointOffset,
+                              long copiedEntries, long copiedBytes, MigrationState state) {
+        private CursorFile {
+            lastKey = lastKey.clone();
+        }
     }
 }

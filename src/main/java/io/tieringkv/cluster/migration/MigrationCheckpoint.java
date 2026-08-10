@@ -8,10 +8,11 @@ public record MigrationCheckpoint(
         long copiedEntries,
         long copiedBytes,
         long checksum,
+        long checkpointOffset,
         MigrationState state) {
 
     public static MigrationCheckpoint empty() {
-        return new MigrationCheckpoint(new byte[0], 0, 0, 0, MigrationState.INIT);
+        return new MigrationCheckpoint(new byte[0], 0, 0, 0, 0, MigrationState.INIT);
     }
 
     public MigrationCheckpoint {
@@ -24,6 +25,7 @@ public record MigrationCheckpoint(
     }
 
     public MigrationCheckpoint withState(MigrationState state) {
-        return new MigrationCheckpoint(lastKey, copiedEntries, copiedBytes, checksum, state);
+        return new MigrationCheckpoint(lastKey, copiedEntries, copiedBytes, checksum,
+                checkpointOffset, state);
     }
 }

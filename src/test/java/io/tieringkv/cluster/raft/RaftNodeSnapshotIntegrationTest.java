@@ -80,7 +80,8 @@ class RaftNodeSnapshotIntegrationTest {
         n2.start();
         n3.start();
         try {
-            RaftNode leader = awaitTrueLeader(List.of(n1, n2, n3));
+            RaftNode leader = io.tieringkv.cluster.RaftTestSupport.awaitLeader(
+                    List.of(n1, n2, n3), 5000);
             for (int i = 0; i < ENTRIES; i++) {
                 leader.propose(("e" + i).getBytes(StandardCharsets.UTF_8)).get();
             }
@@ -118,19 +119,6 @@ class RaftNodeSnapshotIntegrationTest {
         };
         return new RaftNode(id, new LocalRaftTransport(peers, id), apply,
                 new LeaderElection(100, 80), 25, 10, log, persistent, snapshot);
-    }
-
-    private static RaftNode awaitTrueLeader(List<RaftNode> nodes) throws InterruptedException {
-        long deadline = System.currentTimeMillis() + 5000;
-        while (System.currentTimeMillis() < deadline) {
-            for (RaftNode node : nodes) {
-                if (node.state() == RaftState.LEADER) {
-                    return node;
-                }
-            }
-            Thread.sleep(10);
-        }
-        throw new AssertionError("no leader");
     }
 
     private static int countCommands(byte[] state) {

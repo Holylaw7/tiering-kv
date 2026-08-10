@@ -62,20 +62,27 @@ Netty TCP RPC（RpcServer/RpcClient/RpcCodec/RequestId，连接复用 +
 Slot 在线迁移（checkpoint 续传 + CRC 校验 + 原子切换）、3 节点真实
 TCP 集群集成（故障转移 + 重启恢复）。
 
+Phase 13 已交付：分布式优化——Raft 批量/流水线复制（batch +
+inflight + group commit + 空闲即刷，TCP 吞吐 22K ops/s）、游标迁移
+（MigrationCursor + PAUSED + `slot-{start}.cursor` CRC 续传，1KB 负载
+216–245MB/s）、安全 RPC（TLS + Token 认证/过期 + TokenBucket 限流）、
+元数据 Raft 化（MetadataRaftGroup 每副本独立状态机 + MetadataClient，
+故障转移 115–290ms）、跨机部署文档。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 12（Distributed Productionization）✅ 已完成**
-  （Phase 0–11 全部完成）；
-- 最近提交：Phase 12 分布式生产化（详见 git log）；
+- 阶段：**Phase 13（Distributed Optimization）✅ 已完成**
+  （Phase 0–12 全部完成）；
+- 最近提交：Phase 13 分布式优化（详见 git log）；
 - 基线：tag `phase-0`；分支策略：feature/* 合并入 develop，main 保持稳定；
-- 下一步：批量/并行复制、迁移单次迭代游标、RPC TLS、元数据 Raft 化
-  （Phase 13，等待用户指令）。
+- 下一步：MemTable 批量写、自适应 flush/异步客户端、token 签名轮换
+  （Phase 14，等待用户指令）。
 
-项目里程碑：**12 阶段路线图全部完成（2026-08-10）**；定位 = 单机完整冷热
+项目里程碑：**13 阶段路线图全部完成（2026-08-10）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化（RESP + Async Server + Shard + Memory + LFU +
 WAL + LSM/SSTable + Bloom + Compaction + Migration + mmap + BlockCache +
-Production Runtime + Raft 持久化 + TCP RPC + Snapshot + Slot 迁移），
-能力矩阵全 ✅。
+Production Runtime + Raft 持久化 + TCP RPC + Snapshot + Slot 迁移 +
+批量复制 + 安全 RPC + 元数据 Raft），能力矩阵全 ✅。
 
 ## 3. 技术栈
 
@@ -96,6 +103,7 @@ Production Runtime + Raft 持久化 + TCP RPC + Snapshot + Slot 迁移），
 | 生产化 | 批处理 + YAML 配置 + Metrics/INFO + 优雅停机（ADR-0032~0034） |
 | 分布式 | 16384 哈希槽路由 + 元数据服务 + 最小 Raft + 复制适配器（ADR-0035~0038） |
 | 分布式生产化 | RaftLog 持久化 + Snapshot + Netty RPC + 复制优化 + Slot 迁移（ADR-0039~0043） |
+| 分布式优化 | 批量/流水线复制 + 游标迁移 + TLS/认证/限流 + 元数据 Raft（ADR-0044~0047） |
 | 包结构 | `io.tieringkv.{network,protocol,command,storage,memory,cache,eviction,wal,sstable,compaction,scheduler,metrics,benchmark}` |
 
 ## 4. 关键决策（ADR）
@@ -145,6 +153,10 @@ Production Runtime + Raft 持久化 + TCP RPC + Snapshot + Slot 迁移），
 | [ADR-0041](adr/ADR-0041-distributed-rpc-design.md) | Netty TCP RPC：帧/关联/超时/重试/连接复用 |
 | [ADR-0042](adr/ADR-0042-replication-lag-optimization.md) | CommitNotifier 立即补发，滞后 <5ms |
 | [ADR-0043](adr/ADR-0043-slot-migration-strategy.md) | 在线迁移状态机 + checkpoint 续传 + CRC 校验 |
+| [ADR-0044](adr/ADR-0044-raft-batch-replication.md) | 批量 AppendEntries + 流水线 + group commit |
+| [ADR-0045](adr/ADR-0045-slot-cursor-migration.md) | MigrationCursor 单次扫描 + PAUSED + 游标文件 |
+| [ADR-0046](adr/ADR-0046-rpc-security.md) | TLS + Token 认证/过期 + TokenBucket 限流 |
+| [ADR-0047](adr/ADR-0047-metadata-raft.md) | 独立元数据 Raft 组 + 每副本状态机 |
 
 ## 5. 仓库布局
 
@@ -154,7 +166,7 @@ tiering-kv/
 ├── docs/
 │   ├── requirements/  # requirements.md + acceptance.md
 │   ├── architecture/  # overview + storage/network/concurrency
-│   ├── adr/           # ADR-0001 ~ 0043
+│   ├── adr/           # ADR-0001 ~ 0047
 │   ├── design/        # protocol/memory/lsm/bitcask/eviction
 │   ├── benchmark/     # 计划 + 报告占位
 │   ├── review/        # 评审记录
@@ -187,6 +199,7 @@ tiering-kv/
 | 10 | 生产化完善 | ✅ |
 | 11 | 分布式集群 | ✅ |
 | 12 | 分布式生产化 | ✅ |
+| 13 | 分布式优化 | ✅ |
 
 ## 7. 技术债
 
@@ -217,10 +230,13 @@ tiering-kv/
 | TD-023 | 进程内直调 → Netty TCP RPC + 超时重试 | ✅ 已关闭（Phase 12） |
 | TD-024 | 复制滞后 13–35ms → CommitNotifier 立即补发（<1ms） | ✅ 已关闭（Phase 12） |
 | TD-025 | 动态分片（slot 迁移）→ 在线迁移 + checkpoint | ✅ 已关闭（Phase 12） |
-| TD-026 | 复制为同步串行 propose → 批量/并行 AppendEntries | Phase 13 |
-| TD-027 | 迁移每批重建源快照迭代 → 单次迭代 + 游标 checkpoint | Phase 13 |
-| TD-028 | RPC 无 TLS/认证/限流 | Phase 13 |
-| TD-029 | 元数据服务单机实现 → Raft 化落地 | Phase 13 |
+| TD-026 | 复制为同步串行 propose → 批量/流水线（9.2K ops/s） | ✅ 已关闭（Phase 13） |
+| TD-027 | 迁移每批重建源快照 → 游标单次扫描 | ✅ 已关闭（Phase 13） |
+| TD-028 | RPC 无 TLS/认证/限流 → 安全 RPC 层 | ✅ 已关闭（Phase 13） |
+| TD-029 | 元数据单机 → Raft 元数据组 | ✅ 已关闭（Phase 13） |
+| TD-030 | 小负载迁移受单条 put 成本限制 → MemTable 批量写 | Phase 14 |
+| TD-031 | 复制 P50≈6ms → 自适应 flush/异步客户端 | Phase 14 |
+| TD-032 | RPC 静态 token → HMAC 签名轮换；mTLS | Phase 14 |
 
 ## 8. 会话启动清单
 

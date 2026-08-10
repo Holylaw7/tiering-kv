@@ -137,7 +137,7 @@ class SlotMigrationTest {
             MigrationTask resumed = new MigrationTask("t5", 0, HashSlotRouter.SLOT_COUNT - 1,
                     1, source, target);
             SlotMigrationManager second = new SlotMigrationManager(slotTable, dir);
-            second.resume(resumed);
+            second.recover(resumed);
             assertThat(resumed.checkpoint().copiedEntries()).isGreaterThan(0);
             runToCompletion(second, resumed);
             assertThat(target.size()).isEqualTo(50);
@@ -234,10 +234,10 @@ class SlotMigrationTest {
             SlotMigrationManager manager = new SlotMigrationManager(slotTable, dir);
             manager.start(task);
             manager.runBatch(task, 7);
-            assertThat(java.nio.file.Files.exists(dir.resolve("checkpoint-t9.bin"))).isTrue();
+            assertThat(java.nio.file.Files.exists(dir.resolve("slot-0.cursor"))).isTrue();
             MigrationTask reloaded = new MigrationTask("t9", 0,
                     HashSlotRouter.SLOT_COUNT - 1, 1, source, target);
-            new SlotMigrationManager(slotTable, dir).resume(reloaded);
+            new SlotMigrationManager(slotTable, dir).recover(reloaded);
             assertThat(reloaded.checkpoint().copiedEntries()).isEqualTo(7);
         } finally {
             source.close();
