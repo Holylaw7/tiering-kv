@@ -86,7 +86,14 @@ class MetadataPersistenceTest {
         second.start();
         try {
             RaftNode leader = awaitLeader(second.nodes(), 5000);
+            new MetadataClient(second).join("post");
             MetadataState state = second.state(leader.id());
+            long deadline = System.currentTimeMillis() + 5000;
+            while (System.currentTimeMillis() < deadline
+                    && !state.nodes().contains("storage-1")) {
+                Thread.sleep(20);
+                state = second.state(leader.id());
+            }
             assertThat(state.nodes().contains("storage-1")).isTrue();
             assertThat(state.topology().slotTable().shardFor(100)).isEqualTo(0);
             assertThat(state.topology().shardRegistry().get(0).leader())

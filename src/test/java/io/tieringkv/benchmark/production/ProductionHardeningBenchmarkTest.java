@@ -204,10 +204,12 @@ class ProductionHardeningBenchmarkTest {
         second.start();
         try {
             RaftNode leader = awaitLeader(second.nodes(), 5000);
+            new MetadataClient(second).join("after");
             long restartMs = System.currentTimeMillis() - start;
             long deadline = System.currentTimeMillis() + 5000;
             while (System.currentTimeMillis() < deadline
-                    && !second.state(leader.id()).nodes().contains("node-49")) {
+                    && (!second.state(leader.id()).nodes().contains("node-49")
+                    || !second.state(leader.id()).nodes().contains("after"))) {
                 Thread.sleep(20);
             }
             assertThat(second.state(leader.id()).nodes().contains("node-49")).isTrue();
