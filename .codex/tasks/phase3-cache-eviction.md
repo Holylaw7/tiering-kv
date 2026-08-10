@@ -1,5 +1,7 @@
 # Phase 3 Task: Hot Data Management Layer (LFU / ARC Eviction)
 
+状态：✅ 已完成（2026-08-10）
+
 ## Task Identity
 
 Project:
@@ -839,31 +841,40 @@ add cache ADRs
 
 Phase 3 完成：
 
-[ ] HotnessTracker完成
+[x] HotnessTracker完成
 
-[ ] LFU完成
+[x] LFU完成
 
-[ ] LFU decay完成
+[x] LFU decay完成
 
-[ ] ARC prototype完成
+[x] ARC prototype完成
 
-[ ] EvictionManager完成
+[x] EvictionManager完成
 
-[ ] Migration接口完成
+[x] Migration接口完成
 
-[ ] MemoryManager集成完成
+[x] MemoryManager集成完成
 
-[ ] 单元测试完成
+[x] 单元测试完成
 
-[ ] Benchmark完成
+[x] Benchmark完成
 
-[ ] ADR-0010完成
+[x] ADR-0010完成
 
-[ ] ADR-0011完成
+[x] ADR-0011完成
 
-[ ] ADR-0012完成
+[x] ADR-0012完成
 
-[ ] Git commit完成
+[x] Git commit完成
+
+## 验收结果
+
+- `mvn test`：111 用例全绿（Phase 1/2 全部回归通过）。
+- 基准：LFU 查找 P99≈7.4μs、更新 P99≈8.8μs（100K 键 1M 访问）；
+  淘汰决策 P99≈0.9μs（1M 条目，目标 <1ms）。
+- 淘汰链路：超配额 → LFU 选候选 → MigrationCallback → 物理移除；
+  用户 DEL 保持 tombstone。
+- ADR-0010 / 0011 / 0012 已生成；Command 层无感知（装饰器接入）。
 
 ---
 

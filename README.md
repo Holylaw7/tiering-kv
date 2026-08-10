@@ -81,6 +81,25 @@ MemTable（64 段 SkipList + 分段读写锁）
 - DELETE 使用 tombstone；TTL 惰性 + 主动清扫（ADR-0009）；
 - `SET key value EX seconds | PX milliseconds` 已支持。
 
+## 热数据管理层（Phase 3）
+
+```text
+Command Layer
+     │
+     ▼
+TrackingStorageEngine（装饰器：产生 AccessEvent）
+     │
+     ▼
+EvictionManager
+     ├── LFU（默认：频率 + 周期衰减）
+     ├── ARC（原型：T1/T2 + B1/B2 ghost）
+     └── MigrationCallback（Phase 4/6 接冷存储）
+```
+
+- 每次 GET / SET / DELETE 产生访问事件，热度数据驱动淘汰决策；
+- LFU 频率按可配置周期衰减（×0.5，懒计算）；
+- 超内存配额 → 选候选 → 迁移回调 → 物理移除；用户 DEL 仍走 tombstone。
+
 ## 技术栈
 
 | 层次 | 选型 |

@@ -10,7 +10,7 @@
 | 0 | 工程初始化 | ✅ 完成（2026-08-09） |
 | 1 | RESP 协议 | ✅ 完成（2026-08-09） |
 | 2 | 内存 KV 核心 | ✅ 完成（2026-08-10） |
-| 3 | LFU / ARC 热度管理 | ⏳ 未开始 |
+| 3 | LFU / ARC 热度管理 | ✅ 完成（2026-08-10） |
 | 4 | Bitcask 持久化 | ⏳ 未开始 |
 | 5 | LSM Tree | ⏳ 未开始 |
 | 6 | 冷热迁移 | ⏳ 未开始 |
@@ -51,11 +51,18 @@
   100 线程并发写 0 失败（详见
   [memory-engine-report.md](docs/benchmark/memory-engine-report.md)）。
 
-## Phase 3 — LFU / ARC 热度管理
+## Phase 3 — LFU / ARC 热度管理 ✅
 
 - 目标：访问采样、LFU 衰减、ARC 自适应列表、冷热判定阈值。
-- 交付：eviction / cache 模块、热度模拟测试。
-- ADR：[0004](docs/adr/ADR-0004-cache-policy.md)（已创建，实现阶段细化）。
+- 交付：HotnessTracker / FrequencyCounter / LFUPolicy / ARCPolicy /
+  EvictionManager / MigrationCallback / TrackingStorageEngine；命令层无感知接入。
+- ADR：[0004](docs/adr/ADR-0004-cache-policy.md)（缓存策略）、
+  [0010](docs/adr/ADR-0010-hotness-tracking-strategy.md)（热度跟踪）、
+  [0011](docs/adr/ADR-0011-lfu-decay-algorithm.md)（LFU 衰减）、
+  [0012](docs/adr/ADR-0012-arc-policy-evaluation.md)（ARC 评估）。
+- 基准：LFU 查找 P99≈7.4μs、更新 P99≈8.8μs（100K 键 1M 访问）；
+  淘汰决策 P99≈0.9μs（1M 条目，目标 <1ms，详见
+  [cache-eviction-report.md](docs/benchmark/cache-eviction-report.md)）。
 
 ## Phase 4 — Bitcask 持久化
 
