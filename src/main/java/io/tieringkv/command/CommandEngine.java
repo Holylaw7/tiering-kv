@@ -1,9 +1,12 @@
 package io.tieringkv.command;
 
+import io.tieringkv.execution.KeyShardExecutor;
 import io.tieringkv.protocol.RespError;
 import io.tieringkv.protocol.RespValue;
 import io.tieringkv.storage.StorageEngine;
 
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.CompletableFuture;
 import java.util.Locale;
 
 /**
@@ -14,10 +17,16 @@ public final class CommandEngine {
 
     private final CommandRegistry registry;
     private final StorageEngine storage;
+    private final KeyShardExecutor executor;
 
     public CommandEngine(CommandRegistry registry, StorageEngine storage) {
+        this(registry, storage, null);
+    }
+
+    public CommandEngine(CommandRegistry registry, StorageEngine storage, KeyShardExecutor executor) {
         this.registry = registry;
         this.storage = storage;
+        this.executor = executor;
     }
 
     public RespValue execute(RespCommand command) {
@@ -28,5 +37,27 @@ public final class CommandEngine {
             return RespError.unknownCommand(name);
         }
         return handler.execute(command.args(), storage);
+    }
+
+    /**
+     * 异步执行（ADR-0023）：配置了 KeyShardExecutor 时按 key 分片并行，
+     * 同键 FIFO；未配置时同步返回。异常通过 future 传播。
+     */
+    public CompletableFuture<RespValue> executeAsync(RespCommand command) {
+        if (executor == null) {
+            return CompletableFuture.completedFuture(execute(command));
+        }
+        byte[] key = command.args().isEmpty()
+                ? command.name().getBytes(StandardCharsets.UTF_8)
+                : command.args().get(0);
+        CompletableFuture<RespValue> future = new CompletableFuture<>();
+        executor.submit(key, () -> {
+            try {
+                future.complete(execute(command));
+            } catch (Throwable t) {
+                future.completeExceptionally(t);
+            }
+        });
+        return future;
     }
 }
