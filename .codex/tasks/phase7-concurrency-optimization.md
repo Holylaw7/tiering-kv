@@ -1013,7 +1013,8 @@ Phase7完成：
 - `mvn test`：全量用例全绿（Phase 1–6 全部回归通过）。
 - KeyShardExecutor：同键 FIFO、异键并行；ResponseSequencer 保证 RESP 保序。
 - MemTable 256 段；热点检测 + 请求合并 + 本地读缓存（写失效）。
-- 基准与报告：docs/benchmark/concurrency-report.md。
+- 基准（docs/benchmark/concurrency-report.md）：GET 最高 6.3M ops/s、
+  SET 4.5M ops/s、P99 <0.1ms、分片加速 2.79×、0 lost update。
 
 ---
 
