@@ -98,6 +98,13 @@
   （500K 目标未达，瓶颈=协议/调度）；C 级全链路 115–178K ops/s；
   Workload D 压力下内存受控、冷层落盘。
 - ADR-0029（基准方法）、ADR-0030（容量模型）、ADR-0031（部署画像）。
+- Phase 10 高级优化与生产化：响应批处理（ResponseBatcher/ResponseBuffer，
+  batch=64 + 排空 flush）、回调式执行（去掉每请求 Future）、YAML 配置
+  （TieringConfig + application.yaml）、MetricsRegistry + INFO 命令、
+  ShutdownManager 优雅停机（stop accept → drain → WAL force + checkpoint）。
+- 基准：Level B pipeline64×500 218–231K → 465K（>400K ✅）、pipeline128
+  → 1.14M；Level C 154–326K 无回退。
+- ADR-0032（响应批处理）、ADR-0033（内存模型）、ADR-0034（服务生命周期）。
 - Phase 9 评审处置：确认瓶颈分层（A 4.7M → B 230K → C 150K，瓶颈=协议/调度）；
   登记 TD-020（request→response 对象数优化）与 TD-021（JFR 验收指标）。
 - Phase 8 IO 优化：MmapSSTableReader（零拷贝块读）+ FileChannel baseline、

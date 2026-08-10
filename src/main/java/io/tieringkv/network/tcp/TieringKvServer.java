@@ -9,6 +9,7 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.tieringkv.command.CommandEngine;
 import io.tieringkv.config.ServerConfig;
 import io.tieringkv.network.connection.ConnectionInitializer;
+import io.tieringkv.monitor.MetricsRegistry;
 
 import java.net.InetSocketAddress;
 import java.util.concurrent.CountDownLatch;
@@ -21,6 +22,7 @@ public final class TieringKvServer implements AutoCloseable {
 
     private final ServerConfig config;
     private final CommandEngine engine;
+    private final MetricsRegistry metrics;
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
     private EventLoopGroup bossGroup;
@@ -28,8 +30,13 @@ public final class TieringKvServer implements AutoCloseable {
     private Channel serverChannel;
 
     public TieringKvServer(ServerConfig config, CommandEngine engine) {
+        this(config, engine, new MetricsRegistry());
+    }
+
+    public TieringKvServer(ServerConfig config, CommandEngine engine, MetricsRegistry metrics) {
         this.config = config;
         this.engine = engine;
+        this.metrics = metrics;
     }
 
     public void start() throws InterruptedException {
@@ -40,7 +47,7 @@ public final class TieringKvServer implements AutoCloseable {
                 .channel(NioServerSocketChannel.class)
                 .option(ChannelOption.SO_REUSEADDR, true)
                 .childOption(ChannelOption.TCP_NODELAY, true)
-                .childHandler(new ConnectionInitializer(engine));
+                .childHandler(new ConnectionInitializer(engine, metrics));
         serverChannel = bootstrap.bind(config.host(), config.port()).sync().channel();
     }
 
@@ -52,6 +59,13 @@ public final class TieringKvServer implements AutoCloseable {
     /** 阻塞直到 {@link #shutdown()} 被调用。 */
     public void awaitTermination() throws InterruptedException {
         shutdownLatch.await();
+    }
+
+    /** 停止接受新连接（ADR-0034 优雅停机第一步）。 */
+    public void stopAccepting() {
+        if (serverChannel != null) {
+            serverChannel.close().syncUninterruptibly();
+        }
     }
 
     public void shutdown() {

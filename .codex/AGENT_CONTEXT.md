@@ -45,13 +45,17 @@ Phase 9 已交付：三级生产基准（A/B/C）+ 容量模型 + 部署画像�
 A 级 GET 4.7M ops/s；B 级 pipeline64 峰值 218–231K（目标 500K 未达）；
 C 级全链路 115–178K ops/s；瓶颈 = 网络/RESP/调度层。
 
+Phase 10 已交付：响应批处理（pipeline64×500 → 465K ✅）+ 回调式执行 +
+YAML 配置 + Metrics/INFO + ShutdownManager；Level C 154–326K 无回退。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 9（Production Benchmark）✅ 已完成**（Phase 0–8 ✅）；
-- 最近提交：`benchmark: add production benchmark`（详见 git log）；
+- 阶段：**Phase 10（Advanced Optimization & Productionization）✅ 已完成**
+  （Phase 0–9 全部完成）；
+- 最近提交：`feat: add graceful shutdown`（详见 git log）；
 - 基线：tag `phase-0`；分支策略：feature/* 合并入 develop，main 保持稳定；
-- 下一步：**Phase 10 Advanced Optimization（协议/调度层优化 + 生产化）**
-  （等待用户指令）。
+- 下一步：项目按 10 阶段路线图全部完成；可进入独立进程复测、集群扩展或
+  对外发布准备（等待用户指令）。
 
 ## 3. 技术栈
 
@@ -69,6 +73,7 @@ C 级全链路 115–178K ops/s；瓶颈 = 网络/RESP/调度层。
 | 并发 | KeyShardExecutor + ResponseSequencer + 热点读缓存（ADR-0023~0025） |
 | IO | mmap 零拷贝 + BlockCache + Off-Heap MemoryPool（ADR-0026~0028） |
 | 生产基准 | 三级基准 + 容量模型 + 部署画像（ADR-0029~0031） |
+| 生产化 | 批处理 + YAML 配置 + Metrics/INFO + 优雅停机（ADR-0032~0034） |
 | 包结构 | `io.tieringkv.{network,protocol,command,storage,memory,cache,eviction,wal,sstable,compaction,scheduler,metrics,benchmark}` |
 
 ## 4. 关键决策（ADR）
@@ -106,6 +111,9 @@ C 级全链路 115–178K ops/s；瓶颈 = 网络/RESP/调度层。
 | [ADR-0029](adr/ADR-0029-production-benchmark-methodology.md) | 三级基准方法与环境冻结 |
 | [ADR-0030](adr/ADR-0030-capacity-model.md) | CPU/内存/磁盘/网络容量模型 |
 | [ADR-0031](adr/ADR-0031-production-deployment-profile.md) | 生产部署画像（JVM/线程/WAL/水位） |
+| [ADR-0032](adr/ADR-0032-response-batching-strategy.md) | 自适应响应批处理（batch=64 + 排空 flush） |
+| [ADR-0033](adr/ADR-0033-request-response-memory-model.md) | 回调式执行 + 缓冲复用（对象削减） |
+| [ADR-0034](adr/ADR-0034-production-service-lifecycle.md) | 启动/优雅停机生命周期（drain + WAL force + checkpoint） |
 
 ## 5. 仓库布局
 
@@ -145,6 +153,7 @@ tiering-kv/
 | 7 | 并发优化 | ✅ |
 | 8 | mmap / Memory Pool | ✅ |
 | 9 | Benchmark | ✅ |
+| 10 | 生产化完善 | ✅ |
 | 10 | 生产化 | 未开始 |
 
 ## 7. 技术债
