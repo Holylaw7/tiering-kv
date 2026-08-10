@@ -74,6 +74,21 @@ public final class RoutingTable implements UnifiedRouter {
         version++;
     }
 
+    /** 移除条目（合并/失效时使用）：键范围/槽位/region 映射清除。 */
+    public synchronized void remove(RegionId regionId) {
+        RoutingTableEntry old = byRegion.remove(regionId);
+        if (old == null) {
+            return;
+        }
+        byStartKey.remove(old.startKey());
+        for (int slot = old.slotStart(); slot <= old.slotEnd(); slot++) {
+            if (bySlot[slot] == old) {
+                bySlot[slot] = null;
+            }
+        }
+        version++;
+    }
+
     public synchronized int entryCount() {
         return byRegion.size();
     }
