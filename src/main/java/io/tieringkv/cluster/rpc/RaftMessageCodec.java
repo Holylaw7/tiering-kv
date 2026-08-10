@@ -4,6 +4,8 @@ import io.tieringkv.cluster.raft.AppendEntriesRequest;
 import io.tieringkv.cluster.raft.AppendEntriesResponse;
 import io.tieringkv.cluster.raft.InstallSnapshotRequest;
 import io.tieringkv.cluster.raft.InstallSnapshotResponse;
+import io.tieringkv.cluster.raft.TimeoutNowRequest;
+import io.tieringkv.cluster.raft.TimeoutNowResponse;
 import io.tieringkv.cluster.raft.LogEntry;
 import io.tieringkv.cluster.raft.VoteRequest;
 import io.tieringkv.cluster.raft.VoteResponse;
@@ -145,6 +147,33 @@ public final class RaftMessageCodec {
         buffer.putLong(response.term());
         buffer.put(response.success() ? (byte) 1 : (byte) 0);
         return buffer.array();
+    }
+
+    public static byte[] encode(TimeoutNowRequest request) {
+        byte[] leader = utf8(request.leaderId());
+        ByteBuffer buffer = ByteBuffer.allocate(8 + 2 + leader.length)
+                .order(ByteOrder.BIG_ENDIAN);
+        buffer.putLong(request.term());
+        buffer.putShort((short) leader.length);
+        buffer.put(leader);
+        return buffer.array();
+    }
+
+    public static TimeoutNowRequest decodeTimeoutNowRequest(byte[] bytes) {
+        ByteBuffer buffer = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN);
+        return new TimeoutNowRequest(buffer.getLong(), readString(buffer));
+    }
+
+    public static byte[] encode(TimeoutNowResponse response) {
+        ByteBuffer buffer = ByteBuffer.allocate(9).order(ByteOrder.BIG_ENDIAN);
+        buffer.putLong(response.term());
+        buffer.put(response.accepted() ? (byte) 1 : (byte) 0);
+        return buffer.array();
+    }
+
+    public static TimeoutNowResponse decodeTimeoutNowResponse(byte[] bytes) {
+        ByteBuffer buffer = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN);
+        return new TimeoutNowResponse(buffer.getLong(), buffer.get() == 1);
     }
 
     public static InstallSnapshotResponse decodeInstallSnapshotResponse(byte[] bytes) {

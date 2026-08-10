@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.LongAdder;
 public final class RegionMetricsRegistry {
 
     private final LongAdder splits = new LongAdder();
+    private final LongAdder merges = new LongAdder();
     private final LongAdder moveBytes = new LongAdder();
     private final AtomicLong regionCount = new AtomicLong();
     private final AtomicLong regionSize = new AtomicLong();
@@ -20,6 +21,10 @@ public final class RegionMetricsRegistry {
 
     public void recordSplit() {
         splits.increment();
+    }
+
+    public void recordMerge() {
+        merges.increment();
     }
 
     public void recordRegionMoveBytes(long bytes) {
@@ -47,6 +52,7 @@ public final class RegionMetricsRegistry {
                 regionCount.get(),
                 regionSize.get(),
                 splits.sum(),
+                merges.sum(),
                 raftGroupCount.get(),
                 leaderDistribution,
                 moveBytes.sum());
@@ -58,12 +64,14 @@ public final class RegionMetricsRegistry {
                 "region_count:%d\r\n"
                         + "region_size_bytes:%d\r\n"
                         + "region_split_count:%d\r\n"
+                        + "region_merge_count:%d\r\n"
                         + "raft_group_count:%d\r\n"
                         + "leader_distribution:%s\r\n"
                         + "region_move_bytes:%d\r\n",
                 s.regionCount(),
                 s.regionSizeBytes(),
                 s.regionSplitCount(),
+                s.regionMergeCount(),
                 s.raftGroupCount(),
                 s.leaderDistribution(),
                 s.regionMoveBytes());
@@ -77,6 +85,7 @@ public final class RegionMetricsRegistry {
             long regionCount,
             long regionSizeBytes,
             long regionSplitCount,
+            long regionMergeCount,
             long raftGroupCount,
             String leaderDistribution,
             long regionMoveBytes) {

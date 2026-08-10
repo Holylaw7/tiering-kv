@@ -342,10 +342,15 @@ class RaftTest {
         List<BackfillTransport> transports = new ArrayList<>();
         for (String id : List.of("n1", "n2", "n3")) {
             BackfillTransport transport = new BackfillTransport(peers, id);
+            // n1 快速选举确保为 leader，避免 n3（目标滞后副本）当选
+            io.tieringkv.cluster.raft.LeaderElection election =
+                    id.equals("n1")
+                            ? new io.tieringkv.cluster.raft.LeaderElection(12, 4)
+                            : ELECTION;
             RaftNode node = new RaftNode(id, transport,
                     (index, command) -> applied.add(
                             new String(command, StandardCharsets.UTF_8)),
-                    ELECTION, 25, 10, new MemoryRaftLog(), null, null);
+                    election, 25, 10, new MemoryRaftLog(), null, null);
             nodes.add(node);
             transports.add(transport);
         }
@@ -356,13 +361,16 @@ class RaftTest {
         awaitTrue("all have A", () ->
                 nodes.stream().allMatch(n -> n.logSize() == 1), 3000);
         // 断开 leader → n3 的复制（n3 滞后）
-        BackfillTransport leaderTransport = transports.get(
-                nodes.indexOf(leader));
-        leaderTransport.dropTarget = "n3";
+        // 全部传输丢弃到 n3：避免选举切换后新 leader 绕开丢弃
+        for (BackfillTransport transport : transports) {
+            transport.dropTarget = "n3";
+        }
         leader.propose(bytes("B")).get();
         assertThat(nodes.stream().filter(n -> n.id().equals("n3"))
                 .findFirst().orElseThrow().logSize()).isEqualTo(1);
-        leaderTransport.dropTarget = null;
+        for (BackfillTransport transport : transports) {
+            transport.dropTarget = null;
+        }
         // 击杀 leader，n2 以非空日志当选
         leader.suspend();
         leader.close();

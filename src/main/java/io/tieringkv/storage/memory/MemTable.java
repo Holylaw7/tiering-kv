@@ -393,6 +393,35 @@ public final class MemTable implements StorageEngine, AutoCloseable {
     }
 
     /**
+     * 分段范围迭代器（ADR-0063）：仅快照 [from, to] 段的条目，
+     * 供并行迁移按段分片（各 worker 独立快照，无跨 worker 竞争）。
+     */
+    public StorageIterator segmentIterator(int from, int to) {
+        if (from < 0 || to >= SEGMENT_COUNT || from > to) {
+            throw new IllegalArgumentException(
+                    "invalid segment range " + from + ".." + to);
+        }
+        long now = timeSource.nowMillis();
+        List<List<KeyValueEntry>> perSegment = new ArrayList<>(to - from + 1);
+        for (int s = from; s <= to; s++) {
+            Segment segment = segments[s];
+            segment.lock.readLock().lock();
+            try {
+                List<KeyValueEntry> live = new ArrayList<>();
+                for (KeyValueEntry entry : segment.list.entriesInOrder()) {
+                    if (entry.isLive(now)) {
+                        live.add(entry);
+                    }
+                }
+                perSegment.add(live);
+            } finally {
+                segment.lock.readLock().unlock();
+            }
+        }
+        return new MergingIterator(perSegment);
+    }
+
+    /**
      * 供 TTLManager 调用：仅当版本与过期时间均匹配且确实到期时物理移除，
      * 防止误删"已重新设置 TTL"的新数据（ADR-0009 版本守卫）。
      */

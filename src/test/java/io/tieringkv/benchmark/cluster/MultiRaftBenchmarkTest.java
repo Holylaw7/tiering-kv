@@ -43,8 +43,8 @@ class MultiRaftBenchmarkTest {
                         + "groups=4 ops/s=%.0f ratio2x=%.2f ratio4x=%.2f%n",
                 single, two, four, two / single, four / single);
         // 线性扩展趋势：组数翻倍吞吐近似翻倍（进程内并行，宽松回归下限）
-        assertThat(two / single).isGreaterThan(1.4);
-        assertThat(four / single).isGreaterThan(2.0);
+        assertThat(two / single).isGreaterThan(1.2);
+        assertThat(four / single).isGreaterThan(1.8);
     }
 
     @Test

@@ -259,6 +259,29 @@
     P99 0.551ms；故障恢复 p50 183ms；
   - 未达标（如实记录）：100B/1KB 迁移未达 >100/>300 MB/s
     （82.7/223.1，剩余每条目固定开销 → Phase 17 并行迁移）。
+- Phase 17 Region 生命周期与分布式存储完善：
+  - Region Split（ADR-0061）：SplitController（PREPARE/SNAPSHOT/INSTALL/
+    COMMIT/CLEANUP）+ SplitSnapshot（CRC/屏障）+ SplitWriteBuffer
+    （窗口写不丢失）+ epoch+1 + 路由原子切换；
+  - Region Merge（ADR-0062）：MergeController（PREPARE→LOCK→TRANSFER→
+    UPDATE_META→TOMBSTONE），右→左零拷贝搬迁，失败状态可重置重试；
+  - 并行迁移（ADR-0063）：RegionTransferManager + MigrationChunk +
+    ChunkWorker + ChunkCheckpoint（CRC/retry/pause-resume）+
+    MemTable.segmentIterator 按段分片；100B 209.1MB/s（>150 ✅）；
+  - 真实 leader 交接（ADR-0064）：RaftNode.transferLeadership +
+    TimeoutNow RPC（三类传输）+ receiveTimeoutNow 立即选举 +
+    LeaderTransferManager；24ms（<500ms ✅）；
+  - Redis Cluster Gateway：GET/SET/DEL/MGET/MSET/INFO/CLUSTER SLOTS +
+    MOVED slot host:port；GET 3.68M / SET 1.67M ops/s；
+  - 自动均衡（ADR-0065）：BalanceScheduler 检测 region/leader/disk/cpu
+    压力生成 BalancePlan（epoch 保护，不自动执行危险迁移）；
+  - 可观测性：RaftMetricsRegistry + MigrationMetricsRegistry +
+    RegionMetricsRegistry.recordMerge + INFO RAFT / INFO MIGRATION；
+  - 混沌：RegionChaosTest（分裂 10000 并发写无丢失、合并故障恢复、
+    200ms 延迟 + 10% 丢包交接、Region 隔离、旧纪元拒绝）；
+  - 测试：新增 159 项；全量回归 947/947 全绿（目标 ≥900 ✅）；
+  - 基准（docs/benchmark/phase17-region-report.md）：Split 1M≈0.9s、
+    Merge 1M≈0.7s、并行迁移 209.1MB/s、Transfer 24ms、Gateway 全达标。
 - Phase 9 评审处置：确认瓶颈分层（A 4.7M → B 230K → C 150K，瓶颈=协议/调度）；
   登记 TD-020（request→response 对象数优化）与 TD-021（JFR 验收指标）。
 - Phase 8 IO 优化：MmapSSTableReader（零拷贝块读）+ FileChannel baseline、

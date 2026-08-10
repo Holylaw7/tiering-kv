@@ -5,6 +5,8 @@ import io.tieringkv.cluster.raft.AppendEntriesResponse;
 import io.tieringkv.cluster.raft.InstallSnapshotRequest;
 import io.tieringkv.cluster.raft.InstallSnapshotResponse;
 import io.tieringkv.cluster.raft.RaftNode;
+import io.tieringkv.cluster.raft.TimeoutNowRequest;
+import io.tieringkv.cluster.raft.TimeoutNowResponse;
 import io.tieringkv.cluster.raft.VoteRequest;
 import io.tieringkv.cluster.raft.VoteResponse;
 import io.tieringkv.cluster.rpc.security.RpcSecurityConfig;
@@ -110,6 +112,13 @@ public final class MultiRaftEndpoint implements AutoCloseable {
                         RaftMessageCodec.decodeInstallSnapshotRequest(plain);
                 InstallSnapshotResponse response = node.receive(request);
                 return new RpcFrame(frame.requestId(), RpcMessageType.INSTALL_SNAPSHOT_RESPONSE,
+                        RaftMessageCodec.encode(response));
+            }
+            case TIMEOUT_NOW -> {
+                TimeoutNowRequest request =
+                        RaftMessageCodec.decodeTimeoutNowRequest(plain);
+                TimeoutNowResponse response = node.receiveTimeoutNow(request);
+                return new RpcFrame(frame.requestId(), RpcMessageType.TIMEOUT_NOW_RESPONSE,
                         RaftMessageCodec.encode(response));
             }
             default -> throw new IllegalArgumentException(

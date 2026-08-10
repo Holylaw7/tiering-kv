@@ -5,6 +5,8 @@ import io.tieringkv.cluster.raft.AppendEntriesResponse;
 import io.tieringkv.cluster.raft.InstallSnapshotRequest;
 import io.tieringkv.cluster.raft.InstallSnapshotResponse;
 import io.tieringkv.cluster.raft.RaftTransport;
+import io.tieringkv.cluster.raft.TimeoutNowRequest;
+import io.tieringkv.cluster.raft.TimeoutNowResponse;
 import io.tieringkv.cluster.raft.VoteRequest;
 import io.tieringkv.cluster.raft.VoteResponse;
 
@@ -54,5 +56,14 @@ public final class MultiRaftTransport implements RaftTransport {
                         RaftMessageCodec.encode(request))
                 .thenApply(response -> RaftMessageCodec
                         .decodeInstallSnapshotResponse(response.payload()));
+    }
+
+    @Override
+    public CompletableFuture<TimeoutNowResponse> timeoutNow(
+            String target, TimeoutNowRequest request) {
+        return endpoint.call(target, groupId, RpcMessageType.TIMEOUT_NOW,
+                        RaftMessageCodec.encode(request))
+                .thenApply(response -> RaftMessageCodec
+                        .decodeTimeoutNowResponse(response.payload()));
     }
 }

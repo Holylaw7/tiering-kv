@@ -6,6 +6,8 @@ import io.tieringkv.cluster.raft.InstallSnapshotRequest;
 import io.tieringkv.cluster.raft.InstallSnapshotResponse;
 import io.tieringkv.cluster.raft.RaftNode;
 import io.tieringkv.cluster.raft.RaftTransport;
+import io.tieringkv.cluster.raft.TimeoutNowRequest;
+import io.tieringkv.cluster.raft.TimeoutNowResponse;
 import io.tieringkv.cluster.raft.VoteRequest;
 import io.tieringkv.cluster.raft.VoteResponse;
 import io.tieringkv.cluster.rpc.security.RpcSecurityConfig;
@@ -96,6 +98,16 @@ public final class NettyRaftTransport implements RaftTransport, AutoCloseable {
                 RaftMessageCodec.decodeInstallSnapshotResponse(response.payload()));
     }
 
+    @Override
+    public CompletableFuture<TimeoutNowResponse> timeoutNow(
+            String target, TimeoutNowRequest request) {
+        byte[] payload = RaftMessageCodec.encode(request);
+        RpcRequest rpc = new RpcRequest(RequestId.next(),
+                RpcMessageType.TIMEOUT_NOW, payload);
+        return call(target, rpc).thenApply(response ->
+                RaftMessageCodec.decodeTimeoutNowResponse(response.payload()));
+    }
+
     private CompletableFuture<RpcResponse> call(String target, RpcRequest request) {
         InetSocketAddress address = addresses.get(target);
         if (address == null) {
@@ -130,6 +142,13 @@ public final class NettyRaftTransport implements RaftTransport, AutoCloseable {
                         RaftMessageCodec.decodeInstallSnapshotRequest(frame.payload());
                 InstallSnapshotResponse response = node.receive(request);
                 return new RpcFrame(frame.requestId(), RpcMessageType.INSTALL_SNAPSHOT_RESPONSE,
+                        RaftMessageCodec.encode(response));
+            }
+            case TIMEOUT_NOW -> {
+                TimeoutNowRequest request =
+                        RaftMessageCodec.decodeTimeoutNowRequest(frame.payload());
+                TimeoutNowResponse response = node.receiveTimeoutNow(request);
+                return new RpcFrame(frame.requestId(), RpcMessageType.TIMEOUT_NOW_RESPONSE,
                         RaftMessageCodec.encode(response));
             }
             default -> throw new IllegalArgumentException("unexpected frame type " + frame.type());

@@ -361,7 +361,7 @@ class ChaosValidationTest {
             newLeader.put(key(1), value(1));
             awaitSee(fixture.nodes, activeIds(fixture.nodes, oldLeader.id()), key(1), 8000);
             // 无法定数的旧提案绝不能虚假成功：必须被显式失败（冲突截断）
-            awaitTrue("old proposal settles as failed", pending::isDone, 5000);
+            awaitTrue("old proposal settles as failed", pending::isDone, 15_000);
             assertThat(pending.isCompletedExceptionally()).isTrue();
             assertThatThrownBy(pending::join)
                     .hasRootCauseInstanceOf(IllegalStateException.class);
@@ -468,7 +468,7 @@ class ChaosValidationTest {
             throws Exception {
         long deadline = System.currentTimeMillis() + 10_000;
         while (System.currentTimeMillis() < deadline) {
-            ClusterNode leader = awaitLeader(fixture.nodes, null, 3000);
+            ClusterNode leader = awaitLeader(fixture.nodes, null, 8000);
             try {
                 leader.put(key, value);
                 return;

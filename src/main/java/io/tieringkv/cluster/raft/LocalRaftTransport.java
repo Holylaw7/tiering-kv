@@ -39,6 +39,12 @@ public final class LocalRaftTransport implements RaftTransport {
         return CompletableFuture.completedFuture(find(target).receive(request));
     }
 
+    @Override
+    public CompletableFuture<TimeoutNowResponse> timeoutNow(
+            String target, TimeoutNowRequest request) {
+        return CompletableFuture.completedFuture(find(target).receiveTimeoutNow(request));
+    }
+
     private RaftNode find(String id) {
         for (RaftNode peer : peers) {
             if (peer.id().equals(id)) {
