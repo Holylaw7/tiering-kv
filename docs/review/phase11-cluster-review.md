@@ -118,3 +118,23 @@ matchIndex + 失败回退）、`LogEntry` / `Term` / 投票与追加请求响应
 - 提交后立即补发 commitIndex，降低复制滞后；
 - 动态 slot 迁移与多 shard 数据搬迁；
 - 元数据服务 Raft 化落地与网关节点。
+
+## 8. 外部评审意见与处置（2026-08-10）
+
+评审结论：分片（16384 hash slot）、元数据拆分（NodeRegistry /
+ShardRegistry / TopologyManager）、Raft 修复（matchIndex 初始 -1、
+挂起节点停止参与选举、propose 失去领导权快速失败）、
+ReplicatedStorageEngine 上层包装（不改存储核心）均确认正确；
+复制写 145–154K ops/s、读 750–840K ops/s、选举 124–310ms 符合预期。
+
+评审指出 Phase 11 不足（均已在 Phase 11 完成时如实登记）：
+
+| 评审项 | 现状 | 处置 |
+| --- | --- | --- |
+| Raft Log 不持久化（term/vote/log/commitIndex 重启丢失） | TD-022 | Phase 12 Raft Log Store + Snapshot |
+| Snapshot 缺失（日志无限增长，恢复变慢） | TD-022 | Phase 12 Snapshot + 日志截断 |
+| RPC 为进程内对象调用（无 TCP/protobuf/correlation） | TD-023 | Phase 12 Netty RPC + 消息序列化 |
+| Slot 迁移缺失（静态分片） | TD-025 | Phase 12 slot migration protocol |
+
+评审还前瞻确认元数据演进方向：Metadata → Raft Cluster（Topology State），
+对齐 etcd / PD（TiDB）；已写入 Phase 12 计划。

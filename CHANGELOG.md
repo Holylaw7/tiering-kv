@@ -128,6 +128,11 @@
 - Phase 11 评审处置：登记 TD-022（Raft 日志持久化）、TD-023（TCP RPC
   传输）、TD-024（提交后立即补发 commitIndex 降低复制滞后）、TD-025
   （动态 slot 迁移）；技术债清单见 ROADMAP。
+- Phase 11 外部评审归档（docs/review/phase11-cluster-review.md）：确认
+  哈希槽 / 元数据 / Raft 修复 / 复制适配器设计正确；四项不足（Raft Log
+  不持久化、Snapshot 缺失、进程内 RPC、Slot 迁移缺失）对应 TD-022/
+  023/025 进入 Phase 12；元数据 Raft Cluster（etcd/PD 方向）纳入
+  Phase 12 计划。
 - Phase 9 评审处置：确认瓶颈分层（A 4.7M → B 230K → C 150K，瓶颈=协议/调度）；
   登记 TD-020（request→response 对象数优化）与 TD-021（JFR 验收指标）。
 - Phase 8 IO 优化：MmapSSTableReader（零拷贝块读）+ FileChannel baseline、
