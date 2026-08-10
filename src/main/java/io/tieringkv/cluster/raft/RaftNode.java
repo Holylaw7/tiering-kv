@@ -37,6 +37,9 @@ public final class RaftNode implements AutoCloseable {
     private final RaftPersistentState persistentState;
     private final SnapshotManager snapshotManager;
     private final CommitNotifier commitNotifier = new CommitNotifier();
+    private final java.util.concurrent.atomic.AtomicLong flushCount =
+            new java.util.concurrent.atomic.AtomicLong();
+    private volatile Throwable lastFlushError;
 
     private final Object lock = new Object();
     private final ReplicationTracker replication = new ReplicationTracker();
@@ -527,15 +530,20 @@ public final class RaftNode implements AutoCloseable {
     }
 
     private void flushReplication() {
-        List<PeerCall> calls;
-        synchronized (lock) {
-            if (!running || suspended || state != RaftState.LEADER) {
-                return;
+        try {
+            List<PeerCall> calls;
+            synchronized (lock) {
+                if (!running || suspended || state != RaftState.LEADER) {
+                    return;
+                }
+                calls = buildBatchCallsLocked();
             }
-            calls = buildBatchCallsLocked();
-        }
-        for (PeerCall call : calls) {
-            sendAsync(call);
+            for (PeerCall call : calls) {
+                sendAsync(call);
+            }
+            flushCount.incrementAndGet();
+        } catch (Throwable t) {
+            lastFlushError = t;
         }
     }
 
@@ -783,6 +791,14 @@ public final class RaftNode implements AutoCloseable {
 
     public ReplicationTracker replication() {
         return replication;
+    }
+
+    public long flushCount() {
+        return flushCount.get();
+    }
+
+    public Throwable lastFlushError() {
+        return lastFlushError;
     }
 
     @Override

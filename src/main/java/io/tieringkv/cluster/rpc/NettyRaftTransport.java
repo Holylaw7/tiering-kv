@@ -8,6 +8,7 @@ import io.tieringkv.cluster.raft.RaftNode;
 import io.tieringkv.cluster.raft.RaftTransport;
 import io.tieringkv.cluster.raft.VoteRequest;
 import io.tieringkv.cluster.raft.VoteResponse;
+import io.tieringkv.cluster.rpc.security.RpcSecurityConfig;
 
 import java.net.InetSocketAddress;
 import java.util.List;
@@ -28,13 +29,20 @@ public final class NettyRaftTransport implements RaftTransport, AutoCloseable {
     private final Map<String, InetSocketAddress> addresses;
     private volatile RaftNode localNode;
     private final RpcServer server;
-    private final RpcClient client = new RpcClient();
+    private final RpcClient client;
 
     public NettyRaftTransport(String selfId, int port,
                               Map<String, InetSocketAddress> addresses) {
+        this(selfId, port, addresses, RpcSecurityConfig.disabled());
+    }
+
+    public NettyRaftTransport(String selfId, int port,
+                              Map<String, InetSocketAddress> addresses,
+                              RpcSecurityConfig security) {
         this.selfId = selfId;
         this.addresses = Map.copyOf(addresses);
-        this.server = new RpcServer(port);
+        this.server = new RpcServer(port, security);
+        this.client = new RpcClient(security);
         this.server.handler(this::handle);
     }
 
