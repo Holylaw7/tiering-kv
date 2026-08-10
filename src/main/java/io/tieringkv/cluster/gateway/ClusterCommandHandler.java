@@ -1,5 +1,6 @@
 package io.tieringkv.cluster.gateway;
 
+import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.handler.codec.DecoderException;
@@ -7,14 +8,19 @@ import io.tieringkv.cluster.metrics.GatewayMetricsRegistry;
 import io.tieringkv.command.RespCommand;
 import io.tieringkv.command.RespRequestParser;
 import io.tieringkv.protocol.RespError;
+import io.tieringkv.protocol.RespEncoder;
 import io.tieringkv.protocol.RespProtocolException;
 import io.tieringkv.protocol.RespValue;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /** 集群网关命令处理器（ADR-0068）：RESP 命令 → 统一路由网关 → 写回。 */
 public final class ClusterCommandHandler extends ChannelInboundHandlerAdapter {
 
     private final UnifiedClusterGateway gateway;
     private final GatewayMetricsRegistry metrics;
+    private final List<RespValue> pending = new ArrayList<>();
 
     public ClusterCommandHandler(UnifiedClusterGateway gateway,
                                  GatewayMetricsRegistry metrics) {
@@ -43,10 +49,24 @@ public final class ClusterCommandHandler extends ChannelInboundHandlerAdapter {
             long t0 = System.nanoTime();
             RespValue response = gateway.execute(command.name(), command.args());
             metrics.recordRequest(System.nanoTime() - t0);
-            ctx.writeAndFlush(response);
+            pending.add(response);
         } catch (RespProtocolException e) {
-            ctx.writeAndFlush(RespError.protocol(e.getMessage()));
+            pending.add(RespError.protocol(e.getMessage()));
         }
+    }
+
+    /** 单个读批次解码完成后：批量编码 + 单次 flush（吞吐关键，ADR-0068）。 */
+    @Override
+    public void channelReadComplete(ChannelHandlerContext ctx) {
+        if (pending.isEmpty()) {
+            return;
+        }
+        ByteBuf buffer = ctx.alloc().buffer();
+        for (RespValue response : pending) {
+            RespEncoder.write(buffer, response);
+        }
+        pending.clear();
+        ctx.writeAndFlush(buffer);
     }
 
     @Override
