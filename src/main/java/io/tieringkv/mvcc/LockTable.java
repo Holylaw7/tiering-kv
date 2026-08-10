@@ -17,8 +17,15 @@ public final class LockTable {
     }
 
     public boolean release(byte[] key, String txnId) {
-        return locks.remove(new ByteKey(key), new LockRecord(key, txnId,
-                new byte[0], 0, 0, LockType.WRITE));
+        boolean[] removed = {false};
+        locks.computeIfPresent(new ByteKey(key), (k, record) -> {
+            if (record.txnId().equals(txnId)) {
+                removed[0] = true;
+                return null;
+            }
+            return record;
+        });
+        return removed[0];
     }
 
     public LockRecord check(byte[] key) {

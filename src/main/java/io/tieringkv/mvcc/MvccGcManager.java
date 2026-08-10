@@ -1,6 +1,10 @@
 package io.tieringkv.mvcc;
 
 import java.util.List;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -35,39 +39,28 @@ public final class MvccGcManager implements AutoCloseable {
     public GcResult gc() {
         long collected = 0;
         long bytes = 0;
+        Map<byte[], List<MvccEntry>> byKey = new TreeMap<>(
+                java.util.Arrays::compareUnsigned);
         try (io.tieringkv.storage.StorageIterator iterator =
                      engine.underlying().iterator()) {
-            byte[] currentUser = null;
-            int count = 0;
-            byte[] currentKey = null;
-            long currentCommit = -1;
             while (iterator.hasNext()) {
                 io.tieringkv.storage.memory.KeyValueEntry entry = iterator.next();
                 byte[] userKey = MvccKey.userKey(entry.key());
-                if (currentUser == null
-                        || !java.util.Arrays.equals(userKey, currentUser)) {
-                    // 切换用户键：保留上一键的最新版本
-                    if (currentUser != null && currentKey != null && count > 1
-                            && safePoint.canCollect(currentCommit)) {
-                        engine.deleteVersion(currentUser, currentCommit);
-                        collected++;
-                        bytes += entryBytes(entry.key(), entry.value());
-                    }
-                    currentUser = userKey;
-                    count = 1;
-                    currentKey = null;
-                    currentCommit = -1;
-                } else {
-                    count++;
-                }
-                long commit = MvccKey.commitTS(entry.key());
-                if (safePoint.canCollect(commit) && count > 1) {
-                    engine.deleteVersion(userKey, commit);
+                byKey.computeIfAbsent(userKey, ignored -> new ArrayList<>())
+                        .add(new MvccEntry(userKey, entry.value(),
+                                MvccKey.startTS(entry.key()),
+                                MvccKey.commitTS(entry.key()),
+                                MvccKey.writeType(entry.key())));
+            }
+        }
+        for (List<MvccEntry> versions : byKey.values()) {
+            versions.sort(Comparator.comparingLong(MvccEntry::commitTS));
+            for (int i = 0; i < versions.size() - 1; i++) {
+                MvccEntry version = versions.get(i);
+                if (safePoint.canCollect(version.commitTS())) {
+                    engine.deleteVersion(version.key(), version.commitTS());
                     collected++;
-                    bytes += entryBytes(entry.key(), entry.value());
-                } else {
-                    currentKey = entry.key();
-                    currentCommit = commit;
+                    bytes += entryBytes(version.key(), version.value());
                 }
             }
         }

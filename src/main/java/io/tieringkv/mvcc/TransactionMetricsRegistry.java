@@ -43,7 +43,8 @@ public final class TransactionMetricsRegistry {
         long count = commits.sum();
         double avgMs = count == 0 ? 0
                 : commitLatencyNanos.sum() / (double) count / 1_000_000.0;
-        return new Snapshot(active.get(), commits.sum(), rollbacks.sum(),
+        return new Snapshot(begins.sum(), active.get(), commits.sum(),
+                rollbacks.sum(),
                 conflicts.sum(), lockCount.get(), avgMs);
     }
 
@@ -51,17 +52,18 @@ public final class TransactionMetricsRegistry {
         Snapshot s = snapshot();
         return String.format(Locale.ROOT,
                 "# Transaction\r\n"
+                        + "begin_txn:%d\r\n"
                         + "active_txn:%d\r\n"
                         + "committed_txn:%d\r\n"
                         + "rollback_txn:%d\r\n"
                         + "conflict_txn:%d\r\n"
                         + "lock_count:%d\r\n"
                         + "txn_commit_latency_ms:%.3f\r\n",
-                s.activeTxn(), s.committedTxn(), s.rollbackTxn(),
+                s.beginTotal(), s.activeTxn(), s.committedTxn(), s.rollbackTxn(),
                 s.conflictTxn(), s.lockCount(), s.commitLatencyMs());
     }
 
-    public record Snapshot(long activeTxn, long committedTxn,
+    public record Snapshot(long beginTotal, long activeTxn, long committedTxn,
                            long rollbackTxn, long conflictTxn,
                            long lockCount, double commitLatencyMs) {
     }

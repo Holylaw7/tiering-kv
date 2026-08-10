@@ -12,9 +12,7 @@ public final class PrewriteExecutor {
                          java.util.Set<ByteKey> readSet) {
         detector.checkLockConflict(locks, key, txnId);
         detector.checkReadWriteConflict(engine, key, startTS, readSet);
-        if (!deleted) {
-            detector.checkWriteConflict(engine, key, startTS);
-        }
+        detector.checkWriteConflict(engine, key, startTS);
         LockRecord lock = new LockRecord(key, txnId, primary,
                 startTS, lockTtlMillis, LockType.WRITE);
         if (!locks.acquire(key, lock)) {
