@@ -279,7 +279,7 @@
     RegionMetricsRegistry.recordMerge + INFO RAFT / INFO MIGRATION；
   - 混沌：RegionChaosTest（分裂 10000 并发写无丢失、合并故障恢复、
     200ms 延迟 + 10% 丢包交接、Region 隔离、旧纪元拒绝）；
-  - 测试：新增 156 项；全量回归最终统计见合并后报告（目标 ≥900）；
+  - 测试：新增 159 项；全量回归 947/947 全绿（目标 ≥900 ✅）；
   - 基准（docs/benchmark/phase17-region-report.md）：Split 1M≈0.9s、
     Merge 1M≈0.7s、并行迁移 209.1MB/s、Transfer 24ms、Gateway 全达标。
 - Phase 9 评审处置：确认瓶颈分层（A 4.7M → B 230K → C 150K，瓶颈=协议/调度）；

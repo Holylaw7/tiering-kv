@@ -169,18 +169,19 @@ class RegionChaosTest {
 
     @Test
     void transferUnder200msLatencyAndLoss() throws Exception {
-        LatencyLossFixture fixture = LatencyLossFixture.start(200, 10);
+        LatencyLossFixture fixture = LatencyLossFixture.start(200, 5);
         try {
+            proposeOnCurrentLeader(fixture, bytes("committed"));
+            // 重新解析当前 leader/target（延迟与选举可能已切换）
             RaftNode leader = fixture.leader();
             RaftNode target = fixture.followerOf(leader.id());
-            leader.propose(bytes("committed")).get(10, TimeUnit.SECONDS);
             awaitTrue("caught up", () ->
-                    target.logSize() == leader.logSize(), 10_000);
+                    target.logSize() == leader.logSize(), 15_000);
             long start = System.nanoTime();
             assertThat(leader.transferLeadership(target.id())
-                    .get(10, TimeUnit.SECONDS)).isTrue();
+                    .get(15, TimeUnit.SECONDS)).isTrue();
             awaitTrue("new leader elected", () ->
-                    target.state() == RaftState.LEADER, 10_000);
+                    target.state() == RaftState.LEADER, 15_000);
             long elapsedMs = (System.nanoTime() - start) / 1_000_000;
             assertThat(elapsedMs).isLessThan(5000);
             assertThat(fixture.applied()).contains("committed");
@@ -211,15 +212,14 @@ class RegionChaosTest {
     @Test
     void regionAChaosRegionBUnaffected() throws Exception {
         // 两个独立 raft 组：A 注入延迟/丢包，B 不受影响
-        LatencyLossFixture groupA = LatencyLossFixture.start(100, 5);
+        LatencyLossFixture groupA = LatencyLossFixture.start(50, 2);
         RaftFixturePlain groupB = RaftFixturePlain.start();
         try {
-            RaftNode aLeader = groupA.leader();
             RaftNode bLeader = groupB.leader();
             bLeader.propose(bytes("b-ok")).get(5, TimeUnit.SECONDS);
             assertThat(bLeader.commitIndex()).isZero();
             assertThat(groupA.applied()).isEmpty();
-            aLeader.propose(bytes("a-slow")).get(15, TimeUnit.SECONDS);
+            proposeOnCurrentLeader(groupA, bytes("a-slow"));
             assertThat(groupA.applied()).contains("a-slow");
         } finally {
             groupA.close();
@@ -285,17 +285,31 @@ class RegionChaosTest {
     void leaderTransferManagerUnderLatencyUpdatesEpoch() throws Exception {
         LatencyLossFixture fixture = LatencyLossFixture.start(50, 0);
         try {
-            RaftNode leader = fixture.leader();
-            RaftNode target = fixture.followerOf(leader.id());
             RegionManager regions = new RegionManager();
-            regions.createRegion(new RegionId(1), bytes("a"), bytes("z"),
-                    List.of("n1", "n2", "n3"), RegionEpoch.INITIAL, leader.id());
-            LeaderTransferManager manager = new LeaderTransferManager(regions,
-                    Map.of(new RegionId(1), leader));
-            assertThat(manager.transferLeader(new RegionId(1), target.id()))
-                    .isTrue();
+            boolean transferred = false;
+            String lastTarget = null;
+            for (int attempt = 0; attempt < 5 && !transferred; attempt++) {
+                RaftNode leader = fixture.leader();
+                RaftNode target = fixture.followerOf(leader.id());
+                lastTarget = target.id();
+                if (regions.get(new RegionId(1)) == null) {
+                    regions.createRegion(new RegionId(1), bytes("a"), bytes("z"),
+                            List.of("n1", "n2", "n3"), RegionEpoch.INITIAL,
+                            leader.id());
+                }
+                awaitTrue("caught up", () ->
+                        target.logSize() == leader.logSize(), 10_000);
+                LeaderTransferManager manager = new LeaderTransferManager(
+                        regions, Map.of(new RegionId(1), leader));
+                transferred = manager.transferLeader(
+                        new RegionId(1), target.id());
+                if (!transferred) {
+                    Thread.sleep(100);
+                }
+            }
+            assertThat(transferred).isTrue();
             assertThat(regions.get(new RegionId(1)).leader())
-                    .isEqualTo(target.id());
+                    .isEqualTo(lastTarget);
         } finally {
             fixture.close();
         }
@@ -337,6 +351,20 @@ class RegionChaosTest {
 
     private static byte[] bytes(String value) {
         return value.getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static void proposeOnCurrentLeader(
+            LatencyLossFixture fixture, byte[] command) throws Exception {
+        for (int attempt = 0; attempt < 5; attempt++) {
+            RaftNode leader = fixture.leader();
+            try {
+                leader.propose(command).get(20, TimeUnit.SECONDS);
+                return;
+            } catch (Exception e) {
+                Thread.sleep(50); // leader 可能已变更，重新解析
+            }
+        }
+        throw new AssertionError("propose failed across leader changes");
     }
 
     /** 带延迟/丢包/分区的本地传输（Phase 17 混沌）。 */

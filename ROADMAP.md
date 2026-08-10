@@ -330,9 +330,9 @@
   [0063](docs/adr/ADR-0063-parallel-region-migration.md)（并行迁移）、
   [0064](docs/adr/ADR-0064-real-leader-transfer.md)（leader 交接）、
   [0065](docs/adr/ADR-0065-placement-auto-balance.md)（自动均衡）。
-- 测试：新增 156 项（Split 29 / Merge 24 / ParallelMigration 22 /
+- 测试：新增 159 项（Split 29 / Merge 24 / ParallelMigration 22 /
   LeaderTransfer 16 / Gateway 24 / Balance 16 / Observability 10 /
-  RegionChaos 10 / Benchmark 5）。
+  RegionChaos 10 / Benchmark 5 等）；全量回归 947/947 全绿。
 - 基准（[phase17-region-report.md](docs/benchmark/phase17-region-report.md)）：
   Split 1M≈0.9s（<10s ✅）、Merge 1M≈0.7s（<20s ✅）、并行迁移 100B
   209.1MB/s（>150 ✅）、Leader Transfer 24ms（<500ms ✅）、Gateway

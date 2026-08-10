@@ -44,7 +44,7 @@ Redis Cluster 网关/自动均衡计划。
 
 ## 4. Tests
 
-新增 156 项（Phase 16 基线 788）：
+新增 159 项（Phase 16 基线 788，全量 947）：
 
 | 模块 | 新增 | 结果 |
 | --- | --- | --- |
@@ -58,7 +58,7 @@ Redis Cluster 网关/自动均衡计划。
 | RegionChaosTest | 10 | ✅ |
 | Phase17RegionBenchmarkTest | 5 | ✅ |
 
-全量回归最终统计见合并后报告（目标 ≥900）。
+全量回归 **947/947 全绿**（目标 ≥900 ✅）。
 
 ## 5. Benchmark
 

@@ -99,7 +99,7 @@ Phase 17 已交付：Region 生命周期闭环——SplitController（五阶段 
 真实 leader 交接（TimeoutNow，24ms）、Redis Cluster Gateway
 （GET/SET/MGET/MSET/CLUSTER SLOTS + MOVED）、BalanceScheduler
 （自动均衡计划 + epoch 保护）、INFO RAFT / INFO MIGRATION 可观测性、
-RegionChaosTest（10 项）；156 项新测试。
+RegionChaosTest（10 项）；159 项新测试，全量回归 947/947 全绿。
 
 ## 2. 当前状态
 
