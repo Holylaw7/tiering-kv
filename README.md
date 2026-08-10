@@ -1,13 +1,17 @@
 # Tiering-KV
 
-> Mini Redis 冷热分层存储引擎 —— 兼容 Redis RESP 协议的高性能键值存储系统。
+> RESP 兼容 KV Server 基础层（演进目标：Mini Redis 冷热分层存储引擎）。
 
 **阶段状态：Phase 1（RESP 协议）✅（Phase 0 工程初始化 ✅）**
 
 ## 项目定位
 
-从零自主实现一个生产级 Mini Redis：内存热数据 + 磁盘冷数据的分层存储，在保持
-Redis 协议兼容的同时，将纯内存方案的内存占用降低 60%–80%。
+**当前定位**：RESP 兼容的 KV Server 基础层——协议、命令与网络层已可用（Phase 1），
+面向 redis-cli 与主流客户端提供基础 PING / ECHO / SET / GET / DEL / EXISTS 能力。
+
+**演进目标（非当前承诺）**：内存热数据 + 磁盘冷数据的分层存储，在保持 Redis 协议
+兼容的同时降低内存占用 60%–80%；分层存储、持久化、迁移与性能优化按
+ROADMAP Phase 2–10 逐步落地。
 
 ## 核心能力
 

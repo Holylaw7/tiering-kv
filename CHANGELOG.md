@@ -38,6 +38,9 @@
   （TD-004 关闭）。
 - 修复：Netty 管道顺序（Encoder 位于 pipeline 最前，符合出站事件方向）；
   ByteProcessor 扫描语义修正。
+- 根据 Phase 1 评审修正定位措辞：README 明确为「RESP 兼容 KV Server 基础层」，
+  性能与分层能力列为演进目标；评审意见归档至
+  docs/review/architecture-review.md。
 
 ## [0.1.0] - 2026-08-09
 

@@ -9,6 +9,9 @@ RESP 协议兼容、内存 + 磁盘冷热分层、LFU/ARC 热度管理、异步�
 Bitcask/LSM 持久化、高并发网络、mmap 零拷贝、分段锁/无锁、
 Bloom Filter、自研 Memory Pool。
 
+当前定位：RESP 兼容 KV Server 基础层（Phase 1 已交付协议/命令/网络层）；
+分层存储与性能优化为演进目标（ROADMAP Phase 2–10）。
+
 Phase 1 已交付命令：PING / ECHO / SET / GET / DEL / EXISTS（RESP2）。
 
 ## 2. 当前状态
