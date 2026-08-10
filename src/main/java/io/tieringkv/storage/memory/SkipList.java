@@ -17,6 +17,8 @@ public final class SkipList {
     private static final double PROMOTION_PROBABILITY = 0.5;
 
     private final Node head = new Node(null, MAX_LEVEL);
+    // 可复用查找路径缓冲：Segment 锁保证同一 SkipList 单线程访问
+    private final Node[] updateBuffer = new Node[MAX_LEVEL];
     private int size;
 
     public KeyValueEntry get(byte[] key) {
@@ -26,8 +28,16 @@ public final class SkipList {
 
     /** 插入或覆盖已有键。 */
     public void put(KeyValueEntry entry) {
+        putAndGetOld(entry);
+    }
+
+    /**
+     * 插入并返回被覆盖的旧 entry（热路径优化：单次查找）。
+     * 调用方负责内存计量（旧条目移除、新条目加入）。
+     */
+    public KeyValueEntry putAndGetOld(KeyValueEntry entry) {
         byte[] key = entry.key();
-        Node[] update = new Node[MAX_LEVEL];
+        Node[] update = updateBuffer;
         Node current = head;
         for (int level = MAX_LEVEL - 1; level >= 0; level--) {
             while (current.forward[level] != null
@@ -38,8 +48,9 @@ public final class SkipList {
         }
         Node next = current.forward[0];
         if (next != null && Arrays.compareUnsigned(next.key, key) == 0) {
+            KeyValueEntry old = next.entry;
             next.entry = entry;
-            return;
+            return old;
         }
         int level = randomLevel();
         Node node = new Node(key, level);
@@ -49,6 +60,7 @@ public final class SkipList {
             update[i].forward[i] = node;
         }
         size++;
+        return null;
     }
 
     /** 移除键并返回原 entry；不存在返回 null。 */

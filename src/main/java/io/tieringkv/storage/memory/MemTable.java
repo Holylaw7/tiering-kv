@@ -86,14 +86,13 @@ public final class MemTable implements StorageEngine, AutoCloseable {
         Segment segment = segments[segmentIndex];
         segment.lock.writeLock().lock();
         try {
-            KeyValueEntry old = segment.list.get(key);
+            KeyValueEntry old = segment.list.putAndGetOld(entry);
             if (old != null) {
                 memoryManager.remove(old.size());
                 if (old.isLive(now)) {
                     liveSize.decrementAndGet();
                 }
             }
-            segment.list.put(entry);
             memoryManager.add(entry.size());
             liveSize.incrementAndGet();
             if (entry.expireTimestamp() >= 0) {
@@ -144,14 +143,13 @@ public final class MemTable implements StorageEngine, AutoCloseable {
                             KeyValueEntry entry = KeyValueEntry.live(
                                     mutation.key(), mutation.value(), now,
                                     mutation.ttlMillis(), versionId);
-                            KeyValueEntry old = segment.list.get(mutation.key());
+                            KeyValueEntry old = segment.list.putAndGetOld(entry);
                             if (old != null) {
                                 memoryManager.remove(old.size());
                                 if (old.isLive(now)) {
                                     liveSize.decrementAndGet();
                                 }
                             }
-                            segment.list.put(entry);
                             memoryManager.add(entry.size());
                             liveSize.incrementAndGet();
                             if (entry.expireTimestamp() >= 0) {
@@ -161,6 +159,86 @@ public final class MemTable implements StorageEngine, AutoCloseable {
                         }
                     } else {
                         applyDeleteLocked(segment, mutation.key(), now, vm.version());
+                    }
+                    applied++;
+                }
+            } finally {
+                segment.lock.writeLock().unlock();
+            }
+        }
+        notifyMemoryPressureIfNeeded();
+        return applied;
+    }
+
+    /**
+     * 零拷贝批量应用（ADR-0059）：RawMutation 不克隆数组，所有权转移给
+     * MemTable；按段分组、单段单锁一次批量插入；版本按请求顺序分配。
+     * 调用方必须在转移后停止修改 key/value 数组。
+     */
+    public int applyRawBatch(List<RawMutation> mutations) {
+        if (mutations.isEmpty()) {
+            throw new IllegalArgumentException("raw batch must not be empty");
+        }
+        long now = timeSource.nowMillis();
+        int n = mutations.size();
+        long[] versions = new long[n];
+        for (int i = 0; i < n; i++) {
+            versions[i] = version.next();
+        }
+        // 平面桶分组：避免 Map<Integer,List<Integer>> 装箱与哈希开销
+        int[] counts = new int[SEGMENT_COUNT];
+        for (int i = 0; i < n; i++) {
+            RawMutation mutation = mutations.get(i);
+            if (mutation.key() == null || mutation.key().length == 0) {
+                throw new IllegalArgumentException("empty key in raw batch");
+            }
+            if (mutation.value() == null) {
+                throw new IllegalArgumentException("null value in raw batch");
+            }
+            counts[segmentIndex(mutation.key())]++;
+        }
+        int[] offsets = new int[SEGMENT_COUNT + 1];
+        for (int s = 0; s < SEGMENT_COUNT; s++) {
+            offsets[s + 1] = offsets[s] + counts[s];
+        }
+        int[] cursor = offsets.clone();
+        int[] order = new int[n];
+        for (int i = 0; i < n; i++) {
+            RawMutation mutation = mutations.get(i);
+            order[cursor[segmentIndex(mutation.key())]++] = i;
+        }
+        int applied = 0;
+        for (int s = 0; s < SEGMENT_COUNT; s++) {
+            int from = offsets[s];
+            int to = offsets[s + 1];
+            if (from == to) {
+                continue;
+            }
+            Segment segment = segments[s];
+            segment.lock.writeLock().lock();
+            try {
+                for (int k = from; k < to; k++) {
+                    int i = order[k];
+                    RawMutation mutation = mutations.get(i);
+                    if (mutation.ttlMillis() != NO_TTL && mutation.ttlMillis() <= 0) {
+                        applyDeleteLocked(segment, mutation.key(), now, versions[i]);
+                    } else {
+                        KeyValueEntry entry = KeyValueEntry.liveOwned(
+                                mutation.key(), mutation.value(), now,
+                                mutation.ttlMillis(), versions[i]);
+                        KeyValueEntry old = segment.list.putAndGetOld(entry);
+                        if (old != null) {
+                            memoryManager.remove(old.size());
+                            if (old.isLive(now)) {
+                                liveSize.decrementAndGet();
+                            }
+                        }
+                        memoryManager.add(entry.size());
+                        liveSize.incrementAndGet();
+                        if (entry.expireTimestamp() >= 0) {
+                            ttlManager.schedule(entry.expireTimestamp(), versions[i],
+                                    s, mutation.key());
+                        }
                     }
                     applied++;
                 }

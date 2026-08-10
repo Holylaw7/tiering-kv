@@ -4,9 +4,8 @@ import io.tieringkv.cluster.sharding.HashSlotRouter;
 import io.tieringkv.cluster.sharding.SlotTable;
 import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.storage.StorageIterator;
-import io.tieringkv.storage.memory.BatchWriteRequest;
 import io.tieringkv.storage.memory.KeyValueEntry;
-import io.tieringkv.storage.memory.Mutation;
+import io.tieringkv.storage.memory.RawMutation;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -61,7 +60,7 @@ public final class StreamingMigrator implements AutoCloseable {
             scanner = new MigrationScanner(
                     openIterator, slotStart, slotEnd, versionBarrier, cursor.lastKey());
         }
-        BatchEncoder encoder = new BatchEncoder(batchSize);
+        List<RawMutation> batch = new java.util.ArrayList<>(batchSize);
         CRC32C crc = new CRC32C();
         crc.update(longToBytes(cursor.checksum()));
         int copied = 0;
@@ -70,14 +69,16 @@ public final class StreamingMigrator implements AutoCloseable {
             long ttl = entry.expireTimestamp() >= 0
                     ? Math.max(0, entry.expireTimestamp() - System.currentTimeMillis())
                     : StorageEngine.NO_TTL;
-            encoder.add(Mutation.put(entry.key(), entry.value(), ttl));
+            // 零拷贝路径（ADR-0059）：所有权随 applyRawBatch 转移，不克隆
+            batch.add(new RawMutation(entry.key(), entry.value(),
+                    entry.version(), ttl));
             crc.update(entry.key());
             crc.update(entry.value() == null ? new byte[0] : entry.value());
             cursor = cursor.advance(entry.key(), entry.version(), crc.getValue());
             copied++;
         }
-        if (!encoder.isEmpty()) {
-            target.applyBatch(new BatchWriteRequest(encoder.drain()));
+        if (!batch.isEmpty()) {
+            target.applyRawBatch(batch);
         }
         persist(cursor);
         boolean completed = !scanner.hasNext();
