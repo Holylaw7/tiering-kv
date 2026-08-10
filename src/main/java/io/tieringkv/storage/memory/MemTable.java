@@ -21,7 +21,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  */
 public final class MemTable implements StorageEngine, AutoCloseable {
 
-    public static final int SEGMENT_COUNT = 64;
+    public static final int SEGMENT_COUNT = 256;
     private static final long DEFAULT_TTL_INTERVAL_MILLIS = 1000;
 
     private final Segment[] segments = new Segment[SEGMENT_COUNT];
