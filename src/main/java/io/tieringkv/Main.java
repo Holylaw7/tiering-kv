@@ -11,6 +11,8 @@ import io.tieringkv.storage.cache.LFUPolicy;
 import io.tieringkv.storage.cache.TrackingStorageEngine;
 import io.tieringkv.storage.cold.ColdMigration;
 import io.tieringkv.storage.cold.ColdStorageEngine;
+import io.tieringkv.storage.tiering.TieringController;
+import io.tieringkv.storage.tiering.TieringStorageEngine;
 import io.tieringkv.storage.wal.RecoveryManager;
 import io.tieringkv.storage.wal.WALConfig;
 import io.tieringkv.storage.wal.WALManager;
@@ -36,6 +38,10 @@ public final class Main {
                 stats.recordsScanned(), stats.recordsApplied(), stats.segmentsReplayed());
         ColdStorageEngine cold = new ColdStorageEngine(
                 ColdStorageEngine.Config.defaults(Path.of("./data/cold")));
+        TieringController tiering = new TieringController(
+                TieringController.Config.defaults(Path.of("./data/migration")),
+                memoryManager, memTable, walManager, cold);
+        tiering.recover();
         CacheConfig cacheConfig = CacheConfig.defaults();
         EvictionManager evictionManager = new EvictionManager(
                 memTable,
@@ -43,10 +49,13 @@ public final class Main {
                 new LFUPolicy(cacheConfig.decayIntervalMillis()),
                 new ColdMigration(cold),
                 walManager,
+                tiering.migrationScheduler(),
                 System::currentTimeMillis,
                 cacheConfig.maxEvictionsPerCycle());
         StorageEngine storage = new TrackingStorageEngine(
-                new WALStorageEngine(walManager, memTable), evictionManager);
+                new TieringStorageEngine(
+                        new WALStorageEngine(walManager, memTable), tiering),
+                evictionManager);
         TieringKvServer server = new TieringKvServer(
                 config,
                 new CommandEngine(CommandRegistry.createDefault(), storage));

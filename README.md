@@ -128,6 +128,22 @@ WAL → MemTable（热层）→ Flush → SSTable（冷层）
 - 淘汰迁移：EvictionManager → ColdMigration → pending 缓冲 → 阈值落 SSTable；
 - 合并：size-tiered 触发 + 全量 latest-wins（重复键 / tombstone / 过期 TTL）。
 
+## 自动调度架构（Phase 6）
+
+```text
+Command → TieringStorageEngine（背压 + 水位）
+    → TieringController
+        ├── WatermarkManager（70% / 85% / 95% + 队列阈值）
+        ├── FlushScheduler → 后台 Flush Worker → SSTable
+        ├── MigrationScheduler → MigrationLog → 后台 Worker → ColdStorage
+        └── BackPressureController（CRITICAL 限写，超时 -ERR）
+```
+
+- 自动 Flush：写后水位检查触发，后台执行、去重、失败保留重试；
+- 异步迁移：EvictionManager 入队 → worker 写冷层 → WAL DELETE → 删内存；
+  状态持久化到 `migration/migration.log`，启动恢复未完成任务；
+- 指标：StorageMetrics 覆盖内存 / 迁移 / Flush / 冷层。
+
 ## 技术栈
 
 | 层次 | 选型 |

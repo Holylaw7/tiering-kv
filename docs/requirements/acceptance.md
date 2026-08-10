@@ -7,7 +7,7 @@
 | FR-01 | redis-cli / redis-benchmark 可完成 SET/GET/DEL/PING/ECHO，错误响应符合 RESP 语义 | 集成测试 | Phase 1 ✅ 已完成 |
 | FR-02 | 热数据命中内存、冷数据落盘，读路径自动升热 | 集成测试 + 压测 | Phase 6 |
 | FR-03 | 热度采样/衰减生效，冷热判定符合配置阈值 | 单元测试 + 模拟 | Phase 3 ✅ 已完成 |
-| FR-04 | 迁移期间读写不阻塞、可重试、数据最终一致 | 集成 + 故障注入 | Phase 6 |
+| FR-04 | 迁移期间读写不阻塞、可重试、数据最终一致 | 集成 + 故障注入 | Phase 6 ✅（异步队列 + 重试 + 恢复） |
 | FR-05 | 重启后 WAL 回放恢复数据；Bitcask/LSM 均可读写 | 恢复测试 | Phase 4 ✅（WAL 恢复）+ Phase 5 ✅（SSTable 冷层 + Flush/恢复） |
 | FR-06 | 1k/10k/100k 连接可建立并稳定服务 | 压力测试 | Phase 7/9 |
 | FR-07 | mmap 路径无多余用户态拷贝 | 基准对比 | Phase 8 |

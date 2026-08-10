@@ -13,7 +13,7 @@
 | 3 | LFU / ARC 热度管理 | ✅ 完成（2026-08-10） |
 | 4 | Bitcask 持久化 | ✅ 完成（2026-08-10，WAL 层） |
 | 5 | LSM Tree | ✅ 完成（2026-08-10） |
-| 6 | 冷热迁移 | ⏳ 未开始 |
+| 6 | 冷热迁移 | ✅ 完成（2026-08-10） |
 | 7 | 并发优化 | ⏳ 未开始 |
 | 8 | mmap / Memory Pool | ⏳ 未开始 |
 | 9 | Benchmark 压力测试 | ⏳ 未开始 |
@@ -94,11 +94,18 @@
   [cold-report.md](docs/benchmark/cold-report.md)。
 - 备注：全量合并（写放大 O(总数据)），Leveled 留 Phase 7。
 
-## Phase 6 — 冷热迁移
+## Phase 6 — 冷热迁移 ✅
 
 - 目标：异步升降级迁移、迁移一致性协议、背压与重试。
-- 交付：scheduler 模块、故障注入测试。
-- 预计 ADR：迁移一致性协议。
+- 交付：TieringController / WatermarkManager / FlushScheduler /
+  MigrationScheduler / MigrationLog / BackPressureController /
+  TierWorkerPool / StorageMetrics / TieringStorageEngine；EvictionManager
+  异步化接入。
+- ADR：[0020](docs/adr/ADR-0020-tier-scheduling-model.md)（调度模型）、
+  [0021](docs/adr/ADR-0021-memory-watermark-policy.md)（水位策略）、
+  [0022](docs/adr/ADR-0022-migration-persistence.md)（迁移持久化）。
+- 基准：迁移 308K ops/s（目标 >50K ✅）；Flush 850K entries/s；内存压力下
+  从未超配额（详见 [tiering-report.md](docs/benchmark/tiering-report.md)）。
 
 ## Phase 7 — 并发优化
 

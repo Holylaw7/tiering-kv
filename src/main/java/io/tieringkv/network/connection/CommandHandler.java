@@ -12,6 +12,7 @@ import io.tieringkv.protocol.RespError;
 import io.tieringkv.protocol.RespProtocolException;
 import io.tieringkv.protocol.RespValue;
 import io.tieringkv.storage.wal.WalWriteException;
+import io.tieringkv.storage.tiering.BackpressureException;
 
 /** 命令入站处理器：解析请求 → 执行 → 写回；协议错误写入后关闭连接。 */
 public final class CommandHandler extends ChannelInboundHandlerAdapter {
@@ -31,6 +32,8 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
             } catch (RespProtocolException e) {
                 writeProtocolErrorAndClose(ctx, e.getMessage());
             } catch (WalWriteException e) {
+                writeError(ctx, "ERR " + e.getMessage());
+            } catch (BackpressureException e) {
                 writeError(ctx, "ERR " + e.getMessage());
             }
         } else {
