@@ -8,7 +8,7 @@ Phase 14 · 2026-08-10
 
 | 指标 | Phase 13 | Phase 14（批量写） | 目标 |
 | --- | --- | --- | --- |
-| 吞吐 | 17.7MB/s（≈180K entries/s） | 18.3MB/s（≈192K entries/s） | >100MB/s ❌ 未达 |
+| 吞吐 | 17.7MB/s（≈180K entries/s） | 18.3–20.4MB/s（≈192–213K entries/s） | >100MB/s ❌ 未达 |
 
 瓶颈分析：`MemTable.applyBatch` 消除了逐条 put 的段锁/分配成本，但吞吐
 未提升——瓶颈转移到源端 `iterator()` 快照归并（一次性全量拷贝 + 200K
@@ -19,7 +19,7 @@ Phase 14 · 2026-08-10
 
 | 指标 | Phase 13 | Phase 14 | 目标 |
 | --- | --- | --- | --- |
-| 吞吐（64 写者，本机传输） | 22K ops/s | 37,255 ops/s | >50K ❌ 未达 |
+| 吞吐（64 写者，本机传输） | 22K ops/s | 37.3–68.3K ops/s | >50K ⚠️ 波动 |
 
 瓶颈分析：ReplicationController 动态 batch/flush 生效（吞吐提升 1.7×），
 但本地传输的同步等待式写者（每次 get）仍限制上限；异步回调式客户端

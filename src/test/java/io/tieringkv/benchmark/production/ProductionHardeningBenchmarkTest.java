@@ -205,6 +205,11 @@ class ProductionHardeningBenchmarkTest {
         try {
             RaftNode leader = awaitLeader(second.nodes(), 5000);
             long restartMs = System.currentTimeMillis() - start;
+            long deadline = System.currentTimeMillis() + 5000;
+            while (System.currentTimeMillis() < deadline
+                    && !second.state(leader.id()).nodes().contains("node-49")) {
+                Thread.sleep(20);
+            }
             assertThat(second.state(leader.id()).nodes().contains("node-49")).isTrue();
             printf("P14-BENCH METADATA RESTART=%dms%n", restartMs);
         } finally {

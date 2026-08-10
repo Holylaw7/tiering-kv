@@ -46,14 +46,14 @@ MetadataRaftGroup.createPersistent（FileRaftLog + MetadataSnapshot + 恢复）
 | FailureInjectionTest | 5 | ✅ |
 | ProductionHardeningBenchmarkTest | 4 | ✅ |
 | Phase 14 新增合计 | 101 | ✅ |
-| 全量回归（Phase 1–14） | 待最终统计 | 见下方 |
+| 全量回归（Phase 1–14） | 552 | ✅ 0 失败 |
 
 ## 5. 基准对比（phase14-production-report.md）
 
 | 指标 | Phase 13 | Phase 14 | 目标 |
 | --- | --- | --- | --- |
-| 100B 迁移 | 17.7MB/s | 18.3MB/s | >100MB/s ❌ |
-| Raft 吞吐 | 22K ops/s | 37.3K ops/s | >50K ❌ |
+| 100B 迁移 | 17.7MB/s | 18.3–20.4MB/s | >100MB/s ❌ |
+| Raft 吞吐 | 22K ops/s | 37.3–68.3K ops/s | >50K ⚠️ 波动 |
 | HMAC 开销 | — | ≈0% | 提供基线 ✅ |
 | 元数据重启 | — | 194ms | 提供基线 ✅ |
 
