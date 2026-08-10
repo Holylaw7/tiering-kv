@@ -23,6 +23,7 @@ Phase 1–18。
 | 0074 Lock & Conflict | LockTable + 写写/读写/锁冲突 |
 | 0075 MVCC GC | SafePoint + 保留最新 |
 | 0076 Recovery | 超时回滚 / primary 补完 / 无永久锁 |
+| 0077 Raft Commit Bound | 空心跳 commitIndex 上界 = 已校验前缀 |
 
 ## 3. Implementation
 
@@ -36,7 +37,7 @@ Phase 1–18。
 
 ## 4. Tests
 
-新增 226 项（Phase 18 基线 1112）：
+新增 227 项（Phase 18 基线 1112）：
 
 | 模块 | 新增 | 结果 |
 | --- | --- | --- |
@@ -53,8 +54,9 @@ Phase 1–18。
 | 混沌 | 10 | ✅ |
 | 指标 | 10 | ✅ |
 | 基准 | 5 | ✅ |
+| Raft 心跳提交上界回归 | 1 | ✅ |
 
-全量回归 **1338/1338 全绿**（目标 >1290 ✅）。
+全量回归 **1339/1339 全绿**（目标 >1290 ✅；含 Raft 心跳提交上界回归 1 项）。
 
 ## 5. Benchmark
 
@@ -78,6 +80,36 @@ Phase 1–18。
 3. 内存版本索引增加内存开销（可演进为按需重建/压缩）；
 4. Raft 集成限于事务记录日志（proposal 级），未实现 Raft 内预写
    （Percolator 数据即锁即日志的完整路径）；
+
+## 8. 验收发现并修复的 Raft 一致性缺陷（ADR-0077）
+
+全量回归阶段 `quorumLossBlocksCommitUntilFailover` 反复失败，隔离复现后确认
+这是真实共识缺陷而非测试脆弱性：
+
+场景：
+
+```text
+旧 leader（term1）分区期间追加未提交 key0 @ idx0
+新 leader（term3）在 idx0 提交另一条命令
+空心跳（prevLogIndex=-1, entries=[], leaderCommit=0）到达旧 leader
+→ 旧实现 commitIndex = min(0, lastLogIndex=0) = 0
+→ 冲突条目 key0(term1) 被错误提交，旧提案 future 虚假成功
+→ 状态机与现任 leader 日志分叉
+```
+
+修复：
+
+- follower 空心跳时 commitIndex 上界 = `prevLogIndex`（Raft "index of last
+  new entry" 语义）；非空请求上界 = 请求最后一条条目 index；
+- leader 对仍有未复制条目的 peer 跳过空心跳，避免 commitIndex 先于冲突
+  数据到达。
+
+回归：
+
+- `RaftTest#emptyHeartbeatMustNotCommitConflictingEntry`（确定性单测）；
+- `ChaosValidationTest#quorumLossBlocksCommitUntilFailover` 隔离连续
+  6/6 通过；组合负载 10/10 通过；
+- 全量 1339/1339 通过。
 5. Redis 网关未接 MVCC 层（自动单键事务化留待 Phase 20）。
 
 ## 8. Next Phase

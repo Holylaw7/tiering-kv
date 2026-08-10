@@ -112,8 +112,9 @@ Phase 19 已交付：MVCC 与事务引擎——MvccStorageEngine（内存版本�
 TimestampOracle/HLC + SnapshotReader + Percolator 2PC（Prewrite/Commit/
 Rollback）+ LockTable/ConflictDetector + TransactionManager/Coordinator
 （跨 Region 2PC + 参与者键归属）+ TxnJournal（Raft）+ Recovery + GC +
-INFO TRANSACTION + Prometheus；226 项新测试。
-全量回归 1338/1338 全绿。
+INFO TRANSACTION + Prometheus；验收中修复 Raft 空心跳错误提交冲突条目的
+共识缺陷（ADR-0077）；227 项新测试。
+全量回归 1339/1339 全绿。
 
 ## 2. 当前状态
 
