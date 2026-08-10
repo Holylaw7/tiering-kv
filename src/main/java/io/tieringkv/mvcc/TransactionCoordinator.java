@@ -2,13 +2,24 @@ package io.tieringkv.mvcc;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Predicate;
 
 /** 跨 Region 2PC 协调器（ADR-0073）：全 participant prewrite 成功才 commit。 */
 public final class TransactionCoordinator {
 
     public record Participant(String regionId,
                               MvccStorageEngine engine,
-                              LockTable locks) {
+                              LockTable locks,
+                              Predicate<ByteKey> ownsKey) {
+
+        public Participant(String regionId, MvccStorageEngine engine,
+                           LockTable locks) {
+            this(regionId, engine, locks, ignored -> true);
+        }
+
+        public boolean owns(ByteKey key) {
+            return ownsKey.test(key);
+        }
     }
 
     private final TimestampOracle oracle;
@@ -45,19 +56,31 @@ public final class TransactionCoordinator {
 
     private void prewriteOn(Participant participant, Transaction txn) {
         PrewriteExecutor prewrite = new PrewriteExecutor();
-        for (ByteKey key : txn.writeKeys()) {
-            prewrite.prewrite(participant.engine(), participant.locks(),
-                    key.key(), txn.writeValue(key), false,
-                    txn.txnId(), txn.primaryKeyOr(key.key()),
-                    txn.startTS(), lockTtlMillis,
-                    System.currentTimeMillis(), txn.readSet());
-        }
-        for (ByteKey key : txn.deleteKeys()) {
-            prewrite.prewrite(participant.engine(), participant.locks(),
-                    key.key(), null, true,
-                    txn.txnId(), txn.primaryKeyOr(key.key()),
-                    txn.startTS(), lockTtlMillis,
-                    System.currentTimeMillis(), txn.readSet());
+        try {
+            for (ByteKey key : txn.writeKeys()) {
+                if (!participant.owns(key)) {
+                    continue;
+                }
+                prewrite.prewrite(participant.engine(), participant.locks(),
+                        key.key(), txn.writeValue(key), false,
+                        txn.txnId(), txn.primaryKeyOr(key.key()),
+                        txn.startTS(), lockTtlMillis,
+                        System.currentTimeMillis(), txn.readSet());
+            }
+            for (ByteKey key : txn.deleteKeys()) {
+                if (!participant.owns(key)) {
+                    continue;
+                }
+                prewrite.prewrite(participant.engine(), participant.locks(),
+                        key.key(), null, true,
+                        txn.txnId(), txn.primaryKeyOr(key.key()),
+                        txn.startTS(), lockTtlMillis,
+                        System.currentTimeMillis(), txn.readSet());
+            }
+        } catch (RuntimeException e) {
+            // 本 participant 部分 prewrite 已写入：先回滚自身再上抛
+            rollbackOn(participant, txn);
+            throw e;
         }
     }
 
@@ -65,11 +88,17 @@ public final class TransactionCoordinator {
                           long commitTS) {
         CommitExecutor commit = new CommitExecutor();
         for (ByteKey key : txn.writeKeys()) {
+            if (!participant.owns(key)) {
+                continue;
+            }
             commit.commit(participant.engine(), participant.locks(),
                     key.key(), txn.writeValue(key), false,
                     txn.txnId(), txn.startTS(), commitTS);
         }
         for (ByteKey key : txn.deleteKeys()) {
+            if (!participant.owns(key)) {
+                continue;
+            }
             commit.commit(participant.engine(), participant.locks(),
                     key.key(), null, true,
                     txn.txnId(), txn.startTS(), commitTS);
@@ -79,10 +108,16 @@ public final class TransactionCoordinator {
     private void rollbackOn(Participant participant, Transaction txn) {
         RollbackExecutor rollback = new RollbackExecutor();
         for (ByteKey key : txn.writeKeys()) {
+            if (!participant.owns(key)) {
+                continue;
+            }
             rollback.rollback(participant.engine(), participant.locks(),
                     key.key(), txn.txnId(), txn.startTS());
         }
         for (ByteKey key : txn.deleteKeys()) {
+            if (!participant.owns(key)) {
+                continue;
+            }
             rollback.rollback(participant.engine(), participant.locks(),
                     key.key(), txn.txnId(), txn.startTS());
         }

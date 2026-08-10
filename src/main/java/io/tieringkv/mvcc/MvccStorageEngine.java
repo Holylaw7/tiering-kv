@@ -9,6 +9,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * MVCC 存储适配器（ADR-0071）：底层 StorageEngine 保存
@@ -17,9 +18,36 @@ import java.util.TreeMap;
 public final class MvccStorageEngine {
 
     private final StorageEngine storage;
+    // 内存版本索引：写入同步维护，读取 O(logN)，避免全表扫描 O(N²)
+    private final Map<ByteKey, List<MvccEntry>> index =
+            new ConcurrentHashMap<>();
 
     public MvccStorageEngine(StorageEngine storage) {
         this.storage = storage;
+        rebuildIndex();
+    }
+
+    /** 启动/快照恢复：从底层存储重建版本索引（O(N) 一次）。 */
+    private void rebuildIndex() {
+        synchronized (index) {
+            index.clear();
+            try (StorageIterator iterator = storage.iterator()) {
+                while (iterator.hasNext()) {
+                    KeyValueEntry entry = iterator.next();
+                    byte[] userKey = MvccKey.userKey(entry.key());
+                    index.compute(new ByteKey(userKey), (key, list) -> {
+                        List<MvccEntry> updated = list == null
+                                ? new ArrayList<>() : new ArrayList<>(list);
+                        updated.add(new MvccEntry(userKey, entry.value(),
+                                MvccKey.startTS(entry.key()),
+                                MvccKey.commitTS(entry.key()),
+                                MvccKey.writeType(entry.key())));
+                        updated.sort(Comparator.comparingLong(MvccEntry::commitTS));
+                        return updated;
+                    });
+                }
+            }
+        }
     }
 
     public StorageEngine underlying() {
@@ -31,37 +59,46 @@ public final class MvccStorageEngine {
                            long commitTS, WriteType writeType) {
         storage.put(MvccKey.encode(userKey, startTS, commitTS, writeType),
                 value == null ? new byte[0] : value);
+        synchronized (index) {
+            index.compute(new ByteKey(userKey), (key, list) -> {
+                List<MvccEntry> updated = list == null
+                        ? new ArrayList<>() : new ArrayList<>(list);
+                updated.add(new MvccEntry(userKey, value, startTS,
+                        commitTS, writeType));
+                updated.sort(Comparator.comparingLong(MvccEntry::commitTS));
+                return updated;
+            });
+        }
     }
 
     /** 删除指定版本（rollback/GC）。 */
     public void deleteVersion(byte[] userKey, long commitTS) {
-        for (MvccEntry entry : versions(userKey)) {
-            if (entry.commitTS() == commitTS) {
-                storage.delete(MvccKey.encode(userKey, entry.startTS(),
-                        commitTS, entry.writeType()));
+        synchronized (index) {
+            List<MvccEntry> list = index.get(new ByteKey(userKey));
+            if (list == null) {
                 return;
+            }
+            List<MvccEntry> updated = new ArrayList<>();
+            for (MvccEntry entry : list) {
+                if (entry.commitTS() == commitTS) {
+                    storage.delete(MvccKey.encode(userKey, entry.startTS(),
+                            commitTS, entry.writeType()));
+                } else {
+                    updated.add(entry);
+                }
+            }
+            if (updated.isEmpty()) {
+                index.remove(new ByteKey(userKey));
+            } else {
+                index.put(new ByteKey(userKey), updated);
             }
         }
     }
 
     /** 用户键全部版本（commitTS 升序，含 tombstone）。 */
     public List<MvccEntry> versions(byte[] userKey) {
-        List<MvccEntry> result = new ArrayList<>();
-        try (StorageIterator iterator = storage.iterator()) {
-            while (iterator.hasNext()) {
-                KeyValueEntry entry = iterator.next();
-                if (!MvccKey.startsWith(entry.key(), userKey)) {
-                    continue;
-                }
-                WriteType type = MvccKey.writeType(entry.key());
-                result.add(new MvccEntry(userKey,
-                        type == WriteType.DELETE ? null : entry.value(),
-                        MvccKey.startTS(entry.key()),
-                        MvccKey.commitTS(entry.key()), type));
-            }
-        }
-        result.sort(Comparator.comparingLong(MvccEntry::commitTS));
-        return result;
+        List<MvccEntry> list = index.get(new ByteKey(userKey));
+        return list == null ? List.of() : List.copyOf(list);
     }
 
     /** Snapshot 读：最大 commitTS <= readTS 的可见版本（DELETE 隐藏旧值）。 */
@@ -82,58 +119,48 @@ public final class MvccStorageEngine {
     /** 最近已提交版本（Redis 默认读）。 */
     public byte[] latestValue(byte[] userKey) {
         List<MvccEntry> versions = versions(userKey);
-        if (versions.isEmpty()) {
-            return null;
+        for (int i = versions.size() - 1; i >= 0; i--) {
+            MvccEntry version = versions.get(i);
+            if (version.writeType() == WriteType.LOCK) {
+                continue; // provisional 不可见
+            }
+            return version.isDelete() ? null : version.value();
         }
-        MvccEntry latest = versions.get(versions.size() - 1);
-        return latest.isDelete() ? null : latest.value();
+        return null;
     }
 
     /** 范围扫描（Snapshot）：按 userKey 分组，readTS 可见值。 */
     public Map<byte[], byte[]> scan(byte[] startKey, byte[] endKey, long readTS) {
         Map<byte[], byte[]> result = new TreeMap<>(
                 (a, b) -> java.util.Arrays.compareUnsigned(a, b));
-        byte[] currentUser = null;
-        MvccEntry currentVisible = null;
-        try (StorageIterator iterator = storage.iterator()) {
-            while (iterator.hasNext()) {
-                KeyValueEntry entry = iterator.next();
-                byte[] userKey = MvccKey.userKey(entry.key());
-                if (endKey != null
-                        && java.util.Arrays.compareUnsigned(userKey, endKey) >= 0) {
-                    break;
-                }
-                if (java.util.Arrays.compareUnsigned(userKey, startKey) < 0) {
-                    continue;
-                }
-                if (!java.util.Arrays.equals(userKey, currentUser)) {
-                    flush(currentUser, currentVisible, result);
-                    currentUser = userKey;
-                    currentVisible = null;
-                }
-                WriteType type = MvccKey.writeType(entry.key());
-                MvccEntry version = new MvccEntry(userKey,
-                        type == WriteType.DELETE ? null : entry.value(),
-                        MvccKey.startTS(entry.key()),
-                        MvccKey.commitTS(entry.key()), type);
+        List<ByteKey> keys = new ArrayList<>(index.keySet());
+        keys.sort((a, b) -> java.util.Arrays.compareUnsigned(a.key(), b.key()));
+        for (ByteKey key : keys) {
+            byte[] userKey = key.key();
+            if (endKey != null
+                    && java.util.Arrays.compareUnsigned(userKey, endKey) >= 0) {
+                break;
+            }
+            if (java.util.Arrays.compareUnsigned(userKey, startKey) < 0) {
+                continue;
+            }
+            MvccEntry visible = null;
+            for (MvccEntry version : index.get(key)) {
                 if (version.commitTS() <= readTS && version.isVisible()) {
-                    currentVisible = version;
+                    visible = version;
                 }
             }
-            flush(currentUser, currentVisible, result);
+            if (visible != null && !visible.isDelete()) {
+                result.put(userKey, visible.value());
+            }
         }
         return result;
     }
 
     public long versionCount() {
-        long count = 0;
-        try (StorageIterator iterator = storage.iterator()) {
-            while (iterator.hasNext()) {
-                iterator.next();
-                count++;
-            }
+        synchronized (index) {
+            return index.values().stream().mapToLong(List::size).sum();
         }
-        return count;
     }
 
     private static void flush(byte[] userKey, MvccEntry visible,
