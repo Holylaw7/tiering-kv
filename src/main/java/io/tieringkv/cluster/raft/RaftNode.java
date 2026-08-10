@@ -446,6 +446,71 @@ public final class RaftNode implements AutoCloseable {
         return futures;
     }
 
+    /**
+     * 真实领导权交接（ADR-0064）：仅当 target 日志追平时发送 TimeoutNow，
+     * 目标立即发起选举；返回是否被接受（目标离线/滞后返回 false）。
+     */
+    public CompletableFuture<Boolean> transferLeadership(String target) {
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        boolean caughtUp;
+        synchronized (lock) {
+            if (state != RaftState.LEADER) {
+                future.complete(false);
+                return future;
+            }
+            if (!transport.peerIds().contains(target) || target.equals(id)) {
+                future.complete(false);
+                return future;
+            }
+            long match = replication.matchIndex(target);
+            caughtUp = match >= lastLogIndex();
+        }
+        if (!caughtUp) {
+            future.complete(false);
+            return future;
+        }
+        transport.timeoutNow(target, new TimeoutNowRequest(currentTerm(), id))
+                .whenComplete((response, error) -> {
+                    if (error != null || response == null || !response.accepted()) {
+                        future.complete(false);
+                    } else {
+                        future.complete(true);
+                    }
+                });
+        return future;
+    }
+
+    /** TimeoutNow（ADR-0064）：term 校验后立即发起选举。 */
+    public TimeoutNowResponse receiveTimeoutNow(TimeoutNowRequest request) {
+        long electionTerm;
+        long lastIndex;
+        long lastTerm;
+        synchronized (lock) {
+            if (suspended) {
+                return new TimeoutNowResponse(currentTerm, false);
+            }
+            if (request.term() < currentTerm) {
+                return new TimeoutNowResponse(currentTerm, false);
+            }
+            if (request.term() > currentTerm) {
+                currentTerm = request.term();
+                votedFor = null;
+            }
+            state = RaftState.CANDIDATE;
+            currentTerm++;
+            votedFor = id;
+            lastHeartbeat = System.currentTimeMillis();
+            electionTimeoutMillis = election.nextTimeoutMillis();
+            electionTerm = currentTerm;
+            lastIndex = lastLogIndex();
+            lastTerm = lastLogTerm();
+            persistStateLocked(true);
+        }
+        long term = electionTerm;
+        scheduler.execute(() -> startElection(term, lastIndex, lastTerm));
+        return new TimeoutNowResponse(electionTerm, true);
+    }
+
     private final java.util.Map<Long, CompletableFuture<Long>> pendingCommits =
             new java.util.concurrent.ConcurrentHashMap<>();
 

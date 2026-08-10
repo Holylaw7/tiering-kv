@@ -18,4 +18,11 @@ public interface RaftTransport {
 
     CompletableFuture<InstallSnapshotResponse> installSnapshot(
             String target, InstallSnapshotRequest request);
+
+    /** TimeoutNow（ADR-0064）：默认不支持；实现方按传输提供。 */
+    default CompletableFuture<TimeoutNowResponse> timeoutNow(
+            String target, TimeoutNowRequest request) {
+        return CompletableFuture.failedFuture(
+                new UnsupportedOperationException("timeoutNow not supported"));
+    }
 }

@@ -10,7 +10,9 @@ public enum RpcMessageType {
     INSTALL_SNAPSHOT_RESPONSE(6),
     AUTH(7),
     AUTH_RESPONSE(8),
-    ERROR(9);
+    ERROR(9),
+    TIMEOUT_NOW(10),
+    TIMEOUT_NOW_RESPONSE(11);
 
     private final int wireValue;
 
@@ -32,6 +34,7 @@ public enum RpcMessageType {
     }
 
     public boolean idempotent() {
-        return this == APPEND_ENTRIES || this == REQUEST_VOTE || this == INSTALL_SNAPSHOT;
+        return this == APPEND_ENTRIES || this == REQUEST_VOTE
+                || this == INSTALL_SNAPSHOT || this == TIMEOUT_NOW;
     }
 }
