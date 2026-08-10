@@ -334,6 +334,47 @@ class RaftTest {
         node.close();
     }
 
+    @Test
+    void newLeaderBackfillsLaggingFollowerWithoutNewWrites() throws Exception {
+        List<String> applied = new ArrayList<>();
+        List<RaftNode> peers = new ArrayList<>();
+        List<RaftNode> nodes = new ArrayList<>();
+        List<BackfillTransport> transports = new ArrayList<>();
+        for (String id : List.of("n1", "n2", "n3")) {
+            BackfillTransport transport = new BackfillTransport(peers, id);
+            RaftNode node = new RaftNode(id, transport,
+                    (index, command) -> applied.add(
+                            new String(command, StandardCharsets.UTF_8)),
+                    ELECTION, 25, 10, new MemoryRaftLog(), null, null);
+            nodes.add(node);
+            transports.add(transport);
+        }
+        peers.addAll(nodes);
+        startAll(nodes.toArray(new RaftNode[0]));
+        RaftNode leader = awaitLeader(nodes, 5000);
+        leader.propose(bytes("A")).get();
+        awaitTrue("all have A", () ->
+                nodes.stream().allMatch(n -> n.logSize() == 1), 3000);
+        // 断开 leader → n3 的复制（n3 滞后）
+        BackfillTransport leaderTransport = transports.get(
+                nodes.indexOf(leader));
+        leaderTransport.dropTarget = "n3";
+        leader.propose(bytes("B")).get();
+        assertThat(nodes.stream().filter(n -> n.id().equals("n3"))
+                .findFirst().orElseThrow().logSize()).isEqualTo(1);
+        leaderTransport.dropTarget = null;
+        // 击杀 leader，n2 以非空日志当选
+        leader.suspend();
+        leader.close();
+        RaftNode newLeader = awaitLeader(nodes, 5000);
+        assertThat(newLeader.id()).isNotEqualTo(leader.id());
+        // 关键回归：无新写入，滞后副本必须被回填
+        awaitTrue("lagging follower backfilled", () ->
+                nodes.stream().filter(n -> n.id().equals("n3"))
+                        .findFirst().orElseThrow().logSize() == 2, 5000);
+        closeAll(nodes.toArray(new RaftNode[0]));
+    }
+
     /** 授予选票但从不响应日志复制的传输：用于构造悬挂提案。 */
     private static final class StubTransport implements RaftTransport {
 
@@ -358,5 +399,57 @@ class RaftTest {
                 String target, InstallSnapshotRequest request) {
             return new CompletableFuture<>();
         }
+    }
+
+    /** 可定向丢弃 AppendEntries 的传输（滞后副本回填回归）。 */
+    private static final class BackfillTransport implements RaftTransport {
+        private final List<RaftNode> peers;
+        private final String selfId;
+        private volatile String dropTarget;
+
+        private BackfillTransport(List<RaftNode> peers, String selfId) {
+            this.peers = peers;
+            this.selfId = selfId;
+        }
+
+        @Override
+        public List<String> peerIds() {
+            return peers.stream().map(RaftNode::id).toList();
+        }
+
+        @Override
+        public CompletableFuture<VoteResponse> requestVote(
+                String target, VoteRequest request) {
+            return CompletableFuture.completedFuture(find(target).receive(request));
+        }
+
+        @Override
+        public CompletableFuture<AppendEntriesResponse> appendEntries(
+                String target, AppendEntriesRequest request) {
+            if (target.equals(dropTarget)) {
+                return CompletableFuture.failedFuture(
+                        new IllegalStateException("dropped"));
+            }
+            return CompletableFuture.completedFuture(find(target).receive(request));
+        }
+
+        @Override
+        public CompletableFuture<InstallSnapshotResponse> installSnapshot(
+                String target, InstallSnapshotRequest request) {
+            return CompletableFuture.completedFuture(find(target).receive(request));
+        }
+
+        private RaftNode find(String id) {
+            for (RaftNode peer : peers) {
+                if (peer.id().equals(id)) {
+                    return peer;
+                }
+            }
+            throw new IllegalStateException("no peer " + id);
+        }
+    }
+
+    private static byte[] bytes(String value) {
+        return value.getBytes(StandardCharsets.UTF_8);
     }
 }

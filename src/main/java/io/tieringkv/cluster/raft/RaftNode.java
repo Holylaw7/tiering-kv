@@ -810,7 +810,26 @@ public final class RaftNode implements AutoCloseable {
         transport.appendEntries(call.peer(), call.appendRequest())
                 .orTimeout(RPC_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
                 .whenComplete((response, error) -> {
-                    // 心跳仅用于保活与 commitIndex 传播，不更新复制进度
+                    if (error != null || response == null) {
+                        return;
+                    }
+                    if (response.term() > currentTerm()) {
+                        synchronized (lock) {
+                            stepDownLocked(response.term());
+                        }
+                        return;
+                    }
+                    if (!response.success()) {
+                        // 日志不匹配：回退 nextIndex，使后续数据 flush 回填
+                        // （Phase 16 混沌发现：新 leader 以非空日志当选后，
+                        //  无新写入时滞后副本永远无法追平）
+                        synchronized (lock) {
+                            if (running && state == RaftState.LEADER) {
+                                replication.onFailure(call.peer());
+                            }
+                        }
+                        flushReplication();
+                    }
                 });
     }
 
