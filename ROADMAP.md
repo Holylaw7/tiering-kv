@@ -20,6 +20,7 @@
 | 10 | 生产化完善 | ✅ 完成（2026-08-10） |
 | 11 | 分布式集群 | ✅ 完成（2026-08-10） |
 | 12 | 分布式生产化 | ✅ 完成（2026-08-10） |
+| 13 | 分布式优化 | ✅ 完成（2026-08-10） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -209,6 +210,30 @@
   TCP 提交 1,359 ops/s（P50=0.65ms / P99=2.16ms）、复制滞后 <1ms、
   RPC 9.3K ops/s（P50=100μs，单连接）、迁移 16.1MB/s + 恢复 549ms。
 
+## Phase 13 — 分布式优化 ✅
+
+- 目标：吞吐、迁移效率、RPC 安全、元数据可靠性、跨机部署准备。
+- 交付：
+  - Raft 批量/流水线复制（RaftReplicationConfig：maxBatchEntries /
+    maxBatchBytes / flushInterval / maxInflight；group commit；
+    ReplicationTracker inflight/lastSent 跟踪）；
+  - 游标迁移（MigrationCursor lastKey/lastVersion/checkpointOffset、
+    PAUSED 状态、`slot-{start}.cursor` CRC 文件、pause/resume/recover）；
+  - 安全 RPC（RpcSecurityConfig + SslContext TLS + RpcAuthInterceptor
+    Token 认证/过期 + TokenBucket 限流 + AUTH/ERROR 帧）；
+  - 元数据 Raft 化（MetadataRaftGroup / MetadataCodec / MetadataState
+    每副本独立状态机 / MetadataClient，leader 故障转移元数据可用）；
+  - 跨机部署文档（gateway/metadata/storage 角色、端口、YAML）。
+- ADR：[0044](docs/adr/ADR-0044-raft-batch-replication.md)（批量复制）、
+  [0045](docs/adr/ADR-0045-slot-cursor-migration.md)（游标迁移）、
+  [0046](docs/adr/ADR-0046-rpc-security.md)（RPC 安全）、
+  [0047](docs/adr/ADR-0047-metadata-raft.md)（元数据 Raft）。
+- 测试：新增 82 项（批量复制 15 / 迁移游标 15 / RPC 安全 19 / 元数据
+  Raft 24 / 集成 5 / 基准 4），全量回归最终统计见评审报告。
+- 基准（[phase13-report.md](docs/benchmark/phase13-report.md)）：
+  复制吞吐 22,169 ops/s（>5000 ✅）、迁移 216–245MB/s（>100MB/s ✅）、
+  RPC 安全开销 +50–70%、元数据故障转移 115–290ms。
+
 ## 技术债登记
 
 | 编号 | 描述 | 来源 | 计划消除 |
@@ -236,7 +261,10 @@
 | TD-023 | 进程内直调 → Netty TCP RPC + 超时重试 | ADR-0037 | ✅ 已关闭（Phase 12） |
 | TD-024 | 复制滞后 13–35ms → CommitNotifier 立即补发（<1ms） | ADR-0037 | ✅ 已关闭（Phase 12） |
 | TD-025 | 动态分片（slot 迁移）→ 在线迁移 + checkpoint | ADR-0035 | ✅ 已关闭（Phase 12） |
-| TD-026 | 复制为同步串行 propose → 批量/并行 AppendEntries | ADR-0037 | Phase 13 |
-| TD-027 | 迁移每批重建源快照迭代 → 单次迭代 + 游标 checkpoint | ADR-0043 | Phase 13 |
-| TD-028 | RPC 无 TLS/认证/限流 | ADR-0041 | Phase 13 |
-| TD-029 | 元数据服务单机实现 → Raft 化落地 | ADR-0036 | Phase 13 |
+| TD-026 | 复制为同步串行 propose → 批量/流水线（9.2K ops/s） | ADR-0037 | ✅ 已关闭（Phase 13） |
+| TD-027 | 迁移每批重建源快照 → 游标单次扫描 | ADR-0043 | ✅ 已关闭（Phase 13） |
+| TD-028 | RPC 无 TLS/认证/限流 → 安全 RPC 层 | ADR-0041 | ✅ 已关闭（Phase 13） |
+| TD-029 | 元数据单机 → Raft 元数据组 | ADR-0036 | ✅ 已关闭（Phase 13） |
+| TD-030 | 小负载迁移（100B）受单条 put 成本限制 → MemTable 批量写接口 | ADR-0045 | Phase 14 |
+| TD-031 | 复制 P50≈6ms（flush 周期 + 同步写者）→ 自适应 flush/异步客户端 | ADR-0044 | Phase 14 |
+| TD-032 | RPC 静态 token → HMAC 签名 + 密钥轮换；mTLS | ADR-0046 | Phase 14 |

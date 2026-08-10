@@ -2,9 +2,9 @@
 
 > 高并发 Redis 协议兼容的 LSM 冷热分层 KV 存储引擎
 > （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding +
-> Raft 持久化集群 + Netty RPC + 在线迁移）。
+> Raft 持久化集群 + 批量复制 + 安全 RPC + 元数据 Raft + 游标迁移）。
 
-**阶段状态：Phase 12（分布式生产化）✅（Phase 0–11 全部完成 ✅）**
+**阶段状态：Phase 13（分布式优化）✅（Phase 0–12 全部完成 ✅）**
 
 ## 项目定位
 
@@ -14,8 +14,9 @@
 分布式集群基础：16384 hash slot 路由、元数据服务、最小真实 Raft（选举 /
 心跳 / 日志复制 / 提交）与故障转移（Phase 11），以及分布式生产化：
 Raft 日志持久化 + 快照、Netty TCP RPC、复制滞后优化（<1ms）、在线
-Slot 迁移（Phase 12）；面向 redis-cli 与主流客户端提供 PING / ECHO /
-SET / GET / DEL / EXISTS 能力。
+Slot 迁移（Phase 12），以及分布式优化：批量/流水线复制（>5000 ops/s）、
+游标迁移、TLS/认证/限流安全 RPC、元数据 Raft 化（Phase 13）；面向
+redis-cli 与主流客户端提供 PING / ECHO / SET / GET / DEL / EXISTS 能力。
 
 **边界（如实声明）**：仍为教学/工程级实现，暂不宣称"高性能 Redis 替代品"；
 分布式为真实 TCP + 持久化原型（RPC 串行、无 TLS、元数据单机），
@@ -238,6 +239,20 @@ RaftNode
 - 基准（[distributed-production-report.md](docs/benchmark/distributed-production-report.md)）：
   TCP 提交 P50=0.65ms / P99=2.16ms，RPC P50=100μs（单连接），
   迁移 16.1MB/s + 恢复 549ms/90K。
+
+## 分布式优化（Phase 13）
+
+- **批量/流水线复制**（ADR-0044）：batch AppendEntries（maxBatchEntries/
+  maxBatchBytes/flushInterval）+ 多 in-flight + group commit，
+  TCP 吞吐 700–1,359 → **9,220 ops/s**（64 并发写者）；
+- **游标迁移**（ADR-0045）：单次扫描 + `slot-{start}.cursor`（CRC 保护）
+  + PAUSED/恢复/崩溃续传，1KB 负载 **244.8MB/s**；
+- **安全 RPC**（ADR-0046）：TLS（PEM 证书）+ Token 认证（含过期）+ 
+  TokenBucket 限流（`ERR RATE_LIMIT`）；
+- **元数据 Raft 化**（ADR-0047）：MetadataRaftGroup + MetadataClient，
+  JOIN/拓扑/slot 归属/迁移状态走 Raft 日志，leader 故障转移 115ms；
+- 基准：[phase13-report.md](docs/benchmark/phase13-report.md)；
+  部署：[distributed-deployment.md](docs/deployment/distributed-deployment.md)。
 
 ## 技术栈
 

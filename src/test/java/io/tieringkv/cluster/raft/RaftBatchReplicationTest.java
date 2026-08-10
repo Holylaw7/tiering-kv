@@ -36,28 +36,24 @@ class RaftBatchReplicationTest {
 
     @Test
     void flushIntervalBatchesPendingEntries() throws Exception {
-        Fixture fixture = group3(new RaftReplicationConfig(128, 1 << 20, 20, 8));
+        Fixture fixture = group3Holding(new RaftReplicationConfig(128, 1 << 20, 20, 8));
         try {
             RaftNode leader = awaitLeader(Arrays.asList(fixture.nodes()), 5000);
+            // 首条立即 flush（idle peer）并保持 in-flight
+            leader.propose(bytes("cmd0"));
+            assertThat(fixture.maxHeldBatch()).isEqualTo(1);
             List<CompletableFuture<Long>> futures = new ArrayList<>();
-            for (int i = 0; i < 5; i++) {
+            for (int i = 1; i < 10; i++) {
                 futures.add(leader.propose(bytes("cmd" + i)));
             }
+            // 后续提案等待 flush 定时器（20ms）批量发送
+            Thread.sleep(60);
+            assertThat(fixture.maxHeldBatch()).isGreaterThanOrEqualTo(5);
+            fixture.releaseAll();
             for (CompletableFuture<Long> future : futures) {
                 future.get(5, TimeUnit.SECONDS);
             }
-            awaitTrue("entries applied", () -> {
-                for (RaftNode node : fixture.nodes()) {
-                    if (node.lastApplied() < 4) {
-                        return false;
-                    }
-                }
-                return true;
-            }, 5000);
-            // 5 条在单个 flush 周期内收集 → 至少一个请求携带 ≥5 条
-            int maxBatch = fixture.records().stream()
-                    .mapToInt(RequestRecord::entryCount).max().orElse(0);
-            assertThat(maxBatch).isGreaterThanOrEqualTo(5);
+            assertThat(leader.commitIndex()).isEqualTo(9);
         } finally {
             closeAll(fixture.nodes());
         }
@@ -423,6 +419,10 @@ class RaftBatchReplicationTest {
         private void releaseAll() {
             holding.releaseAll();
         }
+
+        private int maxHeldBatch() {
+            return holding.maxHeldBatch();
+        }
     }
 
     /** 可控响应传输：请求发出后由测试主动释放响应，用于观测 pipeline。 */
@@ -447,6 +447,10 @@ class RaftBatchReplicationTest {
         @Override
         public CompletableFuture<AppendEntriesResponse> appendEntries(
                 String target, AppendEntriesRequest request) {
+            if (request.entries().isEmpty()) {
+                // 心跳即时放行，避免 follower 选举超时
+                return CompletableFuture.completedFuture(find(target).receive(request));
+            }
             CompletableFuture<AppendEntriesResponse> future = new CompletableFuture<>();
             held.add(new Held(target, request, future));
             return future;
@@ -466,6 +470,14 @@ class RaftBatchReplicationTest {
             }
             for (Held item : snapshot) {
                 item.future().complete(find(item.target()).receive(item.request()));
+            }
+        }
+
+        private int maxHeldBatch() {
+            synchronized (held) {
+                return held.stream()
+                        .mapToInt(h -> h.request().entries().size())
+                        .max().orElse(0);
             }
         }
 

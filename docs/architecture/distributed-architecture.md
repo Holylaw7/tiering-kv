@@ -1,6 +1,6 @@
 # 分布式架构（Distributed Architecture）
 
-状态：✅ 原型完成（Phase 11）→ 分布式生产化（Phase 12）
+状态：✅ 原型完成（Phase 11）→ 分布式生产化（Phase 12）→ 分布式优化（Phase 13）
 
 ## 1. 拓扑
 
@@ -89,4 +89,23 @@ AppendEntries / RequestVote / InstallSnapshot。
 - RPC 单连接串行、无 TLS/认证；
 - 复制为同步串行 propose（批量/并行复制留后续）；
 - 迁移为存量复制模型（增量/双写留后续）；
-- 元数据服务仍为进程内单机（Raft 化落地留后续）。
+- 元数据服务单机（Phase 13 已 Raft 化，见 §9）。
+
+## 9. 分布式优化（Phase 13，ADR-0044~0047）
+
+```text
+RaftNode（批量/流水线复制）
+  ├── RaftReplicationConfig（batch/bytes/flush/inflight）
+  ├── 日志镜像缓存（持锁路径零文件读）
+  └── ReplicationTracker（inflight/lastSent）
+SlotMigrationManager → MigrationCursor（单次扫描 + slot-{start}.cursor）
+RpcServer/RpcClient → TLS + RpcAuthInterceptor + TokenBucket
+MetadataClient → MetadataRaftGroup → 每副本 MetadataState
+```
+
+- 复制：批量 AppendEntries + 多 in-flight + group commit，TCP 9.2K ops/s；
+- 迁移：游标单次扫描 + PAUSED/续传，1KB 负载 244.8MB/s；
+- 安全：TLS PEM + Token 认证（含过期）+ 限流；
+- 元数据：独立 Raft 组，leader 故障转移 115ms，状态机每副本独立；
+- 部署：gateway / metadata / storage 角色与 YAML 配置（见
+  docs/deployment/distributed-deployment.md）。

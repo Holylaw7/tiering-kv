@@ -165,6 +165,28 @@
 - Phase 12 评审处置：TD-022~025 关闭；登记 TD-026（批量/并行复制）、
   TD-027（迁移单次迭代游标）、TD-028（RPC TLS/认证）、TD-029
   （元数据 Raft 化落地）。
+- Phase 13 分布式优化：
+  - Raft 批量/流水线复制：RaftReplicationConfig（maxBatchEntries /
+    maxBatchBytes / flushInterval / maxInflight），异步批量发送 +
+    group commit + inflight/lastSent 跟踪；日志镜像缓存消除持锁文件读；
+  - 游标迁移：MigrationCursor（lastKey/lastVersion/checkpointOffset）、
+    PAUSED 状态、`slot-{start}.cursor` CRC 游标文件、pause/resume/recover；
+  - 安全 RPC：RpcSecurityConfig（TLS PEM 证书）+ RpcAuthInterceptor
+    （Token 认证/过期 + AUTH/ERROR 帧）+ TokenBucket 限流（ERR RATE_LIMIT）；
+    RpcClient 连接/重试全程非阻塞（修复事件循环阻塞导致的提交停滞）；
+  - 元数据 Raft 化：MetadataRaftGroup / MetadataCodec / MetadataState
+    （每副本独立状态机，修复共享状态交错问题）/ MetadataClient；
+  - 跨机部署文档（docs/deployment/distributed-deployment.md）。
+- Phase 13 测试：批量复制 15 / 迁移游标 15 / RPC 安全 19 / 元数据 Raft
+  24 / 集成 5 / 基准 4 —— 新增 82 项；全量回归最终统计见评审报告。
+- Phase 13 基准（docs/benchmark/phase13-report.md）：复制吞吐 9,220
+  → 22,169 ops/s（目标 >5000 ✅）、迁移 216–245MB/s @1KB
+  （目标 >100MB/s ✅）、RPC 安全开销 +50–70%、元数据故障转移
+  115–290ms。
+- ADR-0044（批量复制）、ADR-0045（游标迁移）、ADR-0046（RPC 安全）、
+  ADR-0047（元数据 Raft）。
+- Phase 13 评审处置：TD-026~029 关闭；登记 TD-030（MemTable 批量写）、
+  TD-031（自适应 flush/异步客户端）、TD-032（token 签名轮换/mTLS）。
 - Phase 9 评审处置：确认瓶颈分层（A 4.7M → B 230K → C 150K，瓶颈=协议/调度）；
   登记 TD-020（request→response 对象数优化）与 TD-021（JFR 验收指标）。
 - Phase 8 IO 优化：MmapSSTableReader（零拷贝块读）+ FileChannel baseline、

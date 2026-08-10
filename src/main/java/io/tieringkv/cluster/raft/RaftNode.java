@@ -356,7 +356,7 @@ public final class RaftNode implements AutoCloseable {
             raftLog.append(entry);
             cacheAppendLocked(entry);
             pendingCommits.put(entry.index(), future);
-            batchReady = batchFullLocked();
+            batchReady = batchFullLocked() || idlePeerLocked();
             solo = transport.peerIds().size() <= 1;
             if (solo) {
                 // 无 peers：无异步响应可触发提交，直接走 commit 路径
@@ -523,6 +523,21 @@ public final class RaftNode implements AutoCloseable {
             long next = replication.nextIndex(peer);
             if (next <= lastLogIndex()
                     && lastLogIndex() - next + 1 >= replicationConfig.maxBatchEntries()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 任一 peer 空闲（无 in-flight 且有未发送条目）→ 立即 flush 降低顺序写延迟。 */
+    private boolean idlePeerLocked() {
+        for (String peer : transport.peerIds()) {
+            if (peer.equals(id)) {
+                continue;
+            }
+            FollowerProgress progress = replication.progress(peer);
+            if (progress != null && progress.inflight() == 0
+                    && progress.nextIndex() <= lastLogIndex()) {
                 return true;
             }
         }
