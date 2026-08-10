@@ -7,16 +7,27 @@ import java.util.concurrent.atomic.LongAdder;
 public final class MigrationMetricsRegistry {
 
     private final LongAdder bytes = new LongAdder();
+    private final LongAdder errors = new LongAdder();
+    private volatile long remaining;
     private final long startedAt = System.nanoTime();
 
     public void recordBytes(long migratedBytes) {
         bytes.add(Math.max(0, migratedBytes));
     }
 
+    public void recordError() {
+        errors.increment();
+    }
+
+    public void setRemaining(long remaining) {
+        this.remaining = Math.max(0, remaining);
+    }
+
     public Snapshot snapshot() {
         long total = bytes.sum();
         double seconds = Math.max(1, (System.nanoTime() - startedAt) / 1_000_000_000.0);
-        return new Snapshot(total, total / 1024.0 / 1024.0 / seconds);
+        return new Snapshot(total, total / 1024.0 / 1024.0 / seconds,
+                remaining, errors.sum());
     }
 
     public String sectionText() {
@@ -24,10 +35,14 @@ public final class MigrationMetricsRegistry {
         return String.format(Locale.ROOT,
                 "# Migration\r\n"
                         + "migration_bytes:%d\r\n"
-                        + "migration_speed_mb_per_sec:%.1f\r\n",
-                s.migrationBytes(), s.migrationSpeedMbPerSec());
+                        + "migration_speed_mb_per_sec:%.1f\r\n"
+                        + "migration_remaining:%d\r\n"
+                        + "migration_error:%d\r\n",
+                s.migrationBytes(), s.migrationSpeedMbPerSec(),
+                s.migrationRemaining(), s.migrationErrors());
     }
 
-    public record Snapshot(long migrationBytes, double migrationSpeedMbPerSec) {
+    public record Snapshot(long migrationBytes, double migrationSpeedMbPerSec,
+                           long migrationRemaining, long migrationErrors) {
     }
 }

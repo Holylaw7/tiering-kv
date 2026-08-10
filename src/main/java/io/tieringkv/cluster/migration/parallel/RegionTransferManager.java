@@ -25,17 +25,26 @@ public final class RegionTransferManager implements AutoCloseable {
     private final Path cursorDir;
     private final long versionBarrier;
     private final int workerCount;
+    private final long rateLimitBytesPerSec;
     private final ChunkWorker.PauseController pauseController =
             new ChunkWorker.PauseController();
 
     public RegionTransferManager(StorageEngine source, StorageEngine target,
                                  Path cursorDir, int workerCount,
                                  long versionBarrier) {
+        this(source, target, cursorDir, workerCount, versionBarrier, 0);
+    }
+
+    public RegionTransferManager(StorageEngine source, StorageEngine target,
+                                 Path cursorDir, int workerCount,
+                                 long versionBarrier,
+                                 long rateLimitBytesPerSec) {
         this.source = source;
         this.target = target;
         this.cursorDir = cursorDir;
         this.workerCount = Math.max(1, workerCount);
         this.versionBarrier = versionBarrier;
+        this.rateLimitBytesPerSec = rateLimitBytesPerSec;
     }
 
     public static int defaultWorkerCount() {
@@ -54,6 +63,7 @@ public final class RegionTransferManager implements AutoCloseable {
         List<MigrationChunk> chunks = buildChunks(chunkCount);
         AtomicLong entries = new AtomicLong();
         AtomicLong bytes = new AtomicLong();
+        ByteRateLimiter rateLimiter = new ByteRateLimiter(rateLimitBytesPerSec);
         ExecutorService pool = Executors.newFixedThreadPool(
                 Math.min(workerCount, chunks.size()));
         long start = System.nanoTime();
@@ -62,7 +72,7 @@ public final class RegionTransferManager implements AutoCloseable {
             for (MigrationChunk chunk : chunks) {
                 futures.add(pool.submit(new ChunkWorker(
                         source, target, cursorDir, versionBarrier,
-                        chunk, pauseController, entries, bytes)));
+                        chunk, pauseController, entries, bytes, rateLimiter)));
             }
             for (Future<?> future : futures) {
                 future.get(300, TimeUnit.SECONDS);
