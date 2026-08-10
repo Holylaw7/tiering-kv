@@ -27,6 +27,7 @@
 | 17 | Region 生命周期与分布式存储完善 | ✅ 完成（2026-08-10） |
 | 18 | 分布式生产集成 | ✅ 完成（2026-08-10） |
 | 19 | MVCC 与事务引擎 | ✅ 完成（2026-08-10） |
+| 20 | 事务生产化与存储优化 | ✅ 完成（2026-08-10） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -384,6 +385,24 @@
   （>100K ✅ 最佳轮）、冲突 2.1–7.6M ops/s（>500K ✅）、GC 19–29MB/s
   （>100 未达，TD-041）。
 
+## Phase 20 — 事务生产化与存储优化 ✅
+
+- 交付：批量 GC（BatchGcExecutor 107–285MB/s）+ 网关自动事务
+  （AutoTransactionExecutor / TransactionCommandHandler）+ 持久化 MVCC
+  索引（Writer/Reader/Snapshot/增量重建）+ PersistentTxnJournal +
+  TxnRecoveryReplay（COMMIT 先落盘，恢复补完）+ 锁过期墙上时钟修复 +
+  INFO TRANSACTION/MVCC + Prometheus 指标。
+- ADR：[0078](docs/adr/ADR-0078-mvcc-batch-gc.md)（批量 GC）、
+  [0079](docs/adr/ADR-0079-redis-auto-transaction.md)（自动事务）、
+  [0080](docs/adr/ADR-0080-persistent-mvcc-index.md)（索引持久化）、
+  [0081](docs/adr/ADR-0081-transaction-journal-raft-persistence.md)
+  （事务日志 Raft）、[0082](docs/adr/ADR-0082-cross-machine-transaction-validation.md)
+  （跨机验证）。
+- 测试：新增 181 项；全量回归 1523/1523 全绿（0 failures）。
+- 基准（[phase20-report.md](docs/benchmark/phase20-report.md)）：
+  GC 107–285MB/s（>100 ✅）、网关 GET 2.0–6.9M / SET 141–389K ops/s、
+  单区事务 324–651K txn/s、跨区 62–158K txn/s、恢复 1–4ms。
+
 ## 技术债登记
 
 | 编号 | 描述 | 来源 | 计划消除 |
@@ -426,5 +445,6 @@
 | TD-038 | 网关 CLUSTER 命令子集 | ADR-0061 | Phase 19（全字段 NODES/ASK 搬迁） |
 | TD-039 | Region 键范围与 slot 区间路由未统一 | ADR-0057 | ✅ 已关闭（Phase 18，RoutingTable 统一） |
 | TD-040 | 跨机容器混沌未执行（环境限制） | ADR-0069 | Phase 19（Linux+Docker） |
-| TD-041 | MVCC GC 19–29MB/s（目标 >100）→ 批量删除路径 | Phase 20 |
-| TD-042 | Redis 网关未接 MVCC 自动事务化 | Phase 20 |
+| TD-041 | MVCC GC 19–29MB/s（目标 >100）→ 批量删除路径 | ✅ 已关闭（Phase 20，107–285MB/s） |
+| TD-042 | Redis 网关未接 MVCC 自动事务化 | ✅ 已关闭（Phase 20，GET/SET/DEL/MGET/MSET） |
+| TD-043 | 事务/MVCC 未接入 Multi-Raft Region 网络路径，跨机事务验证受限 | ADR-0082 | Phase 21（网关+Region 路由接入后执行） |

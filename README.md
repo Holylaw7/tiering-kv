@@ -4,7 +4,7 @@
 > （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding +
 > Raft 持久化集群 + 批量复制 + 安全 RPC + 元数据 Raft + 游标迁移）。
 
-**阶段状态：Phase 19（MVCC 与事务引擎）✅（Phase 0–18 全部完成 ✅）**
+**阶段状态：Phase 20（事务生产化与存储优化）✅（Phase 0–19 全部完成 ✅）**
 
 ## 项目定位
 
@@ -397,6 +397,23 @@ RaftNode
   [一致性](docs/architecture/consistency.md) /
   [基准](docs/benchmark/phase19-mvcc-report.md) /
   [评审](docs/review/phase19-mvcc-transaction-review.md)。
+
+## 事务生产化与存储优化（Phase 20）
+
+- **批量 GC**（ADR-0078）：`mvcc/gc` BatchGcExecutor（索引规划 + 分段
+  批量物理删除 + 并行 worker），107–285MB/s（>100 ✅，TD-041 关闭）；
+- **网关自动事务**（ADR-0079）：GET=快照读、SET/DEL=单键事务、
+  MGET=一致快照、MSET=跨 shard 2PC；RESP 不变（TD-042 关闭）；
+- **持久化 MVCC 索引**（ADR-0080）：Writer/Reader/Snapshot + 增量重建；
+- **事务日志 Raft 持久化**（ADR-0081）：COMMIT 决策先落盘 + 恢复重放
+  （无幻影提交 / 无丢失提交）；
+- **可观测性**：INFO TRANSACTION / INFO MVCC、Prometheus
+  （txn_abort/recovery、mvcc_versions/gc_deleted、redis_txn_latency）；
+- **基准**：网关 GET 2.0–6.9M、SET 141–389K ops/s、单区事务
+  324–651K txn/s、跨区 62–158K txn/s、恢复 1–4ms，全部达标；
+- 文档：[基准](docs/benchmark/phase20-report.md) /
+  [评审](docs/review/phase20-transaction-production-review.md) /
+  [混沌](docs/testing/phase20-chaos-report.md)。
 
 ## 技术栈
 

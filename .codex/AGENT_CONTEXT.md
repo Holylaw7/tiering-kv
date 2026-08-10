@@ -116,6 +116,14 @@ INFO TRANSACTION + Prometheus；验收中修复 Raft 空心跳错误提交冲突
 共识缺陷（ADR-0077）；227 项新测试。
 全量回归 1339/1339 全绿。
 
+Phase 20 已交付：事务生产化与存储优化——批量 GC（BatchGcExecutor
+107–285MB/s，TD-041 关闭）+ Redis 网关自动事务（GET/SET/DEL/MGET/MSET，
+TD-042 关闭）+ 持久化 MVCC 索引（Writer/Reader/Snapshot/增量重建）+
+PersistentTxnJournal + TxnRecoveryReplay（COMMIT 先落盘，恢复补完）+
+锁过期墙上时钟修复 + INFO TRANSACTION/MVCC + Prometheus；181 项新测试。
+全量回归 1523/1523 全绿。跨机 Docker+tc netem 因容器内 Maven 网络受限
+未执行（TD-040/TD-043 登记）。
+
 ## 2. 当前状态
 
 - 阶段：**Phase 19（MVCC & Transaction Engine）✅ 已完成**
