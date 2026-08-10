@@ -15,16 +15,17 @@ public final class EvictionManager {
     private final MemTable memTable;
     private final MemoryManager memoryManager;
     private final EvictionPolicy policy;
-    private final MigrationCallback migrationCallback;
+    private final TierMigration migration;
     private final TimeSource timeSource;
     private final int maxEvictionsPerCycle;
+    private static final int MAX_MIGRATION_ATTEMPTS = 3;
 
     public EvictionManager(
             MemTable memTable,
             MemoryManager memoryManager,
             EvictionPolicy policy,
-            MigrationCallback migrationCallback) {
-        this(memTable, memoryManager, policy, migrationCallback,
+            TierMigration migration) {
+        this(memTable, memoryManager, policy, migration,
                 System::currentTimeMillis, CacheConfig.defaults().maxEvictionsPerCycle());
     }
 
@@ -32,13 +33,13 @@ public final class EvictionManager {
             MemTable memTable,
             MemoryManager memoryManager,
             EvictionPolicy policy,
-            MigrationCallback migrationCallback,
+            TierMigration migration,
             TimeSource timeSource,
             int maxEvictionsPerCycle) {
         this.memTable = memTable;
         this.memoryManager = memoryManager;
         this.policy = policy;
-        this.migrationCallback = migrationCallback;
+        this.migration = migration;
         this.timeSource = timeSource;
         this.maxEvictionsPerCycle = maxEvictionsPerCycle;
     }
@@ -57,6 +58,7 @@ public final class EvictionManager {
             return;
         }
         long now = timeSource.nowMillis();
+        int retryBudget = MAX_MIGRATION_ATTEMPTS;
         for (int i = 0; i < maxEvictionsPerCycle && memoryManager.isOverLimit(); i++) {
             EvictionCandidate candidate = policy.selectCandidate();
             if (candidate == null) {
@@ -69,9 +71,21 @@ public final class EvictionManager {
                 policy.onAccess(new AccessEvent(key, AccessEvent.AccessOperation.DELETE, now, 0));
                 continue;
             }
-            migrationCallback.migrate(entry);
-            if (memTable.removePhysical(key)) {
-                policy.onAccess(new AccessEvent(key, AccessEvent.AccessOperation.EVICT, now, 0));
+            MigrationResult result = migration.migrate(entry);
+            switch (result) {
+                case SUCCESS -> {
+                    if (memTable.removePhysical(key)) {
+                        policy.onAccess(new AccessEvent(key, AccessEvent.AccessOperation.EVICT, now, 0));
+                    }
+                }
+                case FAILED -> {
+                    return; // 永久失败：保留数据，终止本轮
+                }
+                case RETRY -> {
+                    if (--retryBudget <= 0) {
+                        return; // 重试预算耗尽：保留数据
+                    }
+                }
             }
         }
     }

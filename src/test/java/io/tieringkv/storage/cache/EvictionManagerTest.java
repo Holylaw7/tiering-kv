@@ -113,12 +113,13 @@ class EvictionManagerTest {
         }
     }
 
-    private static final class CountingMigration implements MigrationCallback {
+    private static final class CountingMigration implements TierMigration {
         private final List<KeyValueEntry> migrated = new ArrayList<>();
 
         @Override
-        public void migrate(KeyValueEntry entry) {
+        public MigrationResult migrate(KeyValueEntry entry) {
             migrated.add(entry);
+            return MigrationResult.SUCCESS;
         }
 
         private int count() {

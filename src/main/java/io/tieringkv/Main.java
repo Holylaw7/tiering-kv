@@ -8,6 +8,7 @@ import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.storage.cache.CacheConfig;
 import io.tieringkv.storage.cache.EvictionManager;
 import io.tieringkv.storage.cache.LFUPolicy;
+import io.tieringkv.storage.cache.TierMigration;
 import io.tieringkv.storage.cache.TrackingStorageEngine;
 import io.tieringkv.storage.memory.MemoryManager;
 import io.tieringkv.storage.memory.MemTable;
@@ -27,9 +28,7 @@ public final class Main {
                 memTable,
                 memoryManager,
                 new LFUPolicy(cacheConfig.decayIntervalMillis()),
-                entry -> {
-                    // Phase 4/6 前为占位：真实迁移将写入 WAL / Bitcask / LSM
-                });
+                TierMigration.discard());
         StorageEngine storage = new TrackingStorageEngine(memTable, evictionManager);
         TieringKvServer server = new TieringKvServer(
                 config,

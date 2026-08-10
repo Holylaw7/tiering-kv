@@ -58,12 +58,13 @@ class CacheIntegrationTest {
         return engine.execute(new io.tieringkv.command.RespCommand(name, argBytes));
     }
 
-    private static final class CountingMigration implements MigrationCallback {
+    private static final class CountingMigration implements TierMigration {
         private final List<KeyValueEntryView> migrated = new ArrayList<>();
 
         @Override
-        public void migrate(io.tieringkv.storage.memory.KeyValueEntry entry) {
+        public MigrationResult migrate(io.tieringkv.storage.memory.KeyValueEntry entry) {
             migrated.add(new KeyValueEntryView(new String(entry.key(), StandardCharsets.UTF_8)));
+            return MigrationResult.SUCCESS;
         }
 
         private int count() {
