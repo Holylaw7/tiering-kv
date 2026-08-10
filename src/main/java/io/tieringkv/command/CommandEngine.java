@@ -8,6 +8,7 @@ import io.tieringkv.storage.StorageEngine;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
 import java.util.Locale;
+import java.util.function.BiConsumer;
 
 /**
  * 命令执行引擎：注册表查找 + 命令执行。
@@ -59,5 +60,30 @@ public final class CommandEngine {
             }
         });
         return future;
+    }
+
+    /**
+     * 回调式异步执行（ADR-0033）：避免每请求 CompletableFuture，
+     * 分片 worker 完成后直接回调（异常经 callback 传递）。
+     */
+    public void executeAsync(RespCommand command, BiConsumer<RespValue, Throwable> callback) {
+        if (executor == null) {
+            try {
+                callback.accept(execute(command), null);
+            } catch (Throwable t) {
+                callback.accept(null, t);
+            }
+            return;
+        }
+        byte[] key = command.args().isEmpty()
+                ? command.name().getBytes(StandardCharsets.UTF_8)
+                : command.args().get(0);
+        executor.submit(key, () -> {
+            try {
+                callback.accept(execute(command), null);
+            } catch (Throwable t) {
+                callback.accept(null, t);
+            }
+        });
     }
 }

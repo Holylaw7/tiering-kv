@@ -5,14 +5,17 @@ import io.netty.channel.socket.SocketChannel;
 import io.tieringkv.command.CommandEngine;
 import io.tieringkv.protocol.RespDecoder;
 import io.tieringkv.protocol.RespEncoder;
+import io.tieringkv.monitor.MetricsRegistry;
 
 /** 连接管道：RESP 解码 → 命令执行 → RESP 编码（ADR-0006）。 */
 public final class ConnectionInitializer extends ChannelInitializer<SocketChannel> {
 
     private final CommandEngine engine;
+    private final MetricsRegistry metrics;
 
-    public ConnectionInitializer(CommandEngine engine) {
+    public ConnectionInitializer(CommandEngine engine, MetricsRegistry metrics) {
         this.engine = engine;
+        this.metrics = metrics;
     }
 
     @Override
@@ -20,6 +23,6 @@ public final class ConnectionInitializer extends ChannelInitializer<SocketChanne
         // 出站事件从调用点向 head 方向传播：Encoder 必须在写入方（command-handler）之前
         channel.pipeline().addLast("resp-encoder", new RespEncoder());
         channel.pipeline().addLast("resp-decoder", new RespDecoder());
-        channel.pipeline().addLast("command-handler", new CommandHandler(engine));
+        channel.pipeline().addLast("command-handler", new CommandHandler(engine, metrics));
     }
 }
