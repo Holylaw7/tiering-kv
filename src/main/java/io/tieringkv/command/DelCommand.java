@@ -3,6 +3,7 @@ package io.tieringkv.command;
 import io.tieringkv.protocol.RespError;
 import io.tieringkv.protocol.RespInteger;
 import io.tieringkv.protocol.RespValue;
+import io.tieringkv.storage.StorageEngine;
 
 import java.util.List;
 
@@ -15,13 +16,15 @@ public final class DelCommand implements Command {
     }
 
     @Override
-    public RespValue execute(List<byte[]> args, KVStore store) {
+    public RespValue execute(List<byte[]> args, StorageEngine storage) {
         if (args.isEmpty()) {
             return RespError.wrongArity(name());
         }
         long removed = 0;
         for (byte[] key : args) {
-            removed += store.delete(key);
+            if (storage.delete(key)) {
+                removed++;
+            }
         }
         return new RespInteger(removed);
     }

@@ -29,6 +29,13 @@
 - Phase 1 测试：协议/命令单元测试、TCP 集成测试（pipeline / inline / 并发 /
   二进制安全）、延迟冒烟基准。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
+- Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
+  （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
+  （配额 + 淘汰回调接口）、TTLManager（惰性 + 主动混合过期）。
+- `SET key value EX seconds | PX milliseconds` 支持。
+- 存储测试套件（MemTable / StorageEngine / Delete / TTL / Iterator / 并发 /
+  MemoryManager）与内存引擎基准（GET 10K/100K/1M，并发写 10/50/100 线程）。
+- ADR-0007（SkipList）、ADR-0008（分段锁）、ADR-0009（TTL 混合策略）。
 
 ### Changed
 
@@ -41,6 +48,9 @@
 - 根据 Phase 1 评审修正定位措辞：README 明确为「RESP 兼容 KV Server 基础层」，
   性能与分层能力列为演进目标；评审意见归档至
   docs/review/architecture-review.md。
+- Command 层迁移至 StorageEngine；移除 KVStore / InMemoryKVStore（Phase 1
+  占位实现，由 MemTable 取代）。
+- surefire 测试堆配置 `-Xmx1g`（支持 1M 数据集基准）。
 
 ## [0.1.0] - 2026-08-09
 

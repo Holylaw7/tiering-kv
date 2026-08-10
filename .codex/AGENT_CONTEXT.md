@@ -14,13 +14,15 @@ Bloom Filter、自研 Memory Pool。
 
 Phase 1 已交付命令：PING / ECHO / SET / GET / DEL / EXISTS（RESP2）。
 
+Phase 2 已交付：StorageEngine SPI、64 段 SkipList MemTable、分段读写锁、
+TTL（惰性 + 主动）、MemoryManager（配额 + 淘汰回调接口）、有序迭代器。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 1（RESP 协议）✅ 已完成**（Phase 0 ✅）；
-- 最近提交：`feat(protocol): implement RESP2 protocol, commands and Netty
-  server (Phase 1)`（详见 git log）；
+- 阶段：**Phase 2（内存 KV 核心）✅ 已完成**（Phase 0/1 ✅）；
+- 最近提交：`feat(storage): implement memory tier engine`（详见 git log）；
 - 基线：tag `phase-0`；分支策略：feature/* 合并入 develop，main 保持稳定；
-- 下一步：**Phase 2 内存 KV 核心**（等待用户指令）。
+- 下一步：**Phase 3 缓存淘汰（LFU / ARC）**（等待用户指令）。
 
 ## 3. 技术栈
 
@@ -30,6 +32,7 @@ Phase 1 已交付命令：PING / ECHO / SET / GET / DEL / EXISTS（RESP2）。
 | 构建 | Maven 3.9+（pom.xml，单模块起步） |
 | 测试 | JUnit 5（单元）；tests/（集成）；benchmarks/（JMH 压测） |
 | 网络 | Netty 4.1.115 事件循环（已引入，ADR-0006） |
+| 内存层 | MemTable（64 段 SkipList + 分段读写锁，ADR-0007/0008/0009） |
 | 包结构 | `io.tieringkv.{network,protocol,command,storage,memory,cache,eviction,wal,sstable,compaction,scheduler,metrics,benchmark}` |
 
 ## 4. 关键决策（ADR）
@@ -42,6 +45,9 @@ Phase 1 已交付命令：PING / ECHO / SET / GET / DEL / EXISTS（RESP2）。
 | [ADR-0004](adr/ADR-0004-cache-policy.md) | LFU + ARC 混合热度管理 + Bloom Filter 防击穿 |
 | [ADR-0005](adr/ADR-0005-persistence-format.md) | 自定义二进制持久化格式（版本化记录 + CRC32C） |
 | [ADR-0006](adr/ADR-0006-resp-protocol.md) | RESP2 线上协议；inline 兼容；Phase 1 连接内同步执行 |
+| [ADR-0007](adr/ADR-0007-memtable-data-structure.md) | MemTable 采用 SkipList（有序 + 迭代 + LSM 衔接） |
+| [ADR-0008](adr/ADR-0008-memory-concurrency-model.md) | 64 段 Striped Lock（读写锁），无全局锁 |
+| [ADR-0009](adr/ADR-0009-ttl-management-strategy.md) | TTL 惰性 + 主动混合（min-heap + 版本守卫） |
 
 ## 5. 仓库布局
 
@@ -73,7 +79,7 @@ tiering-kv/
 | --- | --- | --- |
 | 0 | 工程初始化 | ✅ |
 | 1 | RESP 协议 | ✅ |
-| 2 | 内存 KV 核心 | 未开始 |
+| 2 | 内存 KV 核心 | ✅ |
 | 3 | LFU / ARC | 未开始 |
 | 4 | Bitcask | 未开始 |
 | 5 | LSM Tree | 未开始 |

@@ -61,6 +61,26 @@ Bloom Filter、Memory Pool。
 `scheduler`、`metrics`、`benchmark`。跨层只允许依赖接口，禁止反向依赖
 （见 [ADR-0001](docs/adr/ADR-0001-project-architecture.md)）。
 
+## 内存引擎架构（Phase 2）
+
+```text
+Command Layer
+     │
+     ▼
+StorageEngine（SPI）
+     │
+     ▼
+MemTable（64 段 SkipList + 分段读写锁）
+     ├── KeyValueEntry（版本 / tombstone / TTL / size）
+     ├── MemoryManager（配额 + 淘汰回调接口）
+     └── TTLManager（惰性 + 主动混合过期）
+```
+
+- 有序键空间与有序迭代 → 为 LSM / SSTable 生成准备（ADR-0007）；
+- 64 段分段锁替代全局锁（ADR-0008）；
+- DELETE 使用 tombstone；TTL 惰性 + 主动清扫（ADR-0009）；
+- `SET key value EX seconds | PX milliseconds` 已支持。
+
 ## 技术栈
 
 | 层次 | 选型 |

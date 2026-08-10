@@ -58,10 +58,10 @@
 | --- | --- | --- |
 | PING | 无参返回 PONG；一参回显 bulk | 超一参报错 |
 | ECHO | 回显参数 | 非一参报错 |
-| SET key value | 写入，返回 OK | 非两参报错 |
+| SET key value [EX seconds\|PX milliseconds] | 写入，返回 OK；支持 TTL | 参数/语法错误报错 |
 | GET key | 读值，未命中返回 nil bulk | 非一参报错 |
 | DEL key... | 返回实际删除数量 | 零参报错 |
 | EXISTS key... | 返回存在的键数量 | 零参报错 |
 
 未知命令返回 `ERR unknown command '<name>'`；命令名大小写不敏感；
-键与值为二进制安全。TTL / EX / PX 等参数在 Phase 2 引入。
+键与值为二进制安全。TTL / EX / PX 已在 Phase 2 引入；NX / XX 等留待后续。

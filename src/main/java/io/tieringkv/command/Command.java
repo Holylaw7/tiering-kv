@@ -1,6 +1,7 @@
 package io.tieringkv.command;
 
 import io.tieringkv.protocol.RespValue;
+import io.tieringkv.storage.StorageEngine;
 
 import java.util.List;
 
@@ -13,5 +14,5 @@ public interface Command {
     /** 小写命令名，作为注册表键。 */
     String name();
 
-    RespValue execute(List<byte[]> args, KVStore store);
+    RespValue execute(List<byte[]> args, StorageEngine storage);
 }
