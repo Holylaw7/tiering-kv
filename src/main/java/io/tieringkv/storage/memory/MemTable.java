@@ -170,6 +170,28 @@ public final class MemTable implements StorageEngine, AutoCloseable {
         }
     }
 
+    /**
+     * 版本守卫式物理移除（Flush 用）：仅当当前条目版本与快照版本一致且存活时
+     * 才移除；快照后被并发更新的键保留在内存。
+     */
+    public boolean removePhysicalIfVersion(byte[] key, long expectedVersion) {
+        long now = timeSource.nowMillis();
+        Segment segment = segments[segmentIndex(key)];
+        segment.lock.writeLock().lock();
+        try {
+            KeyValueEntry current = segment.list.get(key);
+            if (current == null || current.version() != expectedVersion || !current.isLive(now)) {
+                return false;
+            }
+            segment.list.remove(key);
+            memoryManager.remove(current.size());
+            liveSize.decrementAndGet();
+            return true;
+        } finally {
+            segment.lock.writeLock().unlock();
+        }
+    }
+
     @Override
     public boolean exists(byte[] key) {
         long now = timeSource.nowMillis();
