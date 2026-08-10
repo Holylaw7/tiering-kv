@@ -179,6 +179,13 @@ FileChannelSSTableReader 保留为 baseline（benchmark 对比/降级）
 - 容量模型与部署画像：docs/benchmark/capacity-model.md、
   deployment-profile.md；详见 docs/benchmark/phase9-* 报告。
 
+## 生产化与优化（Phase 10）
+
+- 响应批处理（自适应 batch=64 + 排空 flush）与回调式执行（对象削减）：
+  Level B pipeline64×500 218–231K → 465K ops/s，pipeline128 → 1.14M；
+- YAML 配置（config/application.yaml）、`INFO` 指标命令、优雅停机
+  （drain + WAL force + checkpoint）。
+
 ## 技术栈
 
 | 层次 | 选型 |

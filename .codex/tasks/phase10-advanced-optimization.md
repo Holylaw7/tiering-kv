@@ -1112,6 +1112,8 @@ git merge --no-ff
 - 响应批处理（自适应 batch=64 + 排空 flush）+ 回调式执行（对象削减）；
 - YAML 配置 / Metrics（INFO）/ 优雅停机（drain + WAL force + checkpoint）；
 - `mvn test` 全量回归通过；phase10-performance-report.md Before/After。
+- 基准：Level B pipeline64×500 218–231K → 465K（>400K ✅）、pipeline128
+  → 1.14M；Level C 154–326K 无回退。
 
 ---
 

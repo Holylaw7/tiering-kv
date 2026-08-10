@@ -17,7 +17,7 @@
 | 7 | 并发优化 | ✅ 完成（2026-08-10） |
 | 8 | mmap / Memory Pool | ✅ 完成（2026-08-10） |
 | 9 | Benchmark 压力测试 | ✅ 完成（2026-08-10） |
-| 10 | 生产化完善 | ⏳ 未开始 |
+| 10 | 生产化完善 | ✅ 完成（2026-08-10） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -144,10 +144,15 @@
   C（生产全链路）+ cold-cache 冷启动（TD-009）+ **生产容量模型**（TD-019）；
   IO 微优化阶段结束。
 
-## Phase 10 — 生产化完善
+## Phase 10 — 生产化完善 ✅
 
 - 目标：配置化、优雅停机、监控指标、故障演练、部署文档。
 - 验收：达到工程完整性的 Mini Redis。
+- 交付：响应批处理 + 回调式执行（Level B p64×500 218–231K → 465K ✅）、
+  YAML 配置、Metrics/INFO、ShutdownManager（drain + WAL force + checkpoint）。
+- ADR：[0032](docs/adr/ADR-0032-response-batching-strategy.md)（响应批处理）、
+  [0033](docs/adr/ADR-0033-request-response-memory-model.md)（内存模型）、
+  [0034](docs/adr/ADR-0034-production-service-lifecycle.md)（服务生命周期）。
 - Phase 9 评审补充：协议/调度层优化——批量响应写、每请求对象数削减
   （TD-020）、ResponseSequencer 并发化、独立进程复测（预期 +20–40%）；
   以 JFR allocation/GC 为验收（TD-021）。
