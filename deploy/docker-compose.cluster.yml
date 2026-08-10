@@ -1,6 +1,8 @@
 services:
   node1:
-    build: .
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
     container_name: tiering-c-node1
     command:
       - --nodeId
@@ -13,11 +15,15 @@ services:
       - /data
     volumes:
       - data-node1:/data
+    cap_add:
+      - NET_ADMIN
     networks:
       - tiering-cluster-net
 
   node2:
-    build: .
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
     container_name: tiering-c-node2
     command:
       - --nodeId
@@ -30,11 +36,15 @@ services:
       - /data
     volumes:
       - data-node2:/data
+    cap_add:
+      - NET_ADMIN
     networks:
       - tiering-cluster-net
 
   node3:
-    build: .
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
     container_name: tiering-c-node3
     command:
       - --nodeId
@@ -47,6 +57,8 @@ services:
       - /data
     volumes:
       - data-node3:/data
+    cap_add:
+      - NET_ADMIN
     networks:
       - tiering-cluster-net
 
