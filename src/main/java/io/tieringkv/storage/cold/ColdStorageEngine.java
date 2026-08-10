@@ -1,6 +1,10 @@
 package io.tieringkv.storage.cold;
 
+import io.tieringkv.cache.block.BlockCache;
+import io.tieringkv.cache.block.CacheKey;
 import io.tieringkv.storage.StorageIterator;
+import io.tieringkv.storage.io.IOStatistics;
+import io.tieringkv.storage.io.MmapSSTableReader;
 import io.tieringkv.storage.memory.KeyValueEntry;
 
 import java.io.IOException;
@@ -37,17 +41,35 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
     private final List<SSTableMeta> tables = new ArrayList<>(); // 旧 → 新
     private final Map<Long, SSTableReader> readers = new HashMap<>();
     private final CompactionManager compactionManager;
+    private final BlockCache blockCache;
+    private final IOStatistics ioStats;
+    private final boolean useMmap;
     private long nextTableId = 1;
     private long pendingBytes;
     private boolean closed;
 
     public ColdStorageEngine(Config config) throws IOException {
+        this(config, null, null, false);
+    }
+
+    /** IO 优化构造：mmap 读取 + BlockCache（均为可选）。 */
+    public ColdStorageEngine(
+            Config config,
+            BlockCache blockCache,
+            IOStatistics ioStats,
+            boolean useMmap) throws IOException {
         this.config = config;
+        this.blockCache = blockCache;
+        this.ioStats = ioStats;
+        this.useMmap = useMmap;
         Files.createDirectories(config.directory());
         List<SSTableMeta> loaded = Manifest.read(config.directory());
         tables.addAll(loaded);
         nextTableId = loaded.stream().mapToLong(SSTableMeta::id).max().orElse(0) + 1;
         this.compactionManager = new CompactionManager(this);
+        if (ioStats != null) {
+            ioStats.setMappedBytes(loaded.stream().mapToLong(SSTableMeta::fileSize).sum());
+        }
     }
 
     @Override
@@ -57,7 +79,9 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
             KeyValueEntry entry = pending.get(Keys.wrap(key));
             if (entry == null) {
                 for (int i = tables.size() - 1; i >= 0; i--) {
-                    entry = readEntry(tables.get(i), key);
+                    entry = blockCache == null
+                            ? readEntry(tables.get(i), key)
+                            : readEntryWithCache(tables.get(i), key);
                     if (entry != null) {
                         break;
                     }
@@ -164,6 +188,9 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
 
     void installCompaction(SSTableMeta output, List<SSTableMeta> inputs) throws IOException {
         for (SSTableMeta input : inputs) {
+            if (blockCache != null) {
+                blockCache.invalidate(input.id());
+            }
             SSTableReader reader = readers.remove(input.id());
             if (reader != null) {
                 reader.close();
@@ -233,10 +260,42 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
         }
     }
 
+    /** BlockCache 路径：cache hit 直接解码；miss → mmap/FileChannel 读 + 回填。 */
+    private KeyValueEntry readEntryWithCache(SSTableMeta meta, byte[] key) {
+        try {
+            SSTableReader reader = readerFor(meta);
+            if (!reader.mightContain(key)) {
+                return null;
+            }
+            BlockIndex.IndexEntry blockEntry = reader.locateBlock(key);
+            CacheKey cacheKey = new CacheKey(meta.id(), blockEntry.offset());
+            ByteBuffer cached = blockCache.get(cacheKey);
+            java.util.List<KeyValueEntry> entries;
+            if (cached != null) {
+                ioStats.recordCacheHit();
+                entries = Block.decode(cached);
+            } else {
+                ioStats.recordCacheMiss();
+                long t0 = System.nanoTime();
+                ByteBuffer raw = reader.readBlockBuffer(blockEntry);
+                ioStats.recordRead(System.nanoTime() - t0);
+                blockCache.put(cacheKey, raw);
+                entries = Block.decode(raw);
+            }
+            int position = SSTableReader.binarySearchEntries(entries, key);
+            return position >= 0 ? entries.get(position) : null;
+        } catch (IOException e) {
+            throw new ColdCorruptionException(
+                    "read " + meta.fileName() + " failed: " + e.getMessage());
+        }
+    }
+
     private SSTableReader readerFor(SSTableMeta meta) {
         return readers.computeIfAbsent(meta.id(), id -> {
             try {
-                return SSTableReader.open(meta, config.directory());
+                return useMmap
+                        ? MmapSSTableReader.open(meta, config.directory())
+                        : SSTableReader.open(meta, config.directory());
             } catch (IOException e) {
                 throw new ColdCorruptionException("open " + meta.fileName() + " failed: " + e.getMessage());
             }

@@ -2,12 +2,15 @@ package io.tieringkv;
 
 import io.tieringkv.command.CommandEngine;
 import io.tieringkv.command.CommandRegistry;
+import io.tieringkv.cache.block.BlockCache;
+import io.tieringkv.cache.block.CachePolicy;
 import io.tieringkv.concurrency.hotkey.HotKeyDetector;
 import io.tieringkv.concurrency.hotkey.HotKeyPolicy;
 import io.tieringkv.concurrency.hotkey.HotKeyReadCache;
 import io.tieringkv.concurrency.hotkey.HotKeyStorageEngine;
 import io.tieringkv.config.ServerConfig;
 import io.tieringkv.execution.KeyShardExecutor;
+import io.tieringkv.memory.MemoryPool;
 import io.tieringkv.network.tcp.TieringKvServer;
 import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.storage.cache.CacheConfig;
@@ -16,6 +19,7 @@ import io.tieringkv.storage.cache.LFUPolicy;
 import io.tieringkv.storage.cache.TrackingStorageEngine;
 import io.tieringkv.storage.cold.ColdMigration;
 import io.tieringkv.storage.cold.ColdStorageEngine;
+import io.tieringkv.storage.io.IOStatistics;
 import io.tieringkv.storage.tiering.TieringController;
 import io.tieringkv.storage.tiering.TieringStorageEngine;
 import io.tieringkv.storage.wal.RecoveryManager;
@@ -41,8 +45,12 @@ public final class Main {
         RecoveryManager.RecoveryStats stats = walManager.recover(memTable);
         System.out.printf("WAL recovery: scanned=%d applied=%d segments=%d%n",
                 stats.recordsScanned(), stats.recordsApplied(), stats.segmentsReplayed());
+        MemoryPool memoryPool = new MemoryPool();
+        BlockCache blockCache = new BlockCache(CachePolicy.defaults(), memoryPool);
+        IOStatistics ioStats = new IOStatistics();
         ColdStorageEngine cold = new ColdStorageEngine(
-                ColdStorageEngine.Config.defaults(Path.of("./data/cold")));
+                ColdStorageEngine.Config.defaults(Path.of("./data/cold")),
+                blockCache, ioStats, true);
         TieringController tiering = new TieringController(
                 TieringController.Config.defaults(Path.of("./data/migration")),
                 memoryManager, memTable, walManager, cold);
