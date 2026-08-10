@@ -174,6 +174,12 @@ class MetadataPersistenceTest {
         second.start();
         try {
             RaftNode leader = awaitLeader(second.nodes(), 5000);
+            new MetadataClient(second).join("after-corrupt");
+            long deadline = System.currentTimeMillis() + 5000;
+            while (System.currentTimeMillis() < deadline
+                    && !second.state(leader.id()).nodes().contains("survivor-key")) {
+                Thread.sleep(20);
+            }
             assertThat(second.state(leader.id()).nodes().contains("survivor-key")).isTrue();
         } finally {
             second.close();
