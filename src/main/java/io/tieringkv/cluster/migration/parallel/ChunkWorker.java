@@ -28,6 +28,7 @@ final class ChunkWorker implements Runnable {
     private final long versionBarrier;
     private final MigrationChunk chunk;
     private final PauseController pauseController;
+    private final ByteRateLimiter rateLimiter;
     private final AtomicLong entries;
     private final AtomicLong bytes;
     private volatile ChunkCheckpoint.Status result;
@@ -35,13 +36,15 @@ final class ChunkWorker implements Runnable {
     ChunkWorker(StorageEngine source, StorageEngine target, Path cursorDir,
                 long versionBarrier, MigrationChunk chunk,
                 PauseController pauseController,
-                AtomicLong entries, AtomicLong bytes) {
+                AtomicLong entries, AtomicLong bytes,
+                ByteRateLimiter rateLimiter) {
         this.source = source;
         this.target = target;
         this.cursorDir = cursorDir;
         this.versionBarrier = versionBarrier;
         this.chunk = chunk;
         this.pauseController = pauseController;
+        this.rateLimiter = rateLimiter;
         this.entries = entries;
         this.bytes = bytes;
     }
@@ -114,6 +117,12 @@ final class ChunkWorker implements Runnable {
         if (batch.isEmpty()) {
             return;
         }
+        long batchBytes = 0;
+        for (RawMutation mutation : batch) {
+            batchBytes += mutation.key().length
+                    + (mutation.value() == null ? 0 : mutation.value().length);
+        }
+        rateLimiter.consume(batchBytes);
         target.applyRawBatch(batch);
         batch.clear();
         checkpoint.persist(cursorDir);

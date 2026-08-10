@@ -25,6 +25,7 @@
 | 15 | 生产验证 | ✅ 完成（2026-08-10） |
 | 16 | Multi-Raft 架构演进 | ✅ 完成（2026-08-10） |
 | 17 | Region 生命周期与分布式存储完善 | ✅ 完成（2026-08-10） |
+| 18 | 分布式生产集成 | ✅ 完成（2026-08-10） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -338,6 +339,31 @@
   209.1MB/s（>150 ✅）、Leader Transfer 24ms（<500ms ✅）、Gateway
   GET/SET 3.68M/1.67M ops/s（>100K/50K ✅）。
 
+## Phase 18 — 分布式生产集成 ✅
+
+- 目标：统一路由、真实 TCP 网关、Split/Merge 与 Raft 联动、生产化
+  迁移、三节点部署、完整可观测性；测试 >1100。
+- 交付：
+  - UnifiedRoutingLayer（RoutingTable/RoutingCache/RouteEpochGuard）；
+  - NettyClusterGateway（真实 TCP，GET 719K / SET 590K ops/s，
+    MOVED/ASK/TRYAGAIN，CLUSTER SLOTS/NODES）；
+  - RegionRaftMigrationManager（split/merge + 子 Raft 组 + 路由切换 +
+    回滚/恢复）；
+  - MigrationScheduler + ByteRateLimiter + 迁移指标；
+  - docker-compose.cluster.yml + CrossMachineChaosTest（20 项）；
+  - MetricsExporter（Prometheus）+ ProductionInfo（INFO CLUSTER 聚合）。
+- ADR：[0066](docs/adr/ADR-0066-unified-routing-model.md)（统一路由）、
+  [0067](docs/adr/ADR-0067-region-raft-migration-lifecycle.md)（Raft 迁移）、
+  [0068](docs/adr/ADR-0068-tcp-gateway-architecture.md)（TCP 网关）、
+  [0069](docs/adr/ADR-0069-cross-machine-deployment.md)（跨机部署）、
+  [0070](docs/adr/ADR-0070-production-metrics.md)（生产指标）。
+- 测试：新增 165 项（Routing 23 / Gateway 31 / Split-Raft 33 /
+  Merge-Raft 25 / Migration 20 / Chaos 20 / Metrics 11 / Benchmark 2）；
+  全量回归 1112/1112 全绿。
+- 基准（[phase18-production-report.md](docs/benchmark/phase18-production-report.md)）：
+  Gateway GET/SET 719K/590K ops/s（>500K/200K ✅）、迁移 100B/1KB
+  209.1/986.0 MB/s（>100/300 ✅）、Split/Merge 1M ~0.9/~0.7s。
+
 ## 技术债登记
 
 | 编号 | 描述 | 来源 | 计划消除 |
@@ -377,5 +403,6 @@
 | TD-035 | 真实跨机部署 + tc netem 混沌 | ADR-0053 | Phase 16 部署产物交付；容器执行待 Linux+Docker |
 | TD-036 | leader 转移仅元数据，未触发真实 Raft 交接 | ADR-0060 | ✅ 已关闭（Phase 17） |
 | TD-037 | Region split/merge 未与存储数据搬迁联动 | ADR-0057 | Phase 18（独立 Raft 组搬迁） |
-| TD-038 | 网关 CLUSTER 命令子集（无 ASK/在线搬迁） | ADR-0061 | Phase 18 |
-| TD-039 | Region 键范围与 slot 区间路由未统一 | ADR-0057 | Phase 18 |
+| TD-038 | 网关 CLUSTER 命令子集 | ADR-0061 | Phase 19（全字段 NODES/ASK 搬迁） |
+| TD-039 | Region 键范围与 slot 区间路由未统一 | ADR-0057 | ✅ 已关闭（Phase 18，RoutingTable 统一） |
+| TD-040 | 跨机容器混沌未执行（环境限制） | ADR-0069 | Phase 19（Linux+Docker） |
