@@ -3,6 +3,7 @@ package io.tieringkv.command;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /** 命令注册表：命令名（小写）→ 实现；启动时构建，运行期只读。 */
 public final class CommandRegistry {
@@ -14,6 +15,10 @@ public final class CommandRegistry {
     }
 
     public static CommandRegistry createDefault() {
+        return createDefault(() -> "# Server\r\nno metrics\r\n");
+    }
+
+    public static CommandRegistry createDefault(Supplier<String> infoProvider) {
         Map<String, Command> map = new HashMap<>();
         for (Command command : List.of(
                 new PingCommand(),
@@ -21,7 +26,8 @@ public final class CommandRegistry {
                 new SetCommand(),
                 new GetCommand(),
                 new DelCommand(),
-                new ExistsCommand())) {
+                new ExistsCommand(),
+                new InfoCommand(infoProvider))) {
             map.put(command.name(), command);
         }
         return new CommandRegistry(map);

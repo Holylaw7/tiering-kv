@@ -1,0 +1,28 @@
+# Tiering-KV 生产配置（ADR-0034）
+server:
+  host: 0.0.0.0
+  port: 6379
+
+worker:
+  shard-count: 16
+  flush-workers: 1
+  migration-workers: 2
+
+memory:
+  limit: 1073741824
+
+wal:
+  fsync-policy: EVERY_SEC
+  max-segment-bytes: 67108864
+
+cache:
+  block-size: 1024
+  hotkey-window-ms: 1000
+  hotkey-threshold: 1000
+
+tiering:
+  low-watermark: 0.70
+  high-watermark: 0.85
+  critical-watermark: 0.95
+  backpressure-timeout-ms: 1000
+  drain-timeout-ms: 5000
