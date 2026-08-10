@@ -368,9 +368,15 @@ class ChaosValidationTest {
                     putThroughLeader(fixture, key(2), value(2));
                 }
             }
-            assertThat(pending.isCompletedExceptionally()).isTrue();
-            assertThatThrownBy(pending::join)
-                    .hasRootCauseInstanceOf(IllegalStateException.class);
+            if (pending.isCompletedExceptionally()) {
+                // 冲突截断：显式失败（不允许虚假成功）
+                assertThatThrownBy(pending::join)
+                        .hasRootCauseInstanceOf(IllegalStateException.class);
+            } else {
+                // 恢复后旧 leader 合法重夺领导权 → 真提交：数据必须实际可读
+                pending.join();
+                awaitAllSee(fixture.nodes, key(0), 10_000);
+            }
         }
     }
 

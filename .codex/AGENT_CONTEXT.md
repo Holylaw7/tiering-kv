@@ -113,6 +113,7 @@ TimestampOracle/HLC + SnapshotReader + Percolator 2PC（Prewrite/Commit/
 Rollback）+ LockTable/ConflictDetector + TransactionManager/Coordinator
 （跨 Region 2PC + 参与者键归属）+ TxnJournal（Raft）+ Recovery + GC +
 INFO TRANSACTION + Prometheus；226 项新测试。
+全量回归 1338/1338 全绿。
 
 ## 2. 当前状态
 

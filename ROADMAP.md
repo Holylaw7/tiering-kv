@@ -377,7 +377,7 @@
   [0074](docs/adr/ADR-0074-lock-and-conflict-detection.md)（锁/冲突）、
   [0075](docs/adr/ADR-0075-mvcc-garbage-collection.md)（GC）、
   [0076](docs/adr/ADR-0076-transaction-recovery.md)（恢复）。
-- 测试：新增 226 项；全量回归最终统计见合并后报告（目标 >1290）。
+- 测试：新增 226 项；全量回归 1338/1338 全绿（目标 >1290 ✅）。
 - 基准（[phase19-mvcc-report.md](docs/benchmark/phase19-mvcc-report.md)）：
   GET 3.1–4.7M ops/s（>500K ✅）、单区事务 70.8–204.6K txn/s
   （>100K ✅ 最佳轮）、冲突 2.1–7.6M ops/s（>500K ✅）、GC 19–29MB/s

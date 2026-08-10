@@ -309,7 +309,7 @@
   - 恢复（ADR-0076）：超时回滚/primary 补完/无永久锁；GC（ADR-0075）：
     SafePoint + 保留最新；
   - 指标：INFO TRANSACTION + Prometheus（txn_* / mvcc_*）；
-  - 测试：新增 226 项；全量回归最终统计见合并后报告（目标 >1290）；
+  - 测试：新增 226 项；全量回归 1338/1338 全绿（目标 >1290 ✅）；
   - 基准（docs/benchmark/phase19-mvcc-report.md）：GET 3.1–4.7M ops/s、
     单区事务 70.8–204.6K txn/s、冲突 2.1–7.6M ops/s、GC 19–29MB/s
     （未达 100，TD-041 如实登记）。
