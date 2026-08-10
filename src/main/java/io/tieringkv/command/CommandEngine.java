@@ -2,6 +2,7 @@ package io.tieringkv.command;
 
 import io.tieringkv.protocol.RespError;
 import io.tieringkv.protocol.RespValue;
+import io.tieringkv.storage.StorageEngine;
 
 import java.util.Locale;
 
@@ -12,11 +13,11 @@ import java.util.Locale;
 public final class CommandEngine {
 
     private final CommandRegistry registry;
-    private final KVStore store;
+    private final StorageEngine storage;
 
-    public CommandEngine(CommandRegistry registry, KVStore store) {
+    public CommandEngine(CommandRegistry registry, StorageEngine storage) {
         this.registry = registry;
-        this.store = store;
+        this.storage = storage;
     }
 
     public RespValue execute(RespCommand command) {
@@ -26,6 +27,6 @@ public final class CommandEngine {
         if (handler == null) {
             return RespError.unknownCommand(name);
         }
-        return handler.execute(command.args(), store);
+        return handler.execute(command.args(), storage);
     }
 }

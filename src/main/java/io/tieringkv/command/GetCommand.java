@@ -4,6 +4,7 @@ import io.tieringkv.protocol.RespBulkString;
 import io.tieringkv.protocol.RespError;
 import io.tieringkv.protocol.RespNull;
 import io.tieringkv.protocol.RespValue;
+import io.tieringkv.storage.StorageEngine;
 
 import java.util.List;
 
@@ -16,11 +17,11 @@ public final class GetCommand implements Command {
     }
 
     @Override
-    public RespValue execute(List<byte[]> args, KVStore store) {
+    public RespValue execute(List<byte[]> args, StorageEngine storage) {
         if (args.size() != 1) {
             return RespError.wrongArity(name());
         }
-        byte[] value = store.get(args.get(0));
+        byte[] value = storage.get(args.get(0));
         return value == null ? RespNull.BULK_STRING : new RespBulkString(value);
     }
 }

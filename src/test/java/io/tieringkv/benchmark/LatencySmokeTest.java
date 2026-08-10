@@ -2,10 +2,10 @@ package io.tieringkv.benchmark;
 
 import io.tieringkv.command.CommandEngine;
 import io.tieringkv.command.CommandRegistry;
-import io.tieringkv.command.InMemoryKVStore;
 import io.tieringkv.config.ServerConfig;
 import io.tieringkv.network.TestRespClient;
 import io.tieringkv.network.tcp.TieringKvServer;
+import io.tieringkv.storage.memory.MemTable;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
@@ -26,7 +26,7 @@ class LatencySmokeTest {
     void hotGetLatencyBaseline() throws Exception {
         TieringKvServer server = new TieringKvServer(
                 new ServerConfig("127.0.0.1", 0),
-                new CommandEngine(CommandRegistry.createDefault(), new InMemoryKVStore()));
+                new CommandEngine(CommandRegistry.createDefault(), MemTable.create()));
         server.start();
         try (TestRespClient client = new TestRespClient(server.boundPort())) {
             client.send(TestRespClient.command("SET", "hot", "value"));

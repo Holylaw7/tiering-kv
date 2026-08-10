@@ -4,6 +4,7 @@ import io.tieringkv.protocol.RespBulkString;
 import io.tieringkv.protocol.RespError;
 import io.tieringkv.protocol.RespSimpleString;
 import io.tieringkv.protocol.RespValue;
+import io.tieringkv.storage.StorageEngine;
 
 import java.util.List;
 
@@ -16,7 +17,7 @@ public final class PingCommand implements Command {
     }
 
     @Override
-    public RespValue execute(List<byte[]> args, KVStore store) {
+    public RespValue execute(List<byte[]> args, StorageEngine storage) {
         if (args.isEmpty()) {
             return new RespSimpleString("PONG");
         }

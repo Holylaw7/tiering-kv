@@ -2,9 +2,9 @@ package io.tieringkv;
 
 import io.tieringkv.command.CommandEngine;
 import io.tieringkv.command.CommandRegistry;
-import io.tieringkv.command.InMemoryKVStore;
 import io.tieringkv.config.ServerConfig;
 import io.tieringkv.network.tcp.TieringKvServer;
+import io.tieringkv.storage.memory.MemTable;
 
 /** Tiering-KV 入口：默认监听 0.0.0.0:6379。 */
 public final class Main {
@@ -16,7 +16,7 @@ public final class Main {
         ServerConfig config = new ServerConfig("0.0.0.0", 6379);
         TieringKvServer server = new TieringKvServer(
                 config,
-                new CommandEngine(CommandRegistry.createDefault(), new InMemoryKVStore()));
+                new CommandEngine(CommandRegistry.createDefault(), MemTable.create()));
         server.start();
         System.out.println("Tiering-KV listening on " + server.boundPort());
         Runtime.getRuntime().addShutdownHook(new Thread(server::shutdown));
