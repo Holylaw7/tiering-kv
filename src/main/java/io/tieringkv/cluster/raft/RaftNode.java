@@ -404,6 +404,48 @@ public final class RaftNode implements AutoCloseable {
         return future;
     }
 
+    /**
+     * 批量提案（ADR-0054）：一次加锁追加 N 条日志、单次复制 flush，
+     * 全部提交后按序完成 futures；非 leader 时整批显式失败。
+     * 复制与提交语义与单条 propose 完全一致，不修改共识协议。
+     */
+    public List<CompletableFuture<Long>> proposeBatch(List<byte[]> commands) {
+        if (commands.isEmpty()) {
+            return List.of();
+        }
+        List<CompletableFuture<Long>> futures = new ArrayList<>(commands.size());
+        boolean batchReady;
+        boolean solo;
+        synchronized (lock) {
+            if (state != RaftState.LEADER) {
+                for (int i = 0; i < commands.size(); i++) {
+                    CompletableFuture<Long> future = new CompletableFuture<>();
+                    future.completeExceptionally(
+                            new IllegalStateException("not leader"));
+                    futures.add(future);
+                }
+                return futures;
+            }
+            for (byte[] command : commands) {
+                LogEntry entry = new LogEntry(currentTerm, lastLogIndex() + 1, command);
+                raftLog.append(entry);
+                cacheAppendLocked(entry);
+                CompletableFuture<Long> future = new CompletableFuture<>();
+                pendingCommits.put(entry.index(), future);
+                futures.add(future);
+            }
+            batchReady = batchFullLocked() || idlePeerLocked();
+            solo = transport.peerIds().size() <= 1;
+            if (solo) {
+                maybeCommitLocked();
+            }
+        }
+        if (batchReady && !solo) {
+            flushReplication();
+        }
+        return futures;
+    }
+
     private final java.util.Map<Long, CompletableFuture<Long>> pendingCommits =
             new java.util.concurrent.ConcurrentHashMap<>();
 

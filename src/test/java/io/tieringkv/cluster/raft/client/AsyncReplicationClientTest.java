@@ -191,10 +191,32 @@ class AsyncReplicationClientTest {
     void drainProcessesAllQueued() throws Exception {
         Fixture fixture = fixture();
         int total = 20;
+        CountDownLatch latch = new CountDownLatch(total);
         for (int i = 0; i < total; i++) {
-            fixture.client().submit(bytes("d" + i), (index, error) -> {
+            fixture.client().submit(bytes("d" + i), (index, error) -> latch.countDown());
+        }
+        // 内联批量收集语义（ADR-0054）：提交线程批量 drain，全部完成
+        assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(fixture.leader().commitIndex()).isEqualTo(total - 1);
+        fixture.close();
+    }
+
+    @Test
+    void inlineBatchDrainProposesAllInOrder() throws Exception {
+        Fixture fixture = fixture();
+        int total = 200;
+        CountDownLatch latch = new CountDownLatch(total);
+        AtomicInteger failures = new AtomicInteger();
+        for (int i = 0; i < total; i++) {
+            fixture.client().submit(bytes("b" + i), (index, error) -> {
+                if (error != null) {
+                    failures.incrementAndGet();
+                }
+                latch.countDown();
             });
         }
+        assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
+        assertThat(failures).hasValue(0);
         assertThat(fixture.leader().commitIndex()).isEqualTo(total - 1);
         fixture.close();
     }
