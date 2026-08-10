@@ -9,8 +9,9 @@ RESP 协议兼容、内存 + 磁盘冷热分层、LFU/ARC 热度管理、异步�
 Bitcask/LSM 持久化、高并发网络、mmap 零拷贝、分段锁/无锁、
 Bloom Filter、自研 Memory Pool。
 
-当前定位：RESP 兼容 KV Server 基础层（Phase 1 已交付协议/命令/网络层）；
-分层存储与性能优化为演进目标（ROADMAP Phase 2–10）。
+当前定位：Redis 兼容的 LSM 分层 KV 存储引擎（RESP + WAL + MemTable +
+SSTable + LFU/ARC + 自动调度，Phase 1–6 完成）；集群/pub/sub/正式性能基线
+为演进目标（Phase 7–10）。
 
 Phase 1 已交付命令：PING / ECHO / SET / GET / DEL / EXISTS（RESP2）。
 
@@ -137,6 +138,8 @@ tiering-kv/
 | TD-010 | pending 迁移缓冲未持久化 → Migration WAL / Pending Manifest | Phase 6 |
 | TD-011 | Flush 手动触发 → memory watermark + FlushScheduler | Phase 6 |
 | TD-012 | size-tiered 读放大 → 评估 leveled compaction | Phase 7 |
+| TD-013 | 快照式 Flush → Active/Immutable MemTable 轮转（RocksDB 模型） | Phase 7 |
+| TD-014 | 迁移队列准入控制 / 批量 / worker 动态扩缩容 | Phase 7/9 |
 
 ## 8. 会话启动清单
 

@@ -77,6 +77,8 @@
 - tiering 测试套件（水位/Flush/迁移队列/恢复/背压/控制器/集成）与
   tiering 基准（Flush、迁移 100K/1M、内存压力）。
 - ADR-0020（调度模型）、ADR-0021（水位策略）、ADR-0022（迁移持久化）。
+- Phase 6 评审处置：定位升级为「Redis 兼容 LSM 分层 KV 存储引擎」；登记
+  TD-013（Immutable MemTable 轮转）、TD-014（迁移队列准入/批量/扩缩容）。
 
 ### Changed
 

@@ -144,3 +144,5 @@
 | TD-010 | pending 迁移缓冲未持久化；需 Migration WAL / Pending Manifest | ADR-0017 | Phase 6 解决 |
 | TD-011 | Flush 为手动触发；需 memory watermark + FlushScheduler | ADR-0017 | Phase 6 解决 |
 | TD-012 | size-tiered 全量合并读放大；评估 leveled compaction | ADR-0019 | Phase 7 评估 |
+| TD-013 | 快照式 Flush → Active/Immutable MemTable 轮转 | ADR-0020 | Phase 7 评估 |
+| TD-014 | 迁移队列准入控制 / 批量 / worker 动态扩缩容 | ADR-0020 | Phase 7/9 评估 |

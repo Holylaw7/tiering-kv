@@ -103,3 +103,30 @@
 9. **技术债**：TD-010 pending 持久化（Migration WAL / Pending Manifest，
    Phase 6）；TD-011 自动 Flush（memory watermark + FlushScheduler，
    Phase 6）；TD-012 leveled compaction（Phase 7）。
+
+## Phase 6 评审结论（2026-08-10）
+
+1. **架构链路完整**：Client → RESP → TieringStorageEngine → MemTable +
+   TieringController（Watermark → Flush/Migration Worker → SSTable/Cold）；
+   Netty 事件循环与后台 worker 隔离，避免用户线程磁盘 IO 导致 RT 爆炸。
+2. **ADR-0020 正确**：Async Worker Model（queue + worker pool + state
+   machine），对齐 RocksDB background jobs / Kafka async flush / Cassandra
+   compaction executor。
+3. **Flush Scheduler 达标，含一项技术债**：水位（≥85%）+ entry 阈值触发；
+   ⚠️ 快照式 Flush 非 Immutable MemTable → 已登记 TD-013（Phase 7 升级
+   Active → Immutable 轮转）。
+4. **Migration Scheduler 完成度高**：version guard 防止"迁移删除新数据"
+   （T1 读旧值 → T2 迁移 → T3 更新 → T4 误删）竞态。
+5. **MigrationLog 为亮点**：CRC32C + 状态机（PENDING/RUNNING/RETRY/
+   SUCCESS/FAILED），对齐 Kafka offset log / RocksDB MANIFEST。
+6. **Backpressure 合理**：CRITICAL awaitWritable → timeout → -ERR，
+   比直接丢数据更安全。
+7. **基准达标**：迁移 283–308K ops/s（目标 6×）、Flush 798–857K entries/s、
+   2MB 配额下峰值 350KB。
+8. **迁移 P99 如实报告**（1M ≈ 1.2–1.4s）：根因是 producer > consumer 的
+   队列堆积，非单任务慢；生产由背压约束，Phase 7/9 候选：队列准入控制、
+   迁移批量、worker 动态扩缩容（TD-014）。
+9. **能力矩阵确认**：RESP/命令/内存/TTL/Tombstone/LFU/ARC/WAL/恢复/SSTable/
+   Bloom/Compaction/迁移/自动 Flush/调度器/背压全部 ✅；
+   定位升级为 **Redis-compatible LSM based Tiered KV Storage Engine**
+   （README/AGENT_CONTEXT 已同步）。

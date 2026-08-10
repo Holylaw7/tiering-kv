@@ -1,17 +1,19 @@
 # Tiering-KV
 
-> RESP 兼容 KV Server 基础层（演进目标：Mini Redis 冷热分层存储引擎）。
+> Redis 兼容的 LSM 分层 KV 存储引擎（RESP + WAL + MemTable + SSTable + 自动调度）。
 
 **阶段状态：Phase 1（RESP 协议）✅（Phase 0 工程初始化 ✅）**
 
 ## 项目定位
 
-**当前定位**：RESP 兼容的 KV Server 基础层——协议、命令与网络层已可用（Phase 1），
-面向 redis-cli 与主流客户端提供基础 PING / ECHO / SET / GET / DEL / EXISTS 能力。
+**当前定位**：Redis 兼容的 LSM 分层 KV 存储引擎——已完成 RESP 协议、内存引擎、
+LFU/ARC 淘汰、WAL 持久化、SSTable 冷层、自动 Flush / 异步迁移 / 背压
+（Phase 1–6），面向 redis-cli 与主流客户端提供 PING / ECHO / SET / GET / DEL /
+EXISTS 能力。
 
-**演进目标（非当前承诺）**：内存热数据 + 磁盘冷数据的分层存储，在保持 Redis 协议
-兼容的同时降低内存占用 60%–80%；分层存储、持久化、迁移与性能优化按
-ROADMAP Phase 2–10 逐步落地。
+**边界（如实声明）**：仍为教学/工程级实现，暂不宣称"高性能 Redis 替代品"；
+集群、pub/sub、Lua、RESP3 与正式性能基线（内存降低 60%–80%）按
+ROADMAP Phase 7–10 推进。
 
 ## 核心能力
 
