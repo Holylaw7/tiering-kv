@@ -313,6 +313,7 @@ public final class MemTable implements StorageEngine, AutoCloseable {
      * 物理移除（淘汰专用）：不产生 tombstone，立即回收内存。
      * 用户 DEL 仍走 tombstone（WAL / Snapshot / LSM 需要删除历史）。
      */
+    @Override
     public boolean removePhysical(byte[] key) {
         long now = timeSource.nowMillis();
         Segment segment = segments[segmentIndex(key)];
@@ -329,6 +330,37 @@ public final class MemTable implements StorageEngine, AutoCloseable {
         } finally {
             segment.lock.writeLock().unlock();
         }
+    }
+
+    /** 批量物理移除（ADR-0078）：按段分组、单段单锁，GC 高频路径。 */
+    @Override
+    public long removeAll(List<byte[]> keys) {
+        long now = timeSource.nowMillis();
+        Map<Integer, List<byte[]>> bySegment = new HashMap<>();
+        for (byte[] key : keys) {
+            bySegment.computeIfAbsent(segmentIndex(key), ignored -> new ArrayList<>())
+                    .add(key);
+        }
+        long removed = 0;
+        for (Map.Entry<Integer, List<byte[]>> group : bySegment.entrySet()) {
+            Segment segment = segments[group.getKey()];
+            segment.lock.writeLock().lock();
+            try {
+                for (byte[] key : group.getValue()) {
+                    KeyValueEntry current = segment.list.get(key);
+                    if (current == null || !current.isLive(now)) {
+                        continue;
+                    }
+                    segment.list.remove(key);
+                    memoryManager.remove(current.size());
+                    liveSize.decrementAndGet();
+                    removed++;
+                }
+            } finally {
+                segment.lock.writeLock().unlock();
+            }
+        }
+        return removed;
     }
 
     /**

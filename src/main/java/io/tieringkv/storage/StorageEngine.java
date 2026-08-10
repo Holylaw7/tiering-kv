@@ -24,6 +24,25 @@ public interface StorageEngine {
 
     boolean delete(byte[] key);
 
+    /**
+     * 物理移除（GC/回滚专用）：不产生 tombstone，立即回收内存。
+     * 默认回退到 delete；MemTable 覆盖为段内物理删除。
+     */
+    default boolean removePhysical(byte[] key) {
+        return delete(key);
+    }
+
+    /** 批量物理移除（ADR-0078）：默认逐条，MemTable 覆盖为分段单锁批量。 */
+    default long removeAll(java.util.List<byte[]> keys) {
+        long removed = 0;
+        for (byte[] key : keys) {
+            if (removePhysical(key)) {
+                removed++;
+            }
+        }
+        return removed;
+    }
+
     boolean exists(byte[] key);
 
     StorageIterator iterator();

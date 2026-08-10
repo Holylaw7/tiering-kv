@@ -14,7 +14,8 @@ public record TieringConfig(
         Memory memory,
         Wal wal,
         Cache cache,
-        Tiering tiering) {
+        Tiering tiering,
+        Gc gc) {
 
     public record Server(String host, int port) {
     }
@@ -39,6 +40,9 @@ public record TieringConfig(
             long drainTimeoutMillis) {
     }
 
+    public record Gc(int batchSize, int workerCount, long maxMemoryBytes) {
+    }
+
     public static TieringConfig defaults() {
         return new TieringConfig(
                 new Server("0.0.0.0", 6379),
@@ -46,7 +50,8 @@ public record TieringConfig(
                 new Memory(1L << 30),
                 new Wal("EVERY_SEC", 64L << 20),
                 new Cache(1024, 1000, 1000),
-                new Tiering(0.70, 0.85, 0.95, 1000, 5000));
+                new Tiering(0.70, 0.85, 0.95, 1000, 5000),
+                new Gc(4096, 4, 64L << 20));
     }
 
     @SuppressWarnings("unchecked")
@@ -66,6 +71,7 @@ public record TieringConfig(
             Map<String, Object> wal = map(root.get("wal"));
             Map<String, Object> cache = map(root.get("cache"));
             Map<String, Object> tiering = map(root.get("tiering"));
+            Map<String, Object> gc = map(root.get("gc"));
             return new TieringConfig(
                     new Server(str(server.get("host"), base.server().host()),
                             num(server.get("port"), base.server().port())),
@@ -82,7 +88,10 @@ public record TieringConfig(
                             dbl(tiering.get("high-watermark"), base.tiering().highWatermark()),
                             dbl(tiering.get("critical-watermark"), base.tiering().criticalWatermark()),
                             num(tiering.get("backpressure-timeout-ms"), base.tiering().backpressureTimeoutMillis()),
-                            num(tiering.get("drain-timeout-ms"), base.tiering().drainTimeoutMillis())));
+                            num(tiering.get("drain-timeout-ms"), base.tiering().drainTimeoutMillis())),
+                    new Gc(num(gc.get("batch-size"), base.gc().batchSize()),
+                            num(gc.get("worker-count"), base.gc().workerCount()),
+                            num(gc.get("max-memory"), base.gc().maxMemoryBytes())));
         } catch (IOException | RuntimeException e) {
             return defaults();
         }
@@ -93,14 +102,16 @@ public record TieringConfig(
                 "server.host=%s server.port=%d shard-count=%d flush-workers=%d "
                         + "migration-workers=%d memory.limit=%d wal.fsync=%s "
                         + "cache.block-size=%d hotkey-window=%d hotkey-threshold=%d "
-                        + "watermarks=%.2f/%.2f/%.2f backpressure-timeout=%d drain-timeout=%d",
+                        + "watermarks=%.2f/%.2f/%.2f backpressure-timeout=%d drain-timeout=%d "
+                        + "gc.batch-size=%d gc.worker-count=%d gc.max-memory=%d",
                 server().host(), server().port(), workers().shardCount(),
                 workers().flushWorkers(), workers().migrationWorkers(),
                 memory().maxBytes(), wal().fsyncPolicy(), cache().blockCacheCapacity(),
                 cache().hotKeyWindowMillis(), cache().hotKeyThreshold(),
                 tiering().lowWatermark(), tiering().highWatermark(),
                 tiering().criticalWatermark(), tiering().backpressureTimeoutMillis(),
-                tiering().drainTimeoutMillis());
+                tiering().drainTimeoutMillis(), gc().batchSize(), gc().workerCount(),
+                gc().maxMemoryBytes());
     }
 
     @SuppressWarnings("unchecked")
