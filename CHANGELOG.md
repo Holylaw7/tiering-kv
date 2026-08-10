@@ -187,6 +187,13 @@
   ADR-0047（元数据 Raft）。
 - Phase 13 评审处置：TD-026~029 关闭；登记 TD-030（MemTable 批量写）、
   TD-031（自适应 flush/异步客户端）、TD-032（token 签名轮换/mTLS）。
+- Phase 14 生产加固：MemTable.applyBatch（批量写 + WAL 批量追加）、
+  AdaptiveFlushController、ReplicationController + putAsync、HMAC-SHA256
+  认证（防重放/轮换）+ mTLS、元数据 Raft 持久化（FileRaftLog +
+  MetadataSnapshot）、跨机部署指南 + 故障注入测试（5/5）。
+- Phase 14 测试：新增 101 项；基准：100B 迁移 18.3MB/s 与 Raft 37.3K
+  ops/s 未达目标（已如实记录，TD-033/034），HMAC 开销≈0、元数据重启
+  194ms。
 - Phase 9 评审处置：确认瓶颈分层（A 4.7M → B 230K → C 150K，瓶颈=协议/调度）；
   登记 TD-020（request→response 对象数优化）与 TD-021（JFR 验收指标）。
 - Phase 8 IO 优化：MmapSSTableReader（零拷贝块读）+ FileChannel baseline、

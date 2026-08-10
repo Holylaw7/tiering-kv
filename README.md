@@ -4,7 +4,7 @@
 > （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding +
 > Raft 持久化集群 + 批量复制 + 安全 RPC + 元数据 Raft + 游标迁移）。
 
-**阶段状态：Phase 13（分布式优化）✅（Phase 0–12 全部完成 ✅）**
+**阶段状态：Phase 14（生产加固）✅（Phase 0–13 全部完成 ✅）**
 
 ## 项目定位
 
@@ -15,8 +15,10 @@
 心跳 / 日志复制 / 提交）与故障转移（Phase 11），以及分布式生产化：
 Raft 日志持久化 + 快照、Netty TCP RPC、复制滞后优化（<1ms）、在线
 Slot 迁移（Phase 12），以及分布式优化：批量/流水线复制（>5000 ops/s）、
-游标迁移、TLS/认证/限流安全 RPC、元数据 Raft 化（Phase 13）；面向
-redis-cli 与主流客户端提供 PING / ECHO / SET / GET / DEL / EXISTS 能力。
+游标迁移、TLS/认证/限流安全 RPC、元数据 Raft 化（Phase 13），以及生产
+加固：MemTable 批量写、自适应 Flush/复制、异步提案、HMAC/mTLS、
+元数据持久化与故障注入（Phase 14）；面向 redis-cli 与主流客户端提供
+PING / ECHO / SET / GET / DEL / EXISTS 能力。
 
 **边界（如实声明）**：仍为教学/工程级实现，暂不宣称"高性能 Redis 替代品"；
 分布式为真实 TCP + 持久化原型（RPC 串行、无 TLS、元数据单机），
@@ -253,6 +255,22 @@ RaftNode
   JOIN/拓扑/slot 归属/迁移状态走 Raft 日志，leader 故障转移 115ms；
 - 基准：[phase13-report.md](docs/benchmark/phase13-report.md)；
   部署：[distributed-deployment.md](docs/deployment/distributed-deployment.md)。
+
+## 生产加固（Phase 14）
+
+- **批量写**（ADR-0048）：`MemTable.applyBatch`（单段单锁 + 版本预分配）
+  + WAL 批量追加；
+- **自适应 Flush/复制**（ADR-0049/0050）：AdaptiveFlushController +
+  ReplicationController + `putAsync`（超时/取消/重试）；
+- **安全升级**（ADR-0051）：HMAC-SHA256 签名 + nonce 防重放 + 双密钥
+  轮换 + mTLS（ONE_WAY/MUTUAL）；
+- **元数据持久化**（ADR-0052）：FileRaftLog + MetadataSnapshot，重启
+  拓扑保留（194ms）；
+- **故障注入**（5/5 通过）与跨机指南：
+  [failure-injection.md](docs/testing/failure-injection.md) /
+  [cross-machine-guide.md](docs/deployment/cross-machine-guide.md)；
+- 基准：[phase14-production-report.md](docs/benchmark/phase14-production-report.md)
+  （100B 迁移 18.3MB/s、Raft 37.3K ops/s，两个目标未达已如实记录）。
 
 ## 技术栈
 

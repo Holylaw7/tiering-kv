@@ -69,10 +69,16 @@ inflight + group commit + 空闲即刷，TCP 吞吐 22K ops/s）、游标迁移
 元数据 Raft 化（MetadataRaftGroup 每副本独立状态机 + MetadataClient，
 故障转移 115–290ms）、跨机部署文档。
 
+Phase 14 已交付：生产加固——MemTable 批量写（applyBatch + WAL 批量）、
+自适应 Flush/复制控制器 + 异步提案、HMAC-SHA256（防重放/轮换）+ mTLS、
+元数据 Raft 持久化（重启拓扑保留 194ms）、故障注入与跨机文档；
+101 项新测试；100B 迁移 18.3MB/s 与 Raft 37.3K ops/s 目标未达
+（TD-033/034）。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 13（Distributed Optimization）✅ 已完成**
-  （Phase 0–12 全部完成）；
+- 阶段：**Phase 14（Production Hardening）✅ 已完成**
+  （Phase 0–13 全部完成）；
 - 最近提交：Phase 13 分布式优化（详见 git log）；
 - 基线：tag `phase-0`；分支策略：feature/* 合并入 develop，main 保持稳定；
 - 下一步：MemTable 批量写、自适应 flush/异步客户端、token 签名轮换
