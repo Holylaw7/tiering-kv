@@ -1,5 +1,10 @@
 package io.tieringkv.cluster.raft;
 
+import io.tieringkv.cluster.raft.log.MemoryRaftLog;
+import io.tieringkv.cluster.raft.log.RaftLog;
+import io.tieringkv.cluster.raft.log.RaftPersistentState;
+import io.tieringkv.cluster.raft.snapshot.SnapshotManager;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -9,23 +14,30 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 
 /**
- * 最小真实 Raft 节点（ADR-0037/0038）：角色切换、随机化选举、
- * 心跳、日志复制（prevLog 校验 + nextIndex 回退）、commit 与状态机 apply。
- * 原型为进程内传输 + 内存日志（网络/持久化留后续）。
+ * 最小真实 Raft 节点（ADR-0037/0038/0039~0042）：角色切换、随机化选举、
+ * 心跳、日志复制（prevLog 校验 + nextIndex 回退）、commit 与状态机 apply；
+ * 日志可持久化（RaftLog）、状态可持久化（term/votedFor/commitIndex）、
+ * 支持 Snapshot 压缩与 InstallSnapshot、传输可替换（本地/Netty TCP）。
  */
 public final class RaftNode implements AutoCloseable {
 
+    private static final long RPC_TIMEOUT_MILLIS = 3_000;
+    private static final int SNAPSHOT_THRESHOLD = 1_024;
+
     private final String id;
-    private final List<RaftNode> peers;
+    private final RaftTransport transport;
     private final BiConsumer<Long, byte[]> stateMachine;
     private final LeaderElection election;
     private final long heartbeatIntervalMillis;
     private final long tickIntervalMillis;
     private final ScheduledExecutorService scheduler;
+    private final RaftLog raftLog;
+    private final RaftPersistentState persistentState;
+    private final SnapshotManager snapshotManager;
+    private final CommitNotifier commitNotifier = new CommitNotifier();
 
     private final Object lock = new Object();
-    private final List<LogEntry> log = new ArrayList<>();
-    private final ReplicationManager replication = new ReplicationManager();
+    private final ReplicationTracker replication = new ReplicationTracker();
     private RaftState state = RaftState.FOLLOWER;
     private long currentTerm;
     private String votedFor;
@@ -37,6 +49,7 @@ public final class RaftNode implements AutoCloseable {
     private boolean running;
     private volatile boolean suspended;
 
+    /** Phase 11 兼容构造：进程内传输 + 内存日志（单元测试/本地原型）。 */
     public RaftNode(
             String id,
             List<RaftNode> peers,
@@ -44,19 +57,62 @@ public final class RaftNode implements AutoCloseable {
             LeaderElection election,
             long heartbeatIntervalMillis,
             long tickIntervalMillis) {
+        this(id, new LocalRaftTransport(peers, id), stateMachine, election,
+                heartbeatIntervalMillis, tickIntervalMillis,
+                new MemoryRaftLog(), null, null);
+    }
+
+    /** 生产构造：可指定传输、持久日志、持久状态与快照管理器。 */
+    public RaftNode(
+            String id,
+            RaftTransport transport,
+            BiConsumer<Long, byte[]> stateMachine,
+            LeaderElection election,
+            long heartbeatIntervalMillis,
+            long tickIntervalMillis,
+            RaftLog raftLog,
+            RaftPersistentState persistentState,
+            SnapshotManager snapshotManager) {
         this.id = id;
-        // 共享可变列表：允许测试/启动时先建节点后组网（节点自身会被跳过）
-        this.peers = peers;
+        this.transport = transport;
         this.stateMachine = stateMachine;
         this.election = election;
         this.heartbeatIntervalMillis = heartbeatIntervalMillis;
         this.tickIntervalMillis = tickIntervalMillis;
+        this.raftLog = raftLog;
+        this.persistentState = persistentState;
+        this.snapshotManager = snapshotManager;
         this.electionTimeoutMillis = election.nextTimeoutMillis();
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread thread = new Thread(r, "raft-" + id);
             thread.setDaemon(true);
             return thread;
         });
+        restorePersistentState();
+    }
+
+    /** 启动恢复：加载快照 → 恢复 term/votedFor/commitIndex → 重放剩余日志。 */
+    private void restorePersistentState() {
+        synchronized (lock) {
+            if (snapshotManager != null && snapshotManager.hasSnapshot()) {
+                long snapshotIndex = snapshotManager.metadata().lastIncludedIndex();
+                raftLog.installSnapshot(snapshotIndex);
+                if (commitIndex < snapshotIndex) {
+                    commitIndex = snapshotIndex;
+                }
+                if (lastApplied < snapshotIndex) {
+                    lastApplied = snapshotIndex;
+                }
+            }
+            if (persistentState != null) {
+                currentTerm = persistentState.term();
+                votedFor = persistentState.votedFor();
+                if (commitIndex < persistentState.commitIndex()) {
+                    commitIndex = Math.min(persistentState.commitIndex(), raftLog.lastIndex());
+                }
+                applyCommittedLocked();
+            }
+        }
     }
 
     public void start() {
@@ -104,6 +160,7 @@ public final class RaftNode implements AutoCloseable {
                 votedFor = request.candidateId();
                 lastHeartbeat = System.currentTimeMillis();
             }
+            persistStateLocked();
             return new VoteResponse(currentTerm, grant);
         }
     }
@@ -126,31 +183,68 @@ public final class RaftNode implements AutoCloseable {
             electionTimeoutMillis = election.nextTimeoutMillis();
 
             if (request.prevLogIndex() > lastLogIndex()) {
+                persistStateLocked();
                 return new AppendEntriesResponse(currentTerm, false, 0);
             }
-            if (request.prevLogIndex() >= 0
-                    && logAt(request.prevLogIndex()).term() != request.prevLogTerm()) {
+            if (!prevLogMatchesLocked(request.prevLogIndex(), request.prevLogTerm())) {
+                persistStateLocked();
                 return new AppendEntriesResponse(currentTerm, false, 0);
             }
-            int index = (int) request.prevLogIndex() + 1;
             for (LogEntry entry : request.entries()) {
-                if (index < log.size()) {
-                    if (log.get(index).term() != entry.term()) {
-                        while (log.size() > index) {
-                            log.remove(log.size() - 1);
-                        }
-                        log.add(entry);
-                    }
-                } else {
-                    log.add(entry);
+                if (entry.index() < raftLog.firstIndex()) {
+                    continue; // 已被快照压缩，无需处理
                 }
-                index++;
+                if (entry.index() <= raftLog.lastIndex()) {
+                    if (raftLog.termAt(entry.index()) != entry.term()) {
+                        raftLog.truncateFrom(entry.index());
+                        raftLog.append(entry);
+                    }
+                } else if (entry.index() == raftLog.lastIndex() + 1) {
+                    raftLog.append(entry);
+                } else {
+                    persistStateLocked();
+                    return new AppendEntriesResponse(currentTerm, false, 0);
+                }
             }
             if (request.leaderCommit() > commitIndex) {
                 commitIndex = Math.min(request.leaderCommit(), lastLogIndex());
                 applyCommittedLocked();
             }
+            persistStateLocked();
             return new AppendEntriesResponse(currentTerm, true, lastLogIndex());
+        }
+    }
+
+    public InstallSnapshotResponse receive(InstallSnapshotRequest request) {
+        synchronized (lock) {
+            if (suspended) {
+                return new InstallSnapshotResponse(currentTerm, false);
+            }
+            if (request.term() < currentTerm) {
+                return new InstallSnapshotResponse(currentTerm, false);
+            }
+            if (request.term() > currentTerm) {
+                currentTerm = request.term();
+                votedFor = null;
+            }
+            state = RaftState.FOLLOWER;
+            leaderId = request.leaderId();
+            lastHeartbeat = System.currentTimeMillis();
+            electionTimeoutMillis = election.nextTimeoutMillis();
+            if (snapshotManager == null
+                    || !snapshotManager.install(request.lastIncludedIndex(),
+                    request.lastIncludedTerm(), request.data())) {
+                return new InstallSnapshotResponse(currentTerm, false);
+            }
+            raftLog.installSnapshot(request.lastIncludedIndex());
+            if (commitIndex < request.lastIncludedIndex()) {
+                commitIndex = request.lastIncludedIndex();
+            }
+            if (lastApplied < request.lastIncludedIndex()) {
+                lastApplied = request.lastIncludedIndex();
+            }
+            persistStateLocked();
+            return new InstallSnapshotResponse(currentTerm, true);
         }
     }
 
@@ -164,8 +258,8 @@ public final class RaftNode implements AutoCloseable {
                 future.completeExceptionally(new IllegalStateException("not leader"));
                 return future;
             }
-            entry = new LogEntry(currentTerm, log.size(), command);
-            log.add(entry);
+            entry = new LogEntry(currentTerm, raftLog.lastIndex() + 1, command);
+            raftLog.append(entry);
             calls = buildReplicationLocked();
         }
         List<PeerResult> results = sendToPeers(calls);
@@ -176,13 +270,13 @@ public final class RaftNode implements AutoCloseable {
                 applyCommittedLocked();
                 future.complete(entry.index());
             } else if (state != RaftState.LEADER) {
-                // 提案尚未提交但已失去领导权：快速失败，避免客户端无限等待
                 future.completeExceptionally(new IllegalStateException(
                         "leadership lost before commit, term=" + currentTerm));
             } else {
                 pendingCommits.put(entry.index(), future);
             }
         }
+        notifyCommit();
         return future;
     }
 
@@ -196,7 +290,6 @@ public final class RaftNode implements AutoCloseable {
         long lastIndex = 0;
         long lastTerm = 0;
         synchronized (lock) {
-            // 挂起节点模拟崩溃/不可达：不参与心跳、选举与复制
             if (!running || suspended) {
                 return;
             }
@@ -213,14 +306,21 @@ public final class RaftNode implements AutoCloseable {
                 electionTerm = currentTerm;
                 lastIndex = lastLogIndex();
                 lastTerm = lastLogTerm();
+                persistStateLocked();
             }
         }
         if (shouldStartElection) {
             VoteRequest request = new VoteRequest(electionTerm, id, lastIndex, lastTerm);
             List<VoteResponse> responses = new ArrayList<>();
-            for (RaftNode peer : peers) {
-                if (peer != this) {
-                    responses.add(peer.receive(request));
+            for (String peer : transport.peerIds()) {
+                if (peer.equals(id)) {
+                    continue;
+                }
+                try {
+                    responses.add(transport.requestVote(peer, request)
+                            .get(RPC_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
+                } catch (Exception ignored) {
+                    // 网络失败视为未投票
                 }
             }
             synchronized (lock) {
@@ -230,14 +330,16 @@ public final class RaftNode implements AutoCloseable {
                         currentTerm = response.term();
                         votedFor = null;
                         state = RaftState.FOLLOWER;
+                        persistStateLocked();
                         return;
                     }
                     if (response.granted() && response.term() == currentTerm) {
                         votes++;
                     }
                 }
-                if (votes > peers.size() / 2) {
+                if (votes > transport.peerIds().size() / 2) {
                     becomeLeaderLocked();
+                    persistStateLocked();
                 }
             }
             return;
@@ -248,70 +350,137 @@ public final class RaftNode implements AutoCloseable {
                 applyReplicationResultsLocked(results);
                 maybeCommitLocked();
             }
+            notifyCommit();
         }
     }
 
     private void becomeLeaderLocked() {
         state = RaftState.LEADER;
         leaderId = id;
-        for (RaftNode peer : peers) {
-            if (peer == this) {
-                continue;
+        for (String peer : transport.peerIds()) {
+            if (!peer.equals(id)) {
+                replication.initialize(peer, lastLogIndex() + 1);
             }
-            replication.initialize(peer.id, lastLogIndex() + 1);
         }
     }
 
     private List<PeerCall> buildReplicationLocked() {
         List<PeerCall> calls = new ArrayList<>();
-        for (RaftNode peer : peers) {
-            if (peer == this) {
+        for (String peer : transport.peerIds()) {
+            if (peer.equals(id)) {
                 continue;
             }
-            long next = replication.nextIndex(peer.id);
+            long next = replication.nextIndex(peer);
+            if (snapshotManager != null && snapshotManager.hasSnapshot()
+                    && next <= snapshotManager.metadata().lastIncludedIndex()) {
+                calls.add(new PeerCall(peer, null,
+                        new InstallSnapshotRequest(currentTerm, id,
+                                snapshotManager.metadata().lastIncludedIndex(),
+                                snapshotManager.metadata().lastIncludedTerm(),
+                                snapshotManager.data())));
+                continue;
+            }
             long prevIndex = next - 1;
-            long prevTerm = prevIndex < 0 ? 0 : logAt(prevIndex).term();
-            List<LogEntry> entries = next <= lastLogIndex()
-                    ? List.copyOf(log.subList((int) next, log.size()))
+            List<LogEntry> entries = next <= raftLog.lastIndex()
+                    ? raftLog.entriesFrom(next)
                     : List.of();
-            calls.add(new PeerCall(peer, new AppendEntriesRequest(
-                    currentTerm, id, prevIndex, prevTerm, entries, commitIndex)));
+            calls.add(new PeerCall(peer,
+                    new AppendEntriesRequest(currentTerm, id, prevIndex,
+                            prevTermLocked(prevIndex), entries, commitIndex), null));
         }
         return calls;
+    }
+
+    private long prevTermLocked(long prevIndex) {
+        if (prevIndex >= raftLog.firstIndex()) {
+            return raftLog.termAt(prevIndex);
+        }
+        if (snapshotManager != null && snapshotManager.hasSnapshot()
+                && prevIndex == snapshotManager.metadata().lastIncludedIndex()) {
+            return snapshotManager.metadata().lastIncludedTerm();
+        }
+        return 0;
+    }
+
+    private boolean prevLogMatchesLocked(long prevIndex, long prevTerm) {
+        if (prevIndex < 0) {
+            return true; // 空日志边界
+        }
+        if (prevIndex >= raftLog.firstIndex()) {
+            return raftLog.termAt(prevIndex) == prevTerm;
+        }
+        if (snapshotManager != null && snapshotManager.hasSnapshot()
+                && prevIndex == snapshotManager.metadata().lastIncludedIndex()) {
+            return snapshotManager.metadata().lastIncludedTerm() == prevTerm;
+        }
+        return false; // 无快照覆盖的边界索引无法校验，拒绝
     }
 
     private List<PeerResult> sendToPeers(List<PeerCall> calls) {
         List<PeerResult> results = new ArrayList<>(calls.size());
         for (PeerCall call : calls) {
-            results.add(new PeerResult(call.peer(), call.peer().receive(call.request())));
+            try {
+                if (call.snapshotRequest() != null) {
+                    InstallSnapshotResponse response = transport
+                            .installSnapshot(call.peer(), call.snapshotRequest())
+                            .get(RPC_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+                    results.add(new PeerResult(call.peer(), null, response,
+                            call.snapshotRequest()));
+                } else {
+                    AppendEntriesResponse response = transport
+                            .appendEntries(call.peer(), call.appendRequest())
+                            .get(RPC_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+                    results.add(new PeerResult(call.peer(), response, null, null));
+                }
+            } catch (Exception e) {
+                results.add(new PeerResult(call.peer(),
+                        new AppendEntriesResponse(0, false, 0), null, null));
+            }
         }
         return results;
     }
 
     private void applyReplicationResultsLocked(List<PeerResult> results) {
         for (PeerResult result : results) {
-            if (result.response().term() > currentTerm) {
-                currentTerm = result.response().term();
-                votedFor = null;
-                state = RaftState.FOLLOWER;
-                return;
-            }
-            if (result.response().success()) {
-                replication.onSuccess(result.peer().id(), result.response().matchIndex());
+            if (result.snapshotResponse() != null) {
+                if (result.snapshotResponse().term() > currentTerm) {
+                    stepDownLocked(result.snapshotResponse().term());
+                    return;
+                }
+                if (result.snapshotResponse().success()) {
+                    replication.onSuccess(result.peer(),
+                            result.snapshotRequest().lastIncludedIndex());
+                } else {
+                    replication.onFailure(result.peer());
+                }
             } else {
-                replication.onFailure(result.peer().id());
+                if (result.appendResponse().term() > currentTerm) {
+                    stepDownLocked(result.appendResponse().term());
+                    return;
+                }
+                if (result.appendResponse().success()) {
+                    replication.onSuccess(result.peer(), result.appendResponse().matchIndex());
+                } else {
+                    replication.onFailure(result.peer());
+                }
             }
         }
+    }
+
+    private void stepDownLocked(long newTerm) {
+        currentTerm = newTerm;
+        votedFor = null;
+        state = RaftState.FOLLOWER;
+        persistStateLocked();
     }
 
     private void maybeCommitLocked() {
         if (state != RaftState.LEADER) {
             return;
         }
-        // peers 列表含自身（共享引用模型）：组大小 = peers.size()
-        int majority = peers.size() / 2 + 1;
+        int majority = transport.peerIds().size() / 2 + 1;
         for (long index = commitIndex + 1; index <= lastLogIndex(); index++) {
-            if (logAt(index).term() != currentTerm) {
+            if (raftLog.termAt(index) != currentTerm) {
                 continue;
             }
             int matched = 1;
@@ -324,13 +493,30 @@ public final class RaftNode implements AutoCloseable {
                 commitIndex = index;
             }
         }
-        applyCommittedLocked();
+        if (commitIndex > lastApplied) {
+            applyCommittedLocked();
+            persistStateLocked();
+            maybeSnapshotLocked();
+        }
+    }
+
+    private void maybeSnapshotLocked() {
+        if (snapshotManager == null
+                || raftLog.size() < SNAPSHOT_THRESHOLD
+                || commitIndex < raftLog.firstIndex()) {
+            return;
+        }
+        long snapshotIndex = commitIndex;
+        long snapshotTerm = raftLog.termAt(snapshotIndex);
+        if (snapshotManager.create(snapshotIndex, snapshotTerm)) {
+            raftLog.installSnapshot(snapshotIndex);
+        }
     }
 
     private void applyCommittedLocked() {
         while (lastApplied < commitIndex) {
             lastApplied++;
-            LogEntry entry = logAt(lastApplied);
+            LogEntry entry = raftLog.entryAt(lastApplied);
             stateMachine.accept(entry.index(), entry.command());
             CompletableFuture<Long> pending = pendingCommits.remove(entry.index());
             if (pending != null) {
@@ -339,16 +525,42 @@ public final class RaftNode implements AutoCloseable {
         }
     }
 
-    private LogEntry logAt(long index) {
-        return log.get((int) index);
+    /** 提交后立即补发 commitIndex（ADR-0042），锁外发送。 */
+    private void notifyCommit() {
+        List<PeerCall> calls;
+        synchronized (lock) {
+            if (!running || suspended || state != RaftState.LEADER
+                    || !commitNotifier.mark(commitIndex)) {
+                return;
+            }
+            calls = new ArrayList<>();
+            for (String peer : transport.peerIds()) {
+                if (peer.equals(id)) {
+                    continue;
+                }
+                long next = replication.nextIndex(peer);
+                calls.add(new PeerCall(peer,
+                        new AppendEntriesRequest(currentTerm, id, next - 1,
+                                prevTermLocked(next - 1), List.of(), commitIndex), null));
+            }
+        }
+        if (calls != null) {
+            sendToPeers(calls);
+        }
+    }
+
+    private void persistStateLocked() {
+        if (persistentState != null) {
+            persistentState.persist(currentTerm, votedFor, commitIndex);
+        }
     }
 
     private long lastLogIndex() {
-        return log.size() - 1;
+        return raftLog.lastIndex();
     }
 
     private long lastLogTerm() {
-        return log.isEmpty() ? 0 : log.get(log.size() - 1).term();
+        return raftLog.lastTerm();
     }
 
     public String id() {
@@ -394,14 +606,18 @@ public final class RaftNode implements AutoCloseable {
 
     public long logSize() {
         synchronized (lock) {
-            return log.size();
+            return raftLog.size();
         }
     }
 
     public List<LogEntry> logSnapshot() {
         synchronized (lock) {
-            return List.copyOf(log);
+            return raftLog.entriesFrom(raftLog.firstIndex());
         }
+    }
+
+    public ReplicationTracker replication() {
+        return replication;
     }
 
     @Override
@@ -413,11 +629,22 @@ public final class RaftNode implements AutoCloseable {
             }
         }
         scheduler.shutdownNow();
+        raftLog.close();
+        if (persistentState != null) {
+            persistentState.close();
+        }
     }
 
-    private record PeerCall(RaftNode peer, AppendEntriesRequest request) {
+    private record PeerCall(
+            String peer,
+            AppendEntriesRequest appendRequest,
+            InstallSnapshotRequest snapshotRequest) {
     }
 
-    private record PeerResult(RaftNode peer, AppendEntriesResponse response) {
+    private record PeerResult(
+            String peer,
+            AppendEntriesResponse appendResponse,
+            InstallSnapshotResponse snapshotResponse,
+            InstallSnapshotRequest snapshotRequest) {
     }
 }
