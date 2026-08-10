@@ -16,7 +16,7 @@
 | 6 | 冷热迁移 | ✅ 完成（2026-08-10） |
 | 7 | 并发优化 | ✅ 完成（2026-08-10） |
 | 8 | mmap / Memory Pool | ✅ 完成（2026-08-10） |
-| 9 | Benchmark 压力测试 | ⏳ 未开始 |
+| 9 | Benchmark 压力测试 | ✅ 完成（2026-08-10） |
 | 10 | 生产化完善 | ⏳ 未开始 |
 
 ## Phase 0 — 工程初始化 ✅
@@ -132,11 +132,14 @@
 - 基准：随机读 P99 0.012–0.040ms（目标 <5ms）；缓存命中率 94.8%；mmap 较
   FileChannel 随机读提速 ~2×（详见 [io-report.md](docs/benchmark/io-report.md)）。
 
-## Phase 9 — Benchmark
+## Phase 9 — Benchmark ✅
 
 - 目标：1k / 10k / 100k 连接、P50/P95/P99、内存对比 Redis。
-- 交付：benchmarks/ 压测套件与 docs/benchmark/ 报告（计划见
-  [benchmark-plan.md](docs/benchmark/benchmark-plan.md)）。
+- 交付：三级基准（A/B/C）+ 管道 RESP 客户端；phase9-memory / server /
+  production 报告 + 容量模型 + 部署画像。
+- 结果：A 级 GET 4.7M、SET 4.4M ops/s；B 级 pipeline64 峰值 218–231K
+  （目标 500K 未达，瓶颈 = RESP/调度层）；C 级全链路 115–178K ops/s、
+  P99 <5ms；Workload D 压力下内存受控。
 - 方向（Phase 8 评审）：三级基准 A（内存）/ B（服务端 pipeline 64）/
   C（生产全链路）+ cold-cache 冷启动（TD-009）+ **生产容量模型**（TD-019）；
   IO 微优化阶段结束。

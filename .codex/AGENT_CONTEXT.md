@@ -41,12 +41,17 @@ Phase 8 已交付：mmap 冷读（MmapSSTableReader + FileChannel baseline）、
 MemoryPool（DirectByteBuffer 池 + 统计）、BlockCache（LRU + off-heap +
 失效）、IOStatistics；ColdStorageEngine 默认 mmap + cache。
 
+Phase 9 已交付：三级生产基准（A/B/C）+ 容量模型 + 部署画像；结论：
+A 级 GET 4.7M ops/s；B 级 pipeline64 峰值 218–231K（目标 500K 未达）；
+C 级全链路 115–178K ops/s；瓶颈 = 网络/RESP/调度层。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 8（IO Optimization）✅ 已完成**（Phase 0–7 ✅）；
-- 最近提交：`feat(io): add mmap and zero-copy optimization`（详见 git log）；
+- 阶段：**Phase 9（Production Benchmark）✅ 已完成**（Phase 0–8 ✅）；
+- 最近提交：`benchmark: add production benchmark`（详见 git log）；
 - 基线：tag `phase-0`；分支策略：feature/* 合并入 develop，main 保持稳定；
-- 下一步：**Phase 9 Production Benchmark**（等待用户指令）。
+- 下一步：**Phase 10 Advanced Optimization（协议/调度层优化 + 生产化）**
+  （等待用户指令）。
 
 ## 3. 技术栈
 
@@ -63,6 +68,7 @@ MemoryPool（DirectByteBuffer 池 + 统计）、BlockCache（LRU + off-heap +
 | 自动调度 | 水位 Flush + 异步迁移 + 背压 + MigrationLog（ADR-0020~0022） |
 | 并发 | KeyShardExecutor + ResponseSequencer + 热点读缓存（ADR-0023~0025） |
 | IO | mmap 零拷贝 + BlockCache + Off-Heap MemoryPool（ADR-0026~0028） |
+| 生产基准 | 三级基准 + 容量模型 + 部署画像（ADR-0029~0031） |
 | 包结构 | `io.tieringkv.{network,protocol,command,storage,memory,cache,eviction,wal,sstable,compaction,scheduler,metrics,benchmark}` |
 
 ## 4. 关键决策（ADR）
@@ -97,6 +103,9 @@ MemoryPool（DirectByteBuffer 池 + 统计）、BlockCache（LRU + off-heap +
 | [ADR-0026](adr/ADR-0026-sstable-io-strategy.md) | mmap 生产读取 + FileChannel baseline |
 | [ADR-0027](adr/ADR-0027-offheap-memory-strategy.md) | DirectByteBuffer 大小类池 + 统计 |
 | [ADR-0028](adr/ADR-0028-block-cache-strategy.md) | Block Cache LRU + 池化缓冲 + 失效 |
+| [ADR-0029](adr/ADR-0029-production-benchmark-methodology.md) | 三级基准方法与环境冻结 |
+| [ADR-0030](adr/ADR-0030-capacity-model.md) | CPU/内存/磁盘/网络容量模型 |
+| [ADR-0031](adr/ADR-0031-production-deployment-profile.md) | 生产部署画像（JVM/线程/WAL/水位） |
 
 ## 5. 仓库布局
 
@@ -135,7 +144,7 @@ tiering-kv/
 | 6 | 冷热迁移 | ✅ |
 | 7 | 并发优化 | ✅ |
 | 8 | mmap / Memory Pool | ✅ |
-| 9 | Benchmark | 未开始 |
+| 9 | Benchmark | ✅ |
 | 10 | 生产化 | 未开始 |
 
 ## 7. 技术债
