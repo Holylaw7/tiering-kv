@@ -296,7 +296,7 @@
     CrossMachineChaosTest（20 项）；
   - 可观测性（ADR-0070）：MetricsExporter（Prometheus）+
     ProductionInfo（INFO CLUSTER 聚合）；
-  - 测试：新增 165 项；全量回归最终统计见合并后报告（目标 >1100）；
+  - 测试：新增 165 项；全量回归 1112/1112 全绿（目标 >1100 ✅）；
   - 基准（docs/benchmark/phase18-production-report.md）：Gateway
     719K/590K ops/s、迁移 209.1/986.0 MB/s、Split/Merge 1M ~0.9/~0.7s。
 - Phase 9 评审处置：确认瓶颈分层（A 4.7M → B 230K → C 150K，瓶颈=协议/调度）；

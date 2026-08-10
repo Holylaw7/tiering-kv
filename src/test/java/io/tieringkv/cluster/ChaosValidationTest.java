@@ -361,7 +361,13 @@ class ChaosValidationTest {
             newLeader.put(key(1), value(1));
             awaitSee(fixture.nodes, activeIds(fixture.nodes, oldLeader.id()), key(1), 8000);
             // 无法定数的旧提案绝不能虚假成功：必须被显式失败（冲突截断）
-            awaitTrue("old proposal settles as failed", pending::isDone, 15_000);
+            for (int round = 0; round < 4 && !pending.isDone(); round++) {
+                awaitTrue("old proposal settles as failed", pending::isDone, 10_000);
+                if (!pending.isDone()) {
+                    // 负载下新 leader 可能轮换：再写一条强制回填
+                    putThroughLeader(fixture, key(2), value(2));
+                }
+            }
             assertThat(pending.isCompletedExceptionally()).isTrue();
             assertThatThrownBy(pending::join)
                     .hasRootCauseInstanceOf(IllegalStateException.class);

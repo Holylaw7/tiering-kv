@@ -358,7 +358,8 @@
   [0069](docs/adr/ADR-0069-cross-machine-deployment.md)（跨机部署）、
   [0070](docs/adr/ADR-0070-production-metrics.md)（生产指标）。
 - 测试：新增 165 项（Routing 23 / Gateway 31 / Split-Raft 33 /
-  Merge-Raft 25 / Migration 20 / Chaos 20 / Metrics 11 / Benchmark 2）。
+  Merge-Raft 25 / Migration 20 / Chaos 20 / Metrics 11 / Benchmark 2）；
+  全量回归 1112/1112 全绿。
 - 基准（[phase18-production-report.md](docs/benchmark/phase18-production-report.md)）：
   Gateway GET/SET 719K/590K ops/s（>500K/200K ✅）、迁移 100B/1KB
   209.1/986.0 MB/s（>100/300 ✅）、Split/Merge 1M ~0.9/~0.7s。

@@ -53,7 +53,7 @@ Phase 18 完成统一路由、真实 TCP 网关、Split/Merge 与 Raft 联动、
 | Phase18MetricsTest | 11 | ✅ |
 | GatewayBenchmarkTest | 2 | ✅ |
 
-全量回归最终统计见合并后报告（目标 >1100）。
+全量回归 **1112/1112 全绿**（目标 >1100 ✅）。
 
 ## 5. Benchmark
 

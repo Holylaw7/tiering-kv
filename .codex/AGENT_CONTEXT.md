@@ -106,7 +106,7 @@ RouteEpochGuard）、真实 TCP Redis Cluster 网关（GET 719K / SET 590K
 ops/s）、Split/Merge 与 Raft 组联动（RegionRaftMigrationManager +
 回滚/恢复）、生产化迁移（限速 + 自适应调度 + 指标）、三节点 compose +
 CrossMachineChaosTest（20 项）、MetricsExporter（Prometheus）+ INFO
-CLUSTER 聚合；165 项新测试。
+CLUSTER 聚合；165 项新测试，全量回归 1112/1112 全绿。
 
 ## 2. 当前状态
 
