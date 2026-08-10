@@ -10,6 +10,9 @@ import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.tieringkv.cluster.rpc.security.RpcSecurityConfig;
 
 import java.net.InetSocketAddress;
 import java.util.Map;
@@ -23,8 +26,17 @@ import java.util.concurrent.TimeUnit;
 public final class RpcClient implements AutoCloseable {
 
     private final EventLoopGroup group = new NioEventLoopGroup();
+    private final RpcSecurityConfig security;
     private final Map<InetSocketAddress, Channel> channels = new ConcurrentHashMap<>();
     private final Map<Long, CompletableFuture<RpcFrame>> pending = new ConcurrentHashMap<>();
+
+    public RpcClient() {
+        this(RpcSecurityConfig.disabled());
+    }
+
+    public RpcClient(RpcSecurityConfig security) {
+        this.security = security;
+    }
 
     /** 发送请求；连接失败/超时按 retries 次数重试（仅幂等消息）。 */
     public CompletableFuture<RpcFrame> call(InetSocketAddress address, RpcFrame frame,
@@ -90,10 +102,40 @@ public final class RpcClient implements AutoCloseable {
                         .handler(new ChannelInitializer<SocketChannel>() {
                             @Override
                             protected void initChannel(SocketChannel ch) {
+                                if (security.sslEnabled()) {
+                                    try {
+                                        SslContext clientContext = SslContextBuilder.forClient()
+                                                .trustManager(security.certFile().toFile())
+                                                .build();
+                                        ch.pipeline().addLast("ssl",
+                                                clientContext.newHandler(ch.alloc(),
+                                                        address.getHostName(), address.getPort()));
+                                    } catch (Exception e) {
+                                        throw new IllegalStateException(
+                                                "failed to load TLS trust store", e);
+                                    }
+                                }
                                 ch.pipeline()
                                         .addLast("decoder", new RpcCodec.Decoder())
                                         .addLast("encoder", new RpcCodec.Encoder())
                                         .addLast("handler", new ResponseHandler());
+                                if (security.authenticationEnabled()) {
+                                    ch.pipeline().addLast("authSender",
+                                            new io.netty.channel.ChannelInboundHandlerAdapter() {
+                                                @Override
+                                                public void channelActive(
+                                                        ChannelHandlerContext ctx) {
+                                                    String payload = security.authToken() + "|"
+                                                            + security.authExpiryMillis();
+                                                    ctx.writeAndFlush(new RpcFrame(
+                                                            RequestId.next().value(),
+                                                            RpcMessageType.AUTH,
+                                                            payload.getBytes(
+                                                                    java.nio.charset.StandardCharsets.UTF_8)));
+                                                    ctx.fireChannelActive();
+                                                }
+                                            });
+                                }
                             }
                         });
                 channel = bootstrap.connect(address).syncUninterruptibly().channel();

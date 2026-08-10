@@ -7,7 +7,10 @@ public enum RpcMessageType {
     REQUEST_VOTE(3),
     REQUEST_VOTE_RESPONSE(4),
     INSTALL_SNAPSHOT(5),
-    INSTALL_SNAPSHOT_RESPONSE(6);
+    INSTALL_SNAPSHOT_RESPONSE(6),
+    AUTH(7),
+    AUTH_RESPONSE(8),
+    ERROR(9);
 
     private final int wireValue;
 
