@@ -330,8 +330,14 @@ public final class RaftNode implements AutoCloseable {
                     return new AppendEntriesResponse(currentTerm, false, 0);
                 }
             }
+            // Raft 规范：leaderCommit 只能推进到“已校验与 leader 日志一致”的索引。
+            // 空心跳只确认到 prevLogIndex（Phase 19 混沌发现：若用 lastLogIndex，
+            // follower 上未提交的冲突条目会被空心跳错误提交，旧提案虚假成功）。
+            long verifiedIndex = request.entries().isEmpty()
+                    ? request.prevLogIndex()
+                    : request.entries().get(request.entries().size() - 1).index();
             if (request.leaderCommit() > commitIndex) {
-                commitIndex = Math.min(request.leaderCommit(), lastLogIndex());
+                commitIndex = Math.min(request.leaderCommit(), verifiedIndex);
                 applyCommittedLocked();
             }
             persistStateLocked(termAdvanced);
@@ -864,6 +870,12 @@ public final class RaftNode implements AutoCloseable {
                 continue;
             }
             long next = replication.nextIndex(peer);
+            if (next <= lastLogIndex()) {
+                // 该 peer 仍有未复制条目：空心跳携带的 commitIndex 可能先于
+                // 冲突数据到达，导致 follower 错误提交本地冲突条目（Phase 19
+                // 混沌发现）。数据 flush 会携带条目与 commitIndex，这里跳过。
+                continue;
+            }
             calls.add(new PeerCall(peer,
                     new AppendEntriesRequest(currentTerm, id, next - 1,
                             prevTermLocked(next - 1), List.of(), commitIndex), null));

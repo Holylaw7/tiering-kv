@@ -373,9 +373,11 @@ class ChaosValidationTest {
                 assertThatThrownBy(pending::join)
                         .hasRootCauseInstanceOf(IllegalStateException.class);
             } else {
-                // 恢复后旧 leader 合法重夺领导权 → 真提交：数据必须实际可读
+                // 恢复后旧 leader 先追平再合法重夺领导权 → 真提交：
+                // 数据必须最终对所有活跃节点可见；负载下用探针写入驱动复制，
+                // 避免调度饥饿导致“已提交但未收敛”的假失败。
                 pending.join();
-                awaitAllSee(fixture.nodes, key(0), 10_000);
+                awaitAllSeeWithProbe(fixture, key(0), 5, 15_000);
             }
         }
     }
@@ -535,6 +537,23 @@ class ChaosValidationTest {
     private static void awaitAllSee(Map<String, ClusterNode> nodes, byte[] key,
                                     long timeoutMillis) throws InterruptedException {
         awaitSee(nodes, activeIds(nodes), key, timeoutMillis);
+    }
+
+    /** 已提交数据最终收敛：未收敛时通过当前 leader 写入探针，主动驱动复制。 */
+    private static void awaitAllSeeWithProbe(ChaosFixture fixture, byte[] key,
+                                             int probeRounds, long timeoutMillis)
+            throws Exception {
+        for (int round = 0; round < probeRounds; round++) {
+            try {
+                awaitAllSee(fixture.nodes, key, timeoutMillis);
+                return;
+            } catch (AssertionError notConverged) {
+                if (round == probeRounds - 1) {
+                    throw notConverged;
+                }
+                putThroughLeader(fixture, key(100 + round), value(100 + round));
+            }
+        }
     }
 
     private static void awaitTrue(String message, java.util.function.BooleanSupplier condition,

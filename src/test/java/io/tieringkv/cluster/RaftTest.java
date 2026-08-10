@@ -226,6 +226,31 @@ class RaftTest {
     }
 
     @Test
+    void emptyHeartbeatMustNotCommitConflictingEntry() throws Exception {
+        List<String> applied = new ArrayList<>();
+        StubTransport transport = new StubTransport();
+        RaftNode node = new RaftNode("n1", transport,
+                (index, command) -> applied.add(new String(command, StandardCharsets.UTF_8)),
+                ELECTION, 25, 10, new MemoryRaftLog(), null, null);
+        node.start();
+        awaitTrue("leader", () -> node.state() == RaftState.LEADER, 3000);
+        CompletableFuture<Long> pending = node.propose("X".getBytes(StandardCharsets.UTF_8));
+        Thread.sleep(100);
+        assertThat(pending.isDone()).isFalse(); // 无多数派 ack，提案保持悬挂
+        long term = node.currentTerm() + 5;
+        // 新 leader 日志在 idx0 是另一条命令；空心跳只确认 prevLog(-1)，
+        // leaderCommit=0 不得把 follower 的冲突条目（term1, X）提交
+        AppendEntriesResponse response = node.receive(new AppendEntriesRequest(
+                term, "new-leader", -1, 0, List.of(), 0));
+        assertThat(response.success()).isTrue();
+        assertThat(node.commitIndex()).isEqualTo(-1);
+        assertThat(node.lastApplied()).isEqualTo(-1);
+        assertThat(applied).isEmpty();
+        assertThat(pending.isDone()).isFalse();
+        node.close();
+    }
+
+    @Test
     void higherTermHeartbeatStepsDownLeader() throws Exception {
         List<String> applied = new ArrayList<>();
         RaftNode[] nodes = group3(applied);
