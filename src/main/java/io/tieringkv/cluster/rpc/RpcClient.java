@@ -14,8 +14,14 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.tieringkv.cluster.rpc.security.RpcSecurityConfig;
+import io.tieringkv.cluster.rpc.security.HmacConfig;
+import io.tieringkv.cluster.rpc.security.HmacToken;
+import io.tieringkv.cluster.rpc.security.RpcTlsConfig;
+import io.tieringkv.cluster.rpc.security.TlsMode;
+import io.tieringkv.cluster.rpc.security.NonceCache;
 
 import java.net.InetSocketAddress;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -29,6 +35,8 @@ public final class RpcClient implements AutoCloseable {
 
     private final EventLoopGroup group = new NioEventLoopGroup();
     private final RpcSecurityConfig security;
+    private final RpcTlsConfig tlsConfig;
+    private final HmacConfig hmacConfig;
     private final Map<InetSocketAddress, Channel> channels = new ConcurrentHashMap<>();
     private final Map<InetSocketAddress, CompletableFuture<Channel>> connecting =
             new ConcurrentHashMap<>();
@@ -39,7 +47,13 @@ public final class RpcClient implements AutoCloseable {
     }
 
     public RpcClient(RpcSecurityConfig security) {
+        this(security, null, null);
+    }
+
+    public RpcClient(RpcSecurityConfig security, RpcTlsConfig tlsConfig, HmacConfig hmacConfig) {
         this.security = security;
+        this.tlsConfig = tlsConfig;
+        this.hmacConfig = hmacConfig;
     }
 
     /** 发送请求；连接失败/超时按 retries 次数重试（仅幂等消息）。 */
@@ -121,11 +135,23 @@ public final class RpcClient implements AutoCloseable {
                     .handler(new ChannelInitializer<SocketChannel>() {
                         @Override
                         protected void initChannel(SocketChannel ch) {
-                            if (security.sslEnabled()) {
+                            if (security.sslEnabled() || tlsConfig != null) {
                                 try {
-                                    SslContext clientContext = SslContextBuilder.forClient()
-                                            .trustManager(security.certFile().toFile())
-                                            .build();
+                                    SslContextBuilder builder = SslContextBuilder.forClient();
+                                    if (tlsConfig != null) {
+                                        Path trust = tlsConfig.mode() == TlsMode.MUTUAL
+                                                ? tlsConfig.caFile()
+                                                : tlsConfig.serverCertFile();
+                                        builder.trustManager(trust.toFile());
+                                        if (tlsConfig.mode() == TlsMode.MUTUAL) {
+                                            builder.keyManager(
+                                                    tlsConfig.clientCertFile().toFile(),
+                                                    tlsConfig.clientKeyFile().toFile());
+                                        }
+                                    } else {
+                                        builder.trustManager(security.certFile().toFile());
+                                    }
+                                    SslContext clientContext = builder.build();
                                     ch.pipeline().addLast("ssl",
                                             clientContext.newHandler(ch.alloc(),
                                                     address.getHostName(), address.getPort()));
@@ -138,7 +164,28 @@ public final class RpcClient implements AutoCloseable {
                                     .addLast("decoder", new RpcCodec.Decoder())
                                     .addLast("encoder", new RpcCodec.Encoder())
                                     .addLast("handler", new ResponseHandler());
-                            if (security.authenticationEnabled()) {
+                            if (hmacConfig != null) {
+                                ch.pipeline().addLast("authSender",
+                                        new ChannelInboundHandlerAdapter() {
+                                            @Override
+                                            public void channelActive(ChannelHandlerContext ctx) {
+                                                String token = HmacToken.issue(
+                                                        hmacConfig.clientId(),
+                                                        System.currentTimeMillis(),
+                                                        Long.toHexString(
+                                                                io.tieringkv.cluster.rpc.RequestId
+                                                                        .next().value()),
+                                                        hmacConfig.keys().get(0));
+                                                ctx.writeAndFlush(new RpcFrame(
+                                                        io.tieringkv.cluster.rpc.RequestId
+                                                                .next().value(),
+                                                        RpcMessageType.AUTH,
+                                                        token.getBytes(
+                                                                java.nio.charset.StandardCharsets.UTF_8)));
+                                                ctx.fireChannelActive();
+                                            }
+                                        });
+                            } else if (security.authenticationEnabled()) {
                                 ch.pipeline().addLast("authSender",
                                         new ChannelInboundHandlerAdapter() {
                                             @Override

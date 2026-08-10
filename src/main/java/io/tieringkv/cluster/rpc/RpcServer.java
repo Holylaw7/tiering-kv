@@ -13,10 +13,16 @@ import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.tieringkv.cluster.rpc.security.RpcAuthInterceptor;
+import io.tieringkv.cluster.rpc.security.HmacAuthInterceptor;
+import io.tieringkv.cluster.rpc.security.HmacConfig;
+import io.tieringkv.cluster.rpc.security.NonceCache;
+import io.tieringkv.cluster.rpc.security.RpcTlsConfig;
+import io.tieringkv.cluster.rpc.security.TlsMode;
 import io.tieringkv.cluster.rpc.security.RpcSecurityConfig;
 import io.tieringkv.cluster.rpc.security.TokenBucket;
 
 import java.net.InetSocketAddress;
+import java.nio.file.Path;
 import java.util.function.Function;
 
 /** Netty RPC 服务端（ADR-0041）：解码帧 → 处理器 → 响应。 */
@@ -24,6 +30,8 @@ public final class RpcServer implements AutoCloseable {
 
     private final int port;
     private final RpcSecurityConfig security;
+    private final RpcTlsConfig tlsConfig;
+    private final HmacConfig hmacConfig;
     private final EventLoopGroup boss = new NioEventLoopGroup(1);
     private final EventLoopGroup worker = new NioEventLoopGroup();
     private volatile Function<RpcFrame, RpcFrame> handler;
@@ -36,16 +44,31 @@ public final class RpcServer implements AutoCloseable {
     }
 
     public RpcServer(int port, RpcSecurityConfig security) {
+        this(port, security, null, null);
+    }
+
+    public RpcServer(int port, RpcSecurityConfig security,
+                     RpcTlsConfig tlsConfig, HmacConfig hmacConfig) {
         this.port = port;
         this.security = security;
+        this.tlsConfig = tlsConfig;
+        this.hmacConfig = hmacConfig;
     }
 
     public void start() throws InterruptedException {
-        if (security.sslEnabled()) {
+        if (security.sslEnabled() || tlsConfig != null) {
             try {
-                sslContext = SslContextBuilder.forServer(
-                                security.certFile().toFile(), security.keyFile().toFile())
-                        .build();
+                Path cert = tlsConfig != null ? tlsConfig.serverCertFile()
+                        : security.certFile();
+                Path key = tlsConfig != null ? tlsConfig.serverKeyFile()
+                        : security.keyFile();
+                SslContextBuilder builder = SslContextBuilder.forServer(
+                        cert.toFile(), key.toFile());
+                if (tlsConfig != null && tlsConfig.mode() == TlsMode.MUTUAL) {
+                    builder.trustManager(tlsConfig.caFile().toFile())
+                            .clientAuth(io.netty.handler.ssl.ClientAuth.REQUIRE);
+                }
+                sslContext = builder.build();
             } catch (Exception e) {
                 throw new IllegalStateException("failed to load TLS certificate", e);
             }
@@ -67,7 +90,10 @@ public final class RpcServer implements AutoCloseable {
                         ch.pipeline()
                                 .addLast("decoder", new RpcCodec.Decoder())
                                 .addLast("encoder", new RpcCodec.Encoder());
-                        if (security.authenticationEnabled()) {
+                        if (hmacConfig != null) {
+                            ch.pipeline().addLast("auth", new HmacAuthInterceptor(
+                                    hmacConfig, NonceCache.defaults()));
+                        } else if (security.authenticationEnabled()) {
                             ch.pipeline().addLast("auth", new RpcAuthInterceptor(
                                     security.authToken(), security.authExpiryMillis()));
                         }
