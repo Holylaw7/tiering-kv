@@ -3,6 +3,7 @@ package io.tieringkv.cluster.migration.streaming;
 import io.tieringkv.cluster.sharding.HashSlotRouter;
 import io.tieringkv.cluster.sharding.SlotTable;
 import io.tieringkv.storage.StorageEngine;
+import io.tieringkv.storage.StorageIterator;
 import io.tieringkv.storage.memory.BatchWriteRequest;
 import io.tieringkv.storage.memory.KeyValueEntry;
 import io.tieringkv.storage.memory.Mutation;
@@ -19,7 +20,7 @@ import java.util.zip.CRC32C;
  * 流式迁移（ADR-0053）：scan batch → encode → apply → checksum →
  * cursor checkpoint；支持 pause/resume/recover 与版本屏障。
  */
-public final class StreamingMigrator {
+public final class StreamingMigrator implements AutoCloseable {
 
     private static final int CURSOR_MAGIC = 0x4D535452; // 'MSTR'
     private static final byte CURSOR_VERSION = 1;
@@ -32,6 +33,8 @@ public final class StreamingMigrator {
     private final int slotEnd;
     private final int targetShardId;
     private final long versionBarrier;
+    private StorageIterator openIterator;
+    private MigrationScanner scanner;
 
     public StreamingMigrator(StorageEngine source, StorageEngine target,
                              SlotTable slotTable, Path cursorDir,
@@ -50,34 +53,48 @@ public final class StreamingMigrator {
     /** 执行一个批次；返回是否完成。 */
     public boolean runBatch(int batchSize) throws IOException {
         MigrationStreamCursor cursor = load();
+        if (scanner == null) {
+            // 持久 scanner：整个迁移只做一次全量快照，跨批次复用，
+            // 避免每批重建 O(N) 迭代器；同时保证迁移开始前的数据不会被
+            // 迁移期间的新快照跳过（版本屏障一致性）。
+            openIterator = source.iterator();
+            scanner = new MigrationScanner(
+                    openIterator, slotStart, slotEnd, versionBarrier, cursor.lastKey());
+        }
         BatchEncoder encoder = new BatchEncoder(batchSize);
         CRC32C crc = new CRC32C();
         crc.update(longToBytes(cursor.checksum()));
         int copied = 0;
-        try (io.tieringkv.storage.StorageIterator iterator = source.iterator()) {
-            MigrationScanner scanner = new MigrationScanner(
-                    iterator, slotStart, slotEnd, versionBarrier, cursor.lastKey());
-            while (scanner.hasNext() && copied < batchSize) {
-                KeyValueEntry entry = scanner.next();
-                long ttl = entry.expireTimestamp() >= 0
-                        ? Math.max(0, entry.expireTimestamp() - System.currentTimeMillis())
-                        : StorageEngine.NO_TTL;
-                encoder.add(Mutation.put(entry.key(), entry.value(), ttl));
-                crc.update(entry.key());
-                crc.update(entry.value() == null ? new byte[0] : entry.value());
-                cursor = cursor.advance(entry.key(), entry.version(), crc.getValue());
-                copied++;
-            }
-            if (!encoder.isEmpty()) {
-                target.applyBatch(new BatchWriteRequest(encoder.drain()));
-            }
-            persist(cursor);
-            boolean completed = !scanner.hasNext();
-            if (completed) {
-                switchTraffic(cursor);
-            }
-            return completed;
+        while (scanner.hasNext() && copied < batchSize) {
+            KeyValueEntry entry = scanner.next();
+            long ttl = entry.expireTimestamp() >= 0
+                    ? Math.max(0, entry.expireTimestamp() - System.currentTimeMillis())
+                    : StorageEngine.NO_TTL;
+            encoder.add(Mutation.put(entry.key(), entry.value(), ttl));
+            crc.update(entry.key());
+            crc.update(entry.value() == null ? new byte[0] : entry.value());
+            cursor = cursor.advance(entry.key(), entry.version(), crc.getValue());
+            copied++;
         }
+        if (!encoder.isEmpty()) {
+            target.applyBatch(new BatchWriteRequest(encoder.drain()));
+        }
+        persist(cursor);
+        boolean completed = !scanner.hasNext();
+        if (completed) {
+            switchTraffic(cursor);
+            close();
+        }
+        return completed;
+    }
+
+    @Override
+    public void close() {
+        if (openIterator != null) {
+            openIterator.close();
+            openIterator = null;
+        }
+        scanner = null;
     }
 
     public MigrationStreamCursor load() throws IOException {
