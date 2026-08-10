@@ -220,7 +220,10 @@ class ChaosValidationTest {
 
     @Test
     void mixedChaosSequenceNoDataLoss() throws Exception {
-        try (ChaosFixture fixture = start(false, null, Map.of())) {
+        // 100ms 全链路延迟需要选举超时 > 2×RTT（与 networkLatency100ms 一致），
+        // 否则领导权持续抖动导致提案无法提交（Phase 20 回归发现）。
+        try (ChaosFixture fixture = start(false, null, Map.of(),
+                new LeaderElection(250, 200))) {
             ClusterNode leader = awaitLeader(fixture.nodes, null, 8000);
             // 阶段1：100ms 全链路延迟
             fixture.network.latency("n1", 100);
@@ -258,6 +261,25 @@ class ChaosValidationTest {
             }
             awaitSee(fixture.nodes, activeIds(fixture.nodes, leader.id()), key(19), 8000);
             assertAllActiveSee(fixture.nodes, 20);
+        }
+    }
+
+    @Test
+    void pendingProposalFailsOnLeaderKillWithinTimeout() throws Exception {
+        try (ChaosFixture fixture = start(false, null, Map.of())) {
+            ClusterNode leader = awaitLeader(fixture.nodes, null, 8000);
+            Set<String> followers = new LinkedHashSet<>(fixture.nodes.keySet());
+            followers.remove(leader.id());
+            for (String follower : followers) {
+                fixture.network.partitionBetween(leader.id(), follower, true);
+            }
+            CompletableFuture<Void> pending = leader.putAsync(key(0), value(0));
+            assertThatThrownBy(() -> pending.get(800, TimeUnit.MILLISECONDS))
+                    .isInstanceOf(TimeoutException.class);
+            kill(leader);
+            // 修复前：future 永久悬挂；修复后：5s 提案超时显式失败
+            assertThatThrownBy(() -> pending.get(8, TimeUnit.SECONDS))
+                    .hasRootCauseInstanceOf(TimeoutException.class);
         }
     }
 
