@@ -87,6 +87,9 @@
 - 并发测试套件（路由/顺序/并行/读写/热点/合并/压力/异步保序）与并发基准
   （GET/SET/Mixed、热点 90%、分片对比）。
 - ADR-0023（分片执行）、ADR-0024（MemTable 并发）、ADR-0025（热点缓解）。
+- Phase 7 评审处置：定位升级为「高并发 Redis 协议兼容 LSM 冷热分层 KV
+  存储引擎」；登记 TD-015（无锁读暂缓）、TD-016（Phase 9 三级基准）、
+  TD-017（动态重分片）、TD-018（Hot Cache version check）。
 
 ### Changed
 

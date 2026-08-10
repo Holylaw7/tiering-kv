@@ -130,3 +130,27 @@
    Bloom/Compaction/迁移/自动 Flush/调度器/背压全部 ✅；
    定位升级为 **Redis-compatible LSM based Tiered KV Storage Engine**
    （README/AGENT_CONTEXT 已同步）。
+
+## Phase 7 评审结论（2026-08-10）
+
+1. **执行链路正确**：Netty → executeAsync → KeyShardExecutor → ShardRouter →
+   ShardWorker → StorageEngine；同键 FIFO、异键并行，符合数据库通用模型。
+2. **ResponseSequencer 为最大亮点**：异步执行 + 有序响应交付，等价于
+   Netty ChannelPromise / Kafka producer sequence / HTTP/2 stream ordering；
+   Redis pipeline 语义未被破坏。
+3. **ADR-0023 合理**：`min(16, CPU)` 分片是吞吐/开销的平衡点。
+4. **MemTable 256 段选择稳健**：冲突概率降约 4×；未强行上 lock-free
+   （lock-free ≠ faster，高竞争 CAS retry 可能更差）——正确工程判断。
+5. **Hot Key 治理完整**：检测 → 本地缓存 → 请求合并（10000 请求 → 1 loader），
+   解决缓存击穿。
+6. **性能达标**：GET 2.6–6.3M（目标 6×）、SET 2.2–4.5M（目标 8×）、
+   P99 ≤0.106ms；口径为内存直连，Phase 9 需全链路验证。
+7. **Phase 9 基准计划（TD-016）**：A 内存（已有）、B 服务端
+   （100 连接 + pipeline 64 + SET/GET mix）、C 生产全链路
+   （Client → Netty → ShardExecutor → WAL → MemTable → SSTable）。
+8. **技术债确认**：TD-015 全量无锁读暂缓（ABA/回收/可见性）；动态重分片
+   （TD-017，Phase 10，需 task migration / routing version / double write）；
+   Hot Cache 为 TTL 兜底的事件一致性，未来加 version check（TD-018）。
+9. **能力矩阵（19 项全 ✅）**：定位升级为
+   **高并发 Redis 协议兼容 LSM-based 冷热分层 KV 存储引擎**
+   （README/AGENT_CONTEXT 已同步）。

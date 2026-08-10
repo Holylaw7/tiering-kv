@@ -153,3 +153,7 @@
 | TD-012 | size-tiered 全量合并读放大；评估 leveled compaction | ADR-0019 | Phase 7 评估 |
 | TD-013 | 快照式 Flush → Active/Immutable MemTable 轮转 | ADR-0020 | Phase 7 评估 |
 | TD-014 | 迁移队列准入控制 / 批量 / worker 动态扩缩容 | ADR-0020 | Phase 7/9 评估 |
+| TD-015 | 全量无锁读（ABA/回收/可见性）→ 暂缓 | ADR-0024 | 验证后新 ADR |
+| TD-016 | Phase 9 三级基准：A 内存 / B 服务端 / C 生产全链路 | ADR-0023 | Phase 9 |
+| TD-017 | 动态重分片（在线扩容） | ADR-0023 | Phase 10 |
+| TD-018 | Hot Cache version check（当前 TTL 兜底） | ADR-0025 | Phase 10 评估 |

@@ -1,15 +1,16 @@
 # Tiering-KV
 
-> Redis 兼容的 LSM 分层 KV 存储引擎（RESP + WAL + MemTable + SSTable + 自动调度）。
+> 高并发 Redis 协议兼容的 LSM 冷热分层 KV 存储引擎
+> （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding）。
 
 **阶段状态：Phase 1（RESP 协议）✅（Phase 0 工程初始化 ✅）**
 
 ## 项目定位
 
-**当前定位**：Redis 兼容的 LSM 分层 KV 存储引擎——已完成 RESP 协议、内存引擎、
-LFU/ARC 淘汰、WAL 持久化、SSTable 冷层、自动 Flush / 异步迁移 / 背压
-（Phase 1–6），面向 redis-cli 与主流客户端提供 PING / ECHO / SET / GET / DEL /
-EXISTS 能力。
+**当前定位**：高并发 Redis 协议兼容的 LSM 冷热分层 KV 存储引擎——已完成 RESP
+协议、内存引擎、LFU/ARC 淘汰、WAL 持久化、SSTable 冷层、自动 Flush /
+异步迁移 / 背压、Key Sharding 异步执行与热点治理（Phase 1–7），面向
+redis-cli 与主流客户端提供 PING / ECHO / SET / GET / DEL / EXISTS 能力。
 
 **边界（如实声明）**：仍为教学/工程级实现，暂不宣称"高性能 Redis 替代品"；
 集群、pub/sub、Lua、RESP3 与正式性能基线（内存降低 60%–80%）按
