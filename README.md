@@ -171,6 +171,14 @@ FileChannelSSTableReader 保留为 baseline（benchmark 对比/降级）
 - mmap 冷读零拷贝；MemoryPool（DirectByteBuffer 大小类池）管理缓存缓冲；
 - IOStatistics 观测 readCount / cacheHit / cacheMiss / mappedBytes / 延迟。
 
+## 生产基准（Phase 9）
+
+- 三级基准：A 内存引擎（GET 4.7M / SET 4.4M ops/s）、B 服务端（pipeline64
+  峰值 218–231K，目标 500K 未达——瓶颈在协议/调度层）、C 生产全链路
+  （115–178K ops/s，P99 <5ms）；
+- 容量模型与部署画像：docs/benchmark/capacity-model.md、
+  deployment-profile.md；详见 docs/benchmark/phase9-* 报告。
+
 ## 技术栈
 
 | 层次 | 选型 |

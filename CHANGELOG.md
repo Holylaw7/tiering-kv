@@ -92,6 +92,12 @@
   TD-017（动态重分片）、TD-018（Hot Cache version check）。
 - Phase 8 评审处置：能力矩阵 21 项确认；登记 TD-019（Phase 9 生产容量模型，
   停止 IO 微优化）；cold-cache 冷启动基准保持 TD-009。
+- Phase 9 生产基准：三级基准套件（A/B/C）+ 管道 RESP 客户端；5 份报告
+  （memory/server/production/capacity-model/deployment-profile）。
+- 结论：A 级 GET 4.7M / SET 4.4M ops/s；B 级 pipeline64 峰值 218–231K
+  （500K 目标未达，瓶颈=协议/调度）；C 级全链路 115–178K ops/s；
+  Workload D 压力下内存受控、冷层落盘。
+- ADR-0029（基准方法）、ADR-0030（容量模型）、ADR-0031（部署画像）。
 - Phase 8 IO 优化：MmapSSTableReader（零拷贝块读）+ FileChannel baseline、
   MemoryPool（DirectBuffer 大小类池 / BufferArena / BufferRecycler /
   AllocationTracker）、BlockCache（LRU + 池化缓冲 + invalidate/clear）、

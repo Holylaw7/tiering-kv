@@ -1095,6 +1095,9 @@ Phase9完成：
 - 容量模型与部署画像（docs/benchmark/capacity-model.md、
   deployment-profile.md）+ 三份阶段报告；
 - `mvn test` 全量回归通过。
+- 关键结论：Level A GET 4.7M ops/s、SET 4.4M；Level B pipeline64 峰值
+  218–231K（目标 500K 未达，瓶颈=协议/调度层）；Level C 115–178K ops/s；
+  Workload D 压力下内存受控、冷层落盘。
 
 ---
 
