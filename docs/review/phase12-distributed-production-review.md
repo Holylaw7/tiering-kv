@@ -90,7 +90,7 @@ Raft 日志/状态重启恢复（term/commitIndex/数据完整）；
 | TcpClusterIntegrationTest | 3 | ✅ |
 | DistributedProductionBenchmarkTest | 4 | ✅ |
 | Phase 12 新增合计 | 77 | ✅ |
-| 全量回归（Phase 1–12） | 待最终统计 | 见下方 |
+| 全量回归（Phase 1–12） | 369 | ✅ 0 失败 |
 
 验收：RaftLog ≥15 ✅（21）、Snapshot ≥10 ✅（12+2）、RPC ≥15 ✅（19）、
 迁移 ≥10 ✅（11）、3 节点真实 TCP 集成 ✅。

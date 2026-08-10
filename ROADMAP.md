@@ -202,9 +202,9 @@
   [0041](docs/adr/ADR-0041-distributed-rpc-design.md)（RPC）、
   [0042](docs/adr/ADR-0042-replication-lag-optimization.md)（复制优化）、
   [0043](docs/adr/ADR-0043-slot-migration-strategy.md)（迁移）。
-- 测试：新增 74 项（RaftLog 21 / Snapshot 12 / RPC 19 / 迁移 11 /
+- 测试：新增 77 项（RaftLog 21 / Snapshot 12 / RPC 19 / 迁移 11 /
   复制优化 5 / 快照集成 2 / TCP 集群集成 3 / 基准 4），全量回归
-  待最终统计。
+  369 项全绿（Phase 1–12）。
 - 基准（[distributed-production-report.md](docs/benchmark/distributed-production-report.md)）：
   TCP 提交 1,359 ops/s（P50=0.65ms / P99=2.16ms）、复制滞后 <1ms、
   RPC 9.3K ops/s（P50=100μs，单连接）、迁移 16.1MB/s + 恢复 549ms。
