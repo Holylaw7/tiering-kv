@@ -1,5 +1,7 @@
 # Phase 5 Task: Cold Storage Engine Layer
 
+状态：✅ 已完成（2026-08-10）
+
 # 1. Task Identity
 
 Project:
@@ -955,29 +957,37 @@ add cold benchmark
 
 Phase5完成：
 
-[ ] Cold Storage Strategy ADR完成
+[x] Cold Storage Strategy ADR完成
 
-[ ] SSTable完成
+[x] SSTable完成
 
-[ ] Bloom Filter完成
+[x] Bloom Filter完成
 
-[ ] Reader/Writer完成
+[x] Reader/Writer完成
 
-[ ] MemTable Flush完成
+[x] MemTable Flush完成
 
-[ ] Compaction完成
+[x] Compaction完成
 
-[ ] Migration完成
+[x] Migration完成
 
-[ ] WAL checkpoint接入
+[x] WAL checkpoint接入
 
-[ ] Crash recovery验证
+[x] Crash recovery验证
 
-[ ] Benchmark完成
+[x] Benchmark完成
 
-[ ] Phase1-4回归通过
+[x] Phase1-4回归通过
 
-[ ] Git merge完成
+[x] Git merge完成
+
+## 验收结果
+
+- `mvn test`：167 用例全绿（Phase 1–4 全部回归通过；新增 22）。
+- 基准：1M 写 104MB/s、随机 GET P99=0.021ms、Bloom FPR=0.82%、
+  合并 46.6MB/s（详见 docs/benchmark/cold-report.md）。
+- ADR-0017 / 0018 / 0019 已生成；写路径 = WAL → MemTable → Flush → SSTable；
+  淘汰迁移 = 写冷层 → 验证 → 删内存（WAL DELETE 防复活）。
 
 ---
 
