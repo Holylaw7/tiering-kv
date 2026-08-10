@@ -72,8 +72,12 @@ public final class RaftPersistentState implements AutoCloseable {
         }
         closed = true;
         try {
-            channel.force(true);
-            channel.close();
+            if (channel.isOpen()) {
+                channel.force(true);
+                channel.close();
+            }
+        } catch (java.nio.channels.ClosedChannelException ignored) {
+            // 已被清理器/并发路径关闭：close 必须幂等
         } catch (IOException e) {
             throw new IllegalStateException("raft state close failed", e);
         }

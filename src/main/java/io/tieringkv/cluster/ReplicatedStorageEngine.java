@@ -21,6 +21,8 @@ import java.util.concurrent.TimeUnit;
  */
 public final class ReplicatedStorageEngine implements StorageEngine {
 
+    private static final long PROPOSAL_TIMEOUT_MILLIS = 5_000;
+
     private final StorageEngine local;
     private RaftNode raft;
 
@@ -89,7 +91,10 @@ public final class ReplicatedStorageEngine implements StorageEngine {
 
     public CompletableFuture<Void> putAsync(byte[] key, byte[] value, long ttlMillis) {
         byte[] command = encode(CommandType.PUT, key, value, ttlMillis);
-        return proposeWithRetry(command, 0);
+        // 有界等待（ADR-0050）：leader 被杀/退位时未决提案必须显式失败，
+        // 禁止客户端永久悬挂（Phase 20 全量回归发现 ChaosValidationTest 挂起）。
+        return proposeWithRetry(command, 0)
+                .orTimeout(PROPOSAL_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
     }
 
     private CompletableFuture<Void> proposeWithRetry(byte[] command, int attempt) {

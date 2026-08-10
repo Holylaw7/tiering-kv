@@ -315,6 +315,24 @@
   - 基准（docs/benchmark/phase19-mvcc-report.md）：GET 3.1–4.7M ops/s、
     单区事务 70.8–204.6K txn/s、冲突 2.1–7.6M ops/s、GC 19–29MB/s
     （未达 100，TD-041 如实登记）。
+- Phase 20 事务生产化与存储优化：
+  - 批量 GC（ADR-0078）：BatchGcExecutor（索引规划 + 分段批量物理删除 +
+    并行 worker + gc.batch.size/worker.count/max.memory 配置），
+    107–285MB/s（>100 ✅，TD-041 关闭）；
+  - 网关自动事务（ADR-0079）：GET 快照读 / SET/DEL 单键事务 /
+    MGET 一致快照 / MSET 跨 shard 2PC，RESP 不变（TD-042 关闭）；
+  - 持久化 MVCC 索引（ADR-0080）：Writer/Reader/Snapshot + 增量重建；
+  - 事务日志（ADR-0081）：PersistentTxnJournal（本地落盘 + Raft 提案
+    重试）+ TxnRecoveryReplay（COMMIT 补完 / ROLLBACK 清理 / 幂等）；
+  - 锁过期修复：LockRecord 改用墙上时钟，修复 HLC 尺度错配；
+  - 可观测性：INFO TRANSACTION/MVCC + Prometheus（txn_abort/recovery、
+    mvcc_versions/gc_deleted、redis_txn_latency）；
+  - 测试：新增 181 项；全量回归 1523/1523 全绿；
+  - 基准（docs/benchmark/phase20-report.md）：GC 107–285MB/s、
+    网关 GET 2.0–6.9M / SET 141–389K ops/s、单区事务 324–651K txn/s、
+    跨区 62–158K txn/s、恢复 1–4ms，全部达标；
+  - 跨机验证（ADR-0082）：Docker daemon 可用；容器内 Maven 网络受限，
+    跨机 tc netem 未执行，登记 TD-040/TD-043，本地混沌 30 项兜底。
 - Phase 9 评审处置：确认瓶颈分层（A 4.7M → B 230K → C 150K，瓶颈=协议/调度）；
   登记 TD-020（request→response 对象数优化）与 TD-021（JFR 验收指标）。
 - Phase 8 IO 优化：MmapSSTableReader（零拷贝块读）+ FileChannel baseline、

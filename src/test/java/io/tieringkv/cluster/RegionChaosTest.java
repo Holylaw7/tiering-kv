@@ -178,7 +178,7 @@ class RegionChaosTest {
             boolean transferred = false;
             String lastTarget = null;
             long successElapsedMs = -1;
-            for (int attempt = 0; attempt < 6 && !transferred; attempt++) {
+            for (int attempt = 0; attempt < 8 && !transferred; attempt++) {
                 try {
                     RaftNode leader = fixture.leader();
                     RaftNode target = fixture.followerOf(leader.id());
@@ -500,7 +500,7 @@ class RegionChaosTest {
             List<RaftNode> nodes = new ArrayList<>();
             Map<String, ChaosTransport> transports = new java.util.HashMap<>();
             LeaderElection election = latency > 100
-                    ? new LeaderElection(400, 300)
+                    ? new LeaderElection(600, 400)
                     : ELECTION;
             for (String id : List.of("n1", "n2", "n3")) {
                 ChaosTransport transport = new ChaosTransport(

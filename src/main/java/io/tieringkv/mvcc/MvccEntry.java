@@ -24,8 +24,18 @@ public final class MvccEntry {
         return key.clone();
     }
 
+    /** 零拷贝内部访问（GC/索引持久化专用）；调用方禁止修改返回数组。 */
+    public byte[] keyBytes() {
+        return key;
+    }
+
     public byte[] value() {
         return value == null ? null : value.clone();
+    }
+
+    /** 零拷贝内部访问（GC/索引持久化专用）；调用方禁止修改返回数组。 */
+    public byte[] valueBytes() {
+        return value;
     }
 
     public long startTS() {

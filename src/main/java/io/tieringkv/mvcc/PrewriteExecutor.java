@@ -14,7 +14,7 @@ public final class PrewriteExecutor {
         detector.checkReadWriteConflict(engine, key, startTS, readSet);
         detector.checkWriteConflict(engine, key, startTS);
         LockRecord lock = new LockRecord(key, txnId, primary,
-                startTS, lockTtlMillis, LockType.WRITE);
+                startTS, lockTtlMillis, LockType.WRITE, now);
         if (!locks.acquire(key, lock)) {
             throw new LockConflictException("lock held on key");
         }

@@ -26,3 +26,8 @@ tiering:
   critical-watermark: 0.95
   backpressure-timeout-ms: 1000
   drain-timeout-ms: 5000
+
+gc:
+  batch-size: 4096
+  worker-count: 4
+  max-memory: 67108864
