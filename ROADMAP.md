@@ -113,3 +113,5 @@
 | --- | --- | --- | --- |
 | TD-001 | 单 Maven 模块；若模块耦合升高需评估拆分多模块 | ADR-0001 | Phase 7 前评估 |
 | TD-002 | JDK 17 目标下暂不采用虚拟线程 | ADR-0003 | Phase 7 评估升级 JDK 21 |
+| TD-005 | ARC 容量单位当前为 entry count，需改为 byte 口径 | ADR-0012 | Phase 9 出 ADR |
+| TD-006 | LFU 索引更新为全局同步段；演进 Segment LFU + Async Buffer | ADR-0010 | Phase 7 优化 |

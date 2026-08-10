@@ -53,7 +53,9 @@ PUT → MemTable → MemoryManager（used > max）
 
 - 每轮最多 `maxEvictionsPerCycle` 次，防 tombstone 边界死循环；
 - 过期/失效候选：清理策略状态后跳过；
-- 本阶段 MigrationCallback 为占位（无盘迁移 = 数据丢弃并计数），
+- 迁移接口：`TierMigration.migrate(entry) → MigrationResult{SUCCESS, FAILED,
+  RETRY}`（ADR-0013）；SUCCESS 后删除，FAILED 保留并终止本轮，RETRY 重试
+  预算默认 3 次；Phase 3 默认实现 `discard()`（无盘迁移 = 丢弃）；
   Phase 4/6 接 WAL / Bitcask / LSM；
 - **淘汰删除 = 物理移除**（`MemTable.removePhysical`，内存回收优先）；
   用户 DEL 仍走 tombstone（WAL / Snapshot / LSM 需要删除历史）。

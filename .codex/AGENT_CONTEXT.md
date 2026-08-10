@@ -56,6 +56,7 @@ TrackingStorageEngine（访问事件装饰器）。
 | [ADR-0010](adr/ADR-0010-hotness-tracking-strategy.md) | LFU 计数 + 周期衰减热度跟踪 |
 | [ADR-0011](adr/ADR-0011-lfu-decay-algorithm.md) | 频率衰减：周期右移 ×0.5，懒计算 |
 | [ADR-0012](adr/ADR-0012-arc-policy-evaluation.md) | ARC 原型（T1/T2/B1/B2 + p 自适应）评估 |
+| [ADR-0013](adr/ADR-0013-tier-migration-interface.md) | TierMigration 结果码（SUCCESS/FAILED/RETRY），先迁移后删除 |
 
 ## 5. 仓库布局
 
@@ -105,6 +106,8 @@ tiering-kv/
 | TD-002 | JDK 17 目标暂不采用虚拟线程 | Phase 7 评估 JDK 21 |
 | TD-003 | 尚未引入架构约束测试（ArchUnit） | Phase 1 评估 |
 | TD-004 | src/main 框架骨架目录与 Maven src/main/java 布局的映射 | ✅ 已关闭（Phase 1） |
+| TD-005 | ARC 容量单位 entry count → byte 口径 | Phase 9 出 ADR |
+| TD-006 | LFU 索引全局同步段 → Segment LFU + Async Buffer（Caffeine 思路） | Phase 7 |
 
 ## 8. 会话启动清单
 

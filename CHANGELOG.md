@@ -42,6 +42,8 @@
 - 超内存配额触发淘汰：候选选择 → 迁移回调 → 物理移除；用户 DEL 保持 tombstone。
 - 缓存测试套件（热度 / LFU / 衰减 / ARC / 淘汰 / 迁移 / 集成）与缓存基准。
 - ADR-0010（热度跟踪）、ADR-0011（LFU 衰减）、ADR-0012（ARC 评估）。
+- 迁移接口升级：`MigrationCallback` → `TierMigration`（SUCCESS / FAILED /
+  RETRY），淘汰遵循"先迁移、后删除"（ADR-0013）。
 
 ### Changed
 

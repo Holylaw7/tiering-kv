@@ -37,3 +37,19 @@
    Storage-layer baseline，网络端到端（回环）P99≈0.19ms。
 7. **技术债确认**：迭代器弱一致（Phase 5 评估 MVCC iterator）；tombstone 未回收
    （Phase 5 compaction 移除）。
+
+## Phase 3 架构评审（2026-08-10）
+
+1. **装饰器接入正确**：TrackingStorageEngine 使存储与缓存逻辑解耦，符合
+   Redis module / RocksDB wrapper / Spring AOP 思路。
+2. **LFU 达到生产级基础**：TreeSet 快照索引 O(logN) 更新、O(1) 候选，
+   优于 Map 全遍历 O(N)。
+3. **衰减合理**：frequency × 0.5 周期衰减解决"老热点永久占用"。
+4. **ARC 原型价值高**：T1/T2/B1/B2 解决 LFU 的热点突变适应问题。
+5. **淘汰流程正确**：迁移先于删除，Phase 6 可直接接磁盘层。
+6. **⚠️ 已修正**：`MigrationCallback(void)` → `TierMigration` 结果码
+   （SUCCESS/FAILED/RETRY），删除仅在 SUCCESS 后执行；基准口径统一为
+   "Eviction decision latency"（候选选择，不含迁移/IO）。
+7. **技术债登记**：TD-005 ARC 容量单位改 byte（Phase 9 ADR）；TD-006 LFU
+   全局同步段 → Segment LFU + Async Statistics Buffer + Periodic Merge
+   （Phase 7，Caffeine 思路）。

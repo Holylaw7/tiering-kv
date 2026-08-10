@@ -875,6 +875,8 @@ Phase 3 完成：
 - 淘汰链路：超配额 → LFU 选候选 → MigrationCallback → 物理移除；
   用户 DEL 保持 tombstone。
 - ADR-0010 / 0011 / 0012 已生成；Command 层无感知（装饰器接入）。
+- 评审修正：迁移接口升级为 `TierMigration`（SUCCESS / FAILED / RETRY，
+  ADR-0013）；基准口径统一为 Eviction decision latency。
 
 ---
 
