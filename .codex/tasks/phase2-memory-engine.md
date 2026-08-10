@@ -1017,7 +1017,8 @@ Git提交
 ## 验收结果
 
 - `mvn test`：79 用例全绿（新增 32：存储层 25、命令层 TTL/语法 5、基准 2）。
-- 基准：GET 1M 数据集 P99=0.0026ms（目标 <0.5ms）；100 线程并发写 0 失败、
-  size 精确（详见 docs/benchmark/memory-engine-report.md）。
+- 基准：存储层 GET（1M 数据集）P99≈2.5μs（目标 <0.5ms）；网络端到端
+  GET P99≈0.19ms；100 线程并发写 0 失败、size 精确（详见
+  docs/benchmark/memory-engine-report.md）。
 - ADR-0007 / 0008 / 0009 已生成；Command 层已迁移至 StorageEngine；
   InMemoryKVStore（Phase 1 占位）已移除。

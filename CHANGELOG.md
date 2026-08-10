@@ -51,6 +51,8 @@
 - Command 层迁移至 StorageEngine；移除 KVStore / InMemoryKVStore（Phase 1
   占位实现，由 MemTable 取代）。
 - surefire 测试堆配置 `-Xmx1g`（支持 1M 数据集基准）。
+- 基准报告标注口径：存储层 GET baseline（P99≈2.5μs）与网络端到端
+  （P99≈0.19ms）分离，避免口径混淆（Phase 2 技术评审）。
 
 ## [0.1.0] - 2026-08-09
 

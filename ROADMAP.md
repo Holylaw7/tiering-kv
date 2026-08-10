@@ -47,7 +47,8 @@
 - ADR：[0007](docs/adr/ADR-0007-memtable-data-structure.md)（SkipList）、
   [0008](docs/adr/ADR-0008-memory-concurrency-model.md)（分段锁）、
   [0009](docs/adr/ADR-0009-ttl-management-strategy.md)（TTL 混合策略）。
-- 基准：GET 1M 数据集 P99=0.0026ms；100 线程并发写 0 失败（详见
+- 基准：存储层 GET（1M 数据集）P99≈2.5μs；网络端到端 GET P99≈0.19ms；
+  100 线程并发写 0 失败（详见
   [memory-engine-report.md](docs/benchmark/memory-engine-report.md)）。
 
 ## Phase 3 — LFU / ARC 热度管理

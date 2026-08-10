@@ -70,6 +70,6 @@ Command 层只依赖 `StorageEngine`，禁止 `new MemTable()` 出现在命令�
 
 ## 8. 已知限制
 
-- 迭代器为分段快照，跨段时刻不完全一致；
+- 迭代器为分段快照，跨段时刻不完全一致（Phase 5 评估 MVCC iterator）；
 - 淘汰回调仅接口（Phase 3 实现 LFU/ARC）；
-- tombstone 尚未压缩回收（Phase 4/5 compaction）。
+- tombstone 尚未压缩回收（Phase 4/5 compaction 移除）。
