@@ -36,6 +36,12 @@
 - 存储测试套件（MemTable / StorageEngine / Delete / TTL / Iterator / 并发 /
   MemoryManager）与内存引擎基准（GET 10K/100K/1M，并发写 10/50/100 线程）。
 - ADR-0007（SkipList）、ADR-0008（分段锁）、ADR-0009（TTL 混合策略）。
+- Phase 3 热数据管理层：HotnessTracker / FrequencyCounter（LFU + 周期衰减）、
+  LFUPolicy（快照索引 O(logN)）、ARCPolicy（T1/T2/B1/B2 + p 自适应原型）、
+  EvictionManager、MigrationCallback、TrackingStorageEngine。
+- 超内存配额触发淘汰：候选选择 → 迁移回调 → 物理移除；用户 DEL 保持 tombstone。
+- 缓存测试套件（热度 / LFU / 衰减 / ARC / 淘汰 / 迁移 / 集成）与缓存基准。
+- ADR-0010（热度跟踪）、ADR-0011（LFU 衰减）、ADR-0012（ARC 评估）。
 
 ### Changed
 

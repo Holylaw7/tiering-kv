@@ -116,6 +116,17 @@ public final class MemTable implements StorageEngine, AutoCloseable {
         }
     }
 
+    /** 返回当前条目（可能为 tombstone / 过期），供淘汰管理校验；不克隆。 */
+    public KeyValueEntry getEntry(byte[] key) {
+        Segment segment = segments[segmentIndex(key)];
+        segment.lock.readLock().lock();
+        try {
+            return segment.list.get(key);
+        } finally {
+            segment.lock.readLock().unlock();
+        }
+    }
+
     @Override
     public boolean delete(byte[] key) {
         long now = timeSource.nowMillis();
@@ -130,6 +141,28 @@ public final class MemTable implements StorageEngine, AutoCloseable {
             segment.list.put(tombstone);
             memoryManager.remove(current.size());
             memoryManager.add(tombstone.size());
+            liveSize.decrementAndGet();
+            return true;
+        } finally {
+            segment.lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * 物理移除（淘汰专用）：不产生 tombstone，立即回收内存。
+     * 用户 DEL 仍走 tombstone（WAL / Snapshot / LSM 需要删除历史）。
+     */
+    public boolean removePhysical(byte[] key) {
+        long now = timeSource.nowMillis();
+        Segment segment = segments[segmentIndex(key)];
+        segment.lock.writeLock().lock();
+        try {
+            KeyValueEntry current = segment.list.get(key);
+            if (current == null || !current.isLive(now)) {
+                return false;
+            }
+            segment.list.remove(key);
+            memoryManager.remove(current.size());
             liveSize.decrementAndGet();
             return true;
         } finally {

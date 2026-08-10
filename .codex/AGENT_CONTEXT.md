@@ -17,12 +17,16 @@ Phase 1 已交付命令：PING / ECHO / SET / GET / DEL / EXISTS（RESP2）。
 Phase 2 已交付：StorageEngine SPI、64 段 SkipList MemTable、分段读写锁、
 TTL（惰性 + 主动）、MemoryManager（配额 + 淘汰回调接口）、有序迭代器。
 
+Phase 3 已交付：HotnessTracker / FrequencyCounter（LFU + 周期衰减）、
+ARCPolicy（T1/T2/B1/B2 原型）、EvictionManager、MigrationCallback、
+TrackingStorageEngine（访问事件装饰器）。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 2（内存 KV 核心）✅ 已完成**（Phase 0/1 ✅）；
-- 最近提交：`feat(storage): implement memory tier engine`（详见 git log）；
+- 阶段：**Phase 3（LFU / ARC 热度管理）✅ 已完成**（Phase 0–2 ✅）；
+- 最近提交：`feat(cache): implement hotness tracker`（详见 git log）；
 - 基线：tag `phase-0`；分支策略：feature/* 合并入 develop，main 保持稳定；
-- 下一步：**Phase 3 缓存淘汰（LFU / ARC）**（等待用户指令）。
+- 下一步：**Phase 4 WAL Persistence**（等待用户指令）。
 
 ## 3. 技术栈
 
@@ -33,6 +37,7 @@ TTL（惰性 + 主动）、MemoryManager（配额 + 淘汰回调接口）、有�
 | 测试 | JUnit 5（单元）；tests/（集成）；benchmarks/（JMH 压测） |
 | 网络 | Netty 4.1.115 事件循环（已引入，ADR-0006） |
 | 内存层 | MemTable（64 段 SkipList + 分段读写锁，ADR-0007/0008/0009） |
+| 缓存层 | LFU（默认）+ ARC 原型；EvictionManager + MigrationCallback（ADR-0010~0012） |
 | 包结构 | `io.tieringkv.{network,protocol,command,storage,memory,cache,eviction,wal,sstable,compaction,scheduler,metrics,benchmark}` |
 
 ## 4. 关键决策（ADR）
@@ -48,6 +53,9 @@ TTL（惰性 + 主动）、MemoryManager（配额 + 淘汰回调接口）、有�
 | [ADR-0007](adr/ADR-0007-memtable-data-structure.md) | MemTable 采用 SkipList（有序 + 迭代 + LSM 衔接） |
 | [ADR-0008](adr/ADR-0008-memory-concurrency-model.md) | 64 段 Striped Lock（读写锁），无全局锁 |
 | [ADR-0009](adr/ADR-0009-ttl-management-strategy.md) | TTL 惰性 + 主动混合（min-heap + 版本守卫） |
+| [ADR-0010](adr/ADR-0010-hotness-tracking-strategy.md) | LFU 计数 + 周期衰减热度跟踪 |
+| [ADR-0011](adr/ADR-0011-lfu-decay-algorithm.md) | 频率衰减：周期右移 ×0.5，懒计算 |
+| [ADR-0012](adr/ADR-0012-arc-policy-evaluation.md) | ARC 原型（T1/T2/B1/B2 + p 自适应）评估 |
 
 ## 5. 仓库布局
 
@@ -80,7 +88,7 @@ tiering-kv/
 | 0 | 工程初始化 | ✅ |
 | 1 | RESP 协议 | ✅ |
 | 2 | 内存 KV 核心 | ✅ |
-| 3 | LFU / ARC | 未开始 |
+| 3 | LFU / ARC | ✅ |
 | 4 | Bitcask | 未开始 |
 | 5 | LSM Tree | 未开始 |
 | 6 | 冷热迁移 | 未开始 |
