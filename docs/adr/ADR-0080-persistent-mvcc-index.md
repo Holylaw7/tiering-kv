@@ -16,7 +16,9 @@ Accepted
 
 - `MvccIndexSnapshot`：userKey 版本链的内存快照；
 - `MvccIndexWriter`：写入快照文件，格式
-  `MAGIC + VERSION + USER_KEY + START_TS + COMMIT_TS + TYPE + CRC32`；
+  `MAGIC + VERSION + COUNT + (KEY_LEN + USER_KEY + VALUE_LEN + VALUE +
+  START_TS + COMMIT_TS + TYPE) + CRC32`；VALUE 必须持久化，否则恢复后
+  索引无法直接提供读取（快照恢复后读取路径依赖索引中的值）；
 - `MvccIndexReader`：校验 MAGIC/VERSION/CRC 并加载；
 - `PersistentMvccIndex`：save/load/restore，支持：
   - 启动恢复：load snapshot → 底层 WAL replay → 增量重建索引；

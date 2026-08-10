@@ -27,6 +27,17 @@ public final class MvccStorageEngine {
         rebuildIndex();
     }
 
+    private MvccStorageEngine(StorageEngine storage, List<MvccEntry> preloaded) {
+        this.storage = storage;
+        importIndex(preloaded);
+    }
+
+    /** 从持久化索引直接构建（ADR-0080）：跳过启动全量扫描。 */
+    public static MvccStorageEngine fromIndex(StorageEngine storage,
+                                              List<MvccEntry> versions) {
+        return new MvccStorageEngine(storage, versions);
+    }
+
     /** 启动/快照恢复：从底层存储重建版本索引（O(N) 一次）。 */
     private void rebuildIndex() {
         synchronized (index) {
