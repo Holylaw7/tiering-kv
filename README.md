@@ -159,6 +159,18 @@ Netty EventLoop → CommandEngine.executeAsync → KeyShardExecutor
 - MemTable 256 段分段锁；热点读走 HotKeyReadCache（无锁子集 + 请求合并）；
 - ConcurrencyMetrics 观测队列深度 / 分片利用率 / 等待 / 延迟。
 
+## IO 架构（Phase 8）
+
+```text
+GET → ColdStorageEngine → BlockCache（LRU，off-heap 池化）
+  hit  → 解码
+  miss → MmapSSTableReader（MappedByteBuffer 零拷贝 + CRC）
+FileChannelSSTableReader 保留为 baseline（benchmark 对比/降级）
+```
+
+- mmap 冷读零拷贝；MemoryPool（DirectByteBuffer 大小类池）管理缓存缓冲；
+- IOStatistics 观测 readCount / cacheHit / cacheMiss / mappedBytes / 延迟。
+
 ## 技术栈
 
 | 层次 | 选型 |

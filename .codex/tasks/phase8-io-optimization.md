@@ -1024,7 +1024,8 @@ Phase8完成：
 - `mvn test`：全量用例全绿（Phase 1–7 全部回归通过）。
 - mmap 读取器 + FileChannel baseline；Block Cache（LRU + 池化缓冲）；
   Off-Heap MemoryPool（复用统计）；IOStatistics。
-- 基准与报告：docs/benchmark/io-report.md。
+- 基准（docs/benchmark/io-report.md）：随机读 P99 0.012–0.040ms；
+  缓存命中率 94.8%；mmap 较 FileChannel 提速 ~2×；GC 计数样本 +3。
 
 ---
 

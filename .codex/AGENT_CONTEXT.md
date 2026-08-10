@@ -37,12 +37,16 @@ Phase 7 已交付：KeyShardExecutor（同键 FIFO / 异键并行）、
 ResponseSequencer（RESP 保序）、MemTable 256 段、HotKeyDetector /
 RequestCoalescer / HotKeyReadCache、ConcurrencyMetrics、异步命令执行。
 
+Phase 8 已交付：mmap 冷读（MmapSSTableReader + FileChannel baseline）、
+MemoryPool（DirectByteBuffer 池 + 统计）、BlockCache（LRU + off-heap +
+失效）、IOStatistics；ColdStorageEngine 默认 mmap + cache。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 7（Concurrency Optimization）✅ 已完成**（Phase 0–6 ✅）；
-- 最近提交：`feat(concurrency): implement key sharded execution`（详见 git log）；
+- 阶段：**Phase 8（IO Optimization）✅ 已完成**（Phase 0–7 ✅）；
+- 最近提交：`feat(io): add mmap and zero-copy optimization`（详见 git log）；
 - 基线：tag `phase-0`；分支策略：feature/* 合并入 develop，main 保持稳定；
-- 下一步：**Phase 8 IO Optimization（mmap / Memory Pool）**（等待用户指令）。
+- 下一步：**Phase 9 Production Benchmark**（等待用户指令）。
 
 ## 3. 技术栈
 
@@ -58,6 +62,7 @@ RequestCoalescer / HotKeyReadCache、ConcurrencyMetrics、异步命令执行。
 | 冷存储 | SSTable + Bloom + Manifest + 全量合并（ADR-0017~0019） |
 | 自动调度 | 水位 Flush + 异步迁移 + 背压 + MigrationLog（ADR-0020~0022） |
 | 并发 | KeyShardExecutor + ResponseSequencer + 热点读缓存（ADR-0023~0025） |
+| IO | mmap 零拷贝 + BlockCache + Off-Heap MemoryPool（ADR-0026~0028） |
 | 包结构 | `io.tieringkv.{network,protocol,command,storage,memory,cache,eviction,wal,sstable,compaction,scheduler,metrics,benchmark}` |
 
 ## 4. 关键决策（ADR）
@@ -89,6 +94,9 @@ RequestCoalescer / HotKeyReadCache、ConcurrencyMetrics、异步命令执行。
 | [ADR-0023](adr/ADR-0023-key-sharding-execution-model.md) | Key Sharding：同键 FIFO、异键并行、响应保序 |
 | [ADR-0024](adr/ADR-0024-memtable-concurrency-strategy.md) | 256 段 Striped Lock；未验证 lock-free 不引入 |
 | [ADR-0025](adr/ADR-0025-hot-key-mitigation.md) | 热点检测 + 本地读缓存 + 请求合并 |
+| [ADR-0026](adr/ADR-0026-sstable-io-strategy.md) | mmap 生产读取 + FileChannel baseline |
+| [ADR-0027](adr/ADR-0027-offheap-memory-strategy.md) | DirectByteBuffer 大小类池 + 统计 |
+| [ADR-0028](adr/ADR-0028-block-cache-strategy.md) | Block Cache LRU + 池化缓冲 + 失效 |
 
 ## 5. 仓库布局
 
@@ -126,7 +134,7 @@ tiering-kv/
 | 5 | LSM Tree | ✅ |
 | 6 | 冷热迁移 | ✅ |
 | 7 | 并发优化 | ✅ |
-| 8 | mmap / Memory Pool | 未开始 |
+| 8 | mmap / Memory Pool | ✅ |
 | 9 | Benchmark | 未开始 |
 | 10 | 生产化 | 未开始 |
 
