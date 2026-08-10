@@ -319,6 +319,8 @@ public final class RaftNode implements AutoCloseable {
                         cacheTruncateLocked(entry.index());
                         raftLog.append(entry);
                         cacheAppendLocked(entry);
+                        // 截断的未提交提案必须失败，禁止被新条目虚假完成
+                        failPendingFromLocked(entry.index());
                     }
                 } else if (entry.index() == cacheLastIndexLocked() + 1) {
                     raftLog.append(entry);
@@ -703,6 +705,19 @@ public final class RaftNode implements AutoCloseable {
             CompletableFuture<Long> pending = pendingCommits.remove(entry.index());
             if (pending != null) {
                 pending.complete(entry.index());
+            }
+        }
+    }
+
+    /** 冲突截断时，index >= from 的未提交提案全部失败（Phase 15 混沌验证发现）。 */
+    private void failPendingFromLocked(long fromIndex) {
+        for (Long index : pendingCommits.keySet()) {
+            if (index >= fromIndex) {
+                CompletableFuture<Long> future = pendingCommits.remove(index);
+                if (future != null) {
+                    future.completeExceptionally(
+                            new IllegalStateException("entry superseded"));
+                }
             }
         }
     }
