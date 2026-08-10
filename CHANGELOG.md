@@ -107,6 +107,27 @@
 - ADR-0032（响应批处理）、ADR-0033（内存模型）、ADR-0034（服务生命周期）。
 - Phase 10 最终评审：确认 10 阶段路线图全部完成；定位为完整冷热分层存储
   系统（14 模块能力矩阵全 ✅）；最终评审归档 architecture-review。
+- Phase 11 分布式集群：16384 hash slot 路由（HashSlotRouter /
+  SlotTable / ShardGroup / ShardId / PartitionKey，CRC16/CCITT）、
+  元数据服务（MetadataServer / ClusterMetadata / NodeRegistry /
+  ShardRegistry / TopologyManager）、最小真实 Raft（RaftNode / RaftState /
+  LogEntry / Term / VoteRequest/Response / AppendEntriesRequest/Response /
+  LeaderElection / ReplicationManager：选举 + 心跳 + 日志复制 + commit/
+  apply）、ReplicatedStorageEngine 复制适配器（写经 Raft 复制后 apply
+  本地引擎，不改 MemTable/WAL/SSTable）、ClusterNode / ClusterClient。
+- Phase 11 故障转移：leader 崩溃 → 新 leader 选举（≤310ms）；replica
+  崩溃 → 半数存活继续服务；无多数派不提交；旧 leader 回归安全降级。
+- Phase 11 测试：ShardingTest（10）/ MetadataTest（10）/ RaftTest（21）/
+  FailoverTest（9）/ ClusterIntegrationTest（1，3 节点 SET → 复制 →
+  杀 leader → 选举 → GET 正确），共 51 项新测试；全量回归 288 项全绿。
+- Phase 11 基准（docs/benchmark/cluster-report.md）：单分片复制写
+  154K ops/s（P99=0.027ms）、读 750K ops/s（P99=4μs）、路由开销
+  ~23–36ns/op、复制滞后 ≤35ms、选举 124–310ms（目标 <5s ✅）。
+- ADR-0035（哈希槽）、ADR-0036（Raft 元数据）、ADR-0037（Raft 复制）、
+  ADR-0038（心跳 + 随机选举超时）。
+- Phase 11 评审处置：登记 TD-022（Raft 日志持久化）、TD-023（TCP RPC
+  传输）、TD-024（提交后立即补发 commitIndex 降低复制滞后）、TD-025
+  （动态 slot 迁移）；技术债清单见 ROADMAP。
 - Phase 9 评审处置：确认瓶颈分层（A 4.7M → B 230K → C 150K，瓶颈=协议/调度）；
   登记 TD-020（request→response 对象数优化）与 TD-021（JFR 验收指标）。
 - Phase 8 IO 优化：MmapSSTableReader（零拷贝块读）+ FileChannel baseline、

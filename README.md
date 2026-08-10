@@ -1,20 +1,22 @@
 # Tiering-KV
 
 > 高并发 Redis 协议兼容的 LSM 冷热分层 KV 存储引擎
-> （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding）。
+> （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding + Raft 集群）。
 
-**阶段状态：Phase 1（RESP 协议）✅（Phase 0 工程初始化 ✅）**
+**阶段状态：Phase 11（分布式集群）✅（Phase 0–10 全部完成 ✅）**
 
 ## 项目定位
 
 **当前定位**：高并发 Redis 协议兼容的 LSM 冷热分层 KV 存储引擎——已完成 RESP
 协议、内存引擎、LFU/ARC 淘汰、WAL 持久化、SSTable 冷层、自动 Flush /
-异步迁移 / 背压、Key Sharding 异步执行与热点治理（Phase 1–7），面向
-redis-cli 与主流客户端提供 PING / ECHO / SET / GET / DEL / EXISTS 能力。
+异步迁移 / 背压、Key Sharding 异步执行与热点治理（Phase 1–10），并完成
+分布式集群基础：16384 hash slot 路由、元数据服务、最小真实 Raft（选举 /
+心跳 / 日志复制 / 提交）与故障转移（Phase 11）；面向 redis-cli 与主流
+客户端提供 PING / ECHO / SET / GET / DEL / EXISTS 能力。
 
 **边界（如实声明）**：仍为教学/工程级实现，暂不宣称"高性能 Redis 替代品"；
-集群、pub/sub、Lua、RESP3 与正式性能基线（内存降低 60%–80%）按
-ROADMAP Phase 7–10 推进。
+集群为进程内分布式原型（Raft 消息无 TCP 传输、日志未落盘），pub/sub、
+Lua、RESP3 与正式性能基线（内存降低 60%–80%）为后续演进方向。
 
 ## 核心能力
 
@@ -186,6 +188,30 @@ FileChannelSSTableReader 保留为 baseline（benchmark 对比/降级）
 - YAML 配置（config/application.yaml）、`INFO` 指标命令、优雅停机
   （drain + WAL force + checkpoint）。
 
+## 分布式集群（Phase 11）
+
+```text
+Client → ClusterClient（slot 路由）→ MetadataServer（拓扑）
+    → Shard Leader（ClusterNode）
+        → Raft Group（Follower / Candidate / Leader）
+            → ReplicatedStorageEngine
+                → TieringStorageEngine（MemTable / WAL / SSTable）
+```
+
+- 哈希槽：CRC16/CCITT + 16384 slot（ADR-0035），与 Redis Cluster 语义一致，
+  100K 键三 shard 分布 33.2% / 33.2% / 33.3%，路由开销仅 ~23ns/op；
+- 元数据服务：JOIN / 拓扑查询 / leader 变更（ADR-0036）；
+- 最小真实 Raft：随机化选举超时 + 心跳 + 日志复制（prevLog 校验 +
+  nextIndex 回退）+ commit/apply（ADR-0037/0038），非简化假共识；
+- 复制适配器：写经 Raft 日志复制后 apply 本地引擎，不改 MemTable/WAL/
+  SSTable；读取走 leader 本地引擎；
+- 基准（进程内原型，见
+  [cluster-report.md](docs/benchmark/cluster-report.md)）：复制写 154K
+  ops/s（P99=0.027ms）、读 750K ops/s（P99=4μs）、复制滞后 ≤35ms
+  （心跳周期约束）、选举 124–310ms（目标 <5s ✅）、51 项新测试；
+- 限制（如实声明）：Raft 消息进程内直调（无 TCP）、日志内存态（无磁盘
+  持久化）、静态分片（无在线 slot 迁移），见 ROADMAP TD-022~025。
+
 ## 技术栈
 
 | 层次 | 选型 |
@@ -215,7 +241,7 @@ tiering-kv/
 ├── docs/
 │   ├── requirements/                    # 需求（requirements + acceptance）
 │   ├── architecture/                    # 架构设计（overview / storage / network / concurrency）
-│   ├── adr/                             # 架构决策记录（ADR-0001 ~ 0005）
+│   ├── adr/                             # 架构决策记录（ADR-0001 ~ 0038）
 │   ├── design/                          # 详细设计（protocol / memory / lsm / bitcask / eviction）
 │   ├── benchmark/                       # 性能报告（计划 + 报告占位）
 │   ├── review/                          # 技术评审
