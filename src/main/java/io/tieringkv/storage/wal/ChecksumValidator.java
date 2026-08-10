@@ -14,8 +14,19 @@ public final class ChecksumValidator {
         return crc.getValue();
     }
 
+    public static long crc32c(byte[] data, int offset, int length) {
+        CRC32C crc = new CRC32C();
+        crc.update(data, offset, length);
+        return crc.getValue();
+    }
+
     /** 校验 data[0,length) 的 CRC 是否等于 expected。 */
     public static boolean matches(byte[] data, int length, long expected) {
         return crc32c(data, length) == expected;
+    }
+
+    /** 校验 data[offset, offset+length) 的 CRC 是否等于 expected。 */
+    public static boolean matches(byte[] data, int offset, int length, long expected) {
+        return crc32c(data, offset, length) == expected;
     }
 }
