@@ -5,6 +5,9 @@ import io.tieringkv.storage.cold.FlushManager;
 import io.tieringkv.storage.memory.MemTable;
 import io.tieringkv.storage.wal.WALManager;
 
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /** 异步 Flush 调度器（ADR-0020/0021）：后台执行、去重、失败保留重试。 */
@@ -15,6 +18,8 @@ public final class FlushScheduler {
     private final WALManager wal;
     private final ColdStorageEngine cold;
     private final StorageMetrics metrics;
+    private final AdaptiveFlushController controller;
+    private final ScheduledExecutorService autoFlusher;
     private final AtomicBoolean flushInProgress = new AtomicBoolean();
 
     public FlushScheduler(
@@ -23,11 +28,56 @@ public final class FlushScheduler {
             WALManager wal,
             ColdStorageEngine cold,
             StorageMetrics metrics) {
+        this(pool, memTable, wal, cold, metrics, null);
+    }
+
+    public FlushScheduler(
+            TierWorkerPool pool,
+            MemTable memTable,
+            WALManager wal,
+            ColdStorageEngine cold,
+            StorageMetrics metrics,
+            AdaptiveFlushController controller) {
         this.pool = pool;
         this.memTable = memTable;
         this.wal = wal;
         this.cold = cold;
         this.metrics = metrics;
+        this.controller = controller;
+        this.autoFlusher = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "adaptive-flush");
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    /** 启动自适应自动巡检（ADR-0049）：按控制器动态间隔检查内存水位。 */
+    public void startAutoFlush() {
+        if (controller == null) {
+            return;
+        }
+        autoFlusher.scheduleWithFixedDelay(this::autoFlushTick,
+                controller.flushIntervalMillis(),
+                controller.flushIntervalMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    private void autoFlushTick() {
+        long max = memTable.memoryManager().maxBytes();
+        if (max <= 0) {
+            return;
+        }
+        double ratio = (double) memTable.memoryManager().usedBytes() / max;
+        if (controller.shouldAutoFlush(ratio)) {
+            scheduleFlush();
+        }
+    }
+
+    public AdaptiveFlushController controller() {
+        return controller;
+    }
+
+    public void close() {
+        autoFlusher.shutdownNow();
     }
 
     /** 触发一次后台 Flush；已在执行或入队失败返回 false。 */
