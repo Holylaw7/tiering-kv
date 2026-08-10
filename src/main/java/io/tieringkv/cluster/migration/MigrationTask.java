@@ -14,6 +14,7 @@ public final class MigrationTask {
     private final Object lock = new Object();
     private MigrationState state = MigrationState.INIT;
     private MigrationCheckpoint checkpoint = MigrationCheckpoint.empty();
+    private MigrationCursor cursor = MigrationCursor.empty();
 
     public MigrationTask(String taskId, int slotStart, int slotEnd, int targetShardId,
                          StorageEngine source, StorageEngine target) {
@@ -74,6 +75,18 @@ public final class MigrationTask {
     public void checkpoint(MigrationCheckpoint checkpoint) {
         synchronized (lock) {
             this.checkpoint = checkpoint;
+        }
+    }
+
+    public MigrationCursor cursor() {
+        synchronized (lock) {
+            return cursor;
+        }
+    }
+
+    public void cursor(MigrationCursor cursor) {
+        synchronized (lock) {
+            this.cursor = cursor;
         }
     }
 }
