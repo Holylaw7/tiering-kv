@@ -5,8 +5,10 @@ import io.tieringkv.storage.StorageIterator;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -101,6 +103,87 @@ public final class MemTable implements StorageEngine, AutoCloseable {
             segment.lock.writeLock().unlock();
         }
         notifyMemoryPressureIfNeeded();
+    }
+
+    /** 批量应用（ADR-0048）：先全量校验，再按段分组、单段单锁顺序应用。 */
+    @Override
+    public int applyBatch(BatchWriteRequest request) {
+        long now = timeSource.nowMillis();
+        for (Mutation mutation : request.mutations()) {
+            if (mutation.key() == null || mutation.key().length == 0) {
+                throw new IllegalArgumentException("empty key in batch");
+            }
+            if (mutation.type() == Mutation.Type.PUT && mutation.value() == null) {
+                throw new IllegalArgumentException("null value in batch");
+            }
+        }
+        // 版本号按请求顺序预分配（ADR-0048：version ordering）
+        long[] versions = new long[request.mutations().size()];
+        for (int i = 0; i < versions.length; i++) {
+            versions[i] = version.next();
+        }
+        Map<Integer, List<VersionedMutation>> bySegment = new HashMap<>();
+        for (int i = 0; i < request.mutations().size(); i++) {
+            Mutation mutation = request.mutations().get(i);
+            bySegment.computeIfAbsent(segmentIndex(mutation.key()),
+                    ignored -> new ArrayList<>())
+                    .add(new VersionedMutation(mutation, versions[i]));
+        }
+        int applied = 0;
+        for (Map.Entry<Integer, List<VersionedMutation>> group : bySegment.entrySet()) {
+            Segment segment = segments[group.getKey()];
+            segment.lock.writeLock().lock();
+            try {
+                for (VersionedMutation vm : group.getValue()) {
+                    Mutation mutation = vm.mutation();
+                    if (mutation.type() == Mutation.Type.PUT) {
+                        if (mutation.ttlMillis() != NO_TTL && mutation.ttlMillis() <= 0) {
+                            applyDeleteLocked(segment, mutation.key(), now, vm.version());
+                        } else {
+                            long versionId = vm.version();
+                            KeyValueEntry entry = KeyValueEntry.live(
+                                    mutation.key(), mutation.value(), now,
+                                    mutation.ttlMillis(), versionId);
+                            KeyValueEntry old = segment.list.get(mutation.key());
+                            if (old != null) {
+                                memoryManager.remove(old.size());
+                                if (old.isLive(now)) {
+                                    liveSize.decrementAndGet();
+                                }
+                            }
+                            segment.list.put(entry);
+                            memoryManager.add(entry.size());
+                            liveSize.incrementAndGet();
+                            if (entry.expireTimestamp() >= 0) {
+                                ttlManager.schedule(entry.expireTimestamp(), versionId,
+                                        group.getKey(), mutation.key());
+                            }
+                        }
+                    } else {
+                        applyDeleteLocked(segment, mutation.key(), now, vm.version());
+                    }
+                    applied++;
+                }
+            } finally {
+                segment.lock.writeLock().unlock();
+            }
+        }
+        notifyMemoryPressureIfNeeded();
+        return applied;
+    }
+
+    private void applyDeleteLocked(Segment segment, byte[] key, long now, long versionId) {
+        KeyValueEntry current = segment.list.get(key);
+        if (current != null && current.isLive(now)) {
+            KeyValueEntry tombstone = KeyValueEntry.tombstone(key, now, versionId);
+            segment.list.put(tombstone);
+            memoryManager.remove(current.size());
+            memoryManager.add(tombstone.size());
+            liveSize.decrementAndGet();
+        }
+    }
+
+    private record VersionedMutation(Mutation mutation, long version) {
     }
 
     @Override

@@ -4,7 +4,9 @@ import io.tieringkv.cluster.sharding.HashSlotRouter;
 import io.tieringkv.cluster.sharding.SlotTable;
 import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.storage.StorageIterator;
+import io.tieringkv.storage.memory.BatchWriteRequest;
 import io.tieringkv.storage.memory.KeyValueEntry;
+import io.tieringkv.storage.memory.Mutation;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -135,6 +137,8 @@ public final class SlotMigrationManager {
         long entries = checkpoint.copiedEntries();
         long bytes = checkpoint.copiedBytes();
         int copied = 0;
+        java.util.List<Mutation> pending = new java.util.ArrayList<>();
+        final int applyBatchSize = 512;
         while (iterator.hasNext() && copied < batchSize) {
             KeyValueEntry entry = iterator.next();
             if (!inRange(task, entry.key())
@@ -144,11 +148,18 @@ public final class SlotMigrationManager {
             long ttl = entry.expireTimestamp() >= 0
                     ? Math.max(0, entry.expireTimestamp() - System.currentTimeMillis())
                     : StorageEngine.NO_TTL;
-            task.target().put(entry.key(), entry.value(), ttl);
+            pending.add(Mutation.put(entry.key(), entry.value(), ttl));
+            if (pending.size() >= applyBatchSize) {
+                task.target().applyBatch(new BatchWriteRequest(pending));
+                pending.clear();
+            }
             cursor = cursor.advance(entry.key(), entry.version());
             entries++;
             bytes += entry.size();
             copied++;
+        }
+        if (!pending.isEmpty()) {
+            task.target().applyBatch(new BatchWriteRequest(pending));
         }
         boolean completed = !iterator.hasNext();
         if (completed) {
