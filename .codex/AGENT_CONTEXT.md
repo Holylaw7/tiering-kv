@@ -170,6 +170,8 @@ tiering-kv/
 | TD-017 | 动态重分片（task migration / routing version / double write） | Phase 10 |
 | TD-018 | Hot Cache 增加 version check（当前 TTL 500ms 兜底） | Phase 10 评估 |
 | TD-019 | 生产容量模型（吞吐/延迟/内存/磁盘），替代 IO 微优化 | Phase 9 |
+| TD-020 | request→response 对象数优化（Future/Lambda/Callback 复用 + 批量写） | Phase 10 |
+| TD-021 | JFR allocation / GC 对比作为 Phase 10 优化验收 | Phase 10 |
 
 ## 8. 会话启动清单
 

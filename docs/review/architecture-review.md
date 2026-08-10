@@ -182,3 +182,20 @@
 ### 技术债（新增）
 
 - TD-019：Phase 9 生产容量模型（吞吐/延迟/内存/磁盘容量模型，替代 IO 微优化）。
+
+## Phase 9 评审结论（2026-08-10）
+
+1. **性能分层清晰**：A（内存直连）4.7M ops/s → B（RESP+Netty+Shard）230K →
+   C（全链路）150K；瓶颈已定位为 **RESP 解析 → Command 调度 → Future 创建 →
+   ResponseSequencer → Netty 写回**，而非 WAL / SSTable / mmap / Compaction。
+2. **瓶颈 1：Future 过度创建**——每个请求产生 CompletableFuture + Lambda +
+   Callback + Context 对象，百万级请求下 allocation rate 上升、GC 压力增大。
+   Phase 10 目标：**减少 request→response 路径对象数量**（复用 Future/回调、
+   批量写、保序器并发化）。
+3. 已登记 TD-020；Phase 10 优化基线以 JFR allocation 采样为准（TD-021）。
+
+### 技术债（新增）
+
+- TD-020：request→response 每请求对象数优化（Future/Lambda/Callback/Context
+  复用与批量写）→ Phase 10；
+- TD-021：Phase 10 以 JFR allocation rate / GC 对比作为优化验收指标。

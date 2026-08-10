@@ -148,6 +148,9 @@
 
 - 目标：配置化、优雅停机、监控指标、故障演练、部署文档。
 - 验收：达到工程完整性的 Mini Redis。
+- Phase 9 评审补充：协议/调度层优化——批量响应写、每请求对象数削减
+  （TD-020）、ResponseSequencer 并发化、独立进程复测（预期 +20–40%）；
+  以 JFR allocation/GC 为验收（TD-021）。
 
 ## 技术债登记
 
@@ -170,3 +173,5 @@
 | TD-017 | 动态重分片（在线扩容） | ADR-0023 | Phase 10 |
 | TD-018 | Hot Cache version check（当前 TTL 兜底） | ADR-0025 | Phase 10 评估 |
 | TD-019 | 生产容量模型（吞吐/延迟/内存/磁盘），替代 IO 微优化 | ADR-0026 | Phase 9 |
+| TD-020 | request→response 对象数优化（Future/Lambda/Callback 复用 + 批量写） | ADR-0023 | Phase 10 |
+| TD-021 | Phase 10 以 JFR allocation / GC 对比为优化验收指标 | ADR-0029 | Phase 10 |

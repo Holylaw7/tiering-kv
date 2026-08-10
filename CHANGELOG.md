@@ -98,6 +98,8 @@
   （500K 目标未达，瓶颈=协议/调度）；C 级全链路 115–178K ops/s；
   Workload D 压力下内存受控、冷层落盘。
 - ADR-0029（基准方法）、ADR-0030（容量模型）、ADR-0031（部署画像）。
+- Phase 9 评审处置：确认瓶颈分层（A 4.7M → B 230K → C 150K，瓶颈=协议/调度）；
+  登记 TD-020（request→response 对象数优化）与 TD-021（JFR 验收指标）。
 - Phase 8 IO 优化：MmapSSTableReader（零拷贝块读）+ FileChannel baseline、
   MemoryPool（DirectBuffer 大小类池 / BufferArena / BufferRecycler /
   AllocationTracker）、BlockCache（LRU + 池化缓冲 + invalidate/clear）、
