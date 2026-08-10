@@ -54,6 +54,8 @@
 - WAL 测试套件（条目/校验/读写/轮转/恢复/崩溃三用例/检查点/集成）与
   WAL 基准（append 100K/1M、恢复 100K/1M）。
 - ADR-0014（写策略）、ADR-0015（记录格式）、ADR-0016（崩溃恢复）。
+- 基准口径修正：WAL append 指标标注为 buffered mode（非逐条 fsync），
+  不等同 durable write throughput（Phase 4 评审）；技术债登记 TD-007/008。
 
 ### Changed
 

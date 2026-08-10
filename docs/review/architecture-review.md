@@ -53,3 +53,30 @@
 7. **技术债登记**：TD-005 ARC 容量单位改 byte（Phase 9 ADR）；TD-006 LFU
    全局同步段 → Segment LFU + Async Statistics Buffer + Periodic Merge
    （Phase 7，Caffeine 思路）。
+
+## Phase 4 总体评价（2026-08-10）
+
+1. **WAL 装饰器优秀**：StorageEngine → WALStorageEngine → MemTable，避免
+   MemTable 感知持久化细节；后续可平滑扩展 LSMStorageEngine /
+   TieredStorageEngine。
+2. **WAL 格式达数据库级**：Magic+Version（TKV1 → 未来 TKV2 可判别）、
+   CRC32C（防半写/断电尾部损坏）、TTL 相对时长 + timestamp（恢复重算绝对
+   过期点，规避机器时间变化）。
+3. **写策略合理**：ALWAYS / EVERY_SEC / NO 对齐 Redis AOF appendfsync；
+   默认 EVERY_SEC 避免每 SET 一次 fsync 导致吞吐塌陷。
+4. **恢复流程正确**：Segment Scan → CRC Verify → Replay → Truncate；
+   中段损坏停止后续重放，避免状态不可预测。
+5. **Checkpoint 方向正确**：offset → snapshot → restore → replay remaining；
+   Phase 5 演进为 Checkpoint → SSTable → Manifest。
+6. **⚠️ 基准口径**：当前 append 指标为 buffered mode（非逐条 fsync），已修正
+   文档为 "WAL append throughput (buffered mode)"，并注明 ALWAYS 模式性能
+   下降属正常，Phase 9 补测对比。
+7. **迁移接口**：评审建议的 `TierMigration{SUCCESS, FAILED, RETRY}` 已在
+   Phase 3 评审时提前落地（ADR-0013 + TierMigration/MigrationResult + 测试），
+   Phase 5 迁移（文件写入/checksum/compaction）直接复用，无需再改。
+
+### 技术债（新增）
+
+- TD-007：WAL 恢复单线程（1M ≈ 1s，可接受；Phase 7 评估 parallel replay）；
+- TD-008：Checkpoint 全量快照（Phase 5 演进为 Immutable MemTable →
+  SSTable flush + Manifest，自然解决）。

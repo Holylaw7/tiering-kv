@@ -115,6 +115,8 @@ tiering-kv/
 | TD-004 | src/main 框架骨架目录与 Maven src/main/java 布局的映射 | ✅ 已关闭（Phase 1） |
 | TD-005 | ARC 容量单位 entry count → byte 口径 | Phase 9 出 ADR |
 | TD-006 | LFU 索引全局同步段 → Segment LFU + Async Buffer（Caffeine 思路） | Phase 7 |
+| TD-007 | WAL 恢复单线程 → Phase 7 评估 parallel replay | Phase 7 |
+| TD-008 | Checkpoint 全量快照 → Phase 5 演进 SSTable + Manifest | Phase 5 |
 
 ## 8. 会话启动清单
 

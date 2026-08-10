@@ -74,8 +74,8 @@
 - ADR：[0014](docs/adr/ADR-0014-wal-write-strategy.md)（写策略）、
   [0015](docs/adr/ADR-0015-wal-record-format.md)（记录格式）、
   [0016](docs/adr/ADR-0016-crash-recovery-strategy.md)（崩溃恢复）。
-- 基准：append P99≈6.8μs（100K/1M，目标 <1ms）；1M 记录恢复 0.57s
-  （详见 [wal-report.md](docs/benchmark/wal-report.md)）。
+- 基准：WAL append（buffered mode）P99≈6.8μs（100K/1M，目标 <1ms）；
+  1M 记录恢复 0.57s（详见 [wal-report.md](docs/benchmark/wal-report.md)）。
 - 备注：Bitcask 文件格式与 merge 在 Phase 5 完成（本阶段完成 WAL 子层）。
 
 ## Phase 5 — LSM Tree
@@ -122,3 +122,5 @@
 | TD-002 | JDK 17 目标下暂不采用虚拟线程 | ADR-0003 | Phase 7 评估升级 JDK 21 |
 | TD-005 | ARC 容量单位当前为 entry count，需改为 byte 口径 | ADR-0012 | Phase 9 出 ADR |
 | TD-006 | LFU 索引更新为全局同步段；演进 Segment LFU + Async Buffer | ADR-0010 | Phase 7 优化 |
+| TD-007 | WAL 恢复单线程（1M ≈ 1s，可接受） | ADR-0016 | Phase 7 评估 parallel replay |
+| TD-008 | Checkpoint 全量快照；演进为 SSTable + Manifest | ADR-0016 | Phase 5 自然解决 |

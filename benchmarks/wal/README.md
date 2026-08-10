@@ -14,7 +14,8 @@ mvn -Dtest=WALBenchmarkTest test
 覆盖：
 
 - Append：100K / 1M 记录（EVERY_SEC，近似 group commit），指标 P50/P95/P99
-  与吞吐，目标 P99 < 1ms；
+  与吞吐，目标 P99 < 1ms；口径为 buffered mode（非逐条 fsync），不等同
+  durable write throughput；
 - Recovery：100K / 1M 记录恢复耗时（目标秒级）。
 
 结果报告：[docs/benchmark/wal-report.md](../../docs/benchmark/wal-report.md)

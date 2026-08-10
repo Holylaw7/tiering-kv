@@ -109,7 +109,8 @@ Command → WALStorageEngine
     └── MemTable
 ```
 
-- 写路径：WAL append（默认 EVERY_SEC，≤1s 丢失窗口）→ MemTable → ack；
+- 写路径：WAL append（默认 EVERY_SEC，缓冲模式，≤1s 丢失窗口）→ MemTable
+  → ack；ALWAYS 提供逐条 fsync 强一致选项；
 - 记录格式：MAGIC / VERSION / TYPE / 时间戳 / 长度 / TTL / 版本 + CRC32C
   （ADR-0015，禁用 Java 序列化）；
 - segment 滚动（`wal/%06d.log`，64MB）+ checkpoint（快照 + offset）加速恢复；

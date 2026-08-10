@@ -1086,7 +1086,7 @@ Phase 5 LSM / Bitcask Storage Engine
   ADR-0014（写策略）、ADR-0015（记录格式）、ADR-0016（崩溃恢复）。
 - 基准：WAL append P99 < 1ms；1M 记录恢复 < 秒级（详见
   docs/benchmark/wal-report.md）。
-- 实测：append P99=0.0068ms（100K）/ 0.0015ms（1M）；
+- 实测：WAL append（buffered mode）P99=0.0068ms（100K）/ 0.0015ms（1M）；
   恢复 92ms（100K）/ 0.57s（1M）。
 
 ```
