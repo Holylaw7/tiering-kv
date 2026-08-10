@@ -1200,7 +1200,8 @@ Phase6完成：
 - 自动 Flush：水位触发 + 后台执行 + 去重 + 失败保留重试；
 - 异步迁移：MigrationLog 持久化 + 启动恢复 + 幂等重放 + 重试上限；
 - 背压：CRITICAL 有界等待，超时返回 -ERR（BackpressureException）；
-- 基准与报告：docs/benchmark/tiering-report.md。
+- 基准（docs/benchmark/tiering-report.md）：迁移 308K ops/s（目标 >50K）；
+  Flush 850K entries/s；内存压力下未超配额。
 
 ---
 

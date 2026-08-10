@@ -68,6 +68,15 @@
 - Phase 5 评审处置：SSTable 写吞吐改为 Peak/Average 双口径；登记 page cache
   影响与 cold-cache 基准计划（TD-009）；技术债 TD-010（pending 持久化）、
   TD-011（自动 Flush）、TD-012（leveled compaction）。
+- Phase 6 自动调度：TieringController / WatermarkManager（70/85/95）/
+  FlushScheduler（异步 + 去重 + 失败保留）/ MigrationScheduler +
+  MigrationLog（持久化 + 启动恢复 + 幂等重放）/ BackPressureController /
+  TierWorkerPool / StorageMetrics / TieringStorageEngine。
+- EvictionManager 异步化：候选入队 → worker 写冷层 → WAL DELETE → 删内存；
+  重试上限后 FAILED（内存保留）；CRITICAL 限写返回 -ERR。
+- tiering 测试套件（水位/Flush/迁移队列/恢复/背压/控制器/集成）与
+  tiering 基准（Flush、迁移 100K/1M、内存压力）。
+- ADR-0020（调度模型）、ADR-0021（水位策略）、ADR-0022（迁移持久化）。
 
 ### Changed
 
