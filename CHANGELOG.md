@@ -299,6 +299,20 @@
   - 测试：新增 165 项；全量回归 1112/1112 全绿（目标 >1100 ✅）；
   - 基准（docs/benchmark/phase18-production-report.md）：Gateway
     719K/590K ops/s、迁移 209.1/986.0 MB/s、Split/Merge 1M ~0.9/~0.7s。
+- Phase 19 MVCC 与事务引擎：
+  - MVCC（ADR-0071）：MvccKey/MvccEntry/MvccStorageEngine（内存版本索引
+    + 启动重建）+ SnapshotReader（commitTS <= readTS）；
+  - 时间戳（ADR-0072）：TimestampOracle + HybridLogicalClock（回拨安全）；
+  - 事务（ADR-0073）：Percolator 2PC + Transaction/TransactionManager/
+    Coordinator（参与者键归属 + 部分 prewrite 回滚）+ TxnJournal（Raft）；
+  - 锁/冲突（ADR-0074）：LockTable + ConflictDetector + 三类异常；
+  - 恢复（ADR-0076）：超时回滚/primary 补完/无永久锁；GC（ADR-0075）：
+    SafePoint + 保留最新；
+  - 指标：INFO TRANSACTION + Prometheus（txn_* / mvcc_*）；
+  - 测试：新增 226 项；全量回归最终统计见合并后报告（目标 >1290）；
+  - 基准（docs/benchmark/phase19-mvcc-report.md）：GET 3.1–4.7M ops/s、
+    单区事务 70.8–204.6K txn/s、冲突 2.1–7.6M ops/s、GC 19–29MB/s
+    （未达 100，TD-041 如实登记）。
 - Phase 9 评审处置：确认瓶颈分层（A 4.7M → B 230K → C 150K，瓶颈=协议/调度）；
   登记 TD-020（request→response 对象数优化）与 TD-021（JFR 验收指标）。
 - Phase 8 IO 优化：MmapSSTableReader（零拷贝块读）+ FileChannel baseline、
