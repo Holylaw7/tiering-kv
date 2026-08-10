@@ -113,7 +113,7 @@ public final class SSTableWriter implements AutoCloseable {
                 + (entry.value() == null ? 0 : entry.value().length);
     }
 
-    static byte[] encodeFooter(long indexOffset, int indexSize, long bloomOffset, int bloomSize) {
+    public static byte[] encodeFooter(long indexOffset, int indexSize, long bloomOffset, int bloomSize) {
         ByteBuffer buffer = ByteBuffer.allocate(FOOTER_SIZE).order(ByteOrder.BIG_ENDIAN);
         buffer.putInt(FOOTER_MAGIC);
         buffer.put((byte) 1);
@@ -126,7 +126,7 @@ public final class SSTableWriter implements AutoCloseable {
         return buffer.array();
     }
 
-    static FooterInfo decodeFooter(byte[] footer) {
+    public static FooterInfo decodeFooter(byte[] footer) {
         if (footer.length != FOOTER_SIZE) {
             throw new ColdCorruptionException("bad footer size");
         }
@@ -148,6 +148,6 @@ public final class SSTableWriter implements AutoCloseable {
         return new FooterInfo(indexOffset, indexSize, bloomOffset, bloomSize);
     }
 
-    record FooterInfo(long indexOffset, long indexSize, long bloomOffset, long bloomSize) {
+    public record FooterInfo(long indexOffset, long indexSize, long bloomOffset, long bloomSize) {
     }
 }
