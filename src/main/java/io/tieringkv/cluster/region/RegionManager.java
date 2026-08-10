@@ -63,6 +63,10 @@ public final class RegionManager {
         if (region == null) {
             throw new IllegalArgumentException("unknown region " + regionId);
         }
+        if (region.state() == RegionState.TOMBSTONE) {
+            // tombstone 区域已失效：任何携带其纪元的请求都是旧请求
+            return false;
+        }
         return !expectedEpoch.olderThan(region.epoch());
     }
 
@@ -125,6 +129,19 @@ public final class RegionManager {
         byId.put(leftId, left.withState(RegionState.TOMBSTONE));
         byId.put(rightId, right.withState(RegionState.TOMBSTONE));
         return merged;
+    }
+
+    /** leader 转移（ADR-0060）：校验新 leader ∈ peers，epoch confVer 推进。 */
+    public synchronized Region transferLeader(RegionId regionId, String newLeader) {
+        Region region = requireNormal(regionId);
+        if (newLeader == null || !region.peers().contains(newLeader)) {
+            throw new IllegalArgumentException(
+                    "new leader must be a region peer: " + newLeader);
+        }
+        Region updated = region.withLeader(newLeader);
+        regions.put(updated.startKey(), updated);
+        byId.put(regionId, updated);
+        return updated;
     }
 
     private Region requireNormal(RegionId regionId) {
