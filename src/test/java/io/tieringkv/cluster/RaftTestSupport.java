@@ -12,20 +12,20 @@ import java.util.function.BooleanSupplier;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** Raft 测试工具：节点构建与等待辅助。 */
-final class RaftTestSupport {
+public final class RaftTestSupport {
 
-    static final LeaderElection ELECTION = new LeaderElection(100, 80);
+    public static final LeaderElection ELECTION = new LeaderElection(100, 80);
 
     private RaftTestSupport() {
     }
 
-    static RaftNode node(String id, List<RaftNode> peers, List<String> applied) {
+    public static RaftNode node(String id, List<RaftNode> peers, List<String> applied) {
         return new RaftNode(id, peers,
                 (index, command) -> applied.add(new String(command, StandardCharsets.UTF_8)),
                 ELECTION, 25, 10);
     }
 
-    static RaftNode[] group3(List<String> applied) {
+    public static RaftNode[] group3(List<String> applied) {
         RaftNode[] nodes = new RaftNode[3];
         List<RaftNode> peers = new ArrayList<>();
         nodes[0] = node("n1", peers, applied);
@@ -35,13 +35,14 @@ final class RaftTestSupport {
         return nodes;
     }
 
-    static void startAll(RaftNode... nodes) {
+    public static void startAll(RaftNode... nodes) {
         for (RaftNode node : nodes) {
             node.start();
         }
     }
 
-    static RaftNode awaitLeader(List<RaftNode> nodes, long timeoutMillis) throws InterruptedException {
+    public static RaftNode awaitLeader(List<RaftNode> nodes, long timeoutMillis)
+            throws InterruptedException {
         long deadline = System.currentTimeMillis() + timeoutMillis;
         while (System.currentTimeMillis() < deadline) {
             for (RaftNode node : nodes) {
@@ -73,7 +74,7 @@ final class RaftTestSupport {
         throw new AssertionError("no leader within " + timeoutMillis + "ms: " + states);
     }
 
-    static void awaitTrue(String message, BooleanSupplier condition, long timeoutMillis)
+    public static void awaitTrue(String message, BooleanSupplier condition, long timeoutMillis)
             throws InterruptedException {
         long deadline = System.currentTimeMillis() + timeoutMillis;
         while (System.currentTimeMillis() < deadline) {
@@ -85,7 +86,7 @@ final class RaftTestSupport {
         assertThat(condition.getAsBoolean()).as(message).isTrue();
     }
 
-    static void closeAll(RaftNode... nodes) {
+    public static void closeAll(RaftNode... nodes) {
         for (RaftNode node : nodes) {
             node.close();
         }

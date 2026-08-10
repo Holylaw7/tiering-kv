@@ -1,6 +1,6 @@
 # 分布式架构（Distributed Architecture）
 
-状态：✅ 原型完成（Phase 11）
+状态：✅ 原型完成（Phase 11）→ 分布式生产化（Phase 12）
 
 ## 1. 拓扑
 
@@ -46,8 +46,47 @@ TieringStorageEngine（Phase 1–10 单机引擎）
 16384 hash slots（Redis Cluster 风格，ADR-0035）；slot 表可重映射
 （rebalance 友好）。
 
-## 5. 原型边界
+## 5. Raft 持久化（Phase 12，ADR-0039/0040）
 
-- 进程内传输（真实 Raft 语义，网络传输留后续）；
-- Raft 日志内存存储（持久化 Raft log 留后续）；
-- 单分片多副本模型（多分片拓扑由元数据支持）。
+```text
+RaftNode
+  ├── RaftLog（FileRaftLog：分段文件 + MAGIC/VERSION/TERM/INDEX/
+  │   COMMAND_TYPE/DATA/CRC32C，SYNC/ASYNC/NONE）
+  ├── RaftPersistentState（term / votedFor / commitIndex，CRC + force）
+  └── SnapshotManager（快照文件 + InstallSnapshot + 日志压缩）
+```
+
+- 崩溃恢复：加载段 → CRC 校验 → 重放合法条目 → 截断损坏尾部；
+- 快照：`lastIncludedIndex/lastIncludedTerm + 状态数据 + checksum`，
+  超过阈值（1024 条）自动创建并压缩日志；重启 = 快照恢复 + 剩余日志重放；
+- 落后 follower：leader 发送 InstallSnapshot 快速追赶。
+
+## 6. 网络传输（Phase 12，ADR-0041）
+
+```text
+RaftTransport
+  ├── LocalRaftTransport（Phase 11 进程内，测试/回退）
+  └── NettyRaftTransport（生产）
+        ├── RpcServer（解码 → 本地 RaftNode.receive → 响应）
+        └── RpcClient（连接复用 + RequestId 关联 + 超时 + 幂等重试）
+```
+
+线协议：`LENGTH | REQUEST_ID(8B) | TYPE(1B) | PAYLOAD`；消息覆盖
+AppendEntries / RequestVote / InstallSnapshot。
+
+## 7. 复制优化与迁移（Phase 12，ADR-0042/0043）
+
+- 复制优化：CommitNotifier 在 commitIndex 推进后立即补发心跳，
+  复制滞后从 13–35ms 降至 <1ms（目标 <5ms ✅）；
+  ReplicationTracker / FollowerProgress 跟踪 nextIndex / matchIndex /
+  lastAck；
+- Slot 迁移：`INIT → COPYING → VERIFYING → SWITCHING → DONE`，
+  checkpoint 持久化可断点续传，VERIFYING 对源/目标做 CRC 比对，
+  SWITCHING 原子更新 SlotTable 后清理源数据（无数据丢失）。
+
+## 8. 当前边界
+
+- RPC 单连接串行、无 TLS/认证；
+- 复制为同步串行 propose（批量/并行复制留后续）；
+- 迁移为存量复制模型（增量/双写留后续）；
+- 元数据服务仍为进程内单机（Raft 化落地留后续）。

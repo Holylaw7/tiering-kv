@@ -133,6 +133,38 @@
   不持久化、Snapshot 缺失、进程内 RPC、Slot 迁移缺失）对应 TD-022/
   023/025 进入 Phase 12；元数据 Raft Cluster（etcd/PD 方向）纳入
   Phase 12 计划。
+- Phase 12 分布式生产化：
+  - RaftLog（FileRaftLog / LogSegment / RaftLogWriter / RaftLogReader /
+    RaftLogRecovery：MAGIC/VERSION/TERM/INDEX/COMMAND_TYPE/DATA/CRC32C，
+    SYNC/ASYNC/NONE，段滚动 + 尾部截断恢复）+ RaftPersistentState
+    （term/votedFor/commitIndex 落盘，term 变更 force、commit 缓冲）；
+  - Snapshot（SnapshotManager / SnapshotWriter / SnapshotReader /
+    SnapshotMetadata：快照创建/加载/校验，RaftNode 超阈值自动压缩 +
+    InstallSnapshot 追赶 + 重启"快照恢复 + 剩余日志重放"）；
+  - Netty RPC（RpcServer / RpcClient / RpcCodec / RequestId /
+    RaftMessageCodec：长度前缀帧 + 请求关联 + 超时 + 幂等重试 +
+    连接复用；三类 Raft 消息）+ RaftTransport 抽象
+    （LocalRaftTransport 测试回退 / NettyRaftTransport 生产）；
+  - 复制优化（CommitNotifier 立即补发 commitIndex + ReplicationTracker /
+    FollowerProgress：复制滞后 13–35ms → <1ms，目标 <5ms ✅）；
+  - Slot 在线迁移（SlotMigrationManager / MigrationTask /
+    MigrationCheckpoint / MigrationState：INIT→COPYING→VERIFYING→
+    SWITCHING→DONE，checkpoint 持久化续传 + 源/目标 CRC 校验 + SlotTable
+    原子切换 + 切换后清理源）；
+  - StorageSnapshotCodec（存储引擎状态机快照编解码）。
+- Phase 12 测试：RaftLog 21 / Snapshot 12 / RPC 19 / 迁移 11 /
+  复制优化 5 / 快照集成 2 / TCP 集群集成 3（3 节点真实 TCP：
+  SET→复制→杀 leader→选举→GET；重启恢复 term/commitIndex/数据；
+  复制滞后 <100ms 断言）——新增约 73 项；全量回归最终统计见评审报告。
+- Phase 12 基准（docs/benchmark/distributed-production-report.md）：
+  RaftLog ASYNC append 102K ops/s（P99=27μs）、TCP 提交 1,359 ops/s
+  （P50=0.65ms / P99=2.16ms）、复制滞后 0ms、RPC 9.3K ops/s
+  （P50=100μs，单连接复用）、迁移 16.1MB/s + 断点续传 549ms/90K。
+- ADR-0039（RaftLog 格式）、ADR-0040（快照策略）、ADR-0041（RPC 设计）、
+  ADR-0042（复制滞后优化）、ADR-0043（Slot 迁移策略）。
+- Phase 12 评审处置：TD-022~025 关闭；登记 TD-026（批量/并行复制）、
+  TD-027（迁移单次迭代游标）、TD-028（RPC TLS/认证）、TD-029
+  （元数据 Raft 化落地）。
 - Phase 9 评审处置：确认瓶颈分层（A 4.7M → B 230K → C 150K，瓶颈=协议/调度）；
   登记 TD-020（request→response 对象数优化）与 TD-021（JFR 验收指标）。
 - Phase 8 IO 优化：MmapSSTableReader（零拷贝块读）+ FileChannel baseline、

@@ -1,9 +1,10 @@
 # Tiering-KV
 
 > 高并发 Redis 协议兼容的 LSM 冷热分层 KV 存储引擎
-> （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding + Raft 集群）。
+> （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding +
+> Raft 持久化集群 + Netty RPC + 在线迁移）。
 
-**阶段状态：Phase 11（分布式集群）✅（Phase 0–10 全部完成 ✅）**
+**阶段状态：Phase 12（分布式生产化）✅（Phase 0–11 全部完成 ✅）**
 
 ## 项目定位
 
@@ -11,12 +12,14 @@
 协议、内存引擎、LFU/ARC 淘汰、WAL 持久化、SSTable 冷层、自动 Flush /
 异步迁移 / 背压、Key Sharding 异步执行与热点治理（Phase 1–10），并完成
 分布式集群基础：16384 hash slot 路由、元数据服务、最小真实 Raft（选举 /
-心跳 / 日志复制 / 提交）与故障转移（Phase 11）；面向 redis-cli 与主流
-客户端提供 PING / ECHO / SET / GET / DEL / EXISTS 能力。
+心跳 / 日志复制 / 提交）与故障转移（Phase 11），以及分布式生产化：
+Raft 日志持久化 + 快照、Netty TCP RPC、复制滞后优化（<1ms）、在线
+Slot 迁移（Phase 12）；面向 redis-cli 与主流客户端提供 PING / ECHO /
+SET / GET / DEL / EXISTS 能力。
 
 **边界（如实声明）**：仍为教学/工程级实现，暂不宣称"高性能 Redis 替代品"；
-集群为进程内分布式原型（Raft 消息无 TCP 传输、日志未落盘），pub/sub、
-Lua、RESP3 与正式性能基线（内存降低 60%–80%）为后续演进方向。
+分布式为真实 TCP + 持久化原型（RPC 串行、无 TLS、元数据单机），
+pub/sub、Lua、RESP3 与正式性能基线（内存降低 60%–80%）为后续演进方向。
 
 ## 核心能力
 
@@ -211,6 +214,30 @@ Client → ClusterClient（slot 路由）→ MetadataServer（拓扑）
   （心跳周期约束）、选举 124–310ms（目标 <5s ✅）、51 项新测试；
 - 限制（如实声明）：Raft 消息进程内直调（无 TCP）、日志内存态（无磁盘
   持久化）、静态分片（无在线 slot 迁移），见 ROADMAP TD-022~025。
+
+## 分布式生产化（Phase 12）
+
+```text
+RaftNode
+  ├── RaftLog（分段文件 + CRC32C + SYNC/ASYNC/NONE + 尾部截断恢复）
+  ├── RaftPersistentState（term / votedFor / commitIndex 落盘）
+  ├── SnapshotManager（快照压缩 + InstallSnapshot 追赶）
+  └── RaftTransport
+        ├── LocalRaftTransport（测试/回退）
+        └── NettyRaftTransport（TCP：连接复用 + RequestId + 超时重试）
+```
+
+- 持久化：重启后 term / 日志 / commitIndex 完整恢复（ADR-0039/0040）；
+- 快照：日志超阈值自动压缩，重启 = 快照恢复 + 剩余日志重放；
+- TCP RPC：AppendEntries / RequestVote / InstallSnapshot 二进制协议，
+  连接复用、超时（3s）、幂等重试（ADR-0041）；
+- 复制优化：CommitNotifier 提交后立即补发，滞后 13–35ms → **<1ms**
+  （目标 <5ms ✅，ADR-0042）；
+- 在线迁移：INIT→COPYING→VERIFYING→SWITCHING→DONE，checkpoint 续传 +
+  CRC 校验 + 原子切换（ADR-0043）；
+- 基准（[distributed-production-report.md](docs/benchmark/distributed-production-report.md)）：
+  TCP 提交 P50=0.65ms / P99=2.16ms，RPC P50=100μs（单连接），
+  迁移 16.1MB/s + 恢复 549ms/90K。
 
 ## 技术栈
 

@@ -19,6 +19,7 @@
 | 9 | Benchmark 压力测试 | ✅ 完成（2026-08-10） |
 | 10 | 生产化完善 | ✅ 完成（2026-08-10） |
 | 11 | 分布式集群 | ✅ 完成（2026-08-10） |
+| 12 | 分布式生产化 | ✅ 完成（2026-08-10） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -179,6 +180,35 @@
   选举 124–310ms（目标 <5s ✅）；详见
   [cluster-report.md](docs/benchmark/cluster-report.md)。
 
+## Phase 12 — 分布式生产化 ✅
+
+- 目标：内存 Raft 原型 → 持久化 + 真实网络 + 快照 + 在线迁移。
+- 交付：
+  - RaftLog（分段二进制文件，MAGIC/VERSION/TERM/INDEX/COMMAND_TYPE/
+    DATA/CRC32C，SYNC/ASYNC/NONE，尾部截断恢复）+ RaftPersistentState
+    （term/votedFor/commitIndex）；
+  - SnapshotManager / SnapshotWriter / SnapshotReader（快照 + 日志压缩 +
+    InstallSnapshot 追赶）；
+  - Netty RPC（RpcServer/RpcClient/RpcCodec/RequestId，连接复用 +
+    超时 + 幂等重试 + 三类 Raft 消息）+ RaftTransport 抽象
+    （Local/Netty 可替换）；
+  - 复制优化：CommitNotifier 立即补发 commitIndex（滞后 13–35ms →
+    <1ms，目标 <5ms ✅）；ReplicationTracker / FollowerProgress；
+  - Slot 在线迁移（SlotMigrationManager / MigrationTask /
+    MigrationCheckpoint，INIT→COPYING→VERIFYING→SWITCHING→DONE，
+    checkpoint 续传 + CRC 校验 + 原子切换）。
+- ADR：[0039](docs/adr/ADR-0039-raft-log-storage-format.md)（日志格式）、
+  [0040](docs/adr/ADR-0040-raft-snapshot-strategy.md)（快照）、
+  [0041](docs/adr/ADR-0041-distributed-rpc-design.md)（RPC）、
+  [0042](docs/adr/ADR-0042-replication-lag-optimization.md)（复制优化）、
+  [0043](docs/adr/ADR-0043-slot-migration-strategy.md)（迁移）。
+- 测试：新增 77 项（RaftLog 21 / Snapshot 12 / RPC 19 / 迁移 11 /
+  复制优化 5 / 快照集成 2 / TCP 集群集成 3 / 基准 4），全量回归
+  369 项全绿（Phase 1–12）。
+- 基准（[distributed-production-report.md](docs/benchmark/distributed-production-report.md)）：
+  TCP 提交 1,359 ops/s（P50=0.65ms / P99=2.16ms）、复制滞后 <1ms、
+  RPC 9.3K ops/s（P50=100μs，单连接）、迁移 16.1MB/s + 恢复 549ms。
+
 ## 技术债登记
 
 | 编号 | 描述 | 来源 | 计划消除 |
@@ -202,7 +232,11 @@
 | TD-019 | 生产容量模型（吞吐/延迟/内存/磁盘），替代 IO 微优化 | ADR-0026 | Phase 9 |
 | TD-020 | request→response 对象数优化（Future/Lambda/Callback 复用 + 批量写） | ADR-0023 | Phase 10 |
 | TD-021 | Phase 10 以 JFR allocation / GC 对比为优化验收指标 | ADR-0029 | Phase 10 |
-| TD-022 | Raft 日志为内存态，无磁盘持久化；需 Raft Log Store + Snapshot | ADR-0037 | Phase 12 |
-| TD-023 | Raft 消息为进程内直接调用，无 TCP 传输；需 RPC 层 + 重试/超时 | ADR-0037 | Phase 12 |
-| TD-024 | 复制滞后受心跳周期约束（≤20ms）；提交后立即补发 commitIndex | ADR-0037 | Phase 12 |
-| TD-025 | 动态重分片（slot 迁移）与多 shard 数据搬迁 | ADR-0035 | Phase 12 |
+| TD-022 | Raft 日志内存态 → 文件分段 RaftLog + 快照 | ADR-0037 | ✅ 已关闭（Phase 12） |
+| TD-023 | 进程内直调 → Netty TCP RPC + 超时重试 | ADR-0037 | ✅ 已关闭（Phase 12） |
+| TD-024 | 复制滞后 13–35ms → CommitNotifier 立即补发（<1ms） | ADR-0037 | ✅ 已关闭（Phase 12） |
+| TD-025 | 动态分片（slot 迁移）→ 在线迁移 + checkpoint | ADR-0035 | ✅ 已关闭（Phase 12） |
+| TD-026 | 复制为同步串行 propose → 批量/并行 AppendEntries | ADR-0037 | Phase 13 |
+| TD-027 | 迁移每批重建源快照迭代 → 单次迭代 + 游标 checkpoint | ADR-0043 | Phase 13 |
+| TD-028 | RPC 无 TLS/认证/限流 | ADR-0041 | Phase 13 |
+| TD-029 | 元数据服务单机实现 → Raft 化落地 | ADR-0036 | Phase 13 |
