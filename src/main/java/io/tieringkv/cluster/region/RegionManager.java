@@ -38,6 +38,18 @@ public final class RegionManager {
         return byId.get(regionId);
     }
 
+    /** 生命周期状态标记（ADR-0061/0062）：epoch 不变，仅供控制器编排。 */
+    public synchronized Region markState(RegionId regionId, RegionState state) {
+        Region region = byId.get(regionId);
+        if (region == null) {
+            throw new IllegalArgumentException("unknown region " + regionId);
+        }
+        Region updated = region.withState(state);
+        regions.put(updated.startKey(), updated);
+        byId.put(regionId, updated);
+        return updated;
+    }
+
     /** 路由：返回包含 key 的 NORMAL region；不存在抛 IllegalStateException。 */
     public synchronized Region route(byte[] key) {
         Map.Entry<byte[], Region> floor = regions.floorEntry(key);
@@ -79,7 +91,7 @@ public final class RegionManager {
 
     /** 分裂：parent → TOMBSTONE，两个子 region 继承范围并推进 confVer。 */
     public synchronized List<Region> splitRegion(RegionId regionId, byte[] splitKey) {
-        Region parent = requireNormal(regionId);
+        Region parent = requireLifecycle(regionId, RegionState.SPLITTING);
         if (parent.endKey() == null) {
             throw new IllegalStateException("cannot split open-ended region");
         }
@@ -106,8 +118,8 @@ public final class RegionManager {
 
     /** 合并：两个相邻 region → TOMBSTONE，合并 region 推进 confVer + version。 */
     public synchronized Region mergeRegion(RegionId leftId, RegionId rightId) {
-        Region left = requireNormal(leftId);
-        Region right = requireNormal(rightId);
+        Region left = requireLifecycle(leftId, RegionState.MERGING);
+        Region right = requireLifecycle(rightId, RegionState.MERGING);
         if (!Arrays.equals(left.endKey(), right.startKey())) {
             throw new IllegalArgumentException("regions are not adjacent");
         }
@@ -145,11 +157,19 @@ public final class RegionManager {
     }
 
     private Region requireNormal(RegionId regionId) {
+        return requireLifecycle(regionId, null);
+    }
+
+    /** 要求 region 存在且处于 NORMAL 或指定生命周期状态。 */
+    private Region requireLifecycle(RegionId regionId, RegionState lifecycleState) {
         Region region = byId.get(regionId);
         if (region == null) {
             throw new IllegalArgumentException("unknown region " + regionId);
         }
-        if (region.state() != RegionState.NORMAL) {
+        boolean allowed = region.state() == RegionState.NORMAL
+                || (lifecycleState != null
+                && region.state() == lifecycleState);
+        if (!allowed) {
             throw new IllegalStateException(
                     "region not normal: " + regionId + " state=" + region.state());
         }
