@@ -15,7 +15,7 @@
 | 5 | LSM Tree | ✅ 完成（2026-08-10） |
 | 6 | 冷热迁移 | ✅ 完成（2026-08-10） |
 | 7 | 并发优化 | ✅ 完成（2026-08-10） |
-| 8 | mmap / Memory Pool | ⏳ 未开始 |
+| 8 | mmap / Memory Pool | ✅ 完成（2026-08-10） |
 | 9 | Benchmark 压力测试 | ⏳ 未开始 |
 | 10 | 生产化完善 | ⏳ 未开始 |
 
@@ -120,11 +120,17 @@
   100 线程同键自增 0 lost update（详见
   [concurrency-report.md](docs/benchmark/concurrency-report.md)）。
 
-## Phase 8 — mmap / Memory Pool
+## Phase 8 — mmap / Memory Pool ✅
 
 - 目标：mmap 零拷贝、自研 Memory Pool、off-heap 缓冲。
-- 交付：io 优化模块、内存基准对比。
-- 预计 ADR：IO 模型与内存池设计。
+- 交付：MmapSSTableReader（零拷贝块读）+ FileChannel baseline、
+  MemoryPool（DirectBuffer 大小类池 + 统计）、BlockCache（LRU + 池化缓冲 +
+  失效）、IOStatistics；ColdStorageEngine 默认 mmap + cache。
+- ADR：[0026](docs/adr/ADR-0026-sstable-io-strategy.md)（SSTable IO 策略）、
+  [0027](docs/adr/ADR-0027-offheap-memory-strategy.md)（Off-Heap 策略）、
+  [0028](docs/adr/ADR-0028-block-cache-strategy.md)（Block Cache 策略）。
+- 基准：随机读 P99 0.012–0.040ms（目标 <5ms）；缓存命中率 94.8%；mmap 较
+  FileChannel 随机读提速 ~2×（详见 [io-report.md](docs/benchmark/io-report.md)）。
 
 ## Phase 9 — Benchmark
 

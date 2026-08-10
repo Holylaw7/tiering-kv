@@ -50,10 +50,15 @@ public final class Block {
     }
 
     public static List<KeyValueEntry> decode(byte[] data) {
-        if (data.length < HEADER_SIZE) {
+        return decode(ByteBuffer.wrap(data));
+    }
+
+    /** 从 ByteBuffer 解码（零拷贝：直接读取，不复制整块）。 */
+    public static List<KeyValueEntry> decode(ByteBuffer data) {
+        ByteBuffer buffer = data.duplicate().order(ByteOrder.BIG_ENDIAN);
+        if (buffer.remaining() < HEADER_SIZE) {
             throw new ColdCorruptionException("block too short");
         }
-        ByteBuffer buffer = ByteBuffer.wrap(data).order(ByteOrder.BIG_ENDIAN);
         if (buffer.getInt() != MAGIC) {
             throw new ColdCorruptionException("bad block magic");
         }
@@ -62,7 +67,7 @@ public final class Block {
         }
         int count = buffer.getInt();
         long expected = buffer.getLong();
-        if (!ChecksumValidator.matches(data, HEADER_SIZE, data.length - HEADER_SIZE, expected)) {
+        if (ChecksumValidator.crc32c(buffer.duplicate()) != expected) {
             throw new ColdCorruptionException("block checksum mismatch");
         }
         List<KeyValueEntry> entries = new ArrayList<>(count);

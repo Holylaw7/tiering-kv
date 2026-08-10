@@ -14,7 +14,7 @@ import java.util.List;
  * SSTable 读取器（ADR-0018）：GET = Bloom → Index 二分 → Block 解码 → 块内二分；
  * 同时支持顺序迭代（DiskIterator）。
  */
-public final class SSTableReader implements AutoCloseable {
+public class SSTableReader implements AutoCloseable {
 
     private final Path path;
     private final SSTableMeta meta;
@@ -22,8 +22,8 @@ public final class SSTableReader implements AutoCloseable {
     private final BlockIndex index;
     private final BloomFilter bloom;
 
-    private SSTableReader(Path path, SSTableMeta meta, FileChannel channel,
-                          BlockIndex index, BloomFilter bloom) {
+    protected SSTableReader(Path path, SSTableMeta meta, FileChannel channel,
+                            BlockIndex index, BloomFilter bloom) {
         this.path = path;
         this.meta = meta;
         this.channel = channel;
@@ -54,10 +54,19 @@ public final class SSTableReader implements AutoCloseable {
             return null;
         }
         BlockIndex.IndexEntry blockEntry = index.findBlock(key);
-        byte[] blockBytes = readFully(channel, blockEntry.offset(), blockEntry.size());
-        List<KeyValueEntry> entries = Block.decode(blockBytes);
-        int position = binarySearch(entries, key);
+        List<KeyValueEntry> entries = Block.decode(readBlockBuffer(blockEntry));
+        int position = binarySearchEntries(entries, key);
         return position >= 0 ? entries.get(position) : null;
+    }
+
+    /** 定位 key 所在块（供 BlockCache 键计算）。 */
+    BlockIndex.IndexEntry locateBlock(byte[] key) {
+        return index.findBlock(key);
+    }
+
+    /** 读取块为 ByteBuffer（FileChannel 实现：堆拷贝；mmap 实现：零拷贝切片）。 */
+    protected ByteBuffer readBlockBuffer(BlockIndex.IndexEntry blockEntry) throws IOException {
+        return ByteBuffer.wrap(readFully(channel, blockEntry.offset(), blockEntry.size()));
     }
 
     public boolean mightContain(byte[] key) {
@@ -81,7 +90,7 @@ public final class SSTableReader implements AutoCloseable {
         return path;
     }
 
-    private static int binarySearch(List<KeyValueEntry> entries, byte[] key) {
+    static int binarySearchEntries(List<KeyValueEntry> entries, byte[] key) {
         int low = 0;
         int high = entries.size() - 1;
         while (low <= high) {

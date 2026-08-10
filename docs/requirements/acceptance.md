@@ -10,7 +10,7 @@
 | FR-04 | 迁移期间读写不阻塞、可重试、数据最终一致 | 集成 + 故障注入 | Phase 6 ✅（异步队列 + 重试 + 恢复） |
 | FR-05 | 重启后 WAL 回放恢复数据；Bitcask/LSM 均可读写 | 恢复测试 | Phase 4 ✅（WAL 恢复）+ Phase 5 ✅（SSTable 冷层 + Flush/恢复） |
 | FR-06 | 1k/10k/100k 连接可建立并稳定服务 | 压力测试 | Phase 7 ✅（分片执行 + 保序）；100k 连接 Phase 9 |
-| FR-07 | mmap 路径无多余用户态拷贝 | 基准对比 | Phase 8 |
+| FR-07 | mmap 路径无多余用户态拷贝 | 基准对比 | Phase 8 ✅（随机读提速 ~2×） |
 | FR-08 | 无全局锁；并发写不同 key 不串行 | 并发测试 | Phase 7 ✅（0 lost update） |
 | FR-09 | Bloom Filter 显著降低不存在键读放大 | 基准 | Phase 5 ✅（FPR 0.82%） |
 | FR-10 | Memory Pool 命中率高，GC 压力受控 | 基准 + JFR | Phase 8 |

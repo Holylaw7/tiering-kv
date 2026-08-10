@@ -32,7 +32,7 @@ public final class DiskIterator implements StorageIterator {
             }
             try {
                 BlockIndex.IndexEntry blockEntry = blocks.get(blockIndex++);
-                currentBlock = Block.decode(reader.readBlock(blockEntry));
+                currentBlock = Block.decode(reader.readBlockBuffer(blockEntry));
                 entryIndex = 0;
             } catch (java.io.IOException e) {
                 throw new ColdCorruptionException("read block failed: " + e.getMessage());
