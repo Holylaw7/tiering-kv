@@ -21,12 +21,15 @@ Phase 3 已交付：HotnessTracker / FrequencyCounter（LFU + 周期衰减）、
 ARCPolicy（T1/T2/B1/B2 原型）、EvictionManager、MigrationCallback、
 TrackingStorageEngine（访问事件装饰器）。
 
+Phase 4 已交付：WAL 持久化层（写前日志 + 崩溃恢复 + checkpoint），
+写路径 = WAL append → MemTable；默认 EVERY_SEC 策略。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 3（LFU / ARC 热度管理）✅ 已完成**（Phase 0–2 ✅）；
-- 最近提交：`feat(cache): implement hotness tracker`（详见 git log）；
+- 阶段：**Phase 4（WAL Persistence）✅ 已完成**（Phase 0–3 ✅）；
+- 最近提交：`feat(wal): implement WAL manager`（详见 git log）；
 - 基线：tag `phase-0`；分支策略：feature/* 合并入 develop，main 保持稳定；
-- 下一步：**Phase 4 WAL Persistence**（等待用户指令）。
+- 下一步：**Phase 5 LSM / Bitcask Storage Engine**（等待用户指令）。
 
 ## 3. 技术栈
 
@@ -38,6 +41,7 @@ TrackingStorageEngine（访问事件装饰器）。
 | 网络 | Netty 4.1.115 事件循环（已引入，ADR-0006） |
 | 内存层 | MemTable（64 段 SkipList + 分段读写锁，ADR-0007/0008/0009） |
 | 缓存层 | LFU（默认）+ ARC 原型；EvictionManager + MigrationCallback（ADR-0010~0012） |
+| 持久化 | WAL（CRC32C + segment 滚动 + checkpoint；EVERY_SEC 默认，ADR-0014~0016） |
 | 包结构 | `io.tieringkv.{network,protocol,command,storage,memory,cache,eviction,wal,sstable,compaction,scheduler,metrics,benchmark}` |
 
 ## 4. 关键决策（ADR）
@@ -57,6 +61,9 @@ TrackingStorageEngine（访问事件装饰器）。
 | [ADR-0011](adr/ADR-0011-lfu-decay-algorithm.md) | 频率衰减：周期右移 ×0.5，懒计算 |
 | [ADR-0012](adr/ADR-0012-arc-policy-evaluation.md) | ARC 原型（T1/T2/B1/B2 + p 自适应）评估 |
 | [ADR-0013](adr/ADR-0013-tier-migration-interface.md) | TierMigration 结果码（SUCCESS/FAILED/RETRY），先迁移后删除 |
+| [ADR-0014](adr/ADR-0014-wal-write-strategy.md) | WAL 写策略：ALWAYS / EVERY_SEC / NO（近似 group commit） |
+| [ADR-0015](adr/ADR-0015-wal-record-format.md) | WAL 二进制记录格式 + CRC32C |
+| [ADR-0016](adr/ADR-0016-crash-recovery-strategy.md) | 崩溃恢复：校验 → 重放 → 截断残尾 + checkpoint |
 
 ## 5. 仓库布局
 
@@ -90,7 +97,7 @@ tiering-kv/
 | 1 | RESP 协议 | ✅ |
 | 2 | 内存 KV 核心 | ✅ |
 | 3 | LFU / ARC | ✅ |
-| 4 | Bitcask | 未开始 |
+| 4 | Bitcask（WAL 子层） | ✅ |
 | 5 | LSM Tree | 未开始 |
 | 6 | 冷热迁移 | 未开始 |
 | 7 | 并发优化 | 未开始 |

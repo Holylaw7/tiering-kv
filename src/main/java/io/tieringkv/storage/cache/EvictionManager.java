@@ -4,6 +4,9 @@ import io.tieringkv.storage.memory.KeyValueEntry;
 import io.tieringkv.storage.memory.MemTable;
 import io.tieringkv.storage.memory.MemoryManager;
 import io.tieringkv.storage.memory.TimeSource;
+import io.tieringkv.storage.wal.WALEntry;
+import io.tieringkv.storage.wal.WALManager;
+import io.tieringkv.storage.wal.WalWriteException;
 
 /**
  * 内存压力驱动的淘汰管理器（ADR-0012）：
@@ -16,6 +19,7 @@ public final class EvictionManager {
     private final MemoryManager memoryManager;
     private final EvictionPolicy policy;
     private final TierMigration migration;
+    private final WALManager wal;
     private final TimeSource timeSource;
     private final int maxEvictionsPerCycle;
     private static final int MAX_MIGRATION_ATTEMPTS = 3;
@@ -34,12 +38,35 @@ public final class EvictionManager {
             MemoryManager memoryManager,
             EvictionPolicy policy,
             TierMigration migration,
+            WALManager wal,
             TimeSource timeSource,
             int maxEvictionsPerCycle) {
+        this(memTable, memoryManager, policy, migration, timeSource, maxEvictionsPerCycle, wal);
+    }
+
+    public EvictionManager(
+            MemTable memTable,
+            MemoryManager memoryManager,
+            EvictionPolicy policy,
+            TierMigration migration,
+            TimeSource timeSource,
+            int maxEvictionsPerCycle) {
+        this(memTable, memoryManager, policy, migration, timeSource, maxEvictionsPerCycle, null);
+    }
+
+    private EvictionManager(
+            MemTable memTable,
+            MemoryManager memoryManager,
+            EvictionPolicy policy,
+            TierMigration migration,
+            TimeSource timeSource,
+            int maxEvictionsPerCycle,
+            WALManager wal) {
         this.memTable = memTable;
         this.memoryManager = memoryManager;
         this.policy = policy;
         this.migration = migration;
+        this.wal = wal;
         this.timeSource = timeSource;
         this.maxEvictionsPerCycle = maxEvictionsPerCycle;
     }
@@ -74,6 +101,13 @@ public final class EvictionManager {
             MigrationResult result = migration.migrate(entry);
             switch (result) {
                 case SUCCESS -> {
+                    if (wal != null) {
+                        try {
+                            wal.append(WALEntry.delete(now, key, 0));
+                        } catch (WalWriteException e) {
+                            return; // 无法记录删除：保留数据，避免崩溃后复活
+                        }
+                    }
                     if (memTable.removePhysical(key)) {
                         policy.onAccess(new AccessEvent(key, AccessEvent.AccessOperation.EVICT, now, 0));
                     }

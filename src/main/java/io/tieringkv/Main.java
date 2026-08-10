@@ -10,8 +10,14 @@ import io.tieringkv.storage.cache.EvictionManager;
 import io.tieringkv.storage.cache.LFUPolicy;
 import io.tieringkv.storage.cache.TierMigration;
 import io.tieringkv.storage.cache.TrackingStorageEngine;
+import io.tieringkv.storage.wal.RecoveryManager;
+import io.tieringkv.storage.wal.WALConfig;
+import io.tieringkv.storage.wal.WALManager;
+import io.tieringkv.storage.wal.WALStorageEngine;
 import io.tieringkv.storage.memory.MemoryManager;
 import io.tieringkv.storage.memory.MemTable;
+
+import java.nio.file.Path;
 
 /** Tiering-KV 入口：默认监听 0.0.0.0:6379。 */
 public final class Main {
@@ -23,13 +29,21 @@ public final class Main {
         ServerConfig config = new ServerConfig("0.0.0.0", 6379);
         MemoryManager memoryManager = new MemoryManager(1L << 30);
         MemTable memTable = MemTable.create(memoryManager);
+        WALManager walManager = new WALManager(WALConfig.defaults(Path.of("./data/wal")));
+        RecoveryManager.RecoveryStats stats = walManager.recover(memTable);
+        System.out.printf("WAL recovery: scanned=%d applied=%d segments=%d%n",
+                stats.recordsScanned(), stats.recordsApplied(), stats.segmentsReplayed());
         CacheConfig cacheConfig = CacheConfig.defaults();
         EvictionManager evictionManager = new EvictionManager(
                 memTable,
                 memoryManager,
                 new LFUPolicy(cacheConfig.decayIntervalMillis()),
-                TierMigration.discard());
-        StorageEngine storage = new TrackingStorageEngine(memTable, evictionManager);
+                TierMigration.discard(),
+                walManager,
+                System::currentTimeMillis,
+                cacheConfig.maxEvictionsPerCycle());
+        StorageEngine storage = new TrackingStorageEngine(
+                new WALStorageEngine(walManager, memTable), evictionManager);
         TieringKvServer server = new TieringKvServer(
                 config,
                 new CommandEngine(CommandRegistry.createDefault(), storage));

@@ -11,7 +11,7 @@
 | 1 | RESP 协议 | ✅ 完成（2026-08-09） |
 | 2 | 内存 KV 核心 | ✅ 完成（2026-08-10） |
 | 3 | LFU / ARC 热度管理 | ✅ 完成（2026-08-10） |
-| 4 | Bitcask 持久化 | ⏳ 未开始 |
+| 4 | Bitcask 持久化 | ✅ 完成（2026-08-10，WAL 层） |
 | 5 | LSM Tree | ⏳ 未开始 |
 | 6 | 冷热迁移 | ⏳ 未开始 |
 | 7 | 并发优化 | ⏳ 未开始 |
@@ -64,12 +64,19 @@
   淘汰决策 P99≈0.9μs（1M 条目，目标 <1ms，详见
   [cache-eviction-report.md](docs/benchmark/cache-eviction-report.md)）。
 
-## Phase 4 — Bitcask 持久化
+## Phase 4 — Bitcask 持久化（WAL 层） ✅
 
 - 目标：追加写日志、全量内存索引、崩溃恢复、后台 merge。
-- 交付：wal / storage（BitcaskEngine）、恢复与合并测试。
-- 预计 ADR：WAL 一致性策略。
+- 交付：WAL 持久化层（WALManager / WALWriter / WALReader / LogSegment /
+  SegmentManager / ChecksumValidator / RecoveryManager / CheckpointManager /
+  WALStorageEngine）；写路径接入 MemTable；崩溃恢复与 checkpoint。
 - 格式基线：[ADR-0005](docs/adr/ADR-0005-persistence-format.md)。
+- ADR：[0014](docs/adr/ADR-0014-wal-write-strategy.md)（写策略）、
+  [0015](docs/adr/ADR-0015-wal-record-format.md)（记录格式）、
+  [0016](docs/adr/ADR-0016-crash-recovery-strategy.md)（崩溃恢复）。
+- 基准：append P99≈6.8μs（100K/1M，目标 <1ms）；1M 记录恢复 0.57s
+  （详见 [wal-report.md](docs/benchmark/wal-report.md)）。
+- 备注：Bitcask 文件格式与 merge 在 Phase 5 完成（本阶段完成 WAL 子层）。
 
 ## Phase 5 — LSM Tree
 

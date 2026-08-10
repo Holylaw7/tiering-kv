@@ -11,6 +11,7 @@ import io.tieringkv.protocol.RespEncoder;
 import io.tieringkv.protocol.RespError;
 import io.tieringkv.protocol.RespProtocolException;
 import io.tieringkv.protocol.RespValue;
+import io.tieringkv.storage.wal.WalWriteException;
 
 /** 命令入站处理器：解析请求 → 执行 → 写回；协议错误写入后关闭连接。 */
 public final class CommandHandler extends ChannelInboundHandlerAdapter {
@@ -29,6 +30,8 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
                 ctx.writeAndFlush(engine.execute(command));
             } catch (RespProtocolException e) {
                 writeProtocolErrorAndClose(ctx, e.getMessage());
+            } catch (WalWriteException e) {
+                writeError(ctx, "ERR " + e.getMessage());
             }
         } else {
             ctx.fireChannelRead(msg);
@@ -61,5 +64,12 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
         ByteBuf buffer = ctx.alloc().buffer();
         RespEncoder.write(buffer, RespError.protocol(message));
         ctx.writeAndFlush(buffer).addListener(ChannelFutureListener.CLOSE);
+    }
+
+    /** WAL 失败：返回错误但保持连接（不谎报成功）。 */
+    private void writeError(ChannelHandlerContext ctx, String message) {
+        ByteBuf buffer = ctx.alloc().buffer();
+        RespEncoder.write(buffer, new RespError(message));
+        ctx.writeAndFlush(buffer);
     }
 }
