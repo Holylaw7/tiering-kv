@@ -19,6 +19,12 @@ public final class CommandRegistry {
     }
 
     public static CommandRegistry createDefault(Supplier<String> infoProvider) {
+        return createDefault(infoProvider, Map.of());
+    }
+
+    public static CommandRegistry createDefault(
+            Supplier<String> infoProvider,
+            Map<String, Supplier<String>> sections) {
         Map<String, Command> map = new HashMap<>();
         for (Command command : List.of(
                 new PingCommand(),
@@ -27,7 +33,7 @@ public final class CommandRegistry {
                 new GetCommand(),
                 new DelCommand(),
                 new ExistsCommand(),
-                new InfoCommand(infoProvider))) {
+                new InfoCommand(infoProvider, sections))) {
             map.put(command.name(), command);
         }
         return new CommandRegistry(map);
