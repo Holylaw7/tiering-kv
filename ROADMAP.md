@@ -24,6 +24,7 @@
 | 14 | 生产加固 | ✅ 完成（2026-08-10） |
 | 15 | 生产验证 | ✅ 完成（2026-08-10） |
 | 16 | Multi-Raft 架构演进 | ✅ 完成（2026-08-10） |
+| 17 | Region 生命周期与分布式存储完善 | ✅ 完成（2026-08-10） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -306,6 +307,37 @@
 - 缺陷修复：新 leader 以非空日志当选后不回填滞后 follower
   （心跳不匹配回退 nextIndex）+ 回归测试。
 
+## Phase 17 — Region 生命周期与分布式存储完善 ✅
+
+- 目标：Region Split/Merge 闭环、并行迁移 >150MB/s、真实 leader 交接
+  <500ms、Redis Cluster 网关、自动均衡计划、≥900 测试全绿。
+- 交付：
+  - SplitController（五阶段 + 写缓冲 + epoch+1 + 路由原子切换）；
+  - MergeController（邻接校验 + 数据搬迁 + 元数据合并 + tombstone）；
+  - 并行迁移（RegionTransferManager 按段分片 + ChunkCheckpoint +
+    pause/resume/retry）；
+  - 真实 leader 交接（RaftNode.transferLeadership + TimeoutNow RPC +
+    LeaderTransferManager）；
+  - RedisClusterGateway（GET/SET/DEL/MGET/MSET/INFO/CLUSTER SLOTS +
+    MOVED）；
+  - BalanceScheduler/BalancePlan（region/leader/disk/cpu 压力 +
+    epoch 保护）；
+  - 可观测性：INFO RAFT / INFO MIGRATION + 指标；
+  - RegionChaosTest（10 项：分裂并发写/合并故障恢复/延迟丢包交接/
+    Region 隔离）。
+- ADR：[0061](docs/adr/ADR-0061-region-split-lifecycle.md)（Split）、
+  [0062](docs/adr/ADR-0062-region-merge.md)（Merge）、
+  [0063](docs/adr/ADR-0063-parallel-region-migration.md)（并行迁移）、
+  [0064](docs/adr/ADR-0064-real-leader-transfer.md)（leader 交接）、
+  [0065](docs/adr/ADR-0065-placement-auto-balance.md)（自动均衡）。
+- 测试：新增 156 项（Split 29 / Merge 24 / ParallelMigration 22 /
+  LeaderTransfer 16 / Gateway 24 / Balance 16 / Observability 10 /
+  RegionChaos 10 / Benchmark 5）。
+- 基准（[phase17-region-report.md](docs/benchmark/phase17-region-report.md)）：
+  Split 1M≈0.9s（<10s ✅）、Merge 1M≈0.7s（<20s ✅）、并行迁移 100B
+  209.1MB/s（>150 ✅）、Leader Transfer 24ms（<500ms ✅）、Gateway
+  GET/SET 3.68M/1.67M ops/s（>100K/50K ✅）。
+
 ## 技术债登记
 
 | 编号 | 描述 | 来源 | 计划消除 |
@@ -343,5 +375,7 @@
 | TD-033 | 100B 迁移 18.3→59.8→82.7MB/s（目标 >100） | ADR-0059 | Phase 17 并行迁移（未达，如实记录） |
 | TD-034 | Raft 同步等待 37~68K ops/s → 异步提案 129K ops/s | ADR-0054 | ✅ 已关闭（Phase 15） |
 | TD-035 | 真实跨机部署 + tc netem 混沌 | ADR-0053 | Phase 16 部署产物交付；容器执行待 Linux+Docker |
-| TD-036 | leader 转移仅元数据，未触发真实 Raft 交接 | ADR-0060 | Phase 17 |
-| TD-037 | Region split/merge 未与存储数据搬迁联动 | ADR-0057 | Phase 17 |
+| TD-036 | leader 转移仅元数据，未触发真实 Raft 交接 | ADR-0060 | ✅ 已关闭（Phase 17） |
+| TD-037 | Region split/merge 未与存储数据搬迁联动 | ADR-0057 | Phase 18（独立 Raft 组搬迁） |
+| TD-038 | 网关 CLUSTER 命令子集（无 ASK/在线搬迁） | ADR-0061 | Phase 18 |
+| TD-039 | Region 键范围与 slot 区间路由未统一 | ADR-0057 | Phase 18 |

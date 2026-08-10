@@ -93,17 +93,25 @@ ClusterMain + Docker Compose + netem 跨机部署产物；138 项新测试，
 全量回归 788/788 全绿；
 100B/1KB 迁移仍未达 >100/>300 MB/s（TD-033，并行迁移 Phase 17）。
 
+Phase 17 已交付：Region 生命周期闭环——SplitController（五阶段 + 写缓冲，
+1M≈0.9s）、MergeController（故障可重试，1M≈0.7s）、并行迁移
+（RegionTransferManager 按段分片 + chunk 检查点，100B 209.1MB/s）、
+真实 leader 交接（TimeoutNow，24ms）、Redis Cluster Gateway
+（GET/SET/MGET/MSET/CLUSTER SLOTS + MOVED）、BalanceScheduler
+（自动均衡计划 + epoch 保护）、INFO RAFT / INFO MIGRATION 可观测性、
+RegionChaosTest（10 项）；156 项新测试。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 16（Multi-Raft Architecture Evolution）✅ 已完成**
-  （Phase 0–15 全部完成）；
-- 最近提交：Phase 16 基准（详见 git log）；
+- 阶段：**Phase 17（Region Lifecycle）✅ 已完成**
+  （Phase 0–16 全部完成）；
+- 最近提交：Phase 17 基准（详见 git log）；
 - 基线：tag `phase-0`；分支策略：feature/* 合并入 develop，main 保持稳定；
-- 下一步：并行迁移（TD-033）、真实 leader 交接（TD-036）、split 数据
-  搬迁（TD-037）、Linux+Docker 跨机混沌执行（TD-035）（Phase 17，
-  等待用户指令）。
+- 下一步：split/merge 与独立 Raft 组数据搬迁联动（TD-037）、网关
+  CLUSTER 全量命令（TD-038）、双路由层统一（TD-039）、Linux+Docker
+  跨机混沌执行（TD-035）（Phase 18，等待用户指令）。
 
-项目里程碑：**16 阶段路线图全部完成（2026-08-10）**；定位 = 单机完整冷热
+项目里程碑：**17 阶段路线图全部完成（2026-08-10）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
 LFU + WAL + LSM/SSTable + Bloom + Compaction + Migration + mmap +
 BlockCache + Production Runtime + Raft 持久化 + TCP RPC + Snapshot +
@@ -192,6 +200,11 @@ Placement），能力矩阵全 ✅。
 | [ADR-0058](adr/ADR-0058-multi-raft-design.md) | 多 Raft 组 + 单端口共享传输 |
 | [ADR-0059](adr/ADR-0059-zero-copy-write-path.md) | 零拷贝批量写（所有权转移） |
 | [ADR-0060](adr/ADR-0060-placement-control.md) | 放置控制（分布/均衡/leader 转移） |
+| [ADR-0061](adr/ADR-0061-region-split-lifecycle.md) | Region 分裂生命周期 + 写缓冲 |
+| [ADR-0062](adr/ADR-0062-region-merge.md) | Region 合并（PREPARE→TOMBSTONE） |
+| [ADR-0063](adr/ADR-0063-parallel-region-migration.md) | 并行迁移（按段分片 + chunk 检查点） |
+| [ADR-0064](adr/ADR-0064-real-leader-transfer.md) | 真实 leader 交接（TimeoutNow） |
+| [ADR-0065](adr/ADR-0065-placement-auto-balance.md) | 自动均衡计划（epoch 保护） |
 
 ## 5. 仓库布局
 
@@ -238,6 +251,7 @@ tiering-kv/
 | 14 | 生产加固 | ✅ |
 | 15 | 生产验证 | ✅ |
 | 16 | Multi-Raft 架构演进 | ✅ |
+| 17 | Region 生命周期 | ✅ |
 
 ## 7. 技术债
 
@@ -278,8 +292,10 @@ tiering-kv/
 | TD-033 | 100B 迁移 18.3→59.8→82.7MB/s（目标 >100） | Phase 17 并行迁移 |
 | TD-034 | Raft 同步等待 37~68K → 异步提案 129K ops/s | ✅ 已关闭（Phase 15） |
 | TD-035 | 真实跨机 tc netem 混沌 | Phase 16 部署产物交付；容器执行待 Linux+Docker |
-| TD-036 | leader 转移未触发真实 Raft 交接 | Phase 17 |
-| TD-037 | Region split/merge 未与数据搬迁联动 | Phase 17 |
+| TD-036 | leader 转移未触发真实 Raft 交接 | ✅ 已关闭（Phase 17） |
+| TD-037 | Region split/merge 未与数据搬迁联动 | Phase 18 |
+| TD-038 | 网关 CLUSTER 命令子集 | Phase 18 |
+| TD-039 | Region 键范围与 slot 区间路由未统一 | Phase 18 |
 
 ## 8. 会话启动清单
 
