@@ -32,10 +32,13 @@ public final class RaftMetricsRegistry {
     }
 
     public String sectionText() {
+        return "# Raft\r\n" + metricLines();
+    }
+
+    public String metricLines() {
         Snapshot s = snapshot();
         return String.format(Locale.ROOT,
-                "# Raft\r\n"
-                        + "leader_transfer_total:%d\r\n"
+                "leader_transfer_total:%d\r\n"
                         + "election_total:%d\r\n"
                         + "proposal_latency_ms:%.3f\r\n",
                 s.leaderTransferTotal(), s.electionTotal(), s.proposalLatencyMs());

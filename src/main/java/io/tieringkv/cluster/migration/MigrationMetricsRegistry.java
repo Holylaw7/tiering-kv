@@ -31,10 +31,13 @@ public final class MigrationMetricsRegistry {
     }
 
     public String sectionText() {
+        return "# Migration\r\n" + metricLines();
+    }
+
+    public String metricLines() {
         Snapshot s = snapshot();
         return String.format(Locale.ROOT,
-                "# Migration\r\n"
-                        + "migration_bytes:%d\r\n"
+                "migration_bytes:%d\r\n"
                         + "migration_speed_mb_per_sec:%.1f\r\n"
                         + "migration_remaining:%d\r\n"
                         + "migration_error:%d\r\n",

@@ -34,10 +34,13 @@ public final class GatewayMetricsRegistry {
     }
 
     public String sectionText() {
+        return "# Gateway\r\n" + metricLines();
+    }
+
+    public String metricLines() {
         Snapshot s = snapshot();
         return String.format(Locale.ROOT,
-                "# Gateway\r\n"
-                        + "gateway_connections:%d\r\n"
+                "gateway_connections:%d\r\n"
                         + "gateway_qps:%.1f\r\n"
                         + "gateway_avg_latency_ms:%.3f\r\n",
                 s.connections(), s.qps(), s.avgLatencyMs());
