@@ -75,20 +75,29 @@ Phase 14 已交付：生产加固——MemTable 批量写（applyBatch + WAL 批
 101 项新测试；100B 迁移 18.3MB/s 与 Raft 37.3K ops/s 目标未达
 （TD-033/034）。
 
+Phase 15 已交付：生产验证——流式迁移（单次快照 + 游标 + 版本屏障，
+100B 2.9→59.8 MB/s）、全异步批量提案（RaftNode.proposeBatch +
+AsyncReplicationClient，1/64/256 写者 129/259/331K ops/s）、证书生命周期
+（原子轮换 p50 13.5ms）、混沌验证（16 项，发现并修复 Raft 截断提案
+虚假完成缺陷）、集群可观测性（ClusterMetricsRegistry + INFO CLUSTER）；
+98 项新测试，全量回归 650 项全绿；100B/1KB 迁移未达 >100/>300 MB/s
+（写路径 3 次拷贝，TD-033）。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 14（Production Hardening）✅ 已完成**
-  （Phase 0–13 全部完成）；
-- 最近提交：Phase 13 分布式优化（详见 git log）；
+- 阶段：**Phase 15（Production Validation）✅ 已完成**
+  （Phase 0–14 全部完成）；
+- 最近提交：Phase 15 基准（详见 git log）；
 - 基线：tag `phase-0`；分支策略：feature/* 合并入 develop，main 保持稳定；
-- 下一步：MemTable 批量写、自适应 flush/异步客户端、token 签名轮换
-  （Phase 14，等待用户指令）。
+- 下一步：零拷贝批量写路径（TD-033）、真实跨机 tc netem 混沌（TD-035）
+  （Phase 16，等待用户指令）。
 
-项目里程碑：**13 阶段路线图全部完成（2026-08-10）**；定位 = 单机完整冷热
-分层存储 + 分布式生产化（RESP + Async Server + Shard + Memory + LFU +
-WAL + LSM/SSTable + Bloom + Compaction + Migration + mmap + BlockCache +
-Production Runtime + Raft 持久化 + TCP RPC + Snapshot + Slot 迁移 +
-批量复制 + 安全 RPC + 元数据 Raft），能力矩阵全 ✅。
+项目里程碑：**15 阶段路线图全部完成（2026-08-10）**；定位 = 单机完整冷热
+分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
+LFU + WAL + LSM/SSTable + Bloom + Compaction + Migration + mmap +
+BlockCache + Production Runtime + Raft 持久化 + TCP RPC + Snapshot +
+Slot 迁移 + 批量复制 + 安全 RPC + 元数据 Raft + 流式迁移 + 异步提案 +
+证书生命周期 + 混沌验证 + 集群可观测性），能力矩阵全 ✅。
 
 ## 3. 技术栈
 
@@ -163,6 +172,10 @@ Production Runtime + Raft 持久化 + TCP RPC + Snapshot + Slot 迁移 +
 | [ADR-0045](adr/ADR-0045-slot-cursor-migration.md) | MigrationCursor 单次扫描 + PAUSED + 游标文件 |
 | [ADR-0046](adr/ADR-0046-rpc-security.md) | TLS + Token 认证/过期 + TokenBucket 限流 |
 | [ADR-0047](adr/ADR-0047-metadata-raft.md) | 独立元数据 Raft 组 + 每副本状态机 |
+| [ADR-0053](adr/ADR-0053-streaming-migration-design.md) | 流式迁移：单次快照 + 游标 + 版本屏障 + 动态 batch |
+| [ADR-0054](adr/ADR-0054-async-proposal-pipeline.md) | 异步提案：有界队列 + 批量 proposeBatch + 背压 |
+| [ADR-0055](adr/ADR-0055-certificate-lifecycle.md) | 证书加载/校验/过期/原子轮换 + 文件监听 |
+| [ADR-0056](adr/ADR-0056-cluster-observability.md) | 集群指标 + INFO CLUSTER |
 
 ## 5. 仓库布局
 
@@ -206,6 +219,8 @@ tiering-kv/
 | 11 | 分布式集群 | ✅ |
 | 12 | 分布式生产化 | ✅ |
 | 13 | 分布式优化 | ✅ |
+| 14 | 生产加固 | ✅ |
+| 15 | 生产验证 | ✅ |
 
 ## 7. 技术债
 
@@ -240,9 +255,12 @@ tiering-kv/
 | TD-027 | 迁移每批重建源快照 → 游标单次扫描 | ✅ 已关闭（Phase 13） |
 | TD-028 | RPC 无 TLS/认证/限流 → 安全 RPC 层 | ✅ 已关闭（Phase 13） |
 | TD-029 | 元数据单机 → Raft 元数据组 | ✅ 已关闭（Phase 13） |
-| TD-030 | 小负载迁移受单条 put 成本限制 → MemTable 批量写 | Phase 14 |
-| TD-031 | 复制 P50≈6ms → 自适应 flush/异步客户端 | Phase 14 |
+| TD-030 | 小负载迁移 → 流式迁移 59.8MB/s（未达 100） | Phase 16 零拷贝写 |
+| TD-031 | 复制 P50≈6ms → 异步提案 129K ops/s | ✅ 已关闭（Phase 15） |
 | TD-032 | RPC 静态 token → HMAC 签名轮换；mTLS | Phase 14 |
+| TD-033 | 100B 迁移 18.3→59.8MB/s（目标 >100） | Phase 16 零拷贝批量写 |
+| TD-034 | Raft 同步等待 37~68K → 异步提案 129K ops/s | ✅ 已关闭（Phase 15） |
+| TD-035 | 真实跨机 tc netem 混沌 | Phase 15 transport 级混沌 ✅；跨机 Phase 16 |
 
 ## 8. 会话启动清单
 

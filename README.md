@@ -4,7 +4,7 @@
 > （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding +
 > Raft 持久化集群 + 批量复制 + 安全 RPC + 元数据 Raft + 游标迁移）。
 
-**阶段状态：Phase 14（生产加固）✅（Phase 0–13 全部完成 ✅）**
+**阶段状态：Phase 15（生产验证）✅（Phase 0–14 全部完成 ✅）**
 
 ## 项目定位
 
@@ -17,12 +17,17 @@ Raft 日志持久化 + 快照、Netty TCP RPC、复制滞后优化（<1ms）、�
 Slot 迁移（Phase 12），以及分布式优化：批量/流水线复制（>5000 ops/s）、
 游标迁移、TLS/认证/限流安全 RPC、元数据 Raft 化（Phase 13），以及生产
 加固：MemTable 批量写、自适应 Flush/复制、异步提案、HMAC/mTLS、
-元数据持久化与故障注入（Phase 14）；面向 redis-cli 与主流客户端提供
+元数据持久化与故障注入（Phase 14），以及生产验证：流式迁移（单次快照 +
+游标 + 版本屏障）、全异步批量提案（129–331K ops/s）、证书生命周期自动
+轮换、混沌验证（16 项，发现并修复 Raft 截断提案虚假完成缺陷）、集群
+可观测性（INFO CLUSTER）（Phase 15）；面向 redis-cli 与主流客户端提供
 PING / ECHO / SET / GET / DEL / EXISTS 能力。
 
 **边界（如实声明）**：仍为教学/工程级实现，暂不宣称"高性能 Redis 替代品"；
-分布式为真实 TCP + 持久化原型（RPC 串行、无 TLS、元数据单机），
-pub/sub、Lua、RESP3 与正式性能基线（内存降低 60%–80%）为后续演进方向。
+分布式为真实 TCP + 持久化原型，基准以进程内为主，跨机 `tc netem` 验证
+待 Phase 16；100B/1KB 流式迁移（59.8/173.3 MB/s）未达 >100/300 MB/s
+目标（写路径 3 次数组拷贝，已如实记录）；pub/sub、Lua、RESP3 与正式
+性能基线（内存降低 60%–80%）为后续演进方向。
 
 ## 核心能力
 
@@ -272,6 +277,29 @@ RaftNode
 - 基准：[phase14-production-report.md](docs/benchmark/phase14-production-report.md)
   （100B 迁移 18.3MB/s、Raft 37.3K ops/s，两个目标未达已如实记录）。
 
+## 生产验证（Phase 15）
+
+- **流式迁移**（ADR-0053）：单次快照扫描 + `MigrationStreamCursor` 游标
+  （CRC + pause/resume/recover）+ 版本屏障 + 动态 batch；修复每批重建
+  O(N) 快照的隐藏 O(N²) 行为，100B 迁移 2.9 → 59.8 MB/s；
+- **全异步提案**（ADR-0054）：`RaftNode.proposeBatch`（N 请求 → 单次
+  AppendEntries）+ `AsyncReplicationClient`（有界队列背压 + 内联批量
+  drain + leader 变更重试）；1/64/256 写者 129/259/331K ops/s，
+  P99 = 0.009/3.071/9.824ms；
+- **证书生命周期**（ADR-0055）：CertificateManager（加载/校验/过期/
+  原子轮换）+ CertificateWatcher（文件监听），轮换 p50=13.5ms，
+  已有连接不中断；
+- **混沌验证**（ADR-0053~0056 支撑）：16 项混沌测试（延迟/丢包/分区/
+  磁盘慢/leader 击杀/混合故障/法定人数丢失），三轮稳定；发现并修复
+  Raft 缺陷——冲突截断的未提交提案被新条目虚假完成；
+- **可观测性**（ADR-0056）：ClusterMetricsRegistry（raft_proposal_qps /
+  raft_commit_latency / raft_replication_lag / migration_speed /
+  migration_cursor / migration_remaining / certificate_expire_time）+
+  `INFO CLUSTER`（node/role/term/leader/slot）；
+- 文档：[混沌报告](docs/testing/phase15-chaos-report.md)、
+  [基准报告](docs/benchmark/phase15-production-validation-report.md)、
+  [评审报告](docs/review/phase15-production-validation-review.md)。
+
 ## 技术栈
 
 | 层次 | 选型 |
@@ -395,7 +423,7 @@ build / chore），每个阶段至少一次语义化提交。
 ## 快速开始
 
 ```bash
-mvn test                  # 单元 + 集成 + 延迟冒烟测试（47 个用例）
+mvn test                  # 单元 + 集成 + 基准 + 混沌（Phase 1–15，650 个用例）
 mvn -q exec:java          # 启动服务，默认 0.0.0.0:6379
 redis-cli -p 6379         # PING / ECHO / SET / GET / DEL / EXISTS
 ```

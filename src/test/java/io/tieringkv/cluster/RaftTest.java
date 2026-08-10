@@ -1,15 +1,22 @@
 package io.tieringkv.cluster;
 
 import io.tieringkv.cluster.raft.AppendEntriesRequest;
+import io.tieringkv.cluster.raft.AppendEntriesResponse;
+import io.tieringkv.cluster.raft.InstallSnapshotRequest;
+import io.tieringkv.cluster.raft.InstallSnapshotResponse;
 import io.tieringkv.cluster.raft.LogEntry;
 import io.tieringkv.cluster.raft.RaftNode;
 import io.tieringkv.cluster.raft.RaftState;
+import io.tieringkv.cluster.raft.RaftTransport;
 import io.tieringkv.cluster.raft.VoteRequest;
+import io.tieringkv.cluster.raft.VoteResponse;
+import io.tieringkv.cluster.raft.log.MemoryRaftLog;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 import static io.tieringkv.cluster.RaftTestSupport.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -195,6 +202,30 @@ class RaftTest {
     }
 
     @Test
+    void truncatedPendingProposalFailsInsteadOfCompleting() throws Exception {
+        List<String> applied = new ArrayList<>();
+        StubTransport transport = new StubTransport();
+        RaftNode node = new RaftNode("n1", transport,
+                (index, command) -> applied.add(new String(command, StandardCharsets.UTF_8)),
+                ELECTION, 25, 10, new MemoryRaftLog(), null, null);
+        node.start();
+        awaitTrue("leader", () -> node.state() == RaftState.LEADER, 3000);
+        CompletableFuture<Long> pending = node.propose("X".getBytes(StandardCharsets.UTF_8));
+        Thread.sleep(100);
+        assertThat(pending.isDone()).isFalse(); // 无多数派 ack，提案保持悬挂
+        long term = node.currentTerm() + 5;
+        AppendEntriesResponse response = node.receive(new AppendEntriesRequest(
+                term, "new-leader", -1, 0,
+                List.of(new LogEntry(term, 0, "Y".getBytes(StandardCharsets.UTF_8))), 0));
+        assertThat(response.success()).isTrue();
+        // 冲突截断后旧提案必须显式失败，禁止被新条目虚假完成（Phase 15 混沌发现）
+        assertThatThrownBy(pending::join)
+                .hasRootCauseInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("superseded");
+        node.close();
+    }
+
+    @Test
     void higherTermHeartbeatStepsDownLeader() throws Exception {
         List<String> applied = new ArrayList<>();
         RaftNode[] nodes = group3(applied);
@@ -303,4 +334,29 @@ class RaftTest {
         node.close();
     }
 
+    /** 授予选票但从不响应日志复制的传输：用于构造悬挂提案。 */
+    private static final class StubTransport implements RaftTransport {
+
+        @Override
+        public List<String> peerIds() {
+            return List.of("n1", "p1", "p2");
+        }
+
+        @Override
+        public CompletableFuture<VoteResponse> requestVote(String target, VoteRequest request) {
+            return CompletableFuture.completedFuture(new VoteResponse(request.term(), true));
+        }
+
+        @Override
+        public CompletableFuture<AppendEntriesResponse> appendEntries(
+                String target, AppendEntriesRequest request) {
+            return new CompletableFuture<>();
+        }
+
+        @Override
+        public CompletableFuture<InstallSnapshotResponse> installSnapshot(
+                String target, InstallSnapshotRequest request) {
+            return new CompletableFuture<>();
+        }
+    }
 }

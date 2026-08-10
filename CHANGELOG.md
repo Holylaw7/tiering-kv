@@ -194,6 +194,36 @@
 - Phase 14 测试：新增 101 项；基准：100B 迁移 18.3MB/s 与 Raft 37.3K
   ops/s 未达目标（已如实记录，TD-033/034），HMAC 开销≈0、元数据重启
   194ms。
+- Phase 15 生产验证：
+  - 流式迁移（ADR-0053）：StreamingMigrator 单次快照 + 跨批次持久
+    scanner + MigrationStreamCursor（CRC/原地更新）+ 版本屏障 + 动态
+    batch（100B→4096 / 1KB→1024 / 10KB→256）；修复每批重建 O(N)
+    快照的隐藏 O(N²) 行为，100B 迁移 2.9 → 59.8 MB/s；
+  - 全异步提案（ADR-0054）：RaftNode.proposeBatch（N 请求 → 单次
+    AppendEntries）+ AsyncReplicationClient（有界队列 NORMAL/WARNING/
+    CRITICAL 背压 + 内联批量 drain + leader 变更整批重试 ≤3）；
+  - 证书生命周期（ADR-0055）：CertificateManager（加载/校验/过期/
+    reload/原子轮换 + server/client supplier）+ CertificateWatcher
+    （WatchService 监听 .crt/.key 变更）；
+  - 混沌验证（ADR-0053~0056 支撑）：ChaosValidationTest 16 项（100ms
+    延迟/5%/10% 丢包/follower/leader 分区/磁盘慢/leader 击杀/replica
+    重启追平/混合故障/法定人数丢失），三轮稳定；发现并修复 Raft 缺陷
+    ——冲突截断的未提交提案被同 index 新条目虚假完成
+    （RaftNode.failPendingFromLocked + 回归测试）；
+  - 集群可观测性（ADR-0056）：ClusterMetricsRegistry（raft_proposal_qps/
+    raft_commit_latency/raft_replication_lag/migration_speed/
+    migration_cursor/migration_remaining/certificate_expire_time）+
+    ClusterInfo + `INFO CLUSTER`（node/role/term/leader/slot）；
+  - INFO 命令扩展支持 `INFO [section]`（未知 section 返回错误）；
+  - 测试：新增 98 项（迁移 19 / 异步 Raft 21 / 证书 15 / 混沌 16+1 /
+    可观测性 15 / 基准 11）；全量回归 650 项全绿（Phase 1–15）；
+  - 基准（docs/benchmark/phase15-production-validation-report.md）：
+    迁移 100B 59.8 / 1KB 173.3 / 10KB 589.8 MB/s；Raft 1/64/256 写者
+    129/259/331K ops/s（目标 100K/200K ✅），P99 0.009/3.071/9.824ms；
+    混沌选举恢复 p50 155ms（目标 <5s ✅）；TLS 轮换 p50 13.5ms；
+  - 未达标（如实记录）：100B/1KB 迁移未达 >100/>300 MB/s，瓶颈 = 写
+    路径每条目 3 次数组拷贝（Mutation 构造/访问器 + KeyValueEntry），
+    零拷贝批量写路径列入 Phase 16（TD-033）。
 - Phase 9 评审处置：确认瓶颈分层（A 4.7M → B 230K → C 150K，瓶颈=协议/调度）；
   登记 TD-020（request→response 对象数优化）与 TD-021（JFR 验收指标）。
 - Phase 8 IO 优化：MmapSSTableReader（零拷贝块读）+ FileChannel baseline、

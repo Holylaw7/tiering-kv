@@ -10,6 +10,7 @@ import io.tieringkv.cluster.raft.snapshot.SnapshotManager;
 import io.tieringkv.storage.StorageEngine;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /** 集群存储节点（ADR-0037）：Raft 组 + 复制存储。 */
 public final class ClusterNode implements AutoCloseable {
@@ -57,6 +58,11 @@ public final class ClusterNode implements AutoCloseable {
 
     public void put(byte[] key, byte[] value) {
         storage.put(key, value);
+    }
+
+    /** 异步复制写（ADR-0050/0054）：返回 future，提交后完成。 */
+    public CompletableFuture<Void> putAsync(byte[] key, byte[] value) {
+        return storage.putAsync(key, value);
     }
 
     public byte[] get(byte[] key) {
