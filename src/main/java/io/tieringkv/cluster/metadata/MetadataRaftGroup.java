@@ -3,11 +3,19 @@ package io.tieringkv.cluster.metadata;
 import io.tieringkv.cluster.raft.LeaderElection;
 import io.tieringkv.cluster.raft.RaftNode;
 import io.tieringkv.cluster.raft.RaftState;
+import io.tieringkv.cluster.raft.RaftReplicationConfig;
+import io.tieringkv.cluster.raft.log.Durability;
+import io.tieringkv.cluster.raft.log.FileRaftLog;
+import io.tieringkv.cluster.raft.log.RaftLog;
+import io.tieringkv.cluster.raft.log.RaftPersistentState;
+import io.tieringkv.cluster.raft.snapshot.SnapshotManager;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -35,6 +43,36 @@ public final class MetadataRaftGroup implements AutoCloseable {
             RaftNode node = new RaftNode(id, peers,
                     (index, command) -> state.apply(command),
                     election, heartbeatIntervalMillis, tickIntervalMillis);
+            group.nodes.put(id, node);
+            group.nodeList.add(node);
+        }
+        peers.addAll(group.nodeList);
+        return group;
+    }
+
+    /** 持久化构造（ADR-0052）：FileRaftLog + RaftPersistentState + MetadataSnapshot。 */
+    public static MetadataRaftGroup createPersistent(
+            List<String> ids, LeaderElection election,
+            long heartbeatIntervalMillis, long tickIntervalMillis,
+            Path baseDir) throws IOException {
+        MetadataRaftGroup group = new MetadataRaftGroup();
+        List<RaftNode> peers = new ArrayList<>();
+        for (String id : ids) {
+            MetadataState state = new MetadataState();
+            group.states.put(id, state);
+            Path nodeDir = baseDir.resolve(id);
+            RaftLog log = FileRaftLog.open(nodeDir.resolve("raftlog"), Durability.SYNC);
+            RaftPersistentState persistent = RaftPersistentState.open(nodeDir);
+            SnapshotManager snapshot = SnapshotManager.open(
+                    nodeDir.resolve("snapshot"),
+                    () -> MetadataStateCodec.serialize(state),
+                    data -> MetadataStateCodec.restore(state, data));
+            RaftNode node = new RaftNode(id,
+                    new io.tieringkv.cluster.raft.LocalRaftTransport(peers, id),
+                    (index, command) -> state.apply(command),
+                    election, heartbeatIntervalMillis, tickIntervalMillis,
+                    log, persistent, snapshot,
+                    RaftReplicationConfig.defaults(), null);
             group.nodes.put(id, node);
             group.nodeList.add(node);
         }

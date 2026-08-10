@@ -31,6 +31,7 @@ public final class RaftNode implements AutoCloseable {
     private final long heartbeatIntervalMillis;
     private final long tickIntervalMillis;
     private final RaftReplicationConfig replicationConfig;
+    private final ReplicationController replicationController;
     private final ScheduledExecutorService scheduler;
     private final ScheduledExecutorService flushScheduler;
     private final RaftLog raftLog;
@@ -82,7 +83,7 @@ public final class RaftNode implements AutoCloseable {
             SnapshotManager snapshotManager) {
         this(id, transport, stateMachine, election, heartbeatIntervalMillis,
                 tickIntervalMillis, raftLog, persistentState, snapshotManager,
-                RaftReplicationConfig.defaults());
+                RaftReplicationConfig.defaults(), null);
     }
 
     /** 完整构造：额外指定批量复制配置（ADR-0044）。 */
@@ -97,6 +98,24 @@ public final class RaftNode implements AutoCloseable {
             RaftPersistentState persistentState,
             SnapshotManager snapshotManager,
             RaftReplicationConfig replicationConfig) {
+        this(id, transport, stateMachine, election, heartbeatIntervalMillis,
+                tickIntervalMillis, raftLog, persistentState, snapshotManager,
+                replicationConfig, null);
+    }
+
+    /** 完整构造：额外指定自适应复制控制器（ADR-0050）。 */
+    public RaftNode(
+            String id,
+            RaftTransport transport,
+            BiConsumer<Long, byte[]> stateMachine,
+            LeaderElection election,
+            long heartbeatIntervalMillis,
+            long tickIntervalMillis,
+            RaftLog raftLog,
+            RaftPersistentState persistentState,
+            SnapshotManager snapshotManager,
+            RaftReplicationConfig replicationConfig,
+            ReplicationController replicationController) {
         this.id = id;
         this.transport = transport;
         this.stateMachine = stateMachine;
@@ -104,6 +123,7 @@ public final class RaftNode implements AutoCloseable {
         this.heartbeatIntervalMillis = heartbeatIntervalMillis;
         this.tickIntervalMillis = tickIntervalMillis;
         this.replicationConfig = replicationConfig;
+        this.replicationController = replicationController;
         this.raftLog = raftLog;
         this.persistentState = persistentState;
         this.snapshotManager = snapshotManager;
@@ -202,9 +222,22 @@ public final class RaftNode implements AutoCloseable {
         }
         scheduler.scheduleWithFixedDelay(this::tick, tickIntervalMillis, tickIntervalMillis,
                 TimeUnit.MILLISECONDS);
-        flushScheduler.scheduleWithFixedDelay(this::flushReplication,
-                replicationConfig.flushIntervalMillis(),
-                replicationConfig.flushIntervalMillis(), TimeUnit.MILLISECONDS);
+        scheduleNextFlush();
+    }
+
+    private void scheduleNextFlush() {
+        long interval = replicationController != null
+                ? replicationController.flushIntervalMillis()
+                : replicationConfig.flushIntervalMillis();
+        flushScheduler.schedule(this::flushTick, interval, TimeUnit.MILLISECONDS);
+    }
+
+    private void flushTick() {
+        try {
+            flushReplication();
+        } finally {
+            scheduleNextFlush();
+        }
     }
 
     /** 模拟节点崩溃/不可用（测试与故障转移场景）。 */
@@ -503,9 +536,12 @@ public final class RaftNode implements AutoCloseable {
     private List<LogEntry> batchEntriesLocked(long next) {
         List<LogEntry> entries = new ArrayList<>();
         long bytes = 0;
+        int maxEntries = replicationController != null
+                ? replicationController.batchSize()
+                : replicationConfig.maxBatchEntries();
         for (long index = next;
              index <= lastLogIndex()
-                     && entries.size() < replicationConfig.maxBatchEntries()
+                     && entries.size() < maxEntries
                      && bytes < replicationConfig.maxBatchBytes();
              index++) {
             LogEntry entry = cacheEntryLocked(index);
@@ -522,7 +558,9 @@ public final class RaftNode implements AutoCloseable {
             }
             long next = replication.nextIndex(peer);
             if (next <= lastLogIndex()
-                    && lastLogIndex() - next + 1 >= replicationConfig.maxBatchEntries()) {
+                    && lastLogIndex() - next + 1 >= (replicationController != null
+                    ? replicationController.batchSize()
+                    : replicationConfig.maxBatchEntries())) {
                 return true;
             }
         }
@@ -563,6 +601,7 @@ public final class RaftNode implements AutoCloseable {
     }
 
     private void sendAsync(PeerCall call) {
+        long sentAt = System.nanoTime();
         CompletableFuture<AppendEntriesResponse> future;
         if (call.snapshotRequest() != null) {
             future = transport.installSnapshot(call.peer(), call.snapshotRequest())
@@ -574,11 +613,17 @@ public final class RaftNode implements AutoCloseable {
         }
         future.orTimeout(RPC_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
                 .whenComplete((response, error) ->
-                        onReplicationResponse(call, response, error));
+                        onReplicationResponse(call, response, error, sentAt));
     }
 
     private void onReplicationResponse(PeerCall call, AppendEntriesResponse response,
-                                       Throwable error) {
+                                       Throwable error, long sentAt) {
+        if (replicationController != null) {
+            replicationController.recordRttNanos(System.nanoTime() - sentAt);
+            long maxMatch = replication.matchIndexSnapshot().values().stream()
+                    .mapToLong(Long::longValue).max().orElse(-1);
+            replicationController.setPendingEntries(Math.max(0, lastLogIndex() - maxMatch));
+        }
         AppendEntriesResponse result = response != null
                 ? response : new AppendEntriesResponse(0, false, 0);
         synchronized (lock) {
