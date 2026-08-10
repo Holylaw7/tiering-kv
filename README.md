@@ -4,7 +4,7 @@
 > （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding +
 > Raft 持久化集群 + 批量复制 + 安全 RPC + 元数据 Raft + 游标迁移）。
 
-**阶段状态：Phase 15（生产验证）✅（Phase 0–14 全部完成 ✅）**
+**阶段状态：Phase 16（Multi-Raft 架构演进）✅（Phase 0–15 全部完成 ✅）**
 
 ## 项目定位
 
@@ -21,13 +21,18 @@ Slot 迁移（Phase 12），以及分布式优化：批量/流水线复制（>50
 游标 + 版本屏障）、全异步批量提案（129–331K ops/s）、证书生命周期自动
 轮换、混沌验证（16 项，发现并修复 Raft 截断提案虚假完成缺陷）、集群
 可观测性（INFO CLUSTER）（Phase 15）；面向 redis-cli 与主流客户端提供
-PING / ECHO / SET / GET / DEL / EXISTS 能力。
+PING / ECHO / SET / GET / DEL / EXISTS 能力；以及 Multi-Raft 架构演进：
+Region 抽象（键范围 + epoch 路由保护）、每 Region 独立 Raft 组
+（单端口共享传输 + 组隔离）、零拷贝批量写（RawMutation 所有权转移）、
+放置控制（分布/均衡/leader 转移）、多 Region 混沌验证（发现并修复
+滞后副本回填缺陷）（Phase 16）。
 
 **边界（如实声明）**：仍为教学/工程级实现，暂不宣称"高性能 Redis 替代品"；
 分布式为真实 TCP + 持久化原型，基准以进程内为主，跨机 `tc netem` 验证
-待 Phase 16；100B/1KB 流式迁移（59.8/173.3 MB/s）未达 >100/300 MB/s
-目标（写路径 3 次数组拷贝，已如实记录）；pub/sub、Lua、RESP3 与正式
-性能基线（内存降低 60%–80%）为后续演进方向。
+待 Linux+Docker 环境执行（部署产物已交付）；100B/1KB 零拷贝迁移
+（82.7/223.1 MB/s）未达 >100/300 MB/s 目标（剩余每条目固定开销，
+已如实记录）；pub/sub、Lua、RESP3 与正式性能基线（内存降低 60%–80%）
+为后续演进方向。
 
 ## 核心能力
 
@@ -299,6 +304,28 @@ RaftNode
 - 文档：[混沌报告](docs/testing/phase15-chaos-report.md)、
   [基准报告](docs/benchmark/phase15-production-validation-report.md)、
   [评审报告](docs/review/phase15-production-validation-review.md)。
+
+## Multi-Raft 架构演进（Phase 16）
+
+- **Region 抽象**（ADR-0057）：键范围 [startKey, endKey) + confVer/version
+  纪元 + NORMAL/SPLITTING/MERGING/TOMBSTONE；RegionManager 路由/
+  分裂/合并，旧纪元请求显式拒绝；
+- **Multi-Raft**（ADR-0058）：MultiRaftNode + RaftGroupManager（每 Region
+  独立 Raft 组）+ MultiRaftEndpoint（单端口组前缀路由，RaftNode API
+  零改动）；吞吐随组数近似线性扩展（2 组 2.02×、4 组 3.68×）；
+- **零拷贝批量写**（ADR-0059）：RawMutation 所有权转移 +
+  MemTable.applyRawBatch（平面桶分组 + 单段单锁）+ SkipList 单次查找；
+  100B 迁移 59.8 → 82.7 MB/s；
+- **放置控制**（ADR-0060）：PlacementManager 分布/均衡检查/leader
+  转移（epoch confVer 推进），自动 rebalance 暂缓；
+- **混沌验证**：ChaosClusterTest 20 项（Region 级故障隔离），发现并
+  修复 Raft 缺陷——新 leader 不回填滞后副本（心跳不匹配回退 nextIndex）；
+- **可观测性**：RegionMetricsRegistry + `INFO REGIONS`
+  （region/leader/epoch/size/state）；
+- **跨机部署**：[Docker Compose + netem 混沌](docs/deployment/phase16-cross-machine.md)
+  （ClusterMain 三节点入口）；
+- 基准：[phase16-multiraft-report.md](docs/benchmark/phase16-multiraft-report.md)；
+  评审：[phase16-multiraft-review.md](docs/review/phase16-multiraft-review.md)。
 
 ## 技术栈
 

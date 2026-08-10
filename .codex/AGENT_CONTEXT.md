@@ -83,21 +83,33 @@ AsyncReplicationClient，1/64/256 写者 129/259/331K ops/s）、证书生命周
 98 项新测试，全量回归 650 项全绿；100B/1KB 迁移未达 >100/>300 MB/s
 （写路径 3 次拷贝，TD-033）。
 
+Phase 16 已交付：Multi-Raft 架构演进——Region 模型（键范围 + epoch 路由
+保护 + split/merge）、每 Region 独立 Raft 组（MultiRaftNode /
+RaftGroupManager / 单端口 MultiRaftEndpoint 组前缀路由）、零拷贝批量写
+（RawMutation 所有权转移 + applyRawBatch，100B 迁移 59.8→82.7 MB/s）、
+放置控制（PlacementManager + leader 转移）、Region 指标 + INFO REGIONS、
+混沌验证（ChaosClusterTest 20 项，发现并修复滞后副本回填缺陷）、
+ClusterMain + Docker Compose + netem 跨机部署产物；138 项新测试，
+全量回归 788/788 全绿；
+100B/1KB 迁移仍未达 >100/>300 MB/s（TD-033，并行迁移 Phase 17）。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 15（Production Validation）✅ 已完成**
-  （Phase 0–14 全部完成）；
-- 最近提交：Phase 15 基准（详见 git log）；
+- 阶段：**Phase 16（Multi-Raft Architecture Evolution）✅ 已完成**
+  （Phase 0–15 全部完成）；
+- 最近提交：Phase 16 基准（详见 git log）；
 - 基线：tag `phase-0`；分支策略：feature/* 合并入 develop，main 保持稳定；
-- 下一步：零拷贝批量写路径（TD-033）、真实跨机 tc netem 混沌（TD-035）
-  （Phase 16，等待用户指令）。
+- 下一步：并行迁移（TD-033）、真实 leader 交接（TD-036）、split 数据
+  搬迁（TD-037）、Linux+Docker 跨机混沌执行（TD-035）（Phase 17，
+  等待用户指令）。
 
-项目里程碑：**15 阶段路线图全部完成（2026-08-10）**；定位 = 单机完整冷热
+项目里程碑：**16 阶段路线图全部完成（2026-08-10）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
 LFU + WAL + LSM/SSTable + Bloom + Compaction + Migration + mmap +
 BlockCache + Production Runtime + Raft 持久化 + TCP RPC + Snapshot +
 Slot 迁移 + 批量复制 + 安全 RPC + 元数据 Raft + 流式迁移 + 异步提案 +
-证书生命周期 + 混沌验证 + 集群可观测性），能力矩阵全 ✅。
+证书生命周期 + 混沌验证 + 集群可观测性 + Region + Multi-Raft + 零拷贝 +
+Placement），能力矩阵全 ✅。
 
 ## 3. 技术栈
 
@@ -176,6 +188,10 @@ Slot 迁移 + 批量复制 + 安全 RPC + 元数据 Raft + 流式迁移 + 异步
 | [ADR-0054](adr/ADR-0054-async-proposal-pipeline.md) | 异步提案：有界队列 + 批量 proposeBatch + 背压 |
 | [ADR-0055](adr/ADR-0055-certificate-lifecycle.md) | 证书加载/校验/过期/原子轮换 + 文件监听 |
 | [ADR-0056](adr/ADR-0056-cluster-observability.md) | 集群指标 + INFO CLUSTER |
+| [ADR-0057](adr/ADR-0057-region-model-design.md) | Region 模型 + epoch 路由保护 |
+| [ADR-0058](adr/ADR-0058-multi-raft-design.md) | 多 Raft 组 + 单端口共享传输 |
+| [ADR-0059](adr/ADR-0059-zero-copy-write-path.md) | 零拷贝批量写（所有权转移） |
+| [ADR-0060](adr/ADR-0060-placement-control.md) | 放置控制（分布/均衡/leader 转移） |
 
 ## 5. 仓库布局
 
@@ -221,6 +237,7 @@ tiering-kv/
 | 13 | 分布式优化 | ✅ |
 | 14 | 生产加固 | ✅ |
 | 15 | 生产验证 | ✅ |
+| 16 | Multi-Raft 架构演进 | ✅ |
 
 ## 7. 技术债
 
@@ -255,12 +272,14 @@ tiering-kv/
 | TD-027 | 迁移每批重建源快照 → 游标单次扫描 | ✅ 已关闭（Phase 13） |
 | TD-028 | RPC 无 TLS/认证/限流 → 安全 RPC 层 | ✅ 已关闭（Phase 13） |
 | TD-029 | 元数据单机 → Raft 元数据组 | ✅ 已关闭（Phase 13） |
-| TD-030 | 小负载迁移 → 流式迁移 59.8MB/s（未达 100） | Phase 16 零拷贝写 |
+| TD-030 | 小负载迁移 → 零拷贝批量写（100B 82.7MB/s） | ✅ 已关闭（Phase 16） |
 | TD-031 | 复制 P50≈6ms → 异步提案 129K ops/s | ✅ 已关闭（Phase 15） |
 | TD-032 | RPC 静态 token → HMAC 签名轮换；mTLS | Phase 14 |
-| TD-033 | 100B 迁移 18.3→59.8MB/s（目标 >100） | Phase 16 零拷贝批量写 |
+| TD-033 | 100B 迁移 18.3→59.8→82.7MB/s（目标 >100） | Phase 17 并行迁移 |
 | TD-034 | Raft 同步等待 37~68K → 异步提案 129K ops/s | ✅ 已关闭（Phase 15） |
-| TD-035 | 真实跨机 tc netem 混沌 | Phase 15 transport 级混沌 ✅；跨机 Phase 16 |
+| TD-035 | 真实跨机 tc netem 混沌 | Phase 16 部署产物交付；容器执行待 Linux+Docker |
+| TD-036 | leader 转移未触发真实 Raft 交接 | Phase 17 |
+| TD-037 | Region split/merge 未与数据搬迁联动 | Phase 17 |
 
 ## 8. 会话启动清单
 

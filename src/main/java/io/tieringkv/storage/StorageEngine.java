@@ -2,6 +2,10 @@ package io.tieringkv.storage;
 
 import io.tieringkv.storage.memory.BatchWriteRequest;
 import io.tieringkv.storage.memory.Mutation;
+import io.tieringkv.storage.memory.RawMutation;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 存储引擎 SPI（ADR-0002 / ADR-0007）。
@@ -37,5 +41,18 @@ public interface StorageEngine {
             }
         }
         return request.mutations().size();
+    }
+
+    /**
+     * 零拷贝批量应用（ADR-0059）：MemTable 覆盖为所有权转移实现；
+     * 其他引擎默认回退到 applyBatch（拷贝路径，语义等价）。
+     */
+    default int applyRawBatch(List<RawMutation> mutations) {
+        List<Mutation> converted = new ArrayList<>(mutations.size());
+        for (RawMutation mutation : mutations) {
+            converted.add(Mutation.put(
+                    mutation.key(), mutation.value(), mutation.ttlMillis()));
+        }
+        return applyBatch(new BatchWriteRequest(converted));
     }
 }

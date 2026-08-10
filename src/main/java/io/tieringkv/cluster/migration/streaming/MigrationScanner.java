@@ -17,6 +17,7 @@ public final class MigrationScanner {
     private final int slotEnd;
     private final long versionBarrier;
     private final byte[] cursorKey;
+    private final boolean fullRange;
     private KeyValueEntry next;
 
     public MigrationScanner(StorageIterator iterator, int slotStart, int slotEnd,
@@ -26,6 +27,7 @@ public final class MigrationScanner {
         this.slotEnd = slotEnd;
         this.versionBarrier = versionBarrier;
         this.cursorKey = cursorKey == null ? new byte[0] : cursorKey.clone();
+        this.fullRange = slotStart <= 0 && slotEnd >= HashSlotRouter.SLOT_COUNT - 1;
         advance();
     }
 
@@ -42,7 +44,8 @@ public final class MigrationScanner {
     private void advance() {
         while (iterator.hasNext()) {
             KeyValueEntry entry = iterator.next();
-            if (!inRange(entry.key()) || compare(entry.key(), cursorKey) <= 0
+            if ((!fullRange && !inRange(entry.key()))
+                    || compare(entry.key(), cursorKey) <= 0
                     || entry.version() > versionBarrier) {
                 continue;
             }

@@ -224,6 +224,41 @@
   - 未达标（如实记录）：100B/1KB 迁移未达 >100/>300 MB/s，瓶颈 = 写
     路径每条目 3 次数组拷贝（Mutation 构造/访问器 + KeyValueEntry），
     零拷贝批量写路径列入 Phase 16（TD-033）。
+- Phase 16 Multi-Raft 架构演进：
+  - Region 模型（ADR-0057）：Region（[startKey,endKey) + leader/peers +
+    epoch + state）、RegionEpoch（confVer/version 从 1 起）、RegionManager
+    （TreeMap 路由 + create/split/merge + tombstone 审计 + epoch guard +
+    transferLeader）、StaleRegionEpochException；
+  - Multi-Raft（ADR-0058）：MultiRaftNode（多 Raft 宿主）、RaftGroupManager
+    （按 Region 创建/销毁组，含持久化组）、MultiRaftEndpoint（单端口共享
+    RPC 端点 + [groupId] 前缀路由）、MultiRaftTransport（RaftTransport
+    兼容，RaftNode API 零改动）；
+  - 零拷贝批量写（ADR-0059）：RawMutation（所有权转移，不克隆）、
+    KeyValueEntry record→class + owned 构造、MemTable.applyRawBatch
+    （平面桶分组 + 单段单锁 + 版本按序分配）、SkipList.putAndGetOld
+    （单次查找）、StreamingMigrator 切换零拷贝路径、全槽位迁移跳过
+    slot 哈希、游标 advance 去克隆；
+  - 放置控制（ADR-0060）：PlacementManager（distribution/balanceSkew/
+    isBalanced/transferLeader），自动 rebalance 暂缓；
+  - Region 可观测性：RegionMetricsRegistry（region_count/region_size/
+    region_split_count/raft_group_count/leader_distribution/
+    region_move_bytes）+ RegionInfo + `INFO REGIONS`；
+  - 混沌验证：ChaosClusterTest 20 项（多 Region 延迟/丢包/分区/磁盘慢/
+    双组击杀/重启追平/混合故障/epoch 保护）；
+  - 缺陷修复：新 leader 以非空日志当选后不回填滞后 follower
+    （心跳拒绝未回退 nextIndex → 修复 + 回归测试
+    newLeaderBackfillsLaggingFollowerWithoutNewWrites）；
+  - 跨机部署：ClusterMain（3 JVM 拓扑入口）+ deploy/Dockerfile +
+    docker-compose.yml + chaos-netem.sh + 跨机指南；
+  - 测试：新增 138 项（Region 34 / Multi-Raft 32 / Zero-Copy 21 /
+    Chaos 21 / Placement+可观测性 23 / 基准 6）；
+  - 全量回归 788/788 全绿（Phase 1–16）；
+  - 基准（docs/benchmark/phase16-multiraft-report.md）：零拷贝迁移
+    100B 82.7 / 1KB 223.1 / 10KB 631.0 MB/s；Multi-Raft 1/2/4 组
+    110/222/404K ops/s（线性扩展 2.02×/3.68× ✅）；TCP 单端口多组
+    P99 0.551ms；故障恢复 p50 183ms；
+  - 未达标（如实记录）：100B/1KB 迁移未达 >100/>300 MB/s
+    （82.7/223.1，剩余每条目固定开销 → Phase 17 并行迁移）。
 - Phase 9 评审处置：确认瓶颈分层（A 4.7M → B 230K → C 150K，瓶颈=协议/调度）；
   登记 TD-020（request→response 对象数优化）与 TD-021（JFR 验收指标）。
 - Phase 8 IO 优化：MmapSSTableReader（零拷贝块读）+ FileChannel baseline、

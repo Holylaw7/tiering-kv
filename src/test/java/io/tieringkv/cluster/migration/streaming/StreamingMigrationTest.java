@@ -345,6 +345,30 @@ class StreamingMigrationTest {
     }
 
     @Test
+    void streamingMigrationUsesZeroCopyOwnership() throws Exception {
+        MemTable source = MemTable.create();
+        MemTable target = MemTable.create();
+        try {
+            byte[] key = key(0);
+            byte[] value = value();
+            source.put(key, value);
+            StreamingMigrator migrator = new StreamingMigrator(source, target,
+                    new SlotTable(), dir, 0, HashSlotRouter.SLOT_COUNT - 1, 1,
+                    Long.MAX_VALUE);
+            while (!migrator.runBatch(512)) {
+            }
+            io.tieringkv.storage.memory.KeyValueEntry stored =
+                    target.getEntry(key);
+            // 零拷贝路径（ADR-0059）：目标条目与源快照共享数组实例
+            assertThat(stored.value()).isSameAs(source.getEntry(key).value());
+            assertThat(stored.key()).isSameAs(source.getEntry(key).key());
+        } finally {
+            source.close();
+            target.close();
+        }
+    }
+
+    @Test
     void invalidBatchSizeRejected() {
         assertThatThrownBy(() -> new BatchEncoder(0))
                 .isInstanceOf(IllegalArgumentException.class);

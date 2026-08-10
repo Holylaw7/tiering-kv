@@ -47,9 +47,12 @@ public final class MigrationStreamCursor {
         return checksum;
     }
 
-    /** 原地前进（热路径：无分配）。 */
+    /**
+     * 原地前进（热路径：无分配）。调用方保证 key 数组在迁移期间稳定
+     * （源快照条目数组不可变）；lastKey() 读取时仍返回防御性克隆。
+     */
     public MigrationStreamCursor advance(byte[] key, long version, long updatedChecksum) {
-        this.lastKey = key == null ? new byte[0] : key.clone();
+        this.lastKey = key == null ? new byte[0] : key;
         this.lastVersion = version;
         this.offset++;
         this.checksum = updatedChecksum;
