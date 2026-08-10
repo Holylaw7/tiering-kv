@@ -39,7 +39,7 @@ Client → ClusterRouter → RegionRouter → Region → RaftGroup → StorageEn
 
 ## 4. Tests
 
-新增 137 项（Phase 15 基线 650）：
+新增 138 项（Phase 15 基线 650）：
 
 | 模块 | 新增 | 结果 |
 | --- | --- | --- |
@@ -50,7 +50,7 @@ Client → ClusterRouter → RegionRouter → Region → RaftGroup → StorageEn
 | Placement + 可观测性（Part 5） | 23 | ✅ |
 | 基准 | 6 | ✅ |
 
-全量回归最终统计见合并后报告。
+全量回归 **788/788 全绿**。
 
 ## 5. Benchmark
 

@@ -297,7 +297,7 @@
   [0058](docs/adr/ADR-0058-multi-raft-design.md)（Multi-Raft）、
   [0059](docs/adr/ADR-0059-zero-copy-write-path.md)（零拷贝写路径）、
   [0060](docs/adr/ADR-0060-placement-control.md)（放置控制）。
-- 测试：新增 137 项（Region 34 / Multi-Raft 32 / Zero-Copy 21 /
+- 测试：新增 138 项（Region 34 / Multi-Raft 32 / Zero-Copy 21 /
   Chaos 21 / Placement+可观测性 23 / 基准 6）。
 - 基准（[phase16-multiraft-report.md](docs/benchmark/phase16-multiraft-report.md)）：
   零拷贝迁移 100B 82.7 / 1KB 223.1 / 10KB 631.0 MB/s（100B/1KB 目标

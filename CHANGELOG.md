@@ -250,8 +250,9 @@
     newLeaderBackfillsLaggingFollowerWithoutNewWrites）；
   - 跨机部署：ClusterMain（3 JVM 拓扑入口）+ deploy/Dockerfile +
     docker-compose.yml + chaos-netem.sh + 跨机指南；
-  - 测试：新增 137 项（Region 34 / Multi-Raft 32 / Zero-Copy 21 /
+  - 测试：新增 138 项（Region 34 / Multi-Raft 32 / Zero-Copy 21 /
     Chaos 21 / Placement+可观测性 23 / 基准 6）；
+  - 全量回归 788/788 全绿（Phase 1–16）；
   - 基准（docs/benchmark/phase16-multiraft-report.md）：零拷贝迁移
     100B 82.7 / 1KB 223.1 / 10KB 631.0 MB/s；Multi-Raft 1/2/4 组
     110/222/404K ops/s（线性扩展 2.02×/3.68× ✅）；TCP 单端口多组

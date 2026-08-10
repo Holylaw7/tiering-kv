@@ -89,7 +89,8 @@ RaftGroupManager / 单端口 MultiRaftEndpoint 组前缀路由）、零拷贝批
 （RawMutation 所有权转移 + applyRawBatch，100B 迁移 59.8→82.7 MB/s）、
 放置控制（PlacementManager + leader 转移）、Region 指标 + INFO REGIONS、
 混沌验证（ChaosClusterTest 20 项，发现并修复滞后副本回填缺陷）、
-ClusterMain + Docker Compose + netem 跨机部署产物；137 项新测试；
+ClusterMain + Docker Compose + netem 跨机部署产物；138 项新测试，
+全量回归 788/788 全绿；
 100B/1KB 迁移仍未达 >100/>300 MB/s（TD-033，并行迁移 Phase 17）。
 
 ## 2. 当前状态
