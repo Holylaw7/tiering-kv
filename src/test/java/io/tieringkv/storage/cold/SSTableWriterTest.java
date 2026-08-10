@@ -12,7 +12,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class SSTableWriterTest {
+public class SSTableWriterTest {
 
     @TempDir
     Path dir;
@@ -61,7 +61,7 @@ class SSTableWriterTest {
         }
     }
 
-    static List<KeyValueEntry> entries(int count) {
+    public static List<KeyValueEntry> entries(int count) {
         List<KeyValueEntry> entries = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             byte[] key = String.format("k%05d", i).getBytes(StandardCharsets.UTF_8);
