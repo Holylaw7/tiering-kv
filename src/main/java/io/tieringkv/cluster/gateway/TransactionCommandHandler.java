@@ -63,6 +63,29 @@ public final class TransactionCommandHandler {
         });
     }
 
+    /** INFO TRANSACTION / INFO MVCC / INFO Gateway 聚合段。 */
+    public String infoSections() {
+        StringBuilder builder = new StringBuilder();
+        if (executor.metrics() != null) {
+            builder.append(executor.metrics().sectionText());
+        } else {
+            builder.append("# Transaction\r\n"
+                    + "begin_txn:0\r\n"
+                    + "active_txn:0\r\n"
+                    + "committed_txn:0\r\n"
+                    + "rollback_txn:0\r\n"
+                    + "conflict_txn:0\r\n"
+                    + "abort_txn:0\r\n"
+                    + "recovery_txn:0\r\n"
+                    + "read_txn:0\r\n"
+                    + "lock_count:0\r\n"
+                    + "txn_commit_latency_ms:0.000\r\n");
+        }
+        builder.append(executor.mvccInfo());
+        builder.append(metrics.sectionText());
+        return builder.toString();
+    }
+
     private RespValue transaction(java.util.function.Supplier<RespValue> action) {
         long t0 = System.nanoTime();
         try {

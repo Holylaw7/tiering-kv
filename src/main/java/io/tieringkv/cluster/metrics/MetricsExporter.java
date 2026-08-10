@@ -67,18 +67,29 @@ public final class MetricsExporter {
                 t.committedTxn());
         counter(sb, "txn_rollback_total", "transactions rolled back",
                 t.rollbackTxn());
+        counter(sb, "txn_abort_total", "transactions aborted",
+                t.abortTxn());
         counter(sb, "txn_conflict_total", "transaction conflicts",
                 t.conflictTxn());
+        counter(sb, "txn_recovery_total", "transactions recovered",
+                t.recoveryTxn());
         gauge(sb, "txn_active", "active transactions", t.activeTxn());
         gauge(sb, "txn_lock_count", "held locks", t.lockCount());
         gauge(sb, "txn_commit_latency_ms", "commit latency ms",
                 t.commitLatencyMs());
+        gauge(sb, "txn_latency_ms", "transaction latency ms",
+                t.commitLatencyMs());
         MvccMetricsRegistry.Snapshot v = mvcc.snapshot();
         gauge(sb, "mvcc_read_qps", "mvcc reads", v.reads());
         gauge(sb, "mvcc_write_qps", "mvcc writes", v.writes());
+        gauge(sb, "mvcc_versions_total", "mvcc versions", v.versions());
         counter(sb, "mvcc_gc_versions_total", "gc versions",
                 v.gcVersions());
+        counter(sb, "mvcc_gc_deleted_versions", "gc deleted versions",
+                v.gcVersions());
         gauge(sb, "mvcc_safe_point", "gc safe point", v.safePoint());
+        gauge(sb, "redis_txn_latency_ms", "redis auto txn latency ms",
+                g.transactionLatencyMs());
         return sb.toString();
     }
 

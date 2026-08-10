@@ -91,10 +91,12 @@ public final class RedisClusterGateway {
                 return localMset(args);
             }
             case "info" -> {
-                return new RespBulkString(
-                        ("# Server\r\ngateway:tiering-kv\r\n"
-                                + "cluster_enabled:1\r\n")
-                                .getBytes(StandardCharsets.UTF_8));
+                String info = "# Server\r\ngateway:tiering-kv\r\n"
+                        + "cluster_enabled:1\r\n";
+                if (txnHandler != null) {
+                    info += txnHandler.infoSections();
+                }
+                return new RespBulkString(info.getBytes(StandardCharsets.UTF_8));
             }
             case "cluster" -> {
                 if (args.size() != 1) {

@@ -40,6 +40,7 @@ public final class TransactionMetricsRegistry {
 
     public void recordAbort() {
         aborts.increment();
+        active.decrementAndGet();
     }
 
     public void recordRecovery() {

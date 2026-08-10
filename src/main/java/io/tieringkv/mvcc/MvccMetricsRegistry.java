@@ -45,12 +45,13 @@ public final class MvccMetricsRegistry {
         return String.format(Locale.ROOT,
                 "mvcc_versions_total:%d\r\n"
                         + "mvcc_gc_versions:%d\r\n"
+                        + "mvcc_gc_deleted_versions:%d\r\n"
                         + "mvcc_gc_bytes:%d\r\n"
                         + "mvcc_safe_point:%d\r\n"
                         + "mvcc_read_qps:%d\r\n"
                         + "mvcc_write_qps:%d\r\n",
-                s.versions(), s.gcVersions(), s.gcBytes(), s.safePoint(),
-                s.reads(), s.writes());
+                s.versions(), s.gcVersions(), s.gcVersions(), s.gcBytes(),
+                s.safePoint(), s.reads(), s.writes());
     }
 
     public record Snapshot(long versions, long gcVersions, long gcBytes,

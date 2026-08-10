@@ -34,6 +34,8 @@ public final class AutoTransactionExecutor {
     private final Function<ByteKey, Participant> participantOf;
     private final TransactionMetricsRegistry metrics;
     private final AtomicLong txnIds = new AtomicLong();
+    private final java.util.Set<Participant> knownParticipants =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     public AutoTransactionExecutor(TimestampOracle oracle,
                                    HybridLogicalClock clock,
@@ -52,6 +54,25 @@ public final class AutoTransactionExecutor {
         this.coordinator = coordinator;
         this.participantOf = participantOf;
         this.metrics = metrics;
+    }
+
+    public TransactionMetricsRegistry metrics() {
+        return metrics;
+    }
+
+    /** INFO MVCC 实时快照（版本数 / 锁数）。 */
+    public String mvccInfo() {
+        long versions = 0;
+        long locks = 0;
+        for (Participant participant : knownParticipants) {
+            versions += participant.engine().versionCount();
+            locks += participant.locks().size();
+        }
+        return String.format(java.util.Locale.ROOT,
+                "# MVCC\r\n"
+                        + "mvcc_versions_total:%d\r\n"
+                        + "mvcc_lock_count:%d\r\n",
+                versions, locks);
     }
 
     /** GET：readTS = HLC.now() 快照读（最新已提交可见）。 */
@@ -121,7 +142,7 @@ public final class AutoTransactionExecutor {
             keys.addAll(txn.writeKeys());
             keys.addAll(txn.deleteKeys());
             for (ByteKey key : keys) {
-                Participant participant = participantOf.apply(key);
+                Participant participant = participant(key.key());
                 boolean exists = participants.stream().anyMatch(p ->
                         p.regionId().equals(participant.regionId()));
                 if (!exists) {
@@ -148,6 +169,7 @@ public final class AutoTransactionExecutor {
         if (participant == null) {
             throw new IllegalStateException("no mvcc participant for key");
         }
+        knownParticipants.add(participant);
         return participant;
     }
 
