@@ -57,6 +57,11 @@ YAML 配置 + Metrics/INFO + ShutdownManager；Level C 154–326K 无回退。
 - 下一步：项目按 10 阶段路线图全部完成；可进入独立进程复测、集群扩展或
   对外发布准备（等待用户指令）。
 
+项目里程碑：**10 阶段路线图全部完成（2026-08-10）**；最终定位 =
+完整冷热分层存储系统（RESP + Async Server + Shard + Memory + LFU + WAL +
+LSM/SSTable + Bloom + Compaction + Migration + mmap + BlockCache +
+Production Runtime），14 模块能力矩阵全 ✅。
+
 ## 3. 技术栈
 
 | 项 | 选型 |
