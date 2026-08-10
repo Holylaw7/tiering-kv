@@ -19,3 +19,6 @@
 | NFR-03 | 内存占用较纯内存 Redis 降低 60%–80% | 对比压测 | Phase 9 |
 
 未列出的验收项在对应 Phase 的任务文件中补充（.codex/tasks/）。
+
+Phase 2 内存核心验收：PUT / GET / DELETE / EXISTS / 迭代 / TTL / 内存配额 /
+100 线程并发由 storage 测试套件覆盖（`mvn test` 79 用例全绿，2026-08-10）。

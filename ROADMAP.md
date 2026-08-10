@@ -9,7 +9,7 @@
 | --- | --- | --- |
 | 0 | 工程初始化 | ✅ 完成（2026-08-09） |
 | 1 | RESP 协议 | ✅ 完成（2026-08-09） |
-| 2 | 内存 KV 核心 | ⏳ 未开始 |
+| 2 | 内存 KV 核心 | ✅ 完成（2026-08-10） |
 | 3 | LFU / ARC 热度管理 | ⏳ 未开始 |
 | 4 | Bitcask 持久化 | ⏳ 未开始 |
 | 5 | LSM Tree | ⏳ 未开始 |
@@ -39,11 +39,16 @@
 - 基线：本机回环 GET P50=0.064ms / P95=0.151ms / P99=0.216ms
   （冒烟基准；Phase 9 以 JMH 建立正式基线）。
 
-## Phase 2 — 内存 KV 核心
+## Phase 2 — 内存 KV 核心 ✅
 
 - 目标：MemTable（分段哈希表）、TTL 支持、内存配额与淘汰回调。
-- 交付：memory 模块、并发单元测试。
-- 预计 ADR：内存数据结构选择。
+- 交付：StorageEngine SPI、64 段 SkipList MemTable、分段读写锁、TTLManager、
+  MemoryManager、有序迭代器；命令层迁移完成（InMemoryKVStore 移除）。
+- ADR：[0007](docs/adr/ADR-0007-memtable-data-structure.md)（SkipList）、
+  [0008](docs/adr/ADR-0008-memory-concurrency-model.md)（分段锁）、
+  [0009](docs/adr/ADR-0009-ttl-management-strategy.md)（TTL 混合策略）。
+- 基准：GET 1M 数据集 P99=0.0026ms；100 线程并发写 0 失败（详见
+  [memory-engine-report.md](docs/benchmark/memory-engine-report.md)）。
 
 ## Phase 3 — LFU / ARC 热度管理
 
