@@ -2,7 +2,12 @@ package io.tieringkv;
 
 import io.tieringkv.command.CommandEngine;
 import io.tieringkv.command.CommandRegistry;
+import io.tieringkv.concurrency.hotkey.HotKeyDetector;
+import io.tieringkv.concurrency.hotkey.HotKeyPolicy;
+import io.tieringkv.concurrency.hotkey.HotKeyReadCache;
+import io.tieringkv.concurrency.hotkey.HotKeyStorageEngine;
 import io.tieringkv.config.ServerConfig;
+import io.tieringkv.execution.KeyShardExecutor;
 import io.tieringkv.network.tcp.TieringKvServer;
 import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.storage.cache.CacheConfig;
@@ -52,13 +57,21 @@ public final class Main {
                 tiering.migrationScheduler(),
                 System::currentTimeMillis,
                 cacheConfig.maxEvictionsPerCycle());
+        WALStorageEngine walStorage = new WALStorageEngine(walManager, memTable);
+        HotKeyPolicy hotKeyPolicy = HotKeyPolicy.defaults();
+        HotKeyReadCache hotKeyCache = new HotKeyReadCache(
+                new HotKeyDetector(hotKeyPolicy), hotKeyPolicy, walStorage);
         StorageEngine storage = new TrackingStorageEngine(
                 new TieringStorageEngine(
-                        new WALStorageEngine(walManager, memTable), tiering),
+                        new HotKeyStorageEngine(walStorage, hotKeyCache), tiering),
                 evictionManager);
+        int shards = Math.min(16, Math.max(1, Runtime.getRuntime().availableProcessors()));
+        KeyShardExecutor executor = new KeyShardExecutor(shards, "command-shard");
+        CommandEngine commandEngine = new CommandEngine(
+                CommandRegistry.createDefault(), storage, executor);
         TieringKvServer server = new TieringKvServer(
                 config,
-                new CommandEngine(CommandRegistry.createDefault(), storage));
+                commandEngine);
         server.start();
         System.out.println("Tiering-KV listening on " + server.boundPort());
         Runtime.getRuntime().addShutdownHook(new Thread(server::shutdown));

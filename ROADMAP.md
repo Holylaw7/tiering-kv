@@ -14,7 +14,7 @@
 | 4 | Bitcask 持久化 | ✅ 完成（2026-08-10，WAL 层） |
 | 5 | LSM Tree | ✅ 完成（2026-08-10） |
 | 6 | 冷热迁移 | ✅ 完成（2026-08-10） |
-| 7 | 并发优化 | ⏳ 未开始 |
+| 7 | 并发优化 | ✅ 完成（2026-08-10） |
 | 8 | mmap / Memory Pool | ⏳ 未开始 |
 | 9 | Benchmark 压力测试 | ⏳ 未开始 |
 | 10 | 生产化完善 | ⏳ 未开始 |
@@ -107,11 +107,18 @@
 - 基准：迁移 308K ops/s（目标 >50K ✅）；Flush 850K entries/s；内存压力下
   从未超配额（详见 [tiering-report.md](docs/benchmark/tiering-report.md)）。
 
-## Phase 7 — 并发优化
+## Phase 7 — 并发优化 ✅
 
 - 目标：分段锁细化、无锁读路径、热点 key 缓解。
-- 交付：并发专项测试（JCStress 等）。
-- 预计 ADR：锁机制选择。
+- 交付：KeyShardExecutor（同键 FIFO / 异键并行）、ResponseSequencer 保序、
+  MemTable 256 段、HotKeyDetector + RequestCoalescer + HotKeyReadCache、
+  ConcurrencyMetrics、CommandEngine.executeAsync。
+- ADR：[0023](docs/adr/ADR-0023-key-sharding-execution-model.md)（分片执行）、
+  [0024](docs/adr/ADR-0024-memtable-concurrency-strategy.md)（MemTable 并发）、
+  [0025](docs/adr/ADR-0025-hot-key-mitigation.md)（热点键缓解）。
+- 基准：GET 最高 6.3M ops/s、SET 4.5M ops/s、P99 <0.1ms；分片加速 2.79×；
+  100 线程同键自增 0 lost update（详见
+  [concurrency-report.md](docs/benchmark/concurrency-report.md)）。
 
 ## Phase 8 — mmap / Memory Pool
 

@@ -146,6 +146,18 @@ Command → TieringStorageEngine（背压 + 水位）
   状态持久化到 `migration/migration.log`，启动恢复未完成任务；
 - 指标：StorageMetrics 覆盖内存 / 迁移 / Flush / 冷层。
 
+## 并发架构（Phase 7）
+
+```text
+Netty EventLoop → CommandEngine.executeAsync → KeyShardExecutor
+    → ShardRouter（fnv1a % N）→ ShardQueue → ShardWorker → StorageEngine
+    → ResponseSequencer（每连接按序号释放响应）
+```
+
+- 同键 FIFO 有序、异键并行；RESP 响应顺序不被并行破坏；
+- MemTable 256 段分段锁；热点读走 HotKeyReadCache（无锁子集 + 请求合并）；
+- ConcurrencyMetrics 观测队列深度 / 分片利用率 / 等待 / 延迟。
+
 ## 技术栈
 
 | 层次 | 选型 |

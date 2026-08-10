@@ -79,6 +79,14 @@
 - ADR-0020（调度模型）、ADR-0021（水位策略）、ADR-0022（迁移持久化）。
 - Phase 6 评审处置：定位升级为「Redis 兼容 LSM 分层 KV 存储引擎」；登记
   TD-013（Immutable MemTable 轮转）、TD-014（迁移队列准入/批量/扩缩容）。
+- Phase 7 并发优化：KeyShardExecutor / ShardRouter / ShardQueue / ShardWorker /
+  ExecutionContext / ConcurrencyMetrics；CommandEngine.executeAsync +
+  ResponseSequencer（RESP 保序）。
+- MemTable 64 → 256 段；HotKeyDetector / AccessCounter / HotKeyPolicy /
+  HotKeyReadCache / RequestCoalescer / HotKeyStorageEngine。
+- 并发测试套件（路由/顺序/并行/读写/热点/合并/压力/异步保序）与并发基准
+  （GET/SET/Mixed、热点 90%、分片对比）。
+- ADR-0023（分片执行）、ADR-0024（MemTable 并发）、ADR-0025（热点缓解）。
 
 ### Changed
 

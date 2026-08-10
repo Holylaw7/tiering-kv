@@ -33,12 +33,16 @@ Phase 6 已交付：自动调度（WatermarkManager + FlushScheduler +
 MigrationScheduler + MigrationLog + BackPressureController + TierWorkerPool +
 StorageMetrics + TieringStorageEngine），EvictionManager 异步化。
 
+Phase 7 已交付：KeyShardExecutor（同键 FIFO / 异键并行）、
+ResponseSequencer（RESP 保序）、MemTable 256 段、HotKeyDetector /
+RequestCoalescer / HotKeyReadCache、ConcurrencyMetrics、异步命令执行。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 6（Tiering Optimization）✅ 已完成**（Phase 0–5 ✅）；
-- 最近提交：`feat(tiering): implement automatic storage management`（详见 git log）；
+- 阶段：**Phase 7（Concurrency Optimization）✅ 已完成**（Phase 0–6 ✅）；
+- 最近提交：`feat(concurrency): implement key sharded execution`（详见 git log）；
 - 基线：tag `phase-0`；分支策略：feature/* 合并入 develop，main 保持稳定；
-- 下一步：**Phase 7 Concurrency Optimization**（等待用户指令）。
+- 下一步：**Phase 8 IO Optimization（mmap / Memory Pool）**（等待用户指令）。
 
 ## 3. 技术栈
 
@@ -53,6 +57,7 @@ StorageMetrics + TieringStorageEngine），EvictionManager 异步化。
 | 持久化 | WAL（CRC32C + segment 滚动 + checkpoint；EVERY_SEC 默认，ADR-0014~0016） |
 | 冷存储 | SSTable + Bloom + Manifest + 全量合并（ADR-0017~0019） |
 | 自动调度 | 水位 Flush + 异步迁移 + 背压 + MigrationLog（ADR-0020~0022） |
+| 并发 | KeyShardExecutor + ResponseSequencer + 热点读缓存（ADR-0023~0025） |
 | 包结构 | `io.tieringkv.{network,protocol,command,storage,memory,cache,eviction,wal,sstable,compaction,scheduler,metrics,benchmark}` |
 
 ## 4. 关键决策（ADR）
@@ -81,6 +86,9 @@ StorageMetrics + TieringStorageEngine），EvictionManager 异步化。
 | [ADR-0020](adr/ADR-0020-tier-scheduling-model.md) | 异步 worker 调度模型（事件循环不阻塞） |
 | [ADR-0021](adr/ADR-0021-memory-watermark-policy.md) | 水位 70/85/95 + 队列阈值，CRITICAL 限写 |
 | [ADR-0022](adr/ADR-0022-migration-persistence.md) | MigrationLog 持久化 + 启动恢复（幂等） |
+| [ADR-0023](adr/ADR-0023-key-sharding-execution-model.md) | Key Sharding：同键 FIFO、异键并行、响应保序 |
+| [ADR-0024](adr/ADR-0024-memtable-concurrency-strategy.md) | 256 段 Striped Lock；未验证 lock-free 不引入 |
+| [ADR-0025](adr/ADR-0025-hot-key-mitigation.md) | 热点检测 + 本地读缓存 + 请求合并 |
 
 ## 5. 仓库布局
 
@@ -117,7 +125,7 @@ tiering-kv/
 | 4 | Bitcask（WAL 子层） | ✅ |
 | 5 | LSM Tree | ✅ |
 | 6 | 冷热迁移 | ✅ |
-| 7 | 并发优化 | 未开始 |
+| 7 | 并发优化 | ✅ |
 | 8 | mmap / Memory Pool | 未开始 |
 | 9 | Benchmark | 未开始 |
 | 10 | 生产化 | 未开始 |

@@ -14,10 +14,14 @@ import io.tieringkv.protocol.RespValue;
 import io.tieringkv.storage.wal.WalWriteException;
 import io.tieringkv.storage.tiering.BackpressureException;
 
+import java.util.concurrent.CompletionException;
+
 /** 命令入站处理器：解析请求 → 执行 → 写回；协议错误写入后关闭连接。 */
 public final class CommandHandler extends ChannelInboundHandlerAdapter {
 
     private final CommandEngine engine;
+    private final ResponseSequencer sequencer = new ResponseSequencer();
+    private long nextSequence = 1;
 
     public CommandHandler(CommandEngine engine) {
         this.engine = engine;
@@ -28,7 +32,19 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
         if (msg instanceof RespValue value) {
             try {
                 RespCommand command = RespRequestParser.parse(value);
-                ctx.writeAndFlush(engine.execute(command));
+                long sequence = nextSequence++;
+                engine.executeAsync(command).whenComplete((response, error) -> {
+                    Outcome outcome = error == null
+                            ? new Outcome(response, false)
+                            : mapFailure(error);
+                    sequencer.complete(sequence, outcome.value(), ready ->
+                            ctx.executor().execute(() -> {
+                                ctx.writeAndFlush(ready);
+                                if (outcome.close()) {
+                                    ctx.close();
+                                }
+                            }));
+                });
             } catch (RespProtocolException e) {
                 writeProtocolErrorAndClose(ctx, e.getMessage());
             } catch (WalWriteException e) {
@@ -39,6 +55,22 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
         } else {
             ctx.fireChannelRead(msg);
         }
+    }
+
+    private static Outcome mapFailure(Throwable error) {
+        Throwable root = error instanceof CompletionException && error.getCause() != null
+                ? error.getCause()
+                : error;
+        if (root instanceof RespProtocolException e) {
+            return new Outcome(RespError.protocol(e.getMessage()), true);
+        }
+        if (root instanceof WalWriteException e) {
+            return new Outcome(new RespError("ERR " + e.getMessage()), false);
+        }
+        if (root instanceof BackpressureException e) {
+            return new Outcome(new RespError("ERR " + e.getMessage()), false);
+        }
+        return new Outcome(new RespError("ERR internal error"), true);
     }
 
     @Override
@@ -74,5 +106,8 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
         ByteBuf buffer = ctx.alloc().buffer();
         RespEncoder.write(buffer, new RespError(message));
         ctx.writeAndFlush(buffer);
+    }
+
+    private record Outcome(RespValue value, boolean close) {
     }
 }
