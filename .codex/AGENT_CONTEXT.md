@@ -108,16 +108,23 @@ ops/s）、Split/Merge 与 Raft 组联动（RegionRaftMigrationManager +
 CrossMachineChaosTest（20 项）、MetricsExporter（Prometheus）+ INFO
 CLUSTER 聚合；165 项新测试，全量回归 1112/1112 全绿。
 
+Phase 19 已交付：MVCC 与事务引擎——MvccStorageEngine（内存版本索引）+
+TimestampOracle/HLC + SnapshotReader + Percolator 2PC（Prewrite/Commit/
+Rollback）+ LockTable/ConflictDetector + TransactionManager/Coordinator
+（跨 Region 2PC + 参与者键归属）+ TxnJournal（Raft）+ Recovery + GC +
+INFO TRANSACTION + Prometheus；226 项新测试。
+全量回归 1338/1338 全绿。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 18（Distributed Production Integration）✅ 已完成**
-  （Phase 0–17 全部完成）；
-- 最近提交：Phase 18 基准（详见 git log）；
+- 阶段：**Phase 19（MVCC & Transaction Engine）✅ 已完成**
+  （Phase 0–18 全部完成）；
+- 最近提交：Phase 19 基准（详见 git log）；
 - 基线：tag `phase-0`；分支策略：feature/* 合并入 develop，main 保持稳定；
-- 下一步：网关 CLUSTER 全量命令（TD-038）、Linux+Docker 跨机混沌执行
-  （TD-040）、快照 RPC 跨机传输（Phase 19，等待用户指令）。
+- 下一步：批量 GC 删除（TD-041）、Redis 自动事务化（TD-042）、
+  Linux+Docker 跨机混沌（TD-040）（Phase 20，等待用户指令）。
 
-项目里程碑：**18 阶段路线图全部完成（2026-08-10）**；定位 = 单机完整冷热
+项目里程碑：**19 阶段路线图全部完成（2026-08-10）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
 LFU + WAL + LSM/SSTable + Bloom + Compaction + Migration + mmap +
 BlockCache + Production Runtime + Raft 持久化 + TCP RPC + Snapshot +
@@ -216,6 +223,12 @@ Placement），能力矩阵全 ✅。
 | [ADR-0068](adr/ADR-0068-tcp-gateway-architecture.md) | 真实 TCP Redis Cluster 网关 |
 | [ADR-0069](adr/ADR-0069-cross-machine-deployment.md) | 三节点部署 + tc netem |
 | [ADR-0070](adr/ADR-0070-production-metrics.md) | Prometheus 指标 + INFO CLUSTER 聚合 |
+| [ADR-0071](adr/ADR-0071-mvcc-data-model.md) | MVCC 数据模型 |
+| [ADR-0072](adr/ADR-0072-timestamp-and-hlc.md) | 时间戳与 HLC |
+| [ADR-0073](adr/ADR-0073-transaction-protocol.md) | Percolator 2PC 事务 |
+| [ADR-0074](adr/ADR-0074-lock-and-conflict-detection.md) | 锁与冲突检测 |
+| [ADR-0075](adr/ADR-0075-mvcc-garbage-collection.md) | MVCC GC |
+| [ADR-0076](adr/ADR-0076-transaction-recovery.md) | 事务恢复 |
 
 ## 5. 仓库布局
 
@@ -264,6 +277,7 @@ tiering-kv/
 | 16 | Multi-Raft 架构演进 | ✅ |
 | 17 | Region 生命周期 | ✅ |
 | 18 | 分布式生产集成 | ✅ |
+| 19 | MVCC 与事务引擎 | ✅ |
 
 ## 7. 技术债
 
@@ -311,6 +325,8 @@ tiering-kv/
 | TD-037 | Region split/merge 与数据搬迁联动 | ✅ 已关闭（Phase 18） |
 | TD-039 | Region 键范围与 slot 区间路由未统一 | ✅ 已关闭（Phase 18） |
 | TD-040 | 跨机容器混沌未执行（环境限制） | Phase 19 |
+| TD-041 | MVCC GC 19–29MB/s（目标 >100） | Phase 20 |
+| TD-042 | Redis 网关未接 MVCC 自动事务化 | Phase 20 |
 
 ## 8. 会话启动清单
 

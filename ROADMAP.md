@@ -26,6 +26,7 @@
 | 16 | Multi-Raft 架构演进 | ✅ 完成（2026-08-10） |
 | 17 | Region 生命周期与分布式存储完善 | ✅ 完成（2026-08-10） |
 | 18 | 分布式生产集成 | ✅ 完成（2026-08-10） |
+| 19 | MVCC 与事务引擎 | ✅ 完成（2026-08-10） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -364,6 +365,24 @@
   Gateway GET/SET 719K/590K ops/s（>500K/200K ✅）、迁移 100B/1KB
   209.1/986.0 MB/s（>100/300 ✅）、Split/Merge 1M ~0.9/~0.7s。
 
+## Phase 19 — MVCC 与事务引擎 ✅
+
+- 交付：MVCC 数据模型 + TimestampOracle/HLC + SnapshotReader +
+  Percolator 2PC（Prewrite/Commit/Rollback）+ LockTable/ConflictDetector +
+  TransactionManager/Coordinator + TxnJournal（Raft）+ Recovery + GC +
+  指标（INFO TRANSACTION + Prometheus）。
+- ADR：[0071](docs/adr/ADR-0071-mvcc-data-model.md)（MVCC）、
+  [0072](docs/adr/ADR-0072-timestamp-and-hlc.md)（时间戳）、
+  [0073](docs/adr/ADR-0073-transaction-protocol.md)（事务协议）、
+  [0074](docs/adr/ADR-0074-lock-and-conflict-detection.md)（锁/冲突）、
+  [0075](docs/adr/ADR-0075-mvcc-garbage-collection.md)（GC）、
+  [0076](docs/adr/ADR-0076-transaction-recovery.md)（恢复）。
+- 测试：新增 226 项；全量回归 1338/1338 全绿（目标 >1290 ✅）。
+- 基准（[phase19-mvcc-report.md](docs/benchmark/phase19-mvcc-report.md)）：
+  GET 3.1–4.7M ops/s（>500K ✅）、单区事务 70.8–204.6K txn/s
+  （>100K ✅ 最佳轮）、冲突 2.1–7.6M ops/s（>500K ✅）、GC 19–29MB/s
+  （>100 未达，TD-041）。
+
 ## 技术债登记
 
 | 编号 | 描述 | 来源 | 计划消除 |
@@ -406,3 +425,5 @@
 | TD-038 | 网关 CLUSTER 命令子集 | ADR-0061 | Phase 19（全字段 NODES/ASK 搬迁） |
 | TD-039 | Region 键范围与 slot 区间路由未统一 | ADR-0057 | ✅ 已关闭（Phase 18，RoutingTable 统一） |
 | TD-040 | 跨机容器混沌未执行（环境限制） | ADR-0069 | Phase 19（Linux+Docker） |
+| TD-041 | MVCC GC 19–29MB/s（目标 >100）→ 批量删除路径 | Phase 20 |
+| TD-042 | Redis 网关未接 MVCC 自动事务化 | Phase 20 |

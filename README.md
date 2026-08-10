@@ -4,7 +4,7 @@
 > （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding +
 > Raft 持久化集群 + 批量复制 + 安全 RPC + 元数据 Raft + 游标迁移）。
 
-**阶段状态：Phase 18（分布式生产集成）✅（Phase 0–17 全部完成 ✅）**
+**阶段状态：Phase 19（MVCC 与事务引擎）✅（Phase 0–18 全部完成 ✅）**
 
 ## 项目定位
 
@@ -33,6 +33,9 @@ SLOTS）、自动均衡计划（epoch 保护）（Phase 17）；以及分布式�
 Redis Cluster 网关（GET 719K / SET 590K ops/s）、Split/Merge 与 Raft
 组联动（子组独立日志 + 回滚）、生产化迁移（限速 + 自适应调度 +
 Prometheus 指标）、三节点容器部署产物与跨机混沌（Phase 18）。
+以及数据库内核：MVCC 多版本模型 + HLC 时间戳 + Snapshot Read +
+Percolator 2PC 事务（Prewrite/Commit/Rollback）+ 锁与冲突检测 +
+事务恢复 + MVCC GC + 跨 Region 2PC + Raft 事务日志（Phase 19）。
 
 **边界（如实声明）**：仍为教学/工程级实现，暂不宣称"高性能 Redis 替代品"；
 分布式为真实 TCP + 持久化原型，基准以进程内为主，跨机 `tc netem` 验证
@@ -375,6 +378,25 @@ RaftNode
   ProductionInfo（INFO CLUSTER 聚合 Region/Raft/Migration/Gateway）；
 - 文档：[基准报告](docs/benchmark/phase18-production-report.md)、
   [评审报告](docs/review/phase18-production-integration-review.md)。
+
+## MVCC 与事务引擎（Phase 19）
+
+- **MVCC**（ADR-0071）：底层键 `[userKey][type][startTS][commitTS]` +
+  MvccStorageEngine adapter + 内存版本索引（启动重建）；
+- **时间戳**（ADR-0072）：TimestampOracle（原子单调/批量/恢复不回退）+
+  HybridLogicalClock（回拨安全）；
+- **事务**（ADR-0073）：Percolator 2PC（BEGIN→Prewrite→Commit/Rollback）
+  + TransactionCoordinator 跨 Region 2PC（参与者键归属，无部分提交）；
+- **锁与冲突**（ADR-0074）：LockTable（TTL 防永久锁）+ 写写/读写/锁冲突；
+- **恢复**（ADR-0076）：超时回滚 / primary 补完 / 无永久锁；
+- **GC**（ADR-0075）：SafePoint + 保留最新版本（19–29MB/s，未达 100，
+  如实登记 TD-041）；
+- **基准**：MVCC GET 3.1–4.7M ops/s、单区事务 70.8–204.6K txn/s、
+  冲突检测 2.1–7.6M ops/s；
+- 文档：[MVCC](docs/architecture/mvcc.md) / [事务](docs/architecture/transaction.md) /
+  [一致性](docs/architecture/consistency.md) /
+  [基准](docs/benchmark/phase19-mvcc-report.md) /
+  [评审](docs/review/phase19-mvcc-transaction-review.md)。
 
 ## 技术栈
 
