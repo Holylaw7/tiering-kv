@@ -116,6 +116,18 @@ Command → WALStorageEngine
 - segment 滚动（`wal/%06d.log`，64MB）+ checkpoint（快照 + offset）加速恢复；
 - 恢复时按绝对过期点判定 TTL，宕机期间过期的键不复活。
 
+## 冷存储架构（Phase 5，SSTable / LSM）
+
+```text
+WAL → MemTable（热层）→ Flush → SSTable（冷层）
+    → Manifest + Compaction；读取：pending → 新表 → 旧表
+```
+
+- SSTable：Data Blocks（4KB，CRC32C）→ Index Block → Bloom Block → Footer；
+- 随机读：Bloom → Index 二分 → Block 解码 → 块内二分；
+- 淘汰迁移：EvictionManager → ColdMigration → pending 缓冲 → 阈值落 SSTable；
+- 合并：size-tiered 触发 + 全量 latest-wins（重复键 / tombstone / 过期 TTL）。
+
 ## 技术栈
 
 | 层次 | 选型 |

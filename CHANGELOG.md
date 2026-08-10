@@ -56,6 +56,15 @@
 - ADR-0014（写策略）、ADR-0015（记录格式）、ADR-0016（崩溃恢复）。
 - 基准口径修正：WAL append 指标标注为 buffered mode（非逐条 fsync），
   不等同 durable write throughput（Phase 4 评审）；技术债登记 TD-007/008。
+- Phase 5 冷存储引擎：ColdStorageEngine（pending + 多表 + Manifest）、
+  SSTableWriter / SSTableReader / Block / BlockIndex / BloomFilter /
+  DiskIterator / CompactionManager / CompactionTask / FlushManager /
+  ColdMigration。
+- MemTable Flush（版本守卫）+ WAL checkpoint 接入；淘汰迁移写入冷层
+  （pending → SSTable）。
+- 冷存储测试套件（Bloom/SSTable/Flush/Compaction/Engine/迁移集成）与
+  冷存储基准（写 100K/1M、随机 GET、FPR、合并）。
+- ADR-0017（冷层策略）、ADR-0018（SSTable 格式）、ADR-0019（合并策略）。
 
 ### Changed
 

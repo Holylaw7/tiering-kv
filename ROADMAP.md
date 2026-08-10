@@ -12,7 +12,7 @@
 | 2 | 内存 KV 核心 | ✅ 完成（2026-08-10） |
 | 3 | LFU / ARC 热度管理 | ✅ 完成（2026-08-10） |
 | 4 | Bitcask 持久化 | ✅ 完成（2026-08-10，WAL 层） |
-| 5 | LSM Tree | ⏳ 未开始 |
+| 5 | LSM Tree | ✅ 完成（2026-08-10） |
 | 6 | 冷热迁移 | ⏳ 未开始 |
 | 7 | 并发优化 | ⏳ 未开始 |
 | 8 | mmap / Memory Pool | ⏳ 未开始 |
@@ -78,12 +78,21 @@
   1M 记录恢复 0.57s（详见 [wal-report.md](docs/benchmark/wal-report.md)）。
 - 备注：Bitcask 文件格式与 merge 在 Phase 5 完成（本阶段完成 WAL 子层）。
 
-## Phase 5 — LSM Tree
+## Phase 5 — LSM Tree ✅
 
 - 目标：MemTable → SSTable、层级合并、Bloom Filter。
-- 交付：sstable / compaction 模块、读写放大观测。
-- 预计 ADR：LSM 层级策略与压缩策略。
+- 交付：ColdStorageEngine（pending + 多表 + Manifest）、SSTableWriter /
+  SSTableReader / Block / BlockIndex / BloomFilter / DiskIterator /
+  CompactionManager / CompactionTask / FlushManager / ColdMigration；
+  MemTable Flush（版本守卫）+ WAL checkpoint 接入。
 - 格式基线：[ADR-0005](docs/adr/ADR-0005-persistence-format.md)。
+- ADR：[0017](docs/adr/ADR-0017-cold-storage-strategy.md)（冷层策略）、
+  [0018](docs/adr/ADR-0018-sstable-format.md)（SSTable 格式）、
+  [0019](docs/adr/ADR-0019-compaction-strategy.md)（合并策略）。
+- 基准：1M 写 104MB/s（目标 >100MB/s ✅）；随机 GET P99=0.021ms
+  （目标 <5ms ✅）；Bloom FPR=0.82%（目标 <1% ✅）；详见
+  [cold-report.md](docs/benchmark/cold-report.md)。
+- 备注：全量合并（写放大 O(总数据)），Leveled 留 Phase 7。
 
 ## Phase 6 — 冷热迁移
 

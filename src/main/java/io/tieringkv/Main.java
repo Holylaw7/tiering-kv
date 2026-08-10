@@ -8,8 +8,9 @@ import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.storage.cache.CacheConfig;
 import io.tieringkv.storage.cache.EvictionManager;
 import io.tieringkv.storage.cache.LFUPolicy;
-import io.tieringkv.storage.cache.TierMigration;
 import io.tieringkv.storage.cache.TrackingStorageEngine;
+import io.tieringkv.storage.cold.ColdMigration;
+import io.tieringkv.storage.cold.ColdStorageEngine;
 import io.tieringkv.storage.wal.RecoveryManager;
 import io.tieringkv.storage.wal.WALConfig;
 import io.tieringkv.storage.wal.WALManager;
@@ -33,12 +34,14 @@ public final class Main {
         RecoveryManager.RecoveryStats stats = walManager.recover(memTable);
         System.out.printf("WAL recovery: scanned=%d applied=%d segments=%d%n",
                 stats.recordsScanned(), stats.recordsApplied(), stats.segmentsReplayed());
+        ColdStorageEngine cold = new ColdStorageEngine(
+                ColdStorageEngine.Config.defaults(Path.of("./data/cold")));
         CacheConfig cacheConfig = CacheConfig.defaults();
         EvictionManager evictionManager = new EvictionManager(
                 memTable,
                 memoryManager,
                 new LFUPolicy(cacheConfig.decayIntervalMillis()),
-                TierMigration.discard(),
+                new ColdMigration(cold),
                 walManager,
                 System::currentTimeMillis,
                 cacheConfig.maxEvictionsPerCycle());
