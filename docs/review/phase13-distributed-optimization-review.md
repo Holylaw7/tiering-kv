@@ -47,7 +47,7 @@ MetadataClient → MetadataRaftGroup → 每副本 MetadataState
 | DistributedOptimizationIntegrationTest | 5 | ✅ |
 | DistributedOptimizationBenchmarkTest | 4 | ✅ |
 | Phase 13 新增合计 | 82 | ✅ |
-| 全量回归（Phase 1–13） | 待最终统计 | 见下方 |
+| 全量回归（Phase 1–13） | 451 | ✅ 0 失败 |
 
 ## 5. 基准对比（phase13-report.md）
 
@@ -66,13 +66,13 @@ MetadataClient → MetadataRaftGroup → 每副本 MetadataState
   充分生效（22K ops/s）；
 - 迁移：单条 `MemTable.put` 固定成本主导小负载吞吐（100B ≈ 18MB/s、
   180K entries/s）；1KB 负载突破 244.8MB/s；
-- RPC：TLS 握手/加解密带来 +66% 单调用开销；
-- 元数据：顺序写受 flush 周期约束（140 ops/s），故障转移开销可忽略。
+- RPC：TLS 握手/加解密带来 +50–70% 单调用开销；
+- 元数据：空闲即刷后顺序写 69–104K ops/s，故障转移开销可忽略。
 
 ## 7. 已知限制
 
 1. 小负载迁移受单条 put 成本限制 → MemTable 批量写接口（TD-030）；
-2. 复制 P50≈6ms → 自适应 flush / 异步客户端（TD-031）；
+2. 复制 P50≈2.5ms（64 写者）→ 自适应 flush / 异步客户端（TD-031）；
 3. RPC 静态 token、无 mTLS → HMAC 签名轮换（TD-032）；
 4. 元数据状态机为进程内内存态（Raft 日志未落盘到元数据组）；
 5. 迁移仍为存量复制模型（增量/双写未实现）；
