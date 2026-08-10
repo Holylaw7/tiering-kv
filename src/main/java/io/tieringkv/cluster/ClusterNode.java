@@ -3,6 +3,10 @@ package io.tieringkv.cluster;
 import io.tieringkv.cluster.raft.LeaderElection;
 import io.tieringkv.cluster.raft.RaftNode;
 import io.tieringkv.cluster.raft.RaftState;
+import io.tieringkv.cluster.raft.RaftTransport;
+import io.tieringkv.cluster.raft.log.RaftLog;
+import io.tieringkv.cluster.raft.log.RaftPersistentState;
+import io.tieringkv.cluster.raft.snapshot.SnapshotManager;
 import io.tieringkv.storage.StorageEngine;
 
 import java.util.List;
@@ -29,6 +33,22 @@ public final class ClusterNode implements AutoCloseable {
             long tickIntervalMillis) {
         return new ClusterNode(id, ReplicatedStorageEngine.create(
                 id, peers, local, election, heartbeatIntervalMillis, tickIntervalMillis));
+    }
+
+    /** 生产构造：TCP 传输 + 持久日志/状态/快照。 */
+    public static ClusterNode createPersistent(
+            String id,
+            RaftTransport transport,
+            StorageEngine local,
+            LeaderElection election,
+            long heartbeatIntervalMillis,
+            long tickIntervalMillis,
+            RaftLog raftLog,
+            RaftPersistentState persistentState,
+            SnapshotManager snapshotManager) {
+        return new ClusterNode(id, ReplicatedStorageEngine.create(
+                id, transport, local, election, heartbeatIntervalMillis,
+                tickIntervalMillis, raftLog, persistentState, snapshotManager));
     }
 
     public void start() {

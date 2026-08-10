@@ -2,6 +2,10 @@ package io.tieringkv.cluster;
 
 import io.tieringkv.cluster.raft.LeaderElection;
 import io.tieringkv.cluster.raft.RaftNode;
+import io.tieringkv.cluster.raft.RaftTransport;
+import io.tieringkv.cluster.raft.log.RaftLog;
+import io.tieringkv.cluster.raft.log.RaftPersistentState;
+import io.tieringkv.cluster.raft.snapshot.SnapshotManager;
 import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.storage.StorageIterator;
 
@@ -30,10 +34,27 @@ public final class ReplicatedStorageEngine implements StorageEngine {
             LeaderElection election,
             long heartbeatIntervalMillis,
             long tickIntervalMillis) {
+        return create(id, new io.tieringkv.cluster.raft.LocalRaftTransport(peers, id),
+                local, election, heartbeatIntervalMillis, tickIntervalMillis,
+                new io.tieringkv.cluster.raft.log.MemoryRaftLog(), null, null);
+    }
+
+    /** 生产构造：指定传输、持久日志、持久状态与快照。 */
+    public static ReplicatedStorageEngine create(
+            String id,
+            RaftTransport transport,
+            StorageEngine local,
+            LeaderElection election,
+            long heartbeatIntervalMillis,
+            long tickIntervalMillis,
+            RaftLog raftLog,
+            RaftPersistentState persistentState,
+            SnapshotManager snapshotManager) {
         ReplicatedStorageEngine engine = new ReplicatedStorageEngine(local);
         engine.raft = new RaftNode(
-                id, peers, engine::applyLocal, election,
-                heartbeatIntervalMillis, tickIntervalMillis);
+                id, transport, engine::applyLocal, election,
+                heartbeatIntervalMillis, tickIntervalMillis,
+                raftLog, persistentState, snapshotManager);
         return engine;
     }
 
