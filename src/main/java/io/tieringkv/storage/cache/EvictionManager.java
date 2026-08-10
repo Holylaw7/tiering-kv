@@ -7,6 +7,8 @@ import io.tieringkv.storage.memory.TimeSource;
 import io.tieringkv.storage.wal.WALEntry;
 import io.tieringkv.storage.wal.WALManager;
 import io.tieringkv.storage.wal.WalWriteException;
+import io.tieringkv.storage.tiering.MigrationScheduler;
+import io.tieringkv.storage.tiering.MigrationTask;
 
 /**
  * 内存压力驱动的淘汰管理器（ADR-0012）：
@@ -20,6 +22,7 @@ public final class EvictionManager {
     private final EvictionPolicy policy;
     private final TierMigration migration;
     private final WALManager wal;
+    private final MigrationScheduler migrationScheduler;
     private final TimeSource timeSource;
     private final int maxEvictionsPerCycle;
     private static final int MAX_MIGRATION_ATTEMPTS = 3;
@@ -30,7 +33,21 @@ public final class EvictionManager {
             EvictionPolicy policy,
             TierMigration migration) {
         this(memTable, memoryManager, policy, migration,
+                (WALManager) null, (MigrationScheduler) null,
                 System::currentTimeMillis, CacheConfig.defaults().maxEvictionsPerCycle());
+    }
+
+    public EvictionManager(
+            MemTable memTable,
+            MemoryManager memoryManager,
+            EvictionPolicy policy,
+            TierMigration migration,
+            WALManager wal,
+            MigrationScheduler migrationScheduler,
+            TimeSource timeSource,
+            int maxEvictionsPerCycle) {
+        this(memTable, memoryManager, policy, migration, migrationScheduler, wal,
+                timeSource, maxEvictionsPerCycle);
     }
 
     public EvictionManager(
@@ -41,7 +58,8 @@ public final class EvictionManager {
             WALManager wal,
             TimeSource timeSource,
             int maxEvictionsPerCycle) {
-        this(memTable, memoryManager, policy, migration, timeSource, maxEvictionsPerCycle, wal);
+        this(memTable, memoryManager, policy, migration, null, wal,
+                timeSource, maxEvictionsPerCycle);
     }
 
     public EvictionManager(
@@ -51,7 +69,9 @@ public final class EvictionManager {
             TierMigration migration,
             TimeSource timeSource,
             int maxEvictionsPerCycle) {
-        this(memTable, memoryManager, policy, migration, timeSource, maxEvictionsPerCycle, null);
+        this(memTable, memoryManager, policy, migration,
+                (WALManager) null, (MigrationScheduler) null,
+                timeSource, maxEvictionsPerCycle);
     }
 
     private EvictionManager(
@@ -59,14 +79,16 @@ public final class EvictionManager {
             MemoryManager memoryManager,
             EvictionPolicy policy,
             TierMigration migration,
+            MigrationScheduler migrationScheduler,
+            WALManager wal,
             TimeSource timeSource,
-            int maxEvictionsPerCycle,
-            WALManager wal) {
+            int maxEvictionsPerCycle) {
         this.memTable = memTable;
         this.memoryManager = memoryManager;
         this.policy = policy;
         this.migration = migration;
         this.wal = wal;
+        this.migrationScheduler = migrationScheduler;
         this.timeSource = timeSource;
         this.maxEvictionsPerCycle = maxEvictionsPerCycle;
     }
@@ -84,6 +106,42 @@ public final class EvictionManager {
         if (!memoryManager.isOverLimit()) {
             return;
         }
+        if (migrationScheduler != null) {
+            maybeEvictAsync();
+            return;
+        }
+        maybeEvictSync();
+    }
+
+    /** 异步路径：候选入队迁移队列，worker 负责落冷层后删除内存。 */
+    private void maybeEvictAsync() {
+        long now = timeSource.nowMillis();
+        for (int i = 0; i < maxEvictionsPerCycle && memoryManager.isOverLimit(); i++) {
+            EvictionCandidate candidate = policy.selectCandidate();
+            if (candidate == null) {
+                return;
+            }
+            byte[] key = candidate.key();
+            KeyValueEntry entry = memTable.getEntry(key);
+            if (entry == null || !entry.isLive(now)) {
+                policy.onAccess(new AccessEvent(key, AccessEvent.AccessOperation.DELETE, now, 0));
+                continue;
+            }
+            if (migrationScheduler.contains(key)) {
+                return; // 已排队：等 worker 释放内存
+            }
+            try {
+                if (!migrationScheduler.submit(MigrationTask.pending(entry, "memory", "cold"))) {
+                    return;
+                }
+            } catch (RuntimeException e) {
+                return; // 入队失败（迁移日志错误）：保留内存
+            }
+        }
+    }
+
+    /** 同步路径（Phase 3–5 语义保留）。 */
+    private void maybeEvictSync() {
         long now = timeSource.nowMillis();
         int retryBudget = MAX_MIGRATION_ATTEMPTS;
         for (int i = 0; i < maxEvictionsPerCycle && memoryManager.isOverLimit(); i++) {
