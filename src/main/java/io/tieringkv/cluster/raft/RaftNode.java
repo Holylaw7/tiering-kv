@@ -145,6 +145,7 @@ public final class RaftNode implements AutoCloseable {
             if (request.term() < currentTerm) {
                 return new VoteResponse(currentTerm, false);
             }
+            boolean termAdvanced = request.term() > currentTerm;
             if (request.term() > currentTerm) {
                 currentTerm = request.term();
                 votedFor = null;
@@ -160,7 +161,7 @@ public final class RaftNode implements AutoCloseable {
                 votedFor = request.candidateId();
                 lastHeartbeat = System.currentTimeMillis();
             }
-            persistStateLocked();
+            persistStateLocked(termAdvanced || grant);
             return new VoteResponse(currentTerm, grant);
         }
     }
@@ -173,6 +174,7 @@ public final class RaftNode implements AutoCloseable {
             if (request.term() < currentTerm) {
                 return new AppendEntriesResponse(currentTerm, false, 0);
             }
+            boolean termAdvanced = request.term() > currentTerm;
             if (request.term() > currentTerm) {
                 currentTerm = request.term();
                 votedFor = null;
@@ -183,11 +185,11 @@ public final class RaftNode implements AutoCloseable {
             electionTimeoutMillis = election.nextTimeoutMillis();
 
             if (request.prevLogIndex() > lastLogIndex()) {
-                persistStateLocked();
+                persistStateLocked(termAdvanced);
                 return new AppendEntriesResponse(currentTerm, false, 0);
             }
             if (!prevLogMatchesLocked(request.prevLogIndex(), request.prevLogTerm())) {
-                persistStateLocked();
+                persistStateLocked(termAdvanced);
                 return new AppendEntriesResponse(currentTerm, false, 0);
             }
             for (LogEntry entry : request.entries()) {
@@ -202,7 +204,7 @@ public final class RaftNode implements AutoCloseable {
                 } else if (entry.index() == raftLog.lastIndex() + 1) {
                     raftLog.append(entry);
                 } else {
-                    persistStateLocked();
+                    persistStateLocked(termAdvanced);
                     return new AppendEntriesResponse(currentTerm, false, 0);
                 }
             }
@@ -210,7 +212,7 @@ public final class RaftNode implements AutoCloseable {
                 commitIndex = Math.min(request.leaderCommit(), lastLogIndex());
                 applyCommittedLocked();
             }
-            persistStateLocked();
+            persistStateLocked(termAdvanced);
             return new AppendEntriesResponse(currentTerm, true, lastLogIndex());
         }
     }
@@ -223,6 +225,7 @@ public final class RaftNode implements AutoCloseable {
             if (request.term() < currentTerm) {
                 return new InstallSnapshotResponse(currentTerm, false);
             }
+            boolean termAdvanced = request.term() > currentTerm;
             if (request.term() > currentTerm) {
                 currentTerm = request.term();
                 votedFor = null;
@@ -243,7 +246,7 @@ public final class RaftNode implements AutoCloseable {
             if (lastApplied < request.lastIncludedIndex()) {
                 lastApplied = request.lastIncludedIndex();
             }
-            persistStateLocked();
+            persistStateLocked(termAdvanced);
             return new InstallSnapshotResponse(currentTerm, true);
         }
     }
@@ -306,7 +309,7 @@ public final class RaftNode implements AutoCloseable {
                 electionTerm = currentTerm;
                 lastIndex = lastLogIndex();
                 lastTerm = lastLogTerm();
-                persistStateLocked();
+                persistStateLocked(true);
             }
         }
         if (shouldStartElection) {
@@ -330,7 +333,7 @@ public final class RaftNode implements AutoCloseable {
                         currentTerm = response.term();
                         votedFor = null;
                         state = RaftState.FOLLOWER;
-                        persistStateLocked();
+                        persistStateLocked(true);
                         return;
                     }
                     if (response.granted() && response.term() == currentTerm) {
@@ -339,7 +342,7 @@ public final class RaftNode implements AutoCloseable {
                 }
                 if (votes > transport.peerIds().size() / 2) {
                     becomeLeaderLocked();
-                    persistStateLocked();
+                    persistStateLocked(true);
                 }
             }
             return;
@@ -471,7 +474,7 @@ public final class RaftNode implements AutoCloseable {
         currentTerm = newTerm;
         votedFor = null;
         state = RaftState.FOLLOWER;
-        persistStateLocked();
+        persistStateLocked(true);
     }
 
     private void maybeCommitLocked() {
@@ -495,7 +498,7 @@ public final class RaftNode implements AutoCloseable {
         }
         if (commitIndex > lastApplied) {
             applyCommittedLocked();
-            persistStateLocked();
+            persistStateLocked(false);
             maybeSnapshotLocked();
         }
     }
@@ -549,9 +552,9 @@ public final class RaftNode implements AutoCloseable {
         }
     }
 
-    private void persistStateLocked() {
+    private void persistStateLocked(boolean force) {
         if (persistentState != null) {
-            persistentState.persist(currentTerm, votedFor, commitIndex);
+            persistentState.persist(currentTerm, votedFor, commitIndex, force);
         }
     }
 

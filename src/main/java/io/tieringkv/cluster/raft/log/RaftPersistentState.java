@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.zip.CRC32C;
 
 /**
@@ -19,6 +20,7 @@ public final class RaftPersistentState implements AutoCloseable {
     private static final byte VERSION = 1;
 
     private final Path file;
+    private final FileChannel channel;
     private long term;
     private String votedFor;
     private long commitIndex;
@@ -28,6 +30,8 @@ public final class RaftPersistentState implements AutoCloseable {
         if (Files.exists(file)) {
             load();
         }
+        this.channel = FileChannel.open(file, StandardOpenOption.CREATE,
+                StandardOpenOption.READ, StandardOpenOption.WRITE);
     }
 
     public static RaftPersistentState open(Path dir) throws IOException {
@@ -36,10 +40,16 @@ public final class RaftPersistentState implements AutoCloseable {
     }
 
     public synchronized void persist(long term, String votedFor, long commitIndex) {
+        persist(term, votedFor, commitIndex, true);
+    }
+
+    /** force=false 时仅缓冲写入（commitIndex 可由日志重放推导，安全性由 log 保证）。 */
+    public synchronized void persist(long term, String votedFor, long commitIndex,
+                                     boolean force) {
         this.term = term;
         this.votedFor = votedFor;
         this.commitIndex = commitIndex;
-        write();
+        write(force);
     }
 
     public synchronized long term() {
@@ -56,10 +66,15 @@ public final class RaftPersistentState implements AutoCloseable {
 
     @Override
     public synchronized void close() {
-        // 状态文件即时写入，无需缓存刷新
+        try {
+            channel.force(true);
+            channel.close();
+        } catch (IOException e) {
+            throw new IllegalStateException("raft state close failed", e);
+        }
     }
 
-    private void write() {
+    private void write(boolean force) {
         byte[] votedBytes = votedFor == null
                 ? new byte[0] : votedFor.getBytes(StandardCharsets.UTF_8);
         if (votedBytes.length > 0xFFFF) {
@@ -82,11 +97,13 @@ public final class RaftPersistentState implements AutoCloseable {
         out.put(payloadBytes);
         out.putInt((int) crc.getValue());
         try {
-            try (FileChannel channel = FileChannel.open(file,
-                    java.nio.file.StandardOpenOption.CREATE,
-                    java.nio.file.StandardOpenOption.TRUNCATE_EXISTING,
-                    java.nio.file.StandardOpenOption.WRITE)) {
-                channel.write(ByteBuffer.wrap(out.array()));
+            ByteBuffer buffer = ByteBuffer.wrap(out.array());
+            channel.position(0);
+            while (buffer.hasRemaining()) {
+                channel.write(buffer);
+            }
+            channel.truncate(buffer.position());
+            if (force) {
                 channel.force(true);
             }
         } catch (IOException e) {
