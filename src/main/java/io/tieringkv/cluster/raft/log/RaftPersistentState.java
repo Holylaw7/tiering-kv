@@ -24,6 +24,7 @@ public final class RaftPersistentState implements AutoCloseable {
     private long term;
     private String votedFor;
     private long commitIndex;
+    private boolean closed;
 
     private RaftPersistentState(Path file) throws IOException {
         this.file = file;
@@ -66,6 +67,10 @@ public final class RaftPersistentState implements AutoCloseable {
 
     @Override
     public synchronized void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
         try {
             channel.force(true);
             channel.close();
@@ -97,6 +102,9 @@ public final class RaftPersistentState implements AutoCloseable {
         out.put(payloadBytes);
         out.putInt((int) crc.getValue());
         try {
+            if (closed) {
+                throw new IllegalStateException("raft state already closed");
+            }
             ByteBuffer buffer = ByteBuffer.wrap(out.array());
             channel.position(0);
             while (buffer.hasRemaining()) {
