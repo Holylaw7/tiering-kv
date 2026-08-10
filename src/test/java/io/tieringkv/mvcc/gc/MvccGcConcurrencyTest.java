@@ -28,9 +28,12 @@ class MvccGcConcurrencyTest {
         MvccStorageEngine engine = new MvccStorageEngine(MemTable.create());
         BatchGcExecutor gc = new BatchGcExecutor(engine, GcConfig.DEFAULT);
         gc.updateSafePoint(new SafePoint(Long.MAX_VALUE / 2));
+        TimestampOracle oracle = new TimestampOracle();
         int writers = 8;
         CountDownLatch start = new CountDownLatch(1);
         AtomicBoolean failed = new AtomicBoolean();
+        java.util.concurrent.atomic.AtomicReference<Throwable> firstError =
+                new java.util.concurrent.atomic.AtomicReference<>();
         AtomicReference<Throwable> error = new AtomicReference<>();
         List<Thread> threads = new ArrayList<>();
         for (int w = 0; w < writers; w++) {
@@ -40,8 +43,9 @@ class MvccGcConcurrencyTest {
                     start.await();
                     for (int i = 0; i < 2_000; i++) {
                         byte[] key = bytes("k" + (i % 200));
+                        long startTS = oracle.nextTimestamp();
                         engine.putVersion(key, bytes("w" + writer + "-" + i),
-                                i, i + 1, WriteType.PUT);
+                                startTS, startTS + 1, WriteType.PUT);
                     }
                 } catch (Throwable t) {
                     failed.set(true);
@@ -82,6 +86,8 @@ class MvccGcConcurrencyTest {
         gc.updateSafePoint(new SafePoint(100));
         CountDownLatch start = new CountDownLatch(1);
         AtomicBoolean failed = new AtomicBoolean();
+        java.util.concurrent.atomic.AtomicReference<Throwable> firstError =
+                new java.util.concurrent.atomic.AtomicReference<>();
         List<Thread> threads = new ArrayList<>();
         for (int w = 0; w < 6; w++) {
             Thread thread = new Thread(() -> {
@@ -92,6 +98,7 @@ class MvccGcConcurrencyTest {
                     }
                 } catch (Throwable t) {
                     failed.set(true);
+                    firstError.compareAndSet(null, t);
                 }
             });
             threads.add(thread);
@@ -102,6 +109,9 @@ class MvccGcConcurrencyTest {
             thread.join(30_000);
         }
         gc.close();
+        if (firstError.get() != null) {
+            firstError.get().printStackTrace(System.err);
+        }
         assertThat(failed).isFalse();
         assertThat(engine.versionCount()).isEqualTo(500);
         ((MemTable) engine.underlying()).close();
@@ -273,19 +283,24 @@ class MvccGcConcurrencyTest {
     void concurrentGcAndCommitNoLostUpdate() throws Exception {
         MvccStorageEngine engine = new MvccStorageEngine(MemTable.create());
         BatchGcExecutor gc = new BatchGcExecutor(engine, GcConfig.DEFAULT);
-        gc.updateSafePoint(new SafePoint(1_000_000));
+        gc.updateSafePoint(new SafePoint(Long.MAX_VALUE / 2));
         AtomicBoolean failed = new AtomicBoolean();
         List<Thread> threads = new ArrayList<>();
         for (int w = 0; w < 4; w++) {
             int writer = w;
+            TimestampOracle perWriterOracle = new TimestampOracle();
             Thread thread = new Thread(() -> {
                 try {
                     for (int i = 0; i < 1_000; i++) {
                         Transaction txn = new Transaction(
-                                "w" + writer + "-" + i, i);
-                        txn.put(bytes("hot"), bytes("w" + writer + "-" + i));
+                                "w" + writer + "-" + i,
+                                perWriterOracle.nextTimestamp());
+                        // 每个写者独占 key + 独占 oracle：串行提交无冲突，
+                        // 验证“GC 并发下最新版本不丢失”
+                        txn.put(bytes("hot" + writer),
+                                bytes("w" + writer + "-" + i));
                         txn.commit(engine, new LockTable(),
-                                new TimestampOracle(), 60_000);
+                                perWriterOracle, 60_000);
                     }
                 } catch (Throwable t) {
                     failed.set(true);
@@ -302,7 +317,9 @@ class MvccGcConcurrencyTest {
         }
         gc.close();
         assertThat(failed).isFalse();
-        assertThat(engine.latestValue(bytes("hot"))).isNotNull();
+        for (int w = 0; w < 4; w++) {
+            assertThat(engine.latestValue(bytes("hot" + w))).isNotNull();
+        }
         ((MemTable) engine.underlying()).close();
     }
 
