@@ -24,6 +24,10 @@ public final class VectorStore {
         return embeddings.size();
     }
 
+    public void clear() {
+        embeddings.clear();
+    }
+
     public List<ScoredEmbedding> search(float[] query, int topK) {
         List<ScoredEmbedding> results = new ArrayList<>();
         for (Embedding embedding : embeddings.values()) {
