@@ -215,14 +215,19 @@ public final class DistributedTxnRouter {
                             ok = false;
                             continue;
                         }
-                        TxnMessages.Response response = client.commit(
-                                entry.txnId(), entry.startTS(),
-                                entry.commitTS(), entry.primary(),
-                                region.getValue()).join();
-                        if (response.status() == TxnMessages.Status.OK) {
-                            actuallyCommitted = true;
-                        }
-                        if (!response.succeeded()) {
+                        try {
+                            TxnMessages.Response response = client.commit(
+                                    entry.txnId(), entry.startTS(),
+                                    entry.commitTS(), entry.primary(),
+                                    region.getValue()).join();
+                            if (response.status() == TxnMessages.Status.OK) {
+                                actuallyCommitted = true;
+                            }
+                            if (!response.succeeded()) {
+                                ok = false;
+                            }
+                        } catch (RuntimeException transientFailure) {
+                            // 瞬时网络故障：本轮跳过，下轮恢复重试
                             ok = false;
                         }
                     }
