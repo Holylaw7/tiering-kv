@@ -4,7 +4,8 @@ Phase 24 · 2026-08-11
 
 ## 1. 结论
 
-Phase 24 完成云原生生产发布闭环：
+Phase 24 完成云原生生产发布闭环，当前定位：**Cloud Native Distributed
+Transaction KV v1.0 RC**：
 
 - 事务元数据 Multi-Raft 化（ADR-0095，关闭 TD-047 的主体）；
 - CI 容器 E2E 管道（`.github/workflows/transaction-e2e.yml`，关闭 TD-048
@@ -18,6 +19,32 @@ Phase 24 完成云原生生产发布闭环：
 - 最终 SLA 基准（docs/benchmark/phase24-final-production-report.md）。
 
 新增 **231 项测试**，全量回归 **2238/2238 全绿**（Phase 1–24）。
+
+## 1.1 核心架构完成度（领域矩阵）
+
+| 领域 | 阶段 | 完成度 | 说明 |
+| --- | --- | --- | --- |
+| Storage Engine | 1–10 | ✅ | MemTable / WAL / SSTable / Compaction / mmap / Memory Pool |
+| Raft | 11–15 | ✅ | 选举 / 日志持久化 / 快照 / 批量流水线复制 / 安全 RPC |
+| Multi-Raft | 16–18 | ✅ | Region 组、共享传输、零拷贝批量写、epoch 路由 |
+| Region / Migration | 16–18 | ✅ | split/merge、slot 迁移、并行迁移、自动均衡 |
+| Redis Gateway | 17–20 | ✅ | RESP2 + CLUSTER 子集 + MVCC 自动事务化 |
+| MVCC / Snapshot Read | 19 | ✅ | 多版本 + HLC + Snapshot Read + GC |
+| Percolator 2PC | 19–21 | ✅ | Prewrite/Commit/Rollback，TCP 化 |
+| Distributed Transaction | 19–21 | ✅ | 跨区 2PC + 网络重试 + 幂等 RPC |
+| Lock Resolver | 22–23 | ✅ | CHECK/RESOLVE/HEARTBEAT RPC + 状态缓存 |
+| Recovery | 19–24 | ✅ | 崩溃恢复 / 事务恢复 / 备份恢复闭环 |
+| Metadata Multi-Raft | 24 | ✅（架构） | TxnMetadataNode + 快照 + decisionIndex；传输进程内（TD-050） |
+| Cloud Runtime | 24 | ✅ | Health / Readiness / Liveness + Graceful Shutdown |
+| Kubernetes | 24 | ✅ | StatefulSet / Service / ConfigMap / Secret / PDB / Gateway |
+| Backup / Restore | 24 | ✅ | 元数据快照 + MVCC 索引 destroy→restore 闭环 |
+| Rolling Upgrade | 24 | ✅ | 逐节点升级 + 追平等待 + quorum 保持 |
+| CI E2E | 24 | ✅（交付物） | JVM E2E 已执行；容器 Runner 待触发（TD-048） |
+| Operational Lifecycle | 24 | ✅ | 探针 / 停机 / 升级 / 备份 / 发布说明 |
+
+**结论**：数据面（存储/冷热/IO）、事务面（2PC/锁/恢复）、控制面
+（Raft 决策/元数据组）与运维面（K8s/CI/生命周期）主链路均已闭环；
+TD-050（元数据 Multi-Raft 网络化）是进入 v1.0 GA 前的最后一个控制面缺口。
 
 ## 2. ADR
 
