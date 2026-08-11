@@ -17,7 +17,7 @@ jobs:
           java-version: "17"
           cache: maven
       - name: JVM container-equivalent E2E
-        run: mvn -q -Dtest=CiTransactionE2ETest,RealDiskChaosTest -DfailIfNoTests=false test
+        run: mvn -q -Dtest=CiTransactionE2ETest,CiTransactionE2EParameterizedTest,RealDiskChaosTest,RealDiskChaosParameterizedTest,MetadataNetworkRaftTest,MetadataNetworkRaftExtendedTest -DfailIfNoTests=false test
 
   container-e2e:
     runs-on: ubuntu-latest
@@ -48,9 +48,77 @@ jobs:
           sleep 1
           printf '*2\r\n$3\r\nGET\r\n$2\r\nk1\r\n' \
             | timeout 5 bash -c 'cat > /dev/tcp/127.0.0.1/6379'
+      - name: Container fault injection
+        run: |
+          scripts/container-chaos.sh kill-coordinator
+          scripts/container-chaos.sh kill-participant
+          scripts/container-chaos.sh kill-meta
+          scripts/container-chaos.sh partition
+      - name: Smoke after fault injection
+        run: |
+          printf '*3\r\n$3\r\nSET\r\n$2\r\nk2\r\n$2\r\nv2\r\n' \
+            | timeout 5 bash -c 'cat > /dev/tcp/127.0.0.1/6379'
+          printf '*2\r\n$3\r\nGET\r\n$2\r\nk2\r\n' \
+            | timeout 5 bash -c 'cat > /dev/tcp/127.0.0.1/6379'
       - name: Collect logs
         if: always()
         run: docker compose -f deploy/docker-compose.transaction.yml logs --tail=200
       - name: Cleanup
         if: always()
         run: docker compose -f deploy/docker-compose.transaction.yml down -v
+
+  kind-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: tiering-kv
+      - name: Build and load image
+        run: |
+          mvn -q -DskipTests package
+          docker build -t tiering-kv:0.1.0 -f deploy/Dockerfile .
+          kind load docker-image tiering-kv:0.1.0
+      - name: Kind in-cluster validation
+        run: |
+          TIERINGKV_KIND_CLUSTER=true scripts/kind-e2e.sh run
+          TIERINGKV_KIND_CLUSTER=true scripts/kind-e2e.sh pdb-drain
+          TIERINGKV_KIND_CLUSTER=true mvn -q -Dtest=KubernetesInClusterValidationTest -DfailIfNoTests=false test
+      - name: Collect cluster logs
+        if: always()
+        run: kubectl -n tiering-kv get pods,svc,pdb
+      - name: Cleanup
+        if: always()
+        run: TIERINGKV_KIND_CLUSTER=true scripts/kind-e2e.sh cleanup
+
+  block-device-chaos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - name: Block device setup
+        run: |
+          sudo scripts/block-device-chaos.sh setup
+          sudo scripts/block-device-chaos.sh disk-full
+          sudo scripts/block-device-chaos.sh cleanup
+          sudo scripts/block-device-chaos.sh setup
+          sudo mount -o remount,ro /mnt/tiering-kv-block
+          sudo mount -o remount,rw /mnt/tiering-kv-block
+      - name: Gated block device chaos tests
+        run: |
+          TIERINGKV_CONTAINER_CHAOS=true \
+            mvn -q -Dtest=RealBlockDeviceChaosTest -DfailIfNoTests=false test
+      - name: Cleanup
+        if: always()
+        run: sudo scripts/block-device-chaos.sh cleanup
