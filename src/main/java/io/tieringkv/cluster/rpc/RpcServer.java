@@ -23,6 +23,7 @@ import io.tieringkv.cluster.rpc.security.TokenBucket;
 
 import java.net.InetSocketAddress;
 import java.nio.file.Path;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 
 /** Netty RPC 服务端（ADR-0041）：解码帧 → 处理器 → 响应。 */
@@ -35,6 +36,8 @@ public final class RpcServer implements AutoCloseable {
     private final EventLoopGroup boss = new NioEventLoopGroup(1);
     private final EventLoopGroup worker = new NioEventLoopGroup();
     private volatile Function<RpcFrame, RpcFrame> handler;
+    private volatile Function<RpcFrame, CompletableFuture<RpcFrame>>
+            asyncHandler;
     private volatile TokenBucket rateLimiter;
     private SslContext sslContext;
     private Channel channel;
@@ -107,6 +110,12 @@ public final class RpcServer implements AutoCloseable {
         this.handler = handler;
     }
 
+    /** 异步处理器（ADR-0099）：长耗时操作（如 Raft 提案）不阻塞事件循环。 */
+    public void asyncHandler(
+            Function<RpcFrame, CompletableFuture<RpcFrame>> handler) {
+        this.asyncHandler = handler;
+    }
+
     public int boundPort() {
         return ((InetSocketAddress) channel.localAddress()).getPort();
     }
@@ -130,11 +139,38 @@ public final class RpcServer implements AutoCloseable {
                 return;
             }
             Function<RpcFrame, RpcFrame> current = handler;
-            if (current == null) {
+            Function<RpcFrame, CompletableFuture<RpcFrame>> async =
+                    asyncHandler;
+            if (current == null && async == null) {
                 ctx.close();
                 return;
             }
+            if (async != null) {
+                CompletableFuture<RpcFrame> response;
+                try {
+                    response = async.apply(request);
+                } catch (Throwable error) {
+                    ctx.writeAndFlush(errorFrame(request, error));
+                    return;
+                }
+                response.whenComplete((frame, error) -> {
+                    if (error != null || frame == null) {
+                        ctx.writeAndFlush(errorFrame(request, error));
+                    } else {
+                        ctx.writeAndFlush(frame);
+                    }
+                });
+                return;
+            }
             ctx.writeAndFlush(current.apply(request));
+        }
+
+        private static RpcFrame errorFrame(RpcFrame request, Throwable error) {
+            String message = error == null ? "async handler failure"
+                    : error.getMessage() == null
+                    ? error.getClass().getSimpleName() : error.getMessage();
+            return new RpcFrame(request.requestId(), RpcMessageType.ERROR,
+                    message.getBytes(java.nio.charset.StandardCharsets.UTF_8));
         }
 
         @Override
