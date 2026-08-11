@@ -131,6 +131,7 @@ MvccCompactor（在线压缩）+ 事务网络指标；202 项新测试；真实 
 三节点混沌（tc netem 100ms/5%/2%、分区、kill -9）执行成功；容器构建
 修复 netty classifier / Main-Class / fat jar 三个缺陷。TD-043 部分关闭
 （TCP 事务协议已覆盖，容器端到端待 Phase 22），TD-044 登记 disk 混沌未执行。
+全量回归 1725/1725 全绿。
 
 ## 2. 当前状态
 

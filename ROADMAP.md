@@ -415,7 +415,7 @@
   [0084](docs/adr/ADR-0084-transaction-metadata-raft.md)、
   [0085](docs/adr/ADR-0085-online-mvcc-compression.md)、
   [0086](docs/adr/ADR-0086-cross-machine-chaos-validation.md)。
-- 测试：新增 202 项；全量回归以最终 mvn test 为准（0 failures）。
+- 测试：新增 202 项；全量回归 1725/1725 全绿（0 failures）。
 - 基准（[phase21-report.md](docs/benchmark/phase21-report.md)）：
   单区 58.7–116.4K、多区 88.1–110.7K txn/s、恢复 0–0ms、
   leader 恢复 156–276ms。

@@ -345,7 +345,7 @@
     （netty classifier / Main-Class / fat jar）；
   - 可观测性：txn_prepare/network_retry/lock_wait/region_count/recovery_time、
     mvcc_compaction_*；
-  - 测试：新增 202 项；
+  - 测试：新增 202 项；全量回归 1725/1725 全绿；
   - 基准（docs/benchmark/phase21-report.md）：单区 58.7–116.4K、
     多区 88.1–110.7K txn/s、恢复 0–0ms、leader 恢复 156–276ms。
 - Phase 9 评审处置：确认瓶颈分层（A 4.7M → B 230K → C 150K，瓶颈=协议/调度）；
