@@ -4,6 +4,7 @@ import io.tieringkv.mvcc.ByteKey;
 import io.tieringkv.mvcc.TimestampOracle;
 import io.tieringkv.mvcc.Transaction;
 import io.tieringkv.mvcc.TransactionMetricsRegistry;
+import io.tieringkv.transaction.lifecycle.TransactionLifecycleManager;
 import io.tieringkv.transaction.metadata.TxnMetaEntry;
 import io.tieringkv.transaction.metadata.TransactionMetadataService;
 import io.tieringkv.transaction.rpc.TxnMessages;
@@ -28,6 +29,9 @@ public final class DistributedTxnRouter {
     private final Map<String, RegionTxnClient> regionsById;
     private final TransactionMetadataService metadata;
     private final TransactionMetricsRegistry metrics;
+    private final TransactionLifecycleManager lifecycle;
+    private final long ttlMillis;
+    private final long maxDurationMillis;
     private final AtomicLong txnIds = new AtomicLong();
 
     public DistributedTxnRouter(
@@ -36,10 +40,26 @@ public final class DistributedTxnRouter {
             List<RegionTxnClient> regions,
             TransactionMetadataService metadata,
             TransactionMetricsRegistry metrics) {
+        this(oracle, regionOf, regions, metadata, metrics, null, 60_000,
+                300_000);
+    }
+
+    public DistributedTxnRouter(
+            TimestampOracle oracle,
+            Function<ByteKey, RegionTxnClient> regionOf,
+            List<RegionTxnClient> regions,
+            TransactionMetadataService metadata,
+            TransactionMetricsRegistry metrics,
+            TransactionLifecycleManager lifecycle,
+            long ttlMillis,
+            long maxDurationMillis) {
         this.oracle = oracle;
         this.regionOf = regionOf;
         this.metadata = metadata;
         this.metrics = metrics;
+        this.lifecycle = lifecycle;
+        this.ttlMillis = ttlMillis;
+        this.maxDurationMillis = maxDurationMillis;
         Map<String, RegionTxnClient> byId = new LinkedHashMap<>();
         for (RegionTxnClient region : regions) {
             byId.put(region.regionId(), region);
@@ -51,8 +71,12 @@ public final class DistributedTxnRouter {
         if (metrics != null) {
             metrics.recordBegin();
         }
-        return new Transaction("dtx-" + txnIds.incrementAndGet(),
+        Transaction txn = new Transaction("dtx-" + txnIds.incrementAndGet(),
                 oracle.nextTimestamp());
+        if (lifecycle != null) {
+            lifecycle.begin(txn, ttlMillis, maxDurationMillis);
+        }
+        return txn;
     }
 
     /** 网络 2PC：prewrite 全成功 → metadata PREPARE → commit 全部。 */
@@ -102,6 +126,9 @@ public final class DistributedTxnRouter {
                 metadata.commit(txn.txnId(), commitTS).join();
             }
             txn.markCommitted(commitTS);
+            if (lifecycle != null) {
+                lifecycle.markCommitted(txn.txnId());
+            }
             if (metrics != null) {
                 metrics.recordCommit(System.nanoTime() - t0);
             }
@@ -122,6 +149,9 @@ public final class DistributedTxnRouter {
                     }
                 }
                 txn.markRolledBack();
+                if (lifecycle != null) {
+                    lifecycle.markRolledBack(txn.txnId());
+                }
                 if (metrics != null) {
                     metrics.recordRollback();
                     metrics.recordConflict();
@@ -149,6 +179,9 @@ public final class DistributedTxnRouter {
             }
         }
         txn.markRolledBack();
+        if (lifecycle != null) {
+            lifecycle.markRolledBack(txn.txnId());
+        }
         if (metrics != null) {
             metrics.recordRollback();
         }

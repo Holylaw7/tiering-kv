@@ -1,6 +1,7 @@
 package io.tieringkv.mvcc;
 
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 
@@ -20,6 +21,12 @@ public final class TransactionMetricsRegistry {
     private final LongAdder lockWaitNanos = new LongAdder();
     private final LongAdder recoveryTimeNanos = new LongAdder();
     private final AtomicLong regionCount = new AtomicLong();
+    private final LongAdder expiredTotal = new LongAdder();
+    private final LongAdder lockTotal = new LongAdder();
+    private final LongAdder lockResolveTotal = new LongAdder();
+    private final AtomicLong longRunning = new AtomicLong();
+    private final Map<String, LongAdder> abortReasons =
+            new java.util.concurrent.ConcurrentHashMap<>();
     private final AtomicLong active = new AtomicLong();
     private final AtomicLong lockCount = new AtomicLong();
 
@@ -76,6 +83,27 @@ public final class TransactionMetricsRegistry {
         recoveryTimeNanos.add(latencyNanos);
     }
 
+    public void recordExpired() {
+        expiredTotal.increment();
+    }
+
+    public void recordAbortReason(String reason) {
+        abortReasons.computeIfAbsent(reason,
+                ignored -> new LongAdder()).increment();
+    }
+
+    public void recordLock() {
+        lockTotal.increment();
+    }
+
+    public void recordLockResolve() {
+        lockResolveTotal.increment();
+    }
+
+    public void setLongRunning(long count) {
+        longRunning.set(count);
+    }
+
     public void setLockCount(long count) {
         lockCount.set(count);
     }
@@ -88,7 +116,9 @@ public final class TransactionMetricsRegistry {
                 rollbacks.sum(), conflicts.sum(), aborts.sum(),
                 recoveries.sum(), reads.sum(), lockCount.get(), avgMs,
                 prepareAvgMs(), networkRetries.sum(), lockWaitAvgMs(),
-                regionCount.get(), recoveryTimeAvgMs());
+                regionCount.get(), recoveryTimeAvgMs(), expiredTotal.sum(),
+                lockTotal.sum(), lockResolveTotal.sum(), longRunning.get(),
+                Map.copyOf(abortReasons));
     }
 
     private double prepareAvgMs() {
@@ -127,12 +157,19 @@ public final class TransactionMetricsRegistry {
                         + "txn_network_retry:%d\r\n"
                         + "txn_lock_wait_ms:%.3f\r\n"
                         + "txn_region_count:%d\r\n"
-                        + "txn_recovery_time_ms:%.3f\r\n",
+                        + "txn_recovery_time_ms:%.3f\r\n"
+                        + "txn_expired_total:%d\r\n"
+                        + "txn_long_running:%d\r\n"
+                        + "lock_total:%d\r\n"
+                        + "lock_resolve_total:%d\r\n"
+                        + "lock_wait_seconds:%.3f\r\n",
                 s.beginTotal(), s.activeTxn(), s.committedTxn(), s.rollbackTxn(),
                 s.conflictTxn(), s.abortTxn(), s.recoveryTxn(), s.readTxn(),
                 s.lockCount(), s.commitLatencyMs(), s.prepareLatencyMs(),
                 s.networkRetry(), s.lockWaitMs(), s.regionCount(),
-                s.recoveryTimeMs());
+                s.recoveryTimeMs(), s.expiredTotal(), s.longRunning(),
+                s.lockTotal(), s.lockResolveTotal(),
+                s.lockWaitMs() / 1000.0);
     }
 
     public record Snapshot(long beginTotal, long activeTxn, long committedTxn,
@@ -141,6 +178,9 @@ public final class TransactionMetricsRegistry {
                            long lockCount, double commitLatencyMs,
                            double prepareLatencyMs, long networkRetry,
                            double lockWaitMs, long regionCount,
-                           double recoveryTimeMs) {
+                           double recoveryTimeMs, long expiredTotal,
+                           long lockTotal, long lockResolveTotal,
+                           long longRunning,
+                           Map<String, LongAdder> abortReasons) {
     }
 }

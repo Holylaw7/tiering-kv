@@ -15,7 +15,8 @@ public record TieringConfig(
         Wal wal,
         Cache cache,
         Tiering tiering,
-        Gc gc) {
+        Gc gc,
+        Txn txn) {
 
     public record Server(String host, int port) {
     }
@@ -43,6 +44,9 @@ public record TieringConfig(
     public record Gc(int batchSize, int workerCount, long maxMemoryBytes) {
     }
 
+    public record Txn(long ttlSeconds, long maxDurationSeconds) {
+    }
+
     public static TieringConfig defaults() {
         return new TieringConfig(
                 new Server("0.0.0.0", 6379),
@@ -51,7 +55,8 @@ public record TieringConfig(
                 new Wal("EVERY_SEC", 64L << 20),
                 new Cache(1024, 1000, 1000),
                 new Tiering(0.70, 0.85, 0.95, 1000, 5000),
-                new Gc(4096, 4, 64L << 20));
+                new Gc(4096, 4, 64L << 20),
+                new Txn(60, 300));
     }
 
     @SuppressWarnings("unchecked")
@@ -72,6 +77,7 @@ public record TieringConfig(
             Map<String, Object> cache = map(root.get("cache"));
             Map<String, Object> tiering = map(root.get("tiering"));
             Map<String, Object> gc = map(root.get("gc"));
+            Map<String, Object> txn = map(root.get("txn"));
             return new TieringConfig(
                     new Server(str(server.get("host"), base.server().host()),
                             num(server.get("port"), base.server().port())),
@@ -91,7 +97,10 @@ public record TieringConfig(
                             num(tiering.get("drain-timeout-ms"), base.tiering().drainTimeoutMillis())),
                     new Gc(num(gc.get("batch-size"), base.gc().batchSize()),
                             num(gc.get("worker-count"), base.gc().workerCount()),
-                            num(gc.get("max-memory"), base.gc().maxMemoryBytes())));
+                            num(gc.get("max-memory"), base.gc().maxMemoryBytes())),
+                    new Txn(num(txn.get("ttl-seconds"), base.txn().ttlSeconds()),
+                            num(txn.get("max-duration-seconds"),
+                                    base.txn().maxDurationSeconds())));
         } catch (IOException | RuntimeException e) {
             return defaults();
         }
@@ -103,7 +112,8 @@ public record TieringConfig(
                         + "migration-workers=%d memory.limit=%d wal.fsync=%s "
                         + "cache.block-size=%d hotkey-window=%d hotkey-threshold=%d "
                         + "watermarks=%.2f/%.2f/%.2f backpressure-timeout=%d drain-timeout=%d "
-                        + "gc.batch-size=%d gc.worker-count=%d gc.max-memory=%d",
+                        + "gc.batch-size=%d gc.worker-count=%d gc.max-memory=%d "
+                        + "txn.ttl-seconds=%d txn.max-duration-seconds=%d",
                 server().host(), server().port(), workers().shardCount(),
                 workers().flushWorkers(), workers().migrationWorkers(),
                 memory().maxBytes(), wal().fsyncPolicy(), cache().blockCacheCapacity(),
@@ -111,7 +121,8 @@ public record TieringConfig(
                 tiering().lowWatermark(), tiering().highWatermark(),
                 tiering().criticalWatermark(), tiering().backpressureTimeoutMillis(),
                 tiering().drainTimeoutMillis(), gc().batchSize(), gc().workerCount(),
-                gc().maxMemoryBytes());
+                gc().maxMemoryBytes(), txn().ttlSeconds(),
+                txn().maxDurationSeconds());
     }
 
     @SuppressWarnings("unchecked")
