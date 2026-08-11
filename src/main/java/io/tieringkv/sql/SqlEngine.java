@@ -51,7 +51,7 @@ public final class SqlEngine {
         };
     }
 
-    public Map<byte[], Long> groupBy(List<Row> rows,
+    public Map<String, Long> groupBy(List<Row> rows,
                                      java.util.function.Function<Row,
                                              byte[]> groupKey,
                                      AggregateType type,
@@ -62,8 +62,10 @@ public final class SqlEngine {
             groups.computeIfAbsent(new Key(groupKey.apply(row)),
                     ignored -> new ArrayList<>()).add(row);
         }
-        Map<byte[], Long> result = new HashMap<>();
-        groups.forEach((key, group) -> result.put(key.bytes(),
+        Map<String, Long> result = new HashMap<>();
+        groups.forEach((key, group) -> result.put(
+                new String(key.bytes(),
+                        StandardCharsets.ISO_8859_1),
                 aggregate(group, type, extractor)));
         return result;
     }

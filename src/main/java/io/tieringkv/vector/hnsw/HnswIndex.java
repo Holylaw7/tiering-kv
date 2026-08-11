@@ -32,8 +32,12 @@ public final class HnswIndex {
     public List<VectorStore.ScoredEmbedding> search(float[] query,
                                                     int topK) {
         List<VectorStore.ScoredEmbedding> candidates = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
         for (int level = layers.size() - 1; level >= 0; level--) {
             for (Embedding embedding : layers.get(level)) {
+                if (!seen.add(embedding.id())) {
+                    continue; // 多层重复条目去重
+                }
                 double score = VectorStore.cosine(query,
                         embedding.values());
                 if (score > 0) {
