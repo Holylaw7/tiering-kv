@@ -1,0 +1,12 @@
+apiVersion: tieringkv.io/v1
+kind: TieringKVCluster
+metadata:
+  name: production
+  namespace: tiering-kv
+spec:
+  metadataReplicas: 3
+  storageReplicas: 3
+  regionIds: [r1, r2, r3]
+  image: tiering-kv:1.0.0
+  backupScheduleCron: "0 2 * * *"
+  backupRetentionHours: 168
