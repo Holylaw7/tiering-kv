@@ -32,6 +32,22 @@ public final class LockTable {
         return locks.get(new ByteKey(key));
     }
 
+    /** 刷新锁 TTL（ADR-0083 HEARTBEAT）：仅更新创建时刻，保持 txnId 不变。 */
+    public boolean refresh(byte[] key, String txnId, long nowMillis,
+                           long ttlMillis) {
+        boolean[] refreshed = {false};
+        locks.computeIfPresent(new ByteKey(key), (k, record) -> {
+            if (record.txnId().equals(txnId)) {
+                refreshed[0] = true;
+                return new LockRecord(record.key(), record.txnId(),
+                        record.primary(), record.startTS(), ttlMillis,
+                        record.lockType(), nowMillis);
+            }
+            return record;
+        });
+        return refreshed[0];
+    }
+
     /** 强制移除（recovery/超时清理）。 */
     public LockRecord resolve(byte[] key) {
         return locks.remove(new ByteKey(key));

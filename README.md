@@ -4,7 +4,7 @@
 > （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding +
 > Raft 持久化集群 + 批量复制 + 安全 RPC + 元数据 Raft + 游标迁移）。
 
-**阶段状态：Phase 20（事务生产化与存储优化）✅（Phase 0–19 全部完成 ✅）**
+**阶段状态：Phase 21（分布式事务网络化与云生产）✅（Phase 0–20 全部完成 ✅）**
 
 ## 项目定位
 
@@ -414,6 +414,24 @@ RaftNode
 - 文档：[基准](docs/benchmark/phase20-report.md) /
   [评审](docs/review/phase20-transaction-production-review.md) /
   [混沌](docs/testing/phase20-chaos-report.md)。
+
+## 分布式事务网络化与云生产（Phase 21）
+
+- **分布式事务路由**（ADR-0083）：DistributedTxnRouter + RegionTxnClient +
+  TxnParticipantClient（PREWRITE/COMMIT/ROLLBACK/HEARTBEAT 复用
+  MultiRaftEndpoint 单端口 RPC），participant 状态机幂等；
+- **事务元数据 Raft**（ADR-0084）：TransactionMetadataService +
+  TxnMetadataRaftGroup，Coordinator 崩溃可恢复续跑；
+- **MVCC 在线压缩**（ADR-0085）：MvccCompactor（SafePoint 合并 + 原子索引文件）；
+- **真实跨机混沌**（ADR-0086）：Docker 三节点 + tc netem（100ms/5%/2%）
+  + 分区 + kill -9，全部存活恢复；
+- **可观测性**：txn_prepare/network_retry/lock_wait/region_count/recovery_time +
+  mvcc_compaction_*；
+- **基准**：单区事务 58.7–116.4K txn/s、多区 88.1–110.7K、恢复 0–0ms、
+  leader 恢复 156–276ms；
+- 文档：[基准](docs/benchmark/phase21-report.md) /
+  [评审](docs/review/phase21-distributed-transaction-review.md) /
+  [混沌](docs/testing/phase21-real-chaos-report.md)。
 
 ## 技术栈
 

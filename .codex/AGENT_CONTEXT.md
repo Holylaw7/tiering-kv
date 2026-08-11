@@ -124,6 +124,15 @@ PersistentTxnJournal + TxnRecoveryReplay（COMMIT 先落盘，恢复补完）+
 全量回归 1523/1523 全绿。跨机 Docker+tc netem 因容器内 Maven 网络受限
 未执行（TD-040/TD-043 登记）。
 
+Phase 21 已交付：分布式事务网络化——DistributedTxnRouter /
+RegionTxnClient / TxnParticipantClient（RPC 2PC）+ TransactionParticipant
+（幂等状态机）+ TransactionMetadataService（Raft 元数据 + 崩溃恢复）+
+MvccCompactor（在线压缩）+ 事务网络指标；202 项新测试；真实 Docker
+三节点混沌（tc netem 100ms/5%/2%、分区、kill -9）执行成功；容器构建
+修复 netty classifier / Main-Class / fat jar 三个缺陷。TD-043 部分关闭
+（TCP 事务协议已覆盖，容器端到端待 Phase 22），TD-044 登记 disk 混沌未执行。
+全量回归 1725/1725 全绿。
+
 ## 2. 当前状态
 
 - 阶段：**Phase 19（MVCC & Transaction Engine）✅ 已完成**

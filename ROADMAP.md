@@ -28,6 +28,7 @@
 | 18 | 分布式生产集成 | ✅ 完成（2026-08-10） |
 | 19 | MVCC 与事务引擎 | ✅ 完成（2026-08-10） |
 | 20 | 事务生产化与存储优化 | ✅ 完成（2026-08-10） |
+| 21 | 分布式事务网络化与云生产 | ✅ 完成（2026-08-11） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -403,6 +404,24 @@
   GC 107–285MB/s（>100 ✅）、网关 GET 2.0–6.9M / SET 141–389K ops/s、
   单区事务 324–651K txn/s、跨区 62–158K txn/s、恢复 1–4ms。
 
+## Phase 21 — 分布式事务网络化与云生产 ✅
+
+- 交付：DistributedTxnRouter / RegionTxnClient / TxnParticipantClient
+  （RPC 2PC）+ TransactionParticipant（幂等状态机）+
+  TransactionMetadataService（Raft 元数据 + 崩溃恢复）+
+  MvccCompactor（在线压缩）+ 事务网络指标 + 真实 Docker 混沌
+  （tc netem / 分区 / kill -9）。
+- ADR：[0083](docs/adr/ADR-0083-distributed-transaction-protocol.md)、
+  [0084](docs/adr/ADR-0084-transaction-metadata-raft.md)、
+  [0085](docs/adr/ADR-0085-online-mvcc-compression.md)、
+  [0086](docs/adr/ADR-0086-cross-machine-chaos-validation.md)。
+- 测试：新增 202 项；全量回归 1725/1725 全绿（0 failures）。
+- 基准（[phase21-report.md](docs/benchmark/phase21-report.md)）：
+  单区 58.7–116.4K、多区 88.1–110.7K txn/s、恢复 0–0ms、
+  leader 恢复 156–276ms。
+- 混沌（[phase21-real-chaos-report.md](docs/testing/phase21-real-chaos-report.md)）：
+  Docker 三节点 + netem/分区/kill -9 存活恢复；TD-044 登记 disk 混沌未执行。
+
 ## 技术债登记
 
 | 编号 | 描述 | 来源 | 计划消除 |
@@ -444,7 +463,8 @@
 | TD-037 | Region split/merge 未与存储数据搬迁联动 | ADR-0057 | Phase 18（独立 Raft 组搬迁） |
 | TD-038 | 网关 CLUSTER 命令子集 | ADR-0061 | Phase 19（全字段 NODES/ASK 搬迁） |
 | TD-039 | Region 键范围与 slot 区间路由未统一 | ADR-0057 | ✅ 已关闭（Phase 18，RoutingTable 统一） |
-| TD-040 | 跨机容器混沌未执行（环境限制） | ADR-0069 | Phase 19（Linux+Docker） |
+| TD-040 | 跨机容器混沌未执行（环境限制） | ADR-0069 | ✅ 已关闭（Phase 21，Docker 三节点 netem/分区/kill -9 执行） |
 | TD-041 | MVCC GC 19–29MB/s（目标 >100）→ 批量删除路径 | ✅ 已关闭（Phase 20，107–285MB/s） |
 | TD-042 | Redis 网关未接 MVCC 自动事务化 | ✅ 已关闭（Phase 20，GET/SET/DEL/MGET/MSET） |
-| TD-043 | 事务/MVCC 未接入 Multi-Raft Region 网络路径，跨机事务验证受限 | ADR-0082 | Phase 21（网关+Region 路由接入后执行） |
+| TD-043 | 事务/MVCC 未接入 Multi-Raft Region 网络路径，跨机事务验证受限 | ADR-0082 | 部分关闭（Phase 21 TCP 事务协议已覆盖；容器端到端待 Phase 22） |
+| TD-044 | 跨机 disk slow / disk full 混沌未执行 | ADR-0086 | Phase 22（IO 限流/ENOSPC 注入） |

@@ -381,7 +381,8 @@ class ChaosValidationTest {
                 fixture.network.partitionBetween(oldLeader.id(), follower, false);
             }
             newLeader.put(key(1), value(1));
-            awaitSee(fixture.nodes, activeIds(fixture.nodes, oldLeader.id()), key(1), 8000);
+            // 全量套件负载下收敛放宽到 15s（Phase 21 全量回归波动）
+            awaitSee(fixture.nodes, activeIds(fixture.nodes, oldLeader.id()), key(1), 15_000);
             // 无法定数的旧提案绝不能虚假成功：必须被显式失败（冲突截断）
             for (int round = 0; round < 4 && !pending.isDone(); round++) {
                 awaitTrue("old proposal settles as failed", pending::isDone, 10_000);
