@@ -21,7 +21,9 @@ import java.util.concurrent.TimeUnit;
  */
 public final class ReplicatedStorageEngine implements StorageEngine {
 
-    private static final long PROPOSAL_TIMEOUT_MILLIS = 5_000;
+    // Phase 28：全量回归负载下混沌用例偶发超过 5s；放宽到 15s
+    // 仍满足 Phase 20「禁止客户端永久悬挂」要求。
+    private static final long PROPOSAL_TIMEOUT_MILLIS = 15_000;
 
     private final StorageEngine local;
     private RaftNode raft;

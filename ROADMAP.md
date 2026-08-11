@@ -35,6 +35,7 @@
 | 25 | 控制面 GA 闭环（v1.0.0） | ✅ 完成（2026-08-11） |
 | 26 | v1 发布冻结与企业就绪 | ✅ 完成（2026-08-11） |
 | 27 | 跨地域复制与企业集成 | ✅ 完成（2026-08-11） |
+| 28 | 多主复制与高级查询引擎 | ✅ 完成（2026-08-11） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -504,6 +505,18 @@
   SYNC 复制 100–250K ops/s、RBAC 1–10M ops/s、SQL 点查 0.36–0.5M、
   Vector topK 5.5–14.5K ops/s（进程内口径）。
 - 后续：双向复制/CRDT、完整 SQL、HNSW 生产化、SaaS 多租户（Phase 28+）。
+
+## Phase 28 — 多主复制与高级查询引擎 ✅
+
+- 交付：双向复制 + CRDT（ADR-0114）、两地三中心容灾（ADR-0115）、
+  SQL 引擎（ADR-0116）、HNSW + 混合检索（ADR-0117）、SaaS 多租户
+  （ADR-0118）、RPC 帧级令牌（ADR-0119）、v1.1 发布流水线。
+- 测试：新增 251 项；全量回归 **3216/3216 全绿**（目标 ≥3200 ✅）。
+- 基准（[phase28-production-report.md](
+  docs/benchmark/phase28-production-report.md)）：CRDT 1–2.5M ops/s、
+  双向写 33–167K ops/s、SQL JOIN 1K×1K 1–5ms、HNSW 100×topK5 ≈38ms。
+- 后续：分布式 SQL、向量分片、Geo CRDT 大规模验证、三地五中心
+  （Phase 29+）。
 
 ## 技术债登记
 

@@ -93,9 +93,9 @@ public final class TxnMetadataClient {
                                                    int nodeIndex,
                                                    int round) {
         if (nodeIndex >= nodeIds.size()) {
-            if (round < 2) {
+            if (round < 5) {
                 return CompletableFuture.supplyAsync(() -> null,
-                        CompletableFuture.delayedExecutor(50,
+                        CompletableFuture.delayedExecutor(100,
                                 TimeUnit.MILLISECONDS))
                         .thenCompose(ignored ->
                                 proposeNetwork(command, 0, round + 1));

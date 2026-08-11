@@ -10,6 +10,7 @@ import io.tieringkv.cluster.raft.TimeoutNowResponse;
 import io.tieringkv.cluster.raft.VoteRequest;
 import io.tieringkv.cluster.raft.VoteResponse;
 import io.tieringkv.cluster.rpc.security.RpcSecurityConfig;
+import io.tieringkv.security.rpc.RpcPermissionGuard;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -36,6 +37,8 @@ public final class MultiRaftEndpoint implements AutoCloseable {
     private final Map<String, TxnRpcHandler> txnHandlers = new ConcurrentHashMap<>();
     private final Map<String, ProposeHandler> proposeHandlers =
             new ConcurrentHashMap<>();
+    private volatile RpcPermissionGuard rpcGuard;
+    private volatile boolean strictUnauthenticated;
 
     public MultiRaftEndpoint(String selfId, int port,
                              Map<String, InetSocketAddress> addresses) {
@@ -96,6 +99,15 @@ public final class MultiRaftEndpoint implements AutoCloseable {
         proposeHandlers.remove(groupId);
     }
 
+    /** RPC 帧级令牌校验（ADR-0119）：设置后带令牌帧按权限域授权。 */
+    public void setRpcGuard(RpcPermissionGuard guard) {
+        this.rpcGuard = guard;
+    }
+
+    public void setStrictUnauthenticated(boolean strict) {
+        this.strictUnauthenticated = strict;
+    }
+
     public int groupCount() {
         return localGroups.size();
     }
@@ -109,6 +121,21 @@ public final class MultiRaftEndpoint implements AutoCloseable {
     public CompletableFuture<RpcFrame> callTxn(
             String target, String groupId, RpcMessageType type, byte[] payload) {
         return callFrame(target, groupId, type, payload);
+    }
+
+    /** 带令牌调用（ADR-0119）：信封 v1。 */
+    public CompletableFuture<RpcFrame> callAuthenticated(
+            String target, String groupId, RpcMessageType type,
+            byte[] payload, String token) {
+        InetSocketAddress address = addresses.get(target);
+        if (address == null) {
+            return CompletableFuture.failedFuture(
+                    new IllegalArgumentException("unknown peer " + target));
+        }
+        RpcFrame frame = new RpcFrame(RequestId.next().value(), type,
+                encodeEnvelopeV1(groupId, payload, token));
+        return client.call(address, frame, RPC_TIMEOUT_MILLIS,
+                RPC_RETRIES);
     }
 
     /** 元数据提案 RPC（ADR-0099）：leader 返回决策索引，非 leader 重定向。 */
@@ -147,6 +174,7 @@ public final class MultiRaftEndpoint implements AutoCloseable {
 
     private RpcFrame handle(RpcFrame frame) {
         Envelope envelope = decodeEnvelope(frame.payload());
+        authorize(frame.type(), envelope);
         TxnRpcHandler txnHandler = txnHandlers.get(envelope.groupId());
         if (txnHandler != null && frame.type().txn()) {
             return txnHandler.handle(frame, envelope.groupId(),
@@ -202,9 +230,15 @@ public final class MultiRaftEndpoint implements AutoCloseable {
     /** 异步入口（ADR-0099）：META_PROPOSE 走异步，其余委托同步处理。 */
     private CompletableFuture<RpcFrame> handleAsync(RpcFrame frame) {
         if (frame.type() != RpcMessageType.META_PROPOSE) {
-            return CompletableFuture.completedFuture(handle(frame));
+            try {
+                return CompletableFuture.completedFuture(handle(frame));
+            } catch (SecurityException e) {
+                return CompletableFuture.completedFuture(
+                        errorFrame(frame, e));
+            }
         }
         Envelope envelope = decodeEnvelope(frame.payload());
+        authorize(frame.type(), envelope);
         ProposeHandler proposeHandler = proposeHandlers.get(
                 envelope.groupId());
         if (proposeHandler == null) {
@@ -240,17 +274,63 @@ public final class MultiRaftEndpoint implements AutoCloseable {
         return buffer.array();
     }
 
+    /** 信封 v1（ADR-0119）：0x54 标记 + 可选令牌 + 载荷。 */
+    private static byte[] encodeEnvelopeV1(String groupId, byte[] payload,
+                                           String token) {
+        byte[] id = groupId.getBytes(StandardCharsets.UTF_8);
+        byte[] tokenBytes = token == null ? new byte[0]
+                : token.getBytes(StandardCharsets.UTF_8);
+        ByteBuffer buffer = ByteBuffer.allocate(1 + 4 + id.length
+                + 2 + tokenBytes.length + payload.length);
+        buffer.put((byte) 0x54);
+        buffer.putInt(id.length);
+        buffer.put(id);
+        buffer.putShort((short) tokenBytes.length);
+        buffer.put(tokenBytes);
+        buffer.put(payload);
+        return buffer.array();
+    }
+
     private static Envelope decodeEnvelope(byte[] bytes) {
         ByteBuffer buffer = ByteBuffer.wrap(bytes);
+        String token = null;
+        if (buffer.get(buffer.position()) == (byte) 0x54) {
+            buffer.get(); // v1 标记
+            int length = buffer.getInt();
+            byte[] id = new byte[length];
+            buffer.get(id);
+            int tokenLength = buffer.getShort() & 0xFFFF;
+            if (tokenLength > 0) {
+                byte[] tokenBytes = new byte[tokenLength];
+                buffer.get(tokenBytes);
+                token = new String(tokenBytes, StandardCharsets.UTF_8);
+            }
+            byte[] payload = new byte[buffer.remaining()];
+            buffer.get(payload);
+            return new Envelope(new String(id, StandardCharsets.UTF_8),
+                    payload, token);
+        }
         int length = buffer.getInt();
         byte[] id = new byte[length];
         buffer.get(id);
         byte[] payload = new byte[buffer.remaining()];
         buffer.get(payload);
-        return new Envelope(new String(id, StandardCharsets.UTF_8), payload);
+        return new Envelope(new String(id, StandardCharsets.UTF_8),
+                payload, null);
     }
 
-    private record Envelope(String groupId, byte[] payload) {
+    private void authorize(RpcMessageType type, Envelope envelope) {
+        if (envelope.token() != null && rpcGuard != null) {
+            rpcGuard.require(envelope.token(), type.name());
+            return;
+        }
+        if (strictUnauthenticated && envelope.token() == null) {
+            throw new SecurityException(
+                    "unauthenticated frame rejected: " + type);
+        }
+    }
+
+    private record Envelope(String groupId, byte[] payload, String token) {
     }
 
     @Override
