@@ -357,6 +357,14 @@
   - 测试：新增 124 项；全量回归 1849/1849 全绿；
   - 基准（docs/benchmark/phase22-report.md）：SET 128–150K、
     GET 3.9–25M、跨区 33.6–59.7K、恢复 0–15ms、锁解析 50–129ms。
+- Phase 23 事务运行时最终化：
+  - runtime 角色（gateway/coordinator/participant/metadata）+
+    docker-compose.transaction.yml（ADR-0093）；
+  - 生命周期持久化（ADR-0091）：TxnLifecycleRecord + MetadataRaft；
+  - LockResolver RPC（ADR-0092）：CHECK/RESOLVE/HEARTBEAT；
+  - 磁盘混沌（ADR-0094）：disk full/readonly/slow 零提交丢失；
+  - 测试：新增 158 项；全量回归 2007/2007 全绿；
+  - 生产配置冻结：docs/deployment/production-runtime.md。
 - Phase 9 评审处置：确认瓶颈分层（A 4.7M → B 230K → C 150K，瓶颈=协议/调度）；
   登记 TD-020（request→response 对象数优化）与 TD-021（JFR 验收指标）。
 - Phase 8 IO 优化：MmapSSTableReader（零拷贝块读）+ FileChannel baseline、

@@ -140,6 +140,13 @@ LockResolver + TxnStatusCache、TCP 端到端运行时与 participant 重启恢�
 磁盘故障 in-JVM 语义覆盖（TD-044 部分关闭，TD-046 登记真实注入受限）。
 全量回归 1849/1849 全绿。
 
+Phase 23 已交付：事务运行时最终化——runtime 角色（gateway/coordinator/
+participant/metadata）+ docker-compose.transaction.yml 全链路 TCP、
+生命周期持久化（ADR-0091）、LockResolver 分布式 RPC（ADR-0092）、
+磁盘故障零提交丢失语义（ADR-0094）、生产配置冻结（ADR-0093）；
+158 项新测试，全量回归 2007/2007 全绿（TD-045 关闭）。
+真实容器编排运行与真实磁盘注入待 Phase 24（TD-048/TD-049）。
+
 ## 2. 当前状态
 
 - 阶段：**Phase 19（MVCC & Transaction Engine）✅ 已完成**
