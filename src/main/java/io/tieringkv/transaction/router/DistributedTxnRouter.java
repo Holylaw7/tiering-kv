@@ -199,10 +199,14 @@ public final class DistributedTxnRouter {
         long committed = 0;
         long rolledBack = 0;
         long skipped = 0;
-        for (TxnMetaEntry entry : metadata.state().pending()) {
+        // ADR-0087：PREPARED/COMMITTED 都要补完（崩溃可能发生在
+        // metadata COMMITTED 之后、participant commit 之前）；
+        // REGISTERED 回滚；ROLLED_BACK 跳过。
+        for (TxnMetaEntry entry : metadata.state().snapshot().values()) {
             switch (entry.state()) {
                 case PREPARED, COMMITTED -> {
                     boolean ok = true;
+                    boolean actuallyCommitted = false;
                     for (Map.Entry<String, List<TxnMessages.Mutation>> region
                             : entry.regionMutations().entrySet()) {
                         RegionTxnClient client = regionsById.get(
@@ -215,6 +219,9 @@ public final class DistributedTxnRouter {
                                 entry.txnId(), entry.startTS(),
                                 entry.commitTS(), entry.primary(),
                                 region.getValue()).join();
+                        if (response.status() == TxnMessages.Status.OK) {
+                            actuallyCommitted = true;
+                        }
                         if (!response.succeeded()) {
                             ok = false;
                         }
@@ -226,7 +233,11 @@ public final class DistributedTxnRouter {
                         } catch (RuntimeException ignored) {
                             // 已提交则幂等
                         }
-                        committed++;
+                        if (actuallyCommitted) {
+                            committed++;
+                        } else {
+                            skipped++;
+                        }
                     } else {
                         skipped++;
                     }

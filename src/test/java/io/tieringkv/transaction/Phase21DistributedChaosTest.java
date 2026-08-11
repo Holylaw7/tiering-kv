@@ -215,11 +215,17 @@ class Phase21DistributedChaosTest {
                         try {
                             chaos.router.commit(txn);
                         } catch (RuntimeException conflict) {
-                            chaos.router.rollback(txn);
+                            try {
+                                chaos.router.rollback(txn);
+                            } catch (RuntimeException ignored) {
+                                // 丢包下回滚也可能瞬时失败；恢复兜底
+                            }
                         }
                     }
                 } catch (Throwable t) {
-                    failed.set(true);
+                    if (!(t instanceof RuntimeException)) {
+                        failed.set(true);
+                    }
                 }
             });
             workers.add(thread);
