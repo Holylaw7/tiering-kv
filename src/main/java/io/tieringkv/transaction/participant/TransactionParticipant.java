@@ -28,6 +28,7 @@ public final class TransactionParticipant {
     private final PersistentTxnJournal journal;
     private final Map<String, TxnMessages.ParticipantState> states =
             new ConcurrentHashMap<>();
+    private final Map<String, Object> txnLocks = new ConcurrentHashMap<>();
 
     public TransactionParticipant(String regionId, MvccStorageEngine engine,
                                   LockTable locks, long lockTtlMillis) {
@@ -62,6 +63,13 @@ public final class TransactionParticipant {
 
     /** PREWRITE：写锁 + provisional；重复/已完成幂等。 */
     public TxnMessages.Response prewrite(TxnMessages.Prewrite request) {
+        synchronized (txnLock(request.txnId())) {
+            return prewriteLocked(request);
+        }
+    }
+
+    private TxnMessages.Response prewriteLocked(
+            TxnMessages.Prewrite request) {
         TxnMessages.ParticipantState current = states.get(request.txnId());
         if (current == TxnMessages.ParticipantState.COMMITTED
                 || current == TxnMessages.ParticipantState.ROLLED_BACK) {
@@ -92,6 +100,12 @@ public final class TransactionParticipant {
 
     /** COMMIT：写 WriteRecord + 释放锁；无锁但已提交 → 幂等成功。 */
     public TxnMessages.Response commit(TxnMessages.Commit request) {
+        synchronized (txnLock(request.txnId())) {
+            return commitLocked(request);
+        }
+    }
+
+    private TxnMessages.Response commitLocked(TxnMessages.Commit request) {
         if (states.get(request.txnId())
                 == TxnMessages.ParticipantState.COMMITTED) {
             return TxnMessages.Response.already();
@@ -126,6 +140,13 @@ public final class TransactionParticipant {
 
     /** ROLLBACK：清理锁与 provisional；幂等。 */
     public TxnMessages.Response rollback(TxnMessages.Rollback request) {
+        synchronized (txnLock(request.txnId())) {
+            return rollbackLocked(request);
+        }
+    }
+
+    private TxnMessages.Response rollbackLocked(
+            TxnMessages.Rollback request) {
         TxnMessages.ParticipantState current = states.get(request.txnId());
         if (current == TxnMessages.ParticipantState.COMMITTED
                 || current == TxnMessages.ParticipantState.ROLLED_BACK) {
@@ -182,5 +203,9 @@ public final class TransactionParticipant {
         journal.recordState(new TxnStateRecord(txnId, state, startTS,
                 commitTS, primary, converted))
                 .exceptionally(error -> null).join();
+    }
+
+    private Object txnLock(String txnId) {
+        return txnLocks.computeIfAbsent(txnId, ignored -> new Object());
     }
 }
