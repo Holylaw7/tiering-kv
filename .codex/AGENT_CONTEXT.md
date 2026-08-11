@@ -154,10 +154,11 @@ Phase 24 已交付（v1.0 云原生生产发布）：事务元数据 Multi-Raft�
 （SET 144–175K、跨区 45–83K、failover 164–303ms、恢复 ≈3ms）；
 231 项新测试，全量回归 **2238/2238 全绿**。
 
-当前技术债：TD-048/049（真实 Docker 磁盘混沌与 CI 容器 E2E 待 Linux
-Runner 执行，交付物已就绪）、TD-050（元数据 Multi-Raft 网络化传输待验证）、
-TD-033（100B 迁移 >100MB/s 未达，如实记录）、TD-046（真实容器 disk
-注入权限限制）。
+当前技术债：TD-048（真实 CI Linux Runner 容器 E2E + tc netem + fio 执行
+待 Phase 25）、TD-049（真实 block device 磁盘故障注入待 Linux VM +
+loop/dmsetup）、TD-050（元数据 Multi-Raft 网络化：Coordinator → Netty
+RPC → Metadata Node1/2/3，最后一个控制面网络化闭环）；TD-047 已架构
+关闭（Phase 24，TxnMetadataNode + 快照 + decisionIndex）。
 
 ## 2. 当前状态
 
