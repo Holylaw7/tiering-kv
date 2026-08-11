@@ -7,6 +7,8 @@ import io.tieringkv.mvcc.MvccMetricsRegistry;
 import io.tieringkv.mvcc.TransactionMetricsRegistry;
 
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.atomic.LongAdder;
 
 /** Prometheus 兼容指标导出（ADR-0070）：HELP/TYPE + name{label} value。 */
 public final class MetricsExporter {
@@ -88,6 +90,17 @@ public final class MetricsExporter {
                 t.regionCount());
         gauge(sb, "txn_recovery_time_ms", "recovery time ms",
                 t.recoveryTimeMs());
+        gauge(sb, "txn_long_running", "long running txns",
+                t.longRunning());
+        counter(sb, "txn_expired_total", "expired txns", t.expiredTotal());
+        counter(sb, "lock_total", "locks acquired", t.lockTotal());
+        counter(sb, "lock_resolve_total", "locks resolved",
+                t.lockResolveTotal());
+        gauge(sb, "lock_wait_time_ms", "lock wait ms", t.lockWaitMs());
+        for (Map.Entry<String, LongAdder> reason : t.abortReasons().entrySet()) {
+            counter(sb, "txn_abort_reason_" + reason.getKey(),
+                    "abort reason", reason.getValue().sum());
+        }
         MvccMetricsRegistry.Snapshot v = mvcc.snapshot();
         gauge(sb, "mvcc_read_qps", "mvcc reads", v.reads());
         gauge(sb, "mvcc_write_qps", "mvcc writes", v.writes());

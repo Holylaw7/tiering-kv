@@ -16,20 +16,24 @@ import java.util.function.Function;
 public final class TxnMetadataRaftGroup implements AutoCloseable {
 
     private final List<RaftNode> nodes;
+    private final List<byte[]> applied;
 
-    private TxnMetadataRaftGroup(List<RaftNode> nodes) {
+    private TxnMetadataRaftGroup(List<RaftNode> nodes, List<byte[]> applied) {
         this.nodes = nodes;
+        this.applied = applied;
     }
 
     public static TxnMetadataRaftGroup start(int count)
             throws InterruptedException {
         List<RaftNode> nodes = new ArrayList<>();
         List<RaftNode> peers = new ArrayList<>();
+        List<byte[]> applied =
+                java.util.Collections.synchronizedList(new ArrayList<>());
         for (int i = 0; i < count; i++) {
             String id = "meta-" + i;
             RaftNode node = new RaftNode(id, peers,
-                    (index, command) -> {
-                    }, new LeaderElection(100, 80), 25, 10);
+                    (index, command) -> applied.add(command.clone()),
+                    new LeaderElection(100, 80), 25, 10);
             nodes.add(node);
         }
         peers.addAll(nodes);
@@ -37,7 +41,7 @@ public final class TxnMetadataRaftGroup implements AutoCloseable {
             node.start();
         }
         awaitLeader(nodes, 5_000);
-        return new TxnMetadataRaftGroup(nodes);
+        return new TxnMetadataRaftGroup(nodes, applied);
     }
 
     /** 提案函数：自动解析当前 leader（leader 变更重试由调用方负责）。 */
@@ -57,6 +61,13 @@ public final class TxnMetadataRaftGroup implements AutoCloseable {
 
     public List<RaftNode> nodes() {
         return List.copyOf(nodes);
+    }
+
+    /** 已应用命令（按 Raft 顺序，ADR-0087 恢复源）。 */
+    public List<byte[]> appliedCommands() {
+        synchronized (applied) {
+            return applied.stream().map(byte[]::clone).toList();
+        }
     }
 
     public static RaftNode awaitLeader(List<RaftNode> nodes, long timeout)

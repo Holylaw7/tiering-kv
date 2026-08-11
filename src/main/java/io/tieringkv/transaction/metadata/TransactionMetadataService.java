@@ -86,8 +86,28 @@ public final class TransactionMetadataService implements AutoCloseable {
 
     private CompletableFuture<Void> propose(TxnMetaCommand command) {
         byte[] payload = TxnMetaCodec.encode(command);
-        appendLog(payload);
-        return proposer.apply(payload).thenRun(() -> state.apply(command));
+        // ADR-0087：Raft-first —— 提案成功（拿到 decisionIndex）后才 apply
+        // 状态并追加本地镜像；失败不产生任何本地状态（无幻影）。
+        return proposer.apply(payload).thenAccept(index -> {
+            TxnMetaCommand indexed = command.withDecisionIndex(index);
+            state.apply(indexed);
+            appendLog(TxnMetaCodec.encode(indexed));
+        });
+    }
+
+    /** 从 Raft 已应用命令重建状态（ADR-0087）：索引=命令在日志中的位置。 */
+    public static TransactionMetadataService recoverFromRaft(
+            List<byte[]> raftCommands,
+            java.util.function.Function<byte[], CompletableFuture<Long>>
+                    proposer,
+            Path logPath) throws IOException {
+        TransactionMetadataService service =
+                new TransactionMetadataService(proposer, logPath);
+        for (int i = 0; i < raftCommands.size(); i++) {
+            service.state.apply(TxnMetaCodec.decode(raftCommands.get(i))
+                    .withDecisionIndex(i));
+        }
+        return service;
     }
 
     private void appendLog(byte[] payload) {

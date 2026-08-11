@@ -14,20 +14,23 @@ public final class TransactionMetadataState {
         switch (command.type()) {
             case REGISTER -> entries.put(command.txnId(),
                     new TxnMetaEntry(command.txnId(), command.primary(),
-                            command.startTS(), 0,
+                            command.startTS(), 0, command.decisionIndex(),
                             TxnMetaEntry.State.REGISTERED,
                             command.regionMutations()));
             case PREPARE -> update(command.txnId(), entry -> new TxnMetaEntry(
                     entry.txnId(), entry.primary(), entry.startTS(),
-                    command.commitTS(), TxnMetaEntry.State.PREPARED,
+                    command.commitTS(), command.decisionIndex(),
+                    TxnMetaEntry.State.PREPARED,
                     entry.regionMutations()));
             case COMMIT -> update(command.txnId(), entry -> new TxnMetaEntry(
                     entry.txnId(), entry.primary(), entry.startTS(),
-                    command.commitTS(), TxnMetaEntry.State.COMMITTED,
+                    command.commitTS(), command.decisionIndex(),
+                    TxnMetaEntry.State.COMMITTED,
                     entry.regionMutations()));
             case ROLLBACK -> update(command.txnId(), entry -> new TxnMetaEntry(
                     entry.txnId(), entry.primary(), entry.startTS(),
-                    entry.commitTS(), TxnMetaEntry.State.ROLLED_BACK,
+                    entry.commitTS(), command.decisionIndex(),
+                    TxnMetaEntry.State.ROLLED_BACK,
                     entry.regionMutations()));
         }
     }

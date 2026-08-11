@@ -10,6 +10,7 @@ public record TxnMetaEntry(
         byte[] primary,
         long startTS,
         long commitTS,
+        long decisionIndex,
         State state,
         Map<String, java.util.List<TxnMessages.Mutation>> regionMutations) {
 

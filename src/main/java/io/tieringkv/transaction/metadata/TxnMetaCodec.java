@@ -27,6 +27,7 @@ public final class TxnMetaCodec {
                     ? new byte[0] : command.primary());
             out.writeLong(command.startTS());
             out.writeLong(command.commitTS());
+            out.writeLong(command.decisionIndex());
             Map<String, List<TxnMessages.Mutation>> regions =
                     command.regionMutations() == null
                             ? Map.of() : command.regionMutations();
@@ -56,6 +57,7 @@ public final class TxnMetaCodec {
             byte[] primary = readBytes(in);
             long startTS = in.readLong();
             long commitTS = in.readLong();
+            long decisionIndex = in.readLong();
             int regionCount = in.readUnsignedShort();
             Map<String, List<TxnMessages.Mutation>> regions =
                     new LinkedHashMap<>();
@@ -74,7 +76,7 @@ public final class TxnMetaCodec {
             }
             return new TxnMetaCommand(
                     TxnMetaCommand.Type.values()[type], txnId, primary,
-                    startTS, commitTS, regions);
+                    startTS, commitTS, decisionIndex, regions);
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }

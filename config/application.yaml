@@ -31,3 +31,7 @@ gc:
   batch-size: 4096
   worker-count: 4
   max-memory: 67108864
+
+txn:
+  ttl-seconds: 60
+  max-duration-seconds: 300
