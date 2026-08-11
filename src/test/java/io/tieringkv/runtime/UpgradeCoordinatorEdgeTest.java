@@ -125,4 +125,38 @@ class UpgradeCoordinatorEdgeTest {
                 node -> {
                 }, () -> false, () -> true, 100)).isFalse();
     }
+
+    @ParameterizedTest(name = "delay {0}")
+    @ValueSource(ints = {20, 80, 150})
+    void parameterizedUpgradeWithDelayedCatchup(int delayMillis)
+            throws Exception {
+        AtomicInteger upgraded = new AtomicInteger();
+        List<String> nodes = List.of("a", "b", "c");
+        AtomicBoolean caughtUp = new AtomicBoolean(false);
+        Thread timer = new Thread(() -> {
+            try {
+                Thread.sleep(delayMillis);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            caughtUp.set(true);
+        });
+        timer.start();
+        boolean done = UpgradeCoordinator.rollingUpgrade(nodes,
+                node -> upgraded.incrementAndGet(),
+                () -> true, caughtUp::get, 1_000);
+        timer.join(2_000);
+        assertThat(done).isTrue();
+        assertThat(upgraded.get()).isEqualTo(3);
+    }
+
+    @Test
+    void quorumSupplierExceptionPropagates() {
+        assertThatThrownBy(() -> UpgradeCoordinator.rollingUpgrade(
+                List.of("a"), node -> {
+                }, () -> {
+                    throw new IllegalStateException("quorum check failed");
+                }, () -> true, 100))
+                .isInstanceOf(IllegalStateException.class);
+    }
 }

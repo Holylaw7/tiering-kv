@@ -162,6 +162,38 @@ class HealthShutdownEdgeTest {
         assertThat(closed.get()).isEqualTo(count);
     }
 
+    @ParameterizedTest(name = "timeout {0}")
+    @ValueSource(ints = {0, 25, 100})
+    void parameterizedDrainWithResolvingInflight(int timeoutMillis)
+            throws Exception {
+        AtomicBoolean inflight = new AtomicBoolean(true);
+        Thread resolver = new Thread(() -> {
+            try {
+                Thread.sleep(20);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            inflight.set(false);
+        });
+        resolver.start();
+        boolean drained = GracefulShutdown.shutdown(() -> {
+        }, () -> !inflight.get(), () -> (long) timeoutMillis, () -> {
+        }, List.of());
+        resolver.join(2_000);
+        // 20ms 后 inflight 结束；超时 >=25ms 时应成功 drain。
+        assertThat(drained).isEqualTo(timeoutMillis >= 25);
+    }
+
+    @ParameterizedTest(name = "json {0}")
+    @ValueSource(ints = {0, 1, 7})
+    void parameterizedJsonPendingLockValues(int pending) {
+        String json = new RuntimeHealth(List.of(), () -> pending,
+                () -> pending * 2).json();
+        assertThat(json).contains("\"pending_txn\":" + pending);
+        assertThat(json).contains("\"lock_count\":" + (pending * 2));
+        assertThat(json).startsWith("{").endsWith("}");
+    }
+
     private RaftNode raftNode() {
         RaftNode node = new RaftNode("n1", new ArrayList<>(),
                 (index, command) -> {
