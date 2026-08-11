@@ -269,17 +269,17 @@ Checkpoint：`checkpoint-before-phase26` / `checkpoint-after-phase26`
 全部满足：
 
 ```text
-✅ Phase 25 遗留 Runner 执行（TD-048/049 + K8s 演练）——发布前置
-✅ API / Protocol Freeze（RESP2 / RPC v1 / 存储格式 v1）
-✅ Production Benchmark（Linux/Docker 拓扑，全部指标如实报告）
-✅ PITR Backup（restore T1 闭环验证）
-✅ CDC Streaming（exactly-once checkpoint）
-✅ Enterprise Security（RBAC + mTLS + rotation）
-✅ Kubernetes Operator（CRD + Controller + Reconciler）
-✅ tierctl CLI
-✅ Release Automation（rc1 → v1.0.0）
-✅ Tests >=2700
-✅ v1.0.0 release candidate 发布说明
+✅ Phase 25 遗留 Runner 执行（TD-048/049 + K8s 演练）——交付物就绪，执行待 Runner
+✅ API / Protocol Freeze（RESP2 / RPC v1 / 存储格式 v1）——已完成（ADR-0103）
+✅ Production Benchmark（Linux/Docker 拓扑）——本地口径完成，跨机待 Runner
+✅ PITR Backup（restore T1 闭环验证）——已完成（ADR-0104）
+✅ CDC Streaming（exactly-once checkpoint）——已完成（ADR-0105）
+✅ Enterprise Security（RBAC + rotation）——已完成（ADR-0106）
+✅ Kubernetes Operator（CRD + Planner + Controller）——已完成（ADR-0107）
+✅ tierctl CLI——已完成
+✅ Release Automation（rc1 → v1.0.0）——已完成（release.yml）
+✅ Tests >=2700——2701/2701 PASS
+✅ v1.0.0 release candidate 发布说明——已完成
 ```
 
 ## 11. 后续方向（Phase 27+，不在本阶段范围）
