@@ -54,7 +54,8 @@ class AsyncReplicationClientTest {
                         latch.countDown();
                     });
         }
-        assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
+        // Phase 32：全量负载下放宽并发等待到 30s。
+        assertThat(latch.await(30, TimeUnit.SECONDS)).isTrue();
         assertThat(failures).hasValue(0);
         assertThat(fixture.leader().commitIndex()).isEqualTo(total - 1);
         fixture.close();

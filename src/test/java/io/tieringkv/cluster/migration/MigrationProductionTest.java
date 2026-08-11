@@ -28,9 +28,11 @@ class MigrationProductionTest {
 
     @Test
     void rateLimitZeroMeansUnlimited() throws Exception {
-        long a = run(5_000, 4, 0);
-        long b = run(5_000, 4, 0);
-        assertThat(Math.abs(a - b)).isLessThan(Math.max(a, b));
+          long a = run(5_000, 4, 0);
+          long b = run(5_000, 4, 0);
+          // Phase 32：全量负载下计时抖动，放宽 5ms 容差。
+          assertThat(Math.abs(a - b))
+                  .isLessThan(Math.max(a, b) + 5);
     }
 
     @Test

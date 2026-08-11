@@ -26,7 +26,8 @@ class Phase32ChaosTest {
         LeaderSelector selector = new LeaderSelector(Map.of(
                 "a", () -> false, "b", () -> true,
                 "c", () -> true), "a");
-        assertThat(selector.selectLeader()).isEqualTo("b");
+        // Map.of 迭代顺序不确定：只断言切到健康地域且非故障主。
+        assertThat(selector.selectLeader()).isIn("b", "c");
         assertThat(selector.majorityHealthy()).isTrue();
     }
 
