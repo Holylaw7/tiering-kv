@@ -233,22 +233,22 @@ public final class TxnRpcCodec {
 
     private static void writeBytes(DataOutputStream out, byte[] bytes)
             throws IOException {
-        out.writeShort(bytes.length);
+        out.writeInt(bytes.length);
         out.write(bytes);
     }
 
     private static void writeNullable(DataOutputStream out, byte[] bytes)
             throws IOException {
         if (bytes == null) {
-            out.writeShort(-1);
+            out.writeInt(-1);
         } else {
-            out.writeShort(bytes.length);
+            out.writeInt(bytes.length);
             out.write(bytes);
         }
     }
 
     private static byte[] readBytes(DataInputStream in) throws IOException {
-        int length = in.readUnsignedShort();
+        int length = in.readInt();
         byte[] bytes = new byte[length];
         in.readFully(bytes);
         return bytes;
@@ -256,8 +256,8 @@ public final class TxnRpcCodec {
 
     private static byte[] readNullable(DataInputStream in)
             throws IOException {
-        int length = in.readUnsignedShort();
-        if (length == 0xFFFF) {
+        int length = in.readInt();
+        if (length == -1) {
             return null;
         }
         byte[] bytes = new byte[length];
