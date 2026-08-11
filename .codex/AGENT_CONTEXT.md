@@ -219,18 +219,25 @@ Phase 31 已交付（v1.4.0）：负载驱动自动重分片（ADR-0132）、SQL
 全球多活网关冲突审计（Phase 32）；跨地域 RTT/冲突率/收敛时间待
 CI/裸机执行。
 
+Phase 32 已交付（v1.5.0）：SQL 写 2PC 生产执行（ADR-0138）、控制台
+REST 服务（ADR-0139）、并发自动重分片（ADR-0140）、网关冲突审计
+（ADR-0141）、全局多活自动选主与数据主权（ADR-0143）、v1.5 发布
+流水线（ADR-0142）；新增 251 项测试，全量回归 **4251/4251 全绿**。
+
+当前剩余：SQL 2PC 真实协调器端到端、控制台 UI/商业化、选主与 Raft
+term 联动（Phase 33）；跨地域 RTT/冲突率/收敛时间/RTO 待 CI/裸机执行。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 31（自治重分片与全球多活）✅ 已完成（v1.4.0）**
-  （Phase 0–30 全部完成）；
-- 最近提交：Phase 31 全球多活合并（详见 git log）；
+- 阶段：**Phase 32（生产接线与全球验证）✅ 已完成（v1.5.0）**
+  （Phase 0–31 全部完成）；
+- 最近提交：Phase 32 生产接线合并（详见 git log）；
 - 基线：develop 合并 Phase 24；分支策略：feature/* 合并入 develop，
   main 保持稳定；
-- 下一步：v1.4.0 发布执行（release.yml）；SQL 2PC 真实接线、控制台
-  REST 服务、自动重分片并发迁移、全球多活网关冲突审计（Phase 32，
-  等待用户指令）。
+- 下一步：v1.5.0 发布执行（release.yml）；SQL 2PC 真实协调器端到端、
+  控制台 UI/商业化、选主与 Raft term 联动（Phase 33，等待用户指令）。
 
-项目里程碑：**31 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
+项目里程碑：**32 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
 LFU + WAL + LSM/SSTable + Bloom + Compaction + Migration + mmap +
 BlockCache + Production Runtime + Raft 持久化 + TCP RPC + Snapshot +
@@ -243,7 +250,8 @@ Geo 事务 + SQL/Vector/SaaS 原型 + 双向复制/CRDT + 容灾 + SQL 引擎 +
 HNSW + SaaS 多租户 + RPC 令牌 + 分布式 SQL + 向量分片 + 五中心全球读 +
 计量/市场 + 告警 + 动态重分片 + 向量迁移 + SQL 写事务 + 全球读水位 +
 账单导出 + 容量模型 + 自动重分片 + SQL 2PC + 向量双写 + 全球多活 +
-账单滚动 + 多云 + 控制台），能力矩阵全 ✅。
+账单滚动 + 多云 + 控制台 + SQL 2PC 生产 + REST 服务 + 并发重分片 +
+冲突审计 + 自动选主 + 数据主权），能力矩阵全 ✅。
 
 ## 3. 技术栈
 
