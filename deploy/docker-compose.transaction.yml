@@ -1,0 +1,116 @@
+services:
+  metadata:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: txn-meta
+    command:
+      - --role
+      - metadata
+      - --node-id
+      - metadata-1
+      - --rpc-port
+      - "7300"
+      - --data-dir
+      - /data
+    volumes:
+      - txn-meta:/data
+    networks:
+      - txn-cluster
+
+  participant-a:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: txn-participant-a
+    command:
+      - --role
+      - participant
+      - --node-id
+      - participant-a
+      - --region-id
+      - r1
+      - --rpc-port
+      - "7100"
+      - --data-dir
+      - /data
+    volumes:
+      - txn-participant-a:/data
+    networks:
+      - txn-cluster
+
+  participant-b:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: txn-participant-b
+    command:
+      - --role
+      - participant
+      - --node-id
+      - participant-b
+      - --region-id
+      - r2
+      - --rpc-port
+      - "7100"
+      - --data-dir
+      - /data
+    volumes:
+      - txn-participant-b:/data
+    networks:
+      - txn-cluster
+
+  coordinator:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: txn-coordinator
+    command:
+      - --role
+      - coordinator
+      - --node-id
+      - coordinator-1
+      - --rpc-port
+      - "7200"
+      - --metadata-node
+      - metadata
+      - --metadata-port
+      - "7300"
+      - --regions
+      - r1@participant-a:7100,r2@participant-b:7100
+    networks:
+      - txn-cluster
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: txn-gateway
+    command:
+      - --role
+      - gateway
+      - --node-id
+      - gateway-1
+      - --rpc-port
+      - "7201"
+      - --gateway-port
+      - "6379"
+      - --metadata-node
+      - metadata
+      - --metadata-port
+      - "7300"
+      - --regions
+      - r1@participant-a:7100,r2@participant-b:7100
+    ports:
+      - "6379:6379"
+    networks:
+      - txn-cluster
+
+volumes:
+  txn-meta:
+  txn-participant-a:
+  txn-participant-b:
+
+networks:
+  txn-cluster:
+    driver: bridge

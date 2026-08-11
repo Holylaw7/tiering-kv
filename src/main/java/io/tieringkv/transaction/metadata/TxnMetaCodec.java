@@ -28,6 +28,11 @@ public final class TxnMetaCodec {
             out.writeLong(command.startTS());
             out.writeLong(command.commitTS());
             out.writeLong(command.decisionIndex());
+            out.writeByte(command.lifecycleState() == null
+                    ? 0xFF : io.tieringkv.transaction.lifecycle
+                    .TxnLifecycleState.valueOf(command.lifecycleState())
+                    .ordinal());
+            out.writeLong(command.expireAtMillis());
             Map<String, List<TxnMessages.Mutation>> regions =
                     command.regionMutations() == null
                             ? Map.of() : command.regionMutations();
@@ -58,6 +63,12 @@ public final class TxnMetaCodec {
             long startTS = in.readLong();
             long commitTS = in.readLong();
             long decisionIndex = in.readLong();
+            int lifecycleOrdinal = in.readUnsignedByte();
+            String lifecycleState = lifecycleOrdinal == 0xFF
+                    ? null
+                    : io.tieringkv.transaction.lifecycle
+                    .TxnLifecycleState.values()[lifecycleOrdinal].name();
+            long expireAtMillis = in.readLong();
             int regionCount = in.readUnsignedShort();
             Map<String, List<TxnMessages.Mutation>> regions =
                     new LinkedHashMap<>();
@@ -76,7 +87,8 @@ public final class TxnMetaCodec {
             }
             return new TxnMetaCommand(
                     TxnMetaCommand.Type.values()[type], txnId, primary,
-                    startTS, commitTS, decisionIndex, regions);
+                    startTS, commitTS, decisionIndex, lifecycleState,
+                    expireAtMillis, regions);
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }

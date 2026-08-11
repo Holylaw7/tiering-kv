@@ -4,7 +4,7 @@
 > （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding +
 > Raft 持久化集群 + 批量复制 + 安全 RPC + 元数据 Raft + 游标迁移）。
 
-**阶段状态：Phase 22（事务可靠性与生产运行时）✅（Phase 0–21 全部完成 ✅）**
+**阶段状态：Phase 23（事务运行时最终化）✅（Phase 0–22 全部完成 ✅）**
 
 ## 项目定位
 
@@ -450,6 +450,22 @@ RaftNode
   [评审](docs/review/phase22-transaction-reliability-review.md) /
   [混沌](docs/testing/phase22-chaos-report.md) /
   [部署](docs/deployment/phase22-runtime-deployment.md)。
+
+## 事务运行时最终化（Phase 23）
+
+- **运行时**（ADR-0093）：gateway/coordinator/participant/metadata 独立
+  JVM 角色 + docker-compose.transaction.yml，全链路 TCP；
+- **生命周期持久化**（ADR-0091）：TxnLifecycleRecord + MetadataRaft，
+  重启恢复/心跳/过期 abort；
+- **LockResolver RPC**（ADR-0092）：CHECK_TXN_STATUS / RESOLVE_LOCK /
+  HEARTBEAT_LOCK 跨 Region 解析；
+- **磁盘混沌**（ADR-0094）：disk full/readonly/slow 语义验证 + 容器式
+  重启恢复，零提交丢失；
+- **测试**：新增 158 项，全量 **2007/2007**；
+- 文档：[基准](docs/benchmark/phase23-runtime-report.md) /
+  [评审](docs/review/phase23-runtime-finalization-review.md) /
+  [混沌](docs/testing/phase23-chaos-report.md) /
+  [生产配置](docs/deployment/production-runtime.md)。
 
 ## 技术栈
 

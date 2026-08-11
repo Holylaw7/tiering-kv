@@ -66,6 +66,26 @@ public final class RegionTxnClient {
                 txnId, startTS, primary));
     }
 
+    /** CHECK_TXN_STATUS（ADR-0092）。 */
+    public CompletableFuture<TxnMessages.Response> checkStatus(
+            String txnId, long startTS) {
+        return client.checkStatus(new TxnMessages.CheckStatus(
+                txnId, startTS));
+    }
+
+    /** RESOLVE_LOCK（ADR-0092）：跨 Region 解析锁。 */
+    public CompletableFuture<TxnMessages.Response> resolveLock(
+            String txnId, long startTS, long commitTS, byte[] primary,
+            List<TxnMessages.Mutation> mutations, boolean rollback) {
+        return client.resolveLock(new TxnMessages.ResolveLock(
+                txnId, startTS, commitTS, primary, mutations, rollback));
+    }
+
+    /** TXN_GET：读最新已提交值（ADR-0093 运行时）。 */
+    public CompletableFuture<TxnMessages.Response> get(byte[] key) {
+        return client.get(key);
+    }
+
     public CompletableFuture<TxnMessages.Response> heartbeat(
             String txnId, long startTS, long ttlMillis) {
         return client.heartbeat(new TxnMessages.Heartbeat(

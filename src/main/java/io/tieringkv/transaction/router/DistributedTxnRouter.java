@@ -32,7 +32,8 @@ public final class DistributedTxnRouter {
     private final TransactionLifecycleManager lifecycle;
     private final long ttlMillis;
     private final long maxDurationMillis;
-    private final AtomicLong txnIds = new AtomicLong();
+    // 全局唯一：重启后的 Router 不得复用旧 txnId（否则与已提交事务冲突）
+    private static final AtomicLong TXN_IDS = new AtomicLong();
 
     public DistributedTxnRouter(
             TimestampOracle oracle,
@@ -71,7 +72,7 @@ public final class DistributedTxnRouter {
         if (metrics != null) {
             metrics.recordBegin();
         }
-        Transaction txn = new Transaction("dtx-" + txnIds.incrementAndGet(),
+        Transaction txn = new Transaction("dtx-" + TXN_IDS.incrementAndGet(),
                 oracle.nextTimestamp());
         if (lifecycle != null) {
             lifecycle.begin(txn, ttlMillis, maxDurationMillis);

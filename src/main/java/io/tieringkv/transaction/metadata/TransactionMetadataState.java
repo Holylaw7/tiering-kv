@@ -9,6 +9,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class TransactionMetadataState {
 
     private final Map<String, TxnMetaEntry> entries = new ConcurrentHashMap<>();
+    private final Map<String, io.tieringkv.transaction.lifecycle
+            .TxnLifecycleRecord> lifecycle = new ConcurrentHashMap<>();
 
     public void apply(TxnMetaCommand command) {
         switch (command.type()) {
@@ -32,6 +34,14 @@ public final class TransactionMetadataState {
                     entry.commitTS(), command.decisionIndex(),
                     TxnMetaEntry.State.ROLLED_BACK,
                     entry.regionMutations()));
+            case LIFECYCLE -> lifecycle.put(command.txnId(),
+                    new io.tieringkv.transaction.lifecycle.TxnLifecycleRecord(
+                            command.txnId(), command.startTS(),
+                            command.expireAtMillis(),
+                            io.tieringkv.transaction.lifecycle
+                                    .TxnLifecycleState.valueOf(
+                                    command.lifecycleState()),
+                            command.decisionIndex()));
         }
     }
 
@@ -52,6 +62,11 @@ public final class TransactionMetadataState {
             }
         }
         return pending;
+    }
+
+    public Map<String, io.tieringkv.transaction.lifecycle.TxnLifecycleRecord>
+            lifecycleSnapshot() {
+        return Map.copyOf(lifecycle);
     }
 
     public int size() {

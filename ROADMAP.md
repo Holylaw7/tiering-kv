@@ -30,6 +30,7 @@
 | 20 | 事务生产化与存储优化 | ✅ 完成（2026-08-10） |
 | 21 | 分布式事务网络化与云生产 | ✅ 完成（2026-08-11） |
 | 22 | 事务可靠性与生产运行时 | ✅ 完成（2026-08-11） |
+| 23 | 事务运行时最终化 | ✅ 完成（2026-08-11） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -434,6 +435,14 @@
   锁解析 50–129ms；
 - 测试：新增 124 项；全量回归 1849/1849 全绿（0 failures）。
 
+## Phase 23 — 事务运行时最终化 ✅
+
+- 交付：runtime 角色（gateway/coordinator/participant/metadata）+
+  compose.transaction.yml + 生命周期持久化（ADR-0091）+
+  LockResolver RPC（ADR-0092）+ 磁盘混沌语义（ADR-0094）+
+  生产配置冻结（ADR-0093）。
+- 测试：新增 158 项；全量回归 **2007/2007 全绿**（TD-045 关闭）。
+
 ## 技术债登记
 
 | 编号 | 描述 | 来源 | 计划消除 |
@@ -480,5 +489,7 @@
 | TD-042 | Redis 网关未接 MVCC 自动事务化 | ✅ 已关闭（Phase 20，GET/SET/DEL/MGET/MSET） |
 | TD-043 | 事务/MVCC 未接入 Multi-Raft Region 网络路径，跨机事务验证受限 | ADR-0082 | 部分关闭（Phase 21 TCP 事务协议已覆盖；容器端到端待 Phase 22） |
 | TD-044 | 跨机 disk slow / disk full 混沌未执行 | ADR-0086 | 部分关闭（Phase 22 in-JVM 语义覆盖；真实注入受 Docker 权限限制） |
-| TD-045 | Phase 22 新增测试数低于 220 目标 | Phase 22 | Phase 23 参数化/等价场景补齐 |
+| TD-045 | Phase 22 新增测试数低于 220 目标 | Phase 22 | ✅ 已关闭（Phase 23 补齐，全量 2007） |
 | TD-046 | 真实容器 disk full / readonly / slow io 注入未完成（Docker Desktop 权限） | ADR-0090 | Phase 23（privileged/device-mapper 环境） |
+| TD-048 | compose.transaction 已提供，真实容器编排运行未执行 | ADR-0093 | Phase 24（CI Docker runner） |
+| TD-049 | 真实容器 disk 注入仍受限（fallocate/mount/fio） | ADR-0094 | Phase 24（privileged 环境） |

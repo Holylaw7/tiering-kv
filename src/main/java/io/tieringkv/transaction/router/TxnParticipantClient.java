@@ -60,6 +60,22 @@ public final class TxnParticipantClient {
                 TxnRpcCodec.encodeHeartbeat(request));
     }
 
+    public CompletableFuture<TxnMessages.Response> checkStatus(
+            TxnMessages.CheckStatus request) {
+        return call(RpcMessageType.TXN_CHECK_STATUS,
+                TxnRpcCodec.encodeCheckStatus(request));
+    }
+
+    public CompletableFuture<TxnMessages.Response> resolveLock(
+            TxnMessages.ResolveLock request) {
+        return call(RpcMessageType.TXN_RESOLVE_LOCK,
+                TxnRpcCodec.encodeResolveLock(request));
+    }
+
+    public CompletableFuture<TxnMessages.Response> get(byte[] key) {
+        return call(RpcMessageType.TXN_GET, key.clone());
+    }
+
     private CompletableFuture<TxnMessages.Response> call(
             RpcMessageType type, byte[] payload) {
         return callWithRetry(type, payload, 0);
