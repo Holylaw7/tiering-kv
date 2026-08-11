@@ -4,7 +4,7 @@
 > （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding +
 > Raft 持久化集群 + 批量复制 + 安全 RPC + 元数据 Raft + 游标迁移）。
 
-**阶段状态：Phase 27（跨地域复制与企业集成）✅（Phase 0–26 全部完成 ✅，v1.1.0 方向）**
+**阶段状态：Phase 28（多主复制与高级查询引擎）✅（Phase 0–27 全部完成 ✅，v1.1.0）**
 
 ## 项目定位
 
@@ -55,6 +55,10 @@ v1 发布流水线；全量测试 2701/2701 全绿（Phase 26，v1.0.0 发布候
 以及跨地域复制（async/sync + 冲突标记）+ Geo 分布式事务（决策日志恢复）
 + RBAC 网关/RPC 接线 + PITR 保留策略 + CDC 多消费者组 + SQL/Vector/
 SaaS 探索原型；全量测试 2965/2965 全绿（Phase 27，v1.1.0 方向）。
+以及多主复制：双向管道（VersionVector 环回抑制 + CRDT 收敛）+ 两地
+三中心容灾（切换计划 + RTO/RPO 演练）+ SQL 引擎（Hash Join/聚合/
+GROUP BY）+ HNSW 与混合检索 + SaaS 多租户控制平面 + RPC 帧级令牌；
+全量测试 3216/3216 全绿（Phase 28，v1.1.0）。
 
 **边界（如实声明）**：仍为教学/工程级实现，暂不宣称"高性能 Redis 替代品"；
 分布式为真实 TCP + 持久化原型，基准以进程内为主，跨机 `tc netem` 验证

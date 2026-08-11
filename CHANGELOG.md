@@ -76,6 +76,18 @@
   - CDC 多组（ADR-0112）：ConsumerGroup / CDCConsumerRegistry；
   - 探索原型（ADR-0113）：sql / vector / saas；
   - 测试：新增 264 项；全量回归 **2965/2965 全绿**（+6 门控跳过）。
+- Phase 28 多主复制与高级查询引擎：
+  - 双向复制 + CRDT（ADR-0114）：BidirectionalPipeline / VersionVector /
+    LwwRegister / GCounter / GSet / OrSet；
+  - 容灾（ADR-0115）：DrTopology / DrSwitchPlanner / DrDrillRunner；
+  - SQL 引擎（ADR-0116）：hashJoin / 聚合 / GROUP BY / ExplainPlan；
+  - HNSW + 混合检索（ADR-0117）：HnswIndex / HybridSearch；
+  - SaaS 多租户（ADR-0118）：TenantRegistry / TenantAuditLog /
+    TenantClusterPlanner；
+  - RPC 帧级令牌（ADR-0119）：信封 v1 + RpcPermissionGuard 接线；
+  - v1.1 发布流水线（release.yml 标签扩展）；
+  - 测试：新增 251 项；全量回归 **3216/3216 全绿**（+6 门控跳过）；
+  - 稳定化：提案超时 15s、元数据客户端重试 5 轮、混沌/基准门控防抖。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager

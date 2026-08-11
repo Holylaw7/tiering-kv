@@ -186,17 +186,25 @@ PITR 保留策略（ADR-0111）、CDC 多消费者组（ADR-0112）、SQL/Vector
 当前剩余：双向复制/CRDT、完整 SQL 引擎、HNSW 生产化、SaaS 多租户
 （Phase 28+）；跨机跨地域基准待 CI Runner。
 
+Phase 28 已交付（v1.1.0）：双向复制 + CRDT（ADR-0114）、两地三中心
+容灾（ADR-0115）、SQL 引擎（ADR-0116）、HNSW + 混合检索（ADR-0117）、
+SaaS 多租户（ADR-0118）、RPC 帧级令牌（ADR-0119）、v1.1 发布流水线；
+新增 251 项测试，全量回归 **3216/3216 全绿**。
+
+当前剩余：分布式 SQL、向量分片、Geo CRDT 大规模验证、三地五中心
+（Phase 29）；跨地域 RTT/RTO/RPO 待 CI/裸机执行。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 27（跨地域复制与企业集成）✅ 已完成（v1.1.0 方向）**
-  （Phase 0–26 全部完成）；
-- 最近提交：Phase 27 跨地域合并（详见 git log）；
+- 阶段：**Phase 28（多主复制与高级查询引擎）✅ 已完成（v1.1.0）**
+  （Phase 0–27 全部完成）；
+- 最近提交：Phase 28 多主合并（详见 git log）；
 - 基线：develop 合并 Phase 24；分支策略：feature/* 合并入 develop，
   main 保持稳定；
-- 下一步：v1.1.0 冻结与发布；双向复制/CRDT、完整 SQL、HNSW 生产化、
-  SaaS 多租户（Phase 28，等待用户指令）。
+- 下一步：v1.1.0 发布执行（release.yml）；分布式 SQL、向量分片、
+  Geo CRDT 大规模验证、三地五中心（Phase 29，等待用户指令）。
 
-项目里程碑：**27 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
+项目里程碑：**28 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
 LFU + WAL + LSM/SSTable + Bloom + Compaction + Migration + mmap +
 BlockCache + Production Runtime + Raft 持久化 + TCP RPC + Snapshot +
@@ -205,7 +213,8 @@ Slot 迁移 + 批量复制 + 安全 RPC + 元数据 Raft + 流式迁移 + 异步
 Placement + MVCC + 2PC 事务 + 生命周期 + 锁解析 + 元数据 Multi-Raft +
 健康探针 + 备份恢复 + 滚动升级 + K8s 清单 + 元数据网络化 + 协议冻结 +
 PITR + CDC + 企业安全 + Operator + CLI + 发布流水线 + 跨地域复制 +
-Geo 事务 + SQL/Vector/SaaS 原型），能力矩阵全 ✅。
+Geo 事务 + SQL/Vector/SaaS 原型 + 双向复制/CRDT + 容灾 + SQL 引擎 +
+HNSW + SaaS 多租户 + RPC 令牌），能力矩阵全 ✅。
 
 ## 3. 技术栈
 

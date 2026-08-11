@@ -1,0 +1,19 @@
+# Phase 28 生产基准报告
+
+Phase 28 · 2026-08-11 · 进程内口径（跨地域 RTT 待 CI/裸机）
+
+```text
+PHASE28-BENCH CRDT 1M-2.5M ops/s
+PHASE28-BENCH BI-WRITE 33K-167K ops/s
+PHASE28-BENCH SQL-JOIN 1K×1K 1-5ms
+PHASE28-BENCH SQL-AGG 10K 行 10ms
+PHASE28-BENCH HNSW 100 次 topK=5 ≈38ms（100/1000 向量）
+PHASE28-BENCH HYBRID 100 次 ≈39ms
+PHASE28-BENCH SAAS-PLAN 1K 次 2ms
+PHASE28-BENCH DR-RTO ≈1ms（进程内）
+```
+
+稳态参照（Phase 17 并行迁移，独立运行）：100B 167.9MB/s、
+1KB 1373MB/s、10KB 4402MB/s。
+
+说明：全量负载下门控为防抖下限，稳态数值以报告与独立运行为准。
