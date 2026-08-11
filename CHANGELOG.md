@@ -41,6 +41,19 @@
   - 测试：新增 231 项；全量回归 **2238/2238 全绿**；
   - 基准（docs/benchmark/phase24-final-production-report.md）：事务 SET
     144–175K、跨区事务 45–83K、failover 164–303ms、恢复 ≈3ms。
+- Phase 25 控制面 GA 闭环：
+  - 元数据 Multi-Raft 网络化（ADR-0099，TD-050 关闭）：TxnMetadataNode
+    接入 MultiRaftEndpoint 共享传输 + FileRaftLog/RaftPersistentState/
+    Snapshot；META_PROPOSE/META_STATUS RPC；RpcServer 异步响应；
+    TxnMetadataClient 网络模式（leader 轮询 + 重定向）；
+  - 容器混沌（ADR-0100）：container-chaos.sh（kill 三类节点 + tc netem
+    分区）+ CI 四 job；
+  - 块设备混沌（ADR-0101）：block-device-chaos.sh（loop/dmsetup/fio/
+    remount）+ 门控测试；
+  - K8s 集群内验证（ADR-0102）：kind-e2e.sh + 门控测试 + 清单约束扩展；
+  - 测试：新增 170 项；全量回归 **2408/2408 全绿**（+6 容器门控本地跳过）；
+  - 基准（docs/benchmark/phase25-final-ga-report.md）：元数据提案
+    657–1077 ops/s、并发 1393 ops/s、failover 110–118ms。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
