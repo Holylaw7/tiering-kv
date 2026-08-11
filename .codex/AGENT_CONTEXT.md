@@ -147,22 +147,36 @@ participant/metadata）+ docker-compose.transaction.yml 全链路 TCP、
 158 项新测试，全量回归 2007/2007 全绿（TD-045 关闭）。
 真实容器编排运行与真实磁盘注入待 Phase 24（TD-048/TD-049）。
 
+Phase 24 已交付（v1.0 云原生生产发布）：事务元数据 Multi-Raft（ADR-0095）、
+健康探针与优雅停机（ADR-0096）、备份/恢复（ADR-0097）、滚动升级
+（ADR-0098）、Kubernetes 生产清单（deploy/kubernetes/tiering-kv/）、CI
+容器 E2E 工作流（.github/workflows/transaction-e2e.yml）、最终 SLA 基准
+（SET 144–175K、跨区 45–83K、failover 164–303ms、恢复 ≈3ms）；
+231 项新测试，全量回归 **2238/2238 全绿**。
+
+当前技术债：TD-048/049（真实 Docker 磁盘混沌与 CI 容器 E2E 待 Linux
+Runner 执行，交付物已就绪）、TD-050（元数据 Multi-Raft 网络化传输待验证）、
+TD-033（100B 迁移 >100MB/s 未达，如实记录）、TD-046（真实容器 disk
+注入权限限制）。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 19（MVCC & Transaction Engine）✅ 已完成**
-  （Phase 0–18 全部完成）；
-- 最近提交：Phase 19 基准（详见 git log）；
-- 基线：tag `phase-0`；分支策略：feature/* 合并入 develop，main 保持稳定；
-- 下一步：批量 GC 删除（TD-041）、Redis 自动事务化（TD-042）、
-  Linux+Docker 跨机混沌（TD-040）（Phase 20，等待用户指令）。
+- 阶段：**Phase 24（云原生生产发布）✅ 已完成（v1.0）**
+  （Phase 0–23 全部完成）；
+- 最近提交：Phase 24 云原生发布合并（详见 git log）；
+- 基线：develop 合并 Phase 24；分支策略：feature/* 合并入 develop，
+  main 保持稳定；
+- 下一步：真实 CI Runner 容器 E2E 与磁盘混沌、元数据 Multi-Raft 网络化
+  （TD-048/049/050，等待用户指令）。
 
-项目里程碑：**19 阶段路线图全部完成（2026-08-10）**；定位 = 单机完整冷热
+项目里程碑：**24 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
 LFU + WAL + LSM/SSTable + Bloom + Compaction + Migration + mmap +
 BlockCache + Production Runtime + Raft 持久化 + TCP RPC + Snapshot +
 Slot 迁移 + 批量复制 + 安全 RPC + 元数据 Raft + 流式迁移 + 异步提案 +
 证书生命周期 + 混沌验证 + 集群可观测性 + Region + Multi-Raft + 零拷贝 +
-Placement），能力矩阵全 ✅。
+Placement + MVCC + 2PC 事务 + 生命周期 + 锁解析 + 元数据 Multi-Raft +
+健康探针 + 备份恢复 + 滚动升级 + K8s 清单），能力矩阵全 ✅。
 
 ## 3. 技术栈
 

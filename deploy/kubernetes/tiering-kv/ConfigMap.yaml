@@ -1,0 +1,72 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tiering-kv-config
+  labels:
+    app: tiering-kv
+data:
+  tiering-kv.yaml: |
+    server:
+      gateway-port: 6379
+      rpc-port: 7300
+    memory:
+      memtable-bytes: 268435456
+    wal:
+      fsync: everysec
+      dir: /data/wal
+    raft:
+      heartbeat-ms: 100
+      election-min-ms: 80
+      election-max-ms: 200
+    transaction:
+      lock-ttl-ms: 60000
+      recovery-timeout-ms: 30000
+  regions.conf: |
+    tiering-kv-storage-0 r1
+    tiering-kv-storage-1 r2
+    tiering-kv-storage-2 r3
+  start.sh: |
+    #!/bin/sh
+    set -e
+    ROLE=${ROLE:?missing ROLE}
+    NODE_ID=${POD_NAME:?missing POD_NAME}
+    RPC_PORT=${RPC_PORT:-7300}
+    DATA_DIR=${DATA_DIR:-/data}
+    case "$ROLE" in
+      metadata)
+        exec java -Xmx512m -jar /app/tiering-kv.jar \
+          --role metadata --node-id "$NODE_ID" \
+          --rpc-port "$RPC_PORT" --data-dir "$DATA_DIR"
+        ;;
+      participant)
+        REGION_ID=$(awk -v name="$NODE_ID" '$1 == name {print $2}' \
+          /etc/tiering-kv/regions.conf)
+        if [ -z "$REGION_ID" ]; then
+          REGION_ID="r${NODE_ID##*-}"
+        fi
+        exec java -Xmx1g -jar /app/tiering-kv.jar \
+          --role participant --node-id "$NODE_ID" \
+          --region-id "$REGION_ID" --rpc-port "$RPC_PORT" \
+          --data-dir "$DATA_DIR"
+        ;;
+      coordinator)
+        exec java -Xmx512m -jar /app/tiering-kv.jar \
+          --role coordinator --node-id "$NODE_ID" \
+          --rpc-port "$RPC_PORT" \
+          --metadata-node "$METADATA_SERVICE" \
+          --metadata-port "${METADATA_PORT:-7300}" \
+          --regions "$REGIONS"
+        ;;
+      gateway)
+        exec java -Xmx512m -jar /app/tiering-kv.jar \
+          --role gateway --node-id "$NODE_ID" \
+          --rpc-port "$RPC_PORT" --gateway-port "${GATEWAY_PORT:-6379}" \
+          --metadata-node "$METADATA_SERVICE" \
+          --metadata-port "${METADATA_PORT:-7300}" \
+          --regions "$REGIONS"
+        ;;
+      *)
+        echo "unknown role $ROLE" >&2
+        exit 1
+        ;;
+    esac

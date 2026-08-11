@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tiering-kv-gateway
+  labels:
+    app: tiering-kv
+    tier: gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tiering-kv
+      tier: gateway
+  template:
+    metadata:
+      labels:
+        app: tiering-kv
+        tier: gateway
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: gateway
+          image: tiering-kv:0.1.0
+          command: ["/bin/sh", "/etc/tiering-kv/start.sh"]
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: ROLE
+              value: gateway
+            - name: RPC_PORT
+              value: "7201"
+            - name: GATEWAY_PORT
+              value: "6379"
+            - name: METADATA_SERVICE
+              value: tiering-kv-meta
+            - name: METADATA_PORT
+              value: "7300"
+            - name: REGIONS
+              value: r1@tiering-kv-storage-0.tiering-kv-storage:7100,r2@tiering-kv-storage-1.tiering-kv-storage:7100,r3@tiering-kv-storage-2.tiering-kv-storage:7100
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            tcpSocket:
+              port: redis
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: redis
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/tiering-kv
+      volumes:
+        - name: config
+          configMap:
+            name: tiering-kv-config

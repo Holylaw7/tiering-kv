@@ -28,10 +28,14 @@ public final class TxnMetaCodec {
             out.writeLong(command.startTS());
             out.writeLong(command.commitTS());
             out.writeLong(command.decisionIndex());
-            out.writeByte(command.lifecycleState() == null
-                    ? 0xFF : io.tieringkv.transaction.lifecycle
-                    .TxnLifecycleState.valueOf(command.lifecycleState())
-                    .ordinal());
+            // 状态名以 UTF 直存：快照可能携带 TxnMetaEntry.State
+            // （REGISTERED/PREPARED/...），LIFECYCLE 命令携带
+            // TxnLifecycleState（ACTIVE/PREWRITE/...），两种枚举无法
+            // 共用 ordinal 空间。
+            out.writeBoolean(command.lifecycleState() != null);
+            if (command.lifecycleState() != null) {
+                out.writeUTF(command.lifecycleState());
+            }
             out.writeLong(command.expireAtMillis());
             Map<String, List<TxnMessages.Mutation>> regions =
                     command.regionMutations() == null
@@ -63,11 +67,7 @@ public final class TxnMetaCodec {
             long startTS = in.readLong();
             long commitTS = in.readLong();
             long decisionIndex = in.readLong();
-            int lifecycleOrdinal = in.readUnsignedByte();
-            String lifecycleState = lifecycleOrdinal == 0xFF
-                    ? null
-                    : io.tieringkv.transaction.lifecycle
-                    .TxnLifecycleState.values()[lifecycleOrdinal].name();
+            String lifecycleState = in.readBoolean() ? in.readUTF() : null;
             long expireAtMillis = in.readLong();
             int regionCount = in.readUnsignedShort();
             Map<String, List<TxnMessages.Mutation>> regions =
