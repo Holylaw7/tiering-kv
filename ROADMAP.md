@@ -31,6 +31,7 @@
 | 21 | 分布式事务网络化与云生产 | ✅ 完成（2026-08-11） |
 | 22 | 事务可靠性与生产运行时 | ✅ 完成（2026-08-11） |
 | 23 | 事务运行时最终化 | ✅ 完成（2026-08-11） |
+| 24 | 云原生生产发布（v1.0） | ✅ 完成（2026-08-11） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -443,6 +444,23 @@
   生产配置冻结（ADR-0093）。
 - 测试：新增 158 项；全量回归 **2007/2007 全绿**（TD-045 关闭）。
 
+## Phase 24 — 云原生生产发布（v1.0） ✅
+
+- 交付：事务元数据 Multi-Raft（`txn/meta/`：TxnMetadataNode /
+  TxnMetadataClient / MetadataSnapshotManager，ADR-0095）、健康探针与
+  优雅停机（RuntimeHealth / GracefulShutdown，ADR-0096）、备份恢复
+  （BackupManager / RestoreManager，ADR-0097）、滚动升级
+  （UpgradeCoordinator，ADR-0098）、Kubernetes 生产清单
+  （deploy/kubernetes/tiering-kv/）、CI 容器 E2E 工作流
+  （.github/workflows/transaction-e2e.yml）、v1.0 发布说明。
+- 关键修复：TxnRpcCodec 64KB 长度前缀溢出（1MB 值往返）、并发快照
+  一致性、零超时 drain/catchup 语义。
+- 测试：新增 231 项；全量回归 **2238/2238 全绿**（目标 ≥2200 ✅）。
+- 基准（[phase24-final-production-report.md](
+  docs/benchmark/phase24-final-production-report.md)）：事务 SET
+  144–175K ops/s、跨区事务 45–83K txn/s、leader failover 164–303ms、
+  恢复 ≈3ms。
+
 ## 技术债登记
 
 | 编号 | 描述 | 来源 | 计划消除 |
@@ -493,3 +511,4 @@
 | TD-046 | 真实容器 disk full / readonly / slow io 注入未完成（Docker Desktop 权限） | ADR-0090 | Phase 23（privileged/device-mapper 环境） |
 | TD-048 | compose.transaction 已提供，真实容器编排运行未执行 | ADR-0093 | Phase 24（CI Docker runner） |
 | TD-049 | 真实容器 disk 注入仍受限（fallocate/mount/fio） | ADR-0094 | Phase 24（privileged 环境） |
+| TD-050 | 元数据 Multi-Raft 为进程内传输，网络化待跨机验证 | ADR-0095 | 下一阶段（Netty RPC + 持久化 Raft 日志） |

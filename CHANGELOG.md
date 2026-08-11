@@ -28,6 +28,19 @@
   CommandHandler）与入口 Main。
 - Phase 1 测试：协议/命令单元测试、TCP 集成测试（pipeline / inline / 并发 /
   二进制安全）、延迟冒烟基准。
+- Phase 24 云原生生产发布：
+  - 事务元数据 Multi-Raft（ADR-0095）：TxnMetadataNode / TxnMetadataClient /
+    MetadataSnapshotManager，命令 Raft-first + decisionIndex；
+  - 运行时生命周期（ADR-0096）：/health /readiness /liveness + 优雅停机；
+  - 备份恢复（ADR-0097）：元数据快照 + MVCC 索引闭环；
+  - 滚动升级（ADR-0098）：逐节点升级 + 追平等待 + quorum 保护；
+  - Kubernetes 清单（StatefulSet / Service / ConfigMap / Secret / PDB /
+    Gateway）+ CI 容器 E2E 工作流；
+  - 关键修复：TxnRpcCodec 64KB 长度前缀溢出、并发快照一致性、零超时
+    drain/catchup 语义；
+  - 测试：新增 231 项；全量回归 **2238/2238 全绿**；
+  - 基准（docs/benchmark/phase24-final-production-report.md）：事务 SET
+    144–175K、跨区事务 45–83K、failover 164–303ms、恢复 ≈3ms。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
