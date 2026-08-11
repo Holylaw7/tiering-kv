@@ -1,4 +1,4 @@
-# Phase 26 Task Prompt — v1 Release Freeze & Enterprise Readiness
+# Phase 26 Task Prompt — Release Freeze & Enterprise Readiness
 
 ## 1. Context
 
@@ -27,11 +27,11 @@ Phase 25 已把最后一个控制面网络化闭环（TD-050）关闭。Phase 26
 
 ## 2. Release 前置项（Phase 25 遗留，必须先于发布冻结）
 
-| 编号 | 内容 | 状态 |
-| --- | --- | --- |
-| TD-048 | CI 容器 E2E + 容器故障注入真实 Runner 执行（3 连绿） | 交付物就绪，待执行 |
-| TD-049 | 真实块设备磁盘混沌（loop/dmsetup/fio/remount） | 交付物就绪，待执行 |
-| K8S-001 | kind 集群内验证（StatefulSet/PDB 驱逐/网关冒烟/备份恢复演练） | 脚本就绪，待执行 |
+| 编号    | 内容                                                          | 状态               |
+| ------- | ------------------------------------------------------------- | ------------------ |
+| TD-048  | CI 容器 E2E + 容器故障注入真实 Runner 执行（3 连绿）          | 交付物就绪，待执行 |
+| TD-049  | 真实块设备磁盘混沌（loop/dmsetup/fio/remount）                | 交付物就绪，待执行 |
+| K8S-001 | kind 集群内验证（StatefulSet/PDB 驱逐/网关冒烟/备份恢复演练） | 脚本就绪，待执行   |
 
 原则（禁止变更）：
 
@@ -93,16 +93,16 @@ Region ×N
 
 验收指标：
 
-| 指标 | 目标 |
-| --- | ---: |
-| GET | >1M ops/s |
-| SET | >200K ops/s |
-| Transaction | >50K txn/s |
-| GET P99 | <5ms |
-| SET P99 | <20ms |
-| TXN P99 | <100ms |
-| Leader failover | <500ms |
-| Node restart | <5s |
+| 指标            |        目标 |
+| --------------- | ----------: |
+| GET             |   >1M ops/s |
+| SET             | >200K ops/s |
+| Transaction     |  >50K txn/s |
+| GET P99         |        <5ms |
+| SET P99         |       <20ms |
+| TXN P99         |      <100ms |
+| Leader failover |      <500ms |
+| Node restart    |         <5s |
 
 输出：`docs/benchmark/v1-final-production-report.md`（如实记录环境/分位/
 是否容器；跨机与 JVM 口径分离）。
@@ -195,13 +195,13 @@ test → benchmark → security scan → docker build → publish image
 
 必须新增（先 ADR 后代码）：
 
-| ADR | 主题 |
-| --- | --- |
+| ADR      | 主题                          |
+| -------- | ----------------------------- |
 | ADR-0103 | Protocol Compatibility Policy |
-| ADR-0104 | Point In Time Recovery |
-| ADR-0105 | CDC Architecture |
-| ADR-0106 | Enterprise Security Model |
-| ADR-0107 | Kubernetes Operator Design |
+| ADR-0104 | Point In Time Recovery        |
+| ADR-0105 | CDC Architecture              |
+| ADR-0106 | Enterprise Security Model     |
+| ADR-0107 | Kubernetes Operator Design    |
 
 ## 6. Test Plan
 
@@ -209,16 +209,16 @@ test → benchmark → security scan → docker build → publish image
 
 Phase 1-26 全量目标：**>=2700 tests**（当前 2408）。
 
-| Module | Count |
-| --- | ---: |
-| Protocol Compatibility | 40 |
-| Production Benchmark | 30 |
-| PITR | 50 |
-| CDC | 50 |
-| Security | 40 |
-| Operator | 40 |
-| CLI | 20 |
-| Release CI | 30 |
+| Module                 | Count |
+| ---------------------- | ----: |
+| Protocol Compatibility |    40 |
+| Production Benchmark   |    30 |
+| PITR                   |    50 |
+| CDC                    |    50 |
+| Security               |    40 |
+| Operator               |    40 |
+| CLI                    |    20 |
+| Release CI             |    30 |
 
 ## 7. Documentation Deliverables
 
