@@ -14,6 +14,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 
 /** 元数据快照（ADR-0095）：序列化状态机，加速恢复。 */
 public final class MetadataSnapshotManager {
@@ -23,15 +24,32 @@ public final class MetadataSnapshotManager {
         try (OutputStream raw = Files.newOutputStream(file);
              DataOutputStream out = new DataOutputStream(
                      new BufferedOutputStream(raw))) {
-            out.writeInt(state.snapshot().size());
+            Map<String, io.tieringkv.transaction.metadata.TxnMetaEntry>
+                    entries = state.snapshot();
+            out.writeInt(entries.size());
             for (io.tieringkv.transaction.metadata.TxnMetaEntry entry
-                    : state.snapshot().values()) {
+                    : entries.values()) {
                 TxnMetaCommand command = new TxnMetaCommand(
                         io.tieringkv.transaction.metadata.TxnMetaCommand.Type
                                 .REGISTER,
                         entry.txnId(), entry.primary(), entry.startTS(),
                         entry.commitTS(), entry.decisionIndex(),
                         entry.state().name(), -1, entry.regionMutations());
+                byte[] payload = TxnMetaCodec.encode(command);
+                out.writeInt(payload.length);
+                out.write(payload);
+            }
+            Map<String, io.tieringkv.transaction.lifecycle.TxnLifecycleRecord>
+                    records = state.lifecycleSnapshot();
+            out.writeInt(records.size());
+            for (io.tieringkv.transaction.lifecycle.TxnLifecycleRecord record
+                    : records.values()) {
+                TxnMetaCommand command = new TxnMetaCommand(
+                        io.tieringkv.transaction.metadata.TxnMetaCommand.Type
+                                .LIFECYCLE,
+                        record.txnId(), null, record.startTS(), 0,
+                        record.decisionIndex(), record.state().name(),
+                        record.expireAtMillis(), Map.of());
                 byte[] payload = TxnMetaCodec.encode(command);
                 out.writeInt(payload.length);
                 out.write(payload);
@@ -51,6 +69,13 @@ public final class MetadataSnapshotManager {
                      new BufferedInputStream(raw))) {
             int count = in.readInt();
             for (int i = 0; i < count; i++) {
+                int length = in.readInt();
+                byte[] payload = new byte[length];
+                in.readFully(payload);
+                state.apply(TxnMetaCodec.decode(payload));
+            }
+            int lifecycleCount = in.readInt();
+            for (int i = 0; i < lifecycleCount; i++) {
                 int length = in.readInt();
                 byte[] payload = new byte[length];
                 in.readFully(payload);
