@@ -81,7 +81,7 @@ class SqlEngineTest {
         rows.add(new SqlEngine.Row(bytes("u1"), bytes("1")));
         rows.add(new SqlEngine.Row(bytes("u2"), bytes("2")));
         rows.add(new SqlEngine.Row(bytes("u1"), bytes("3")));
-        Map<byte[], Long> groups = new SqlEngine().groupBy(rows,
+        Map<String, Long> groups = new SqlEngine().groupBy(rows,
                 row -> new byte[]{row.key()[1]}, AggregateType.COUNT,
                 SqlEngineTest::rowValueLong);
         assertThat(groups).hasSize(2);
