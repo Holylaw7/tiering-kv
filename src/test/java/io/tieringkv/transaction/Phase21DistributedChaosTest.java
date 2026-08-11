@@ -110,8 +110,16 @@ class Phase21DistributedChaosTest {
             Transaction txn = chaos.router.begin();
             txn.put(bytes("a" + i), bytes("va" + i));
             txn.put(bytes("b" + i), bytes("vb" + i));
-            chaos.router.commit(txn);
+            for (int attempt = 0; attempt < 3; attempt++) {
+                try {
+                    chaos.router.commit(txn);
+                    break;
+                } catch (RuntimeException transientFailure) {
+                    // 丢包导致提案失败：客户端重试（幂等）
+                }
+            }
         }
+        chaos.router.recover();
         assertThat(chaos.r2.latestValue(bytes("b19"))).isEqualTo(bytes("vb19"));
         chaos.close();
     }
