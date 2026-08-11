@@ -116,6 +116,15 @@
   - 账单滚动（ADR-0136）：BillingScheduler；多云部署/迁移；
   - 企业控制台（ADR-0137）：ConsoleApi；v1.4 发布流水线；
   - 测试：新增 258 项；全量回归 **4000/4000 全绿**（+6 门控跳过）。
+- Phase 32 生产接线与全球验证：
+  - SQL 写 2PC 生产（ADR-0138）：SqlTxn2PcExecutor；
+  - 控制台 REST（ADR-0139）：ConsoleRestServer；
+  - 并发重分片（ADR-0140）：ConcurrentReshardExecutor；
+  - 网关冲突审计（ADR-0141）：RegionAffinityRouter / ConflictAuditLog；
+  - 自动选主/数据主权（ADR-0143）：LeaderSelector / ComplianceValidator；
+  - v1.5 发布流水线（ADR-0142）；
+  - 测试：新增 251 项；全量回归 **4251/4251 全绿**（+6 门控跳过）；
+  - 稳定化：迁移/异步客户端全量负载容差、选主 Map 顺序无关断言。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager

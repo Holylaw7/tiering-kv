@@ -1,0 +1,14 @@
+# Phase 32 生产基准报告
+
+Phase 32 · 2026-08-11 · 进程内口径（跨地域待 CI/裸机）
+
+```text
+PHASE32-BENCH SQL2PC-PROD 100K-1M txn/s
+PHASE32-BENCH CONCURRENT-RESHARD 34K-1.25M ops/s
+PHASE32-BENCH AFFINITY 1M-10M ops/s
+PHASE32-BENCH LEADER 1M-10M ops/s
+PHASE32-BENCH COMPLIANCE ≈0ms（10K 次）
+```
+
+说明：生产接线为进程内等价；跨地域 RTT/冲突率/收敛时间/RTO 由 Runner
+补充。
