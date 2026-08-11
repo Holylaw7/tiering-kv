@@ -21,18 +21,15 @@ public final class UpgradeCoordinator {
             }
             upgrade.accept(node);
             long deadline = System.currentTimeMillis() + waitMillis;
-            boolean ok = false;
-            while (System.currentTimeMillis() < deadline) {
-                if (caughtUp.getAsBoolean()) {
-                    ok = true;
-                    break;
-                }
+            boolean ok = caughtUp.getAsBoolean();
+            while (!ok && System.currentTimeMillis() < deadline) {
                 try {
                     Thread.sleep(10);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     return false;
                 }
+                ok = caughtUp.getAsBoolean();
             }
             if (!ok) {
                 return false;

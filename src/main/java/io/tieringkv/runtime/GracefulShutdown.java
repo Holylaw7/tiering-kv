@@ -16,18 +16,15 @@ public final class GracefulShutdown {
         stopAccept.run();
         long deadline = System.currentTimeMillis() + drainTimeoutMillis
                 .getAsLong();
-        boolean drained = false;
-        while (System.currentTimeMillis() < deadline) {
-            if (inflightDone.getAsBoolean()) {
-                drained = true;
-                break;
-            }
+        boolean drained = inflightDone.getAsBoolean();
+        while (!drained && System.currentTimeMillis() < deadline) {
             try {
                 Thread.sleep(10);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 break;
             }
+            drained = inflightDone.getAsBoolean();
         }
         flushRaft.run();
         for (AutoCloseable closer : closers) {
