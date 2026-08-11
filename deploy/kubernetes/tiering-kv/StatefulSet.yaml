@@ -1,0 +1,147 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tiering-kv-meta
+  labels:
+    app: tiering-kv
+    tier: metadata
+spec:
+  serviceName: tiering-kv-meta
+  replicas: 3
+  selector:
+    matchLabels:
+      app: tiering-kv
+      tier: metadata
+  template:
+    metadata:
+      labels:
+        app: tiering-kv
+        tier: metadata
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: metadata
+          image: tiering-kv:0.1.0
+          command: ["/bin/sh", "/etc/tiering-kv/start.sh"]
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: ROLE
+              value: metadata
+            - name: RPC_PORT
+              value: "7300"
+            - name: DATA_DIR
+              value: /data
+          ports:
+            - name: raft-rpc
+              containerPort: 7300
+          volumeMounts:
+            - name: config
+              mountPath: /etc/tiering-kv
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            tcpSocket:
+              port: raft-rpc
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: raft-rpc
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: config
+          configMap:
+            name: tiering-kv-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: tiering-kv-storage
+  labels:
+    app: tiering-kv
+    tier: storage
+spec:
+  serviceName: tiering-kv-storage
+  replicas: 3
+  selector:
+    matchLabels:
+      app: tiering-kv
+      tier: storage
+  template:
+    metadata:
+      labels:
+        app: tiering-kv
+        tier: storage
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: storage
+          image: tiering-kv:0.1.0
+          command: ["/bin/sh", "/etc/tiering-kv/start.sh"]
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: ROLE
+              value: participant
+            - name: RPC_PORT
+              value: "7100"
+            - name: DATA_DIR
+              value: /data
+          ports:
+            - name: raft-rpc
+              containerPort: 7100
+          volumeMounts:
+            - name: config
+              mountPath: /etc/tiering-kv
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            tcpSocket:
+              port: raft-rpc
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: raft-rpc
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+      volumes:
+        - name: config
+          configMap:
+            name: tiering-kv-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 100Gi

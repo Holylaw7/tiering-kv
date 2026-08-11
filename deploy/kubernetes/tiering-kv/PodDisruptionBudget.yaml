@@ -1,0 +1,27 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tiering-kv-meta-pdb
+  labels:
+    app: tiering-kv
+    tier: metadata
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: tiering-kv
+      tier: metadata
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tiering-kv-storage-pdb
+  labels:
+    app: tiering-kv
+    tier: storage
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: tiering-kv
+      tier: storage
