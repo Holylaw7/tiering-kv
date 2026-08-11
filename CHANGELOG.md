@@ -333,6 +333,21 @@
     跨区 62–158K txn/s、恢复 1–4ms，全部达标；
   - 跨机验证（ADR-0082）：Docker daemon 可用；容器内 Maven 网络受限，
     跨机 tc netem 未执行，登记 TD-040/TD-043，本地混沌 30 项兜底。
+- Phase 21 分布式事务网络化与云生产：
+  - 分布式事务路由（ADR-0083）：DistributedTxnRouter / RegionTxnClient /
+    TxnParticipantClient，PREWRITE/COMMIT/ROLLBACK/HEARTBEAT 复用
+    MultiRaftEndpoint 单端口 RPC；TransactionParticipant 幂等状态机；
+  - 事务元数据 Raft（ADR-0084）：TransactionMetadataService +
+    TxnMetadataRaftGroup，Coordinator 崩溃恢复续跑；
+  - MVCC 在线压缩（ADR-0085）：MvccCompactor（SafePoint 合并 + 原子索引文件）；
+  - 真实跨机混沌（ADR-0086）：Docker 三节点 + tc netem（100ms/5%/2%）
+    + 分区 + kill -9，全部存活恢复；修复容器构建三缺陷
+    （netty classifier / Main-Class / fat jar）；
+  - 可观测性：txn_prepare/network_retry/lock_wait/region_count/recovery_time、
+    mvcc_compaction_*；
+  - 测试：新增 202 项；
+  - 基准（docs/benchmark/phase21-report.md）：单区 58.7–116.4K、
+    多区 88.1–110.7K txn/s、恢复 0–0ms、leader 恢复 156–276ms。
 - Phase 9 评审处置：确认瓶颈分层（A 4.7M → B 230K → C 150K，瓶颈=协议/调度）；
   登记 TD-020（request→response 对象数优化）与 TD-021（JFR 验收指标）。
 - Phase 8 IO 优化：MmapSSTableReader（零拷贝块读）+ FileChannel baseline、
