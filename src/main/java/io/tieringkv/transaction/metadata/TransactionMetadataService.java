@@ -84,6 +84,20 @@ public final class TransactionMetadataService implements AutoCloseable {
         return propose(TxnMetaCommand.rollback(txnId));
     }
 
+    /** 生命周期状态持久化（ADR-0091）。 */
+    public CompletableFuture<Void> recordLifecycle(
+            String txnId, long startTS,
+            io.tieringkv.transaction.lifecycle.TxnLifecycleState state,
+            long expireAtMillis) {
+        return propose(TxnMetaCommand.lifecycle(txnId, startTS,
+                state.name(), expireAtMillis));
+    }
+
+    public Map<String, io.tieringkv.transaction.lifecycle.TxnLifecycleRecord>
+            lifecycleSnapshot() {
+        return state.lifecycleSnapshot();
+    }
+
     private CompletableFuture<Void> propose(TxnMetaCommand command) {
         byte[] payload = TxnMetaCodec.encode(command);
         // ADR-0087：Raft-first —— 提案成功（拿到 decisionIndex）后才 apply
@@ -93,6 +107,13 @@ public final class TransactionMetadataService implements AutoCloseable {
             state.apply(indexed);
             appendLog(TxnMetaCodec.encode(indexed));
         });
+    }
+
+    /** 直接应用远端元数据命令（ADR-0093：MetadataRuntime 侧）。 */
+    public void applyLocal(TxnMetaCommand command) {
+        state.apply(command.withDecisionIndex(
+                System.currentTimeMillis()));
+        appendLog(TxnMetaCodec.encode(command));
     }
 
     /** 从 Raft 已应用命令重建状态（ADR-0087）：索引=命令在日志中的位置。 */

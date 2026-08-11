@@ -189,6 +189,34 @@ public final class TransactionParticipant {
                 : TxnMessages.Response.already();
     }
 
+    /** CHECK_TXN_STATUS（ADR-0092）：返回本 participant 记录的事务状态。 */
+    public TxnMessages.Response checkStatus(String txnId) {
+        TxnMessages.ParticipantState state = states.get(txnId);
+        return state == null
+                ? TxnMessages.Response.error("UNKNOWN")
+                : new TxnMessages.Response(TxnMessages.Status.OK,
+                state.name());
+    }
+
+    /** RESOLVE_LOCK（ADR-0092）：按本地状态补完 commit 或回滚（幂等）。 */
+    public TxnMessages.Response resolveLock(TxnMessages.Commit commit,
+                                            boolean rollbackDecision) {
+        if (rollbackDecision) {
+            return rollback(new TxnMessages.Rollback(commit.txnId(),
+                    commit.startTS(), commit.primary()));
+        }
+        return commit(commit);
+    }
+
+    /** TXN_GET：读最新已提交值（运行时网关读取路径）。 */
+    public TxnMessages.Response get(byte[] key) {
+        byte[] value = engine.latestValue(key);
+        return value == null
+                ? new TxnMessages.Response(TxnMessages.Status.ALREADY, "")
+                : new TxnMessages.Response(TxnMessages.Status.OK,
+                new String(value, java.nio.charset.StandardCharsets.UTF_8));
+    }
+
     private void journal(TxnStateRecord.State state, String txnId,
                          long startTS, long commitTS, byte[] primary,
                          List<TxnMessages.Mutation> mutations) {

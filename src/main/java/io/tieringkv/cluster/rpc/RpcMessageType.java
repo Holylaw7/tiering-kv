@@ -22,7 +22,13 @@ public enum RpcMessageType {
     TXN_HEARTBEAT(18),
     TXN_HEARTBEAT_RESPONSE(19),
     TXN_METADATA(20),
-    TXN_METADATA_RESPONSE(21);
+    TXN_METADATA_RESPONSE(21),
+    TXN_CHECK_STATUS(22),
+    TXN_CHECK_STATUS_RESPONSE(23),
+    TXN_RESOLVE_LOCK(24),
+    TXN_RESOLVE_LOCK_RESPONSE(25),
+    TXN_GET(26),
+    TXN_GET_RESPONSE(27);
 
     private final int wireValue;
 
@@ -60,6 +66,9 @@ public enum RpcMessageType {
             case TXN_ROLLBACK -> TXN_ROLLBACK_RESPONSE;
             case TXN_HEARTBEAT -> TXN_HEARTBEAT_RESPONSE;
             case TXN_METADATA -> TXN_METADATA_RESPONSE;
+            case TXN_CHECK_STATUS -> TXN_CHECK_STATUS_RESPONSE;
+            case TXN_RESOLVE_LOCK -> TXN_RESOLVE_LOCK_RESPONSE;
+            case TXN_GET -> TXN_GET_RESPONSE;
             default -> throw new IllegalArgumentException(
                     "no response type for " + this);
         };

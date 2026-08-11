@@ -39,6 +39,14 @@ public final class TxnMessages {
     public record Heartbeat(String txnId, long startTS, long ttlMillis) {
     }
 
+    public record CheckStatus(String txnId, long startTS) {
+    }
+
+    public record ResolveLock(String txnId, long startTS, long commitTS,
+                              byte[] primary, List<Mutation> mutations,
+                              boolean rollback) {
+    }
+
     public record Response(Status status, String message) {
 
         public boolean succeeded() {

@@ -26,6 +26,22 @@ public final class TxnParticipantRpcHandler implements TxnRpcHandler {
                     TxnRpcCodec.decodeRollback(payload));
             case TXN_HEARTBEAT -> response = participant.heartbeat(
                     TxnRpcCodec.decodeHeartbeat(payload));
+            case TXN_CHECK_STATUS -> {
+                io.tieringkv.transaction.rpc.TxnMessages.CheckStatus check =
+                        TxnRpcCodec.decodeCheckStatus(payload);
+                response = participant.checkStatus(check.txnId());
+            }
+            case TXN_RESOLVE_LOCK -> {
+                io.tieringkv.transaction.rpc.TxnMessages.ResolveLock resolve =
+                        TxnRpcCodec.decodeResolveLock(payload);
+                response = participant.resolveLock(
+                        new io.tieringkv.transaction.rpc.TxnMessages.Commit(
+                                resolve.txnId(), resolve.startTS(),
+                                resolve.commitTS(), resolve.primary(),
+                                resolve.mutations()),
+                        resolve.rollback());
+            }
+            case TXN_GET -> response = participant.get(payload);
             default -> throw new IllegalArgumentException(
                     "unexpected txn rpc type " + request.type());
         }
