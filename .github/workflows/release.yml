@@ -2,7 +2,8 @@ name: release
 
 on:
   push:
-    tags: ["v1.0.0-rc*", "v1.0.0", "v1.1.0-rc*", "v1.1.0"]
+    tags: ["v1.0.0-rc*", "v1.0.0", "v1.1.0-rc*", "v1.1.0",
+           "v1.2.0-rc*", "v1.2.0"]
   workflow_dispatch:
 
 jobs:
@@ -21,7 +22,7 @@ jobs:
       - name: Test
         run: mvn -q test
       - name: Benchmark
-        run: mvn -q -Dtest='Phase24BenchmarkTest,Phase25BenchmarkTest,Phase26BenchmarkTest,Phase27BenchmarkTest,Phase28BenchmarkTest' -DfailIfNoTests=false test
+        run: mvn -q -Dtest='Phase24BenchmarkTest,Phase25BenchmarkTest,Phase26BenchmarkTest,Phase27BenchmarkTest,Phase28BenchmarkTest,Phase29BenchmarkTest' -DfailIfNoTests=false test
       - name: Security scan
         uses: aquasecurity/trivy-action@0.28.0
         with:
