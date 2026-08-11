@@ -88,6 +88,17 @@
   - v1.1 发布流水线（release.yml 标签扩展）；
   - 测试：新增 251 项；全量回归 **3216/3216 全绿**（+6 门控跳过）；
   - 稳定化：提案超时 15s、元数据客户端重试 5 轮、混沌/基准门控防抖。
+- Phase 29 分布式查询与地域规模验证：
+  - 分布式 SQL（ADR-0120）：ShardPlanner / PartialAggregate /
+    MergeAggregate / MergeJoin / DistributedExecutor；
+  - 分布式向量（ADR-0121）：VectorShard / RebalancePlanner /
+    VectorShardManager；
+  - Geo CRDT 规模（ADR-0122）：CrdtScaleSimulator / HybridClockCalibrator；
+  - 三地五中心与全球读（ADR-0123）：FiveRegionTopology / GlobalReadRouter；
+  - SaaS 计量/市场（ADR-0124）：UsageMeter / BillingPlan / MeteredBilling /
+    ClusterTemplate；
+  - 分布式告警（Goal 7）：AlertRule / AlertManager；v1.2 发布流水线；
+  - 测试：新增 255 项；全量回归 **3471/3471 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager

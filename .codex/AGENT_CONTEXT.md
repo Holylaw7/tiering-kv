@@ -194,17 +194,25 @@ SaaS 多租户（ADR-0118）、RPC 帧级令牌（ADR-0119）、v1.1 发布流�
 当前剩余：分布式 SQL、向量分片、Geo CRDT 大规模验证、三地五中心
 （Phase 29）；跨地域 RTT/RTO/RPO 待 CI/裸机执行。
 
+Phase 29 已交付（v1.2.0）：分布式 SQL（ADR-0120）、分布式向量索引
+（ADR-0121）、Geo CRDT 规模验证（ADR-0122）、三地五中心与全球读
+（ADR-0123）、SaaS 计量/市场（ADR-0124）、v1.2 发布流水线（ADR-0125）、
+分布式告警；新增 255 项测试，全量回归 **3471/3471 全绿**。
+
+当前剩余：动态重分片、向量迁移落地、SQL 触发 2PC、全球读水位联动、
+账单导出（Phase 30）；跨地域 RTT/RTO/RPO 待 CI/裸机执行。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 28（多主复制与高级查询引擎）✅ 已完成（v1.1.0）**
-  （Phase 0–27 全部完成）；
-- 最近提交：Phase 28 多主合并（详见 git log）；
+- 阶段：**Phase 29（分布式查询与地域规模验证）✅ 已完成（v1.2.0）**
+  （Phase 0–28 全部完成）；
+- 最近提交：Phase 29 分布式合并（详见 git log）；
 - 基线：develop 合并 Phase 24；分支策略：feature/* 合并入 develop，
   main 保持稳定；
-- 下一步：v1.1.0 发布执行（release.yml）；分布式 SQL、向量分片、
-  Geo CRDT 大规模验证、三地五中心（Phase 29，等待用户指令）。
+- 下一步：v1.2.0 发布执行（release.yml）；动态重分片、向量迁移落地、
+  SQL 触发 2PC、全球读水位联动、账单导出（Phase 30，等待用户指令）。
 
-项目里程碑：**28 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
+项目里程碑：**29 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
 LFU + WAL + LSM/SSTable + Bloom + Compaction + Migration + mmap +
 BlockCache + Production Runtime + Raft 持久化 + TCP RPC + Snapshot +
@@ -214,7 +222,8 @@ Placement + MVCC + 2PC 事务 + 生命周期 + 锁解析 + 元数据 Multi-Raft 
 健康探针 + 备份恢复 + 滚动升级 + K8s 清单 + 元数据网络化 + 协议冻结 +
 PITR + CDC + 企业安全 + Operator + CLI + 发布流水线 + 跨地域复制 +
 Geo 事务 + SQL/Vector/SaaS 原型 + 双向复制/CRDT + 容灾 + SQL 引擎 +
-HNSW + SaaS 多租户 + RPC 令牌），能力矩阵全 ✅。
+HNSW + SaaS 多租户 + RPC 令牌 + 分布式 SQL + 向量分片 + 五中心全球读 +
+计量/市场 + 告警），能力矩阵全 ✅。
 
 ## 3. 技术栈
 
