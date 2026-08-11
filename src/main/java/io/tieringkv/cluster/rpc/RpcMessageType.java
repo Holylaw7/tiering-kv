@@ -56,7 +56,7 @@ public enum RpcMessageType {
 
     public boolean txn() {
         return wireValue >= TXN_PREWRITE.wireValue()
-                && wireValue <= TXN_METADATA_RESPONSE.wireValue();
+                && wireValue <= TXN_GET_RESPONSE.wireValue();
     }
 
     public RpcMessageType responseType() {
