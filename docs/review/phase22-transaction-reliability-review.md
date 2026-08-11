@@ -34,7 +34,8 @@ Phase 22 将分布式事务从“协议正确”推进到“生产可靠运行�
 - metrics：txn_expired_total / long_running / abort_reason /
   lock_total / lock_resolve_total / lock_wait_seconds；
 - 测试：Lifecycle 22 / LockResolver 21 / MetadataOrdering 19 /
-  DiskChaos 21 / Metrics 14 / Runtime 8 / Benchmark 4（以全量回归计数为准）。
+  DiskChaos 21 / Metrics 14 / Runtime 8 / Benchmark 4；
+  全量回归 **1849/1849 全绿（0 failures）**（新增 124 项）。
 
 ## 4. 基准
 

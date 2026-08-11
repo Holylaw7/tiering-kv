@@ -432,7 +432,7 @@
 - 基准（[phase22-report.md](docs/benchmark/phase22-report.md)）：
   SET 128–150K、GET 3.9–25M、跨区 33.6–59.7K、恢复 0–15ms、
   锁解析 50–129ms；
-- 测试：新增以全量回归计数为准；全量回归 0 failures。
+- 测试：新增 124 项；全量回归 1849/1849 全绿（0 failures）。
 
 ## 技术债登记
 

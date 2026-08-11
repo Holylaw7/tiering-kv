@@ -354,7 +354,7 @@
   - 锁解析（ADR-0089）：LockResolver + TxnStatusCache；
   - 运行时（ADR-0090）：TCP 端到端 + participant 重启恢复；
   - 指标：txn_expired/long_running/abort_reason/lock_total/resolve_total；
-  - 测试：新增 124 项（全量回归计数为准）；
+  - 测试：新增 124 项；全量回归 1849/1849 全绿；
   - 基准（docs/benchmark/phase22-report.md）：SET 128–150K、
     GET 3.9–25M、跨区 33.6–59.7K、恢复 0–15ms、锁解析 50–129ms。
 - Phase 9 评审处置：确认瓶颈分层（A 4.7M → B 230K → C 150K，瓶颈=协议/调度）；

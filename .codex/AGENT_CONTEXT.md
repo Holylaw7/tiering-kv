@@ -138,6 +138,7 @@ Phase 22 已交付：事务可靠性与生产运行时——decisionIndex + Raft
 LockResolver + TxnStatusCache、TCP 端到端运行时与 participant 重启恢复、
 事务/锁指标升级；124 项新测试（低于 220 目标，TD-045 登记）；
 磁盘故障 in-JVM 语义覆盖（TD-044 部分关闭，TD-046 登记真实注入受限）。
+全量回归 1849/1849 全绿。
 
 ## 2. 当前状态
 
