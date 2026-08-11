@@ -211,6 +211,33 @@ class TransactionLifecycleTest {
         fixture.close();
     }
 
+    @ParameterizedTest(name = "heartbeat {0}")
+    @ValueSource(longs = {10, 20, 40, 80})
+    void parameterizedHeartbeatPreventsExpiry(long intervalMillis)
+            throws Exception {
+        TransactionLifecycleManager lifecycle = new TransactionLifecycleManager();
+        Transaction txn = new Transaction("t1", 1);
+        lifecycle.begin(txn, 100, 1000);
+        long now = System.currentTimeMillis();
+        for (long t = 0; t < 200; t += intervalMillis) {
+            lifecycle.heartbeat("t1", now + t);
+        }
+        assertThat(lifecycle.expiredCandidates(now + 250)).isEmpty();
+    }
+
+    @ParameterizedTest(name = "duration {0}")
+    @ValueSource(longs = {5, 15, 40})
+    void parameterizedShortDurationAborts(long durationMillis)
+            throws Exception {
+        Fixture fixture = fixture(60_000, durationMillis);
+        Transaction txn = fixture.router.begin();
+        Thread.sleep(durationMillis + 20);
+        fixture.scheduler.scan();
+        assertThat(fixture.lifecycle.get(txn.txnId()).state())
+                .isEqualTo(TxnLifecycleState.EXPIRED);
+        fixture.close();
+    }
+
     private Fixture fixture() throws Exception {
         return fixture(60_000, 300_000);
     }

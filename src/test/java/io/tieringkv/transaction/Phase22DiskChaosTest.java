@@ -161,7 +161,7 @@ class Phase22DiskChaosTest {
     }
 
     @ParameterizedTest(name = "failOnPut {0}")
-    @ValueSource(ints = {1, 2, 3})
+    @ValueSource(ints = {1, 2, 3, 4, 5, 6, 7, 8})
     void parameterizedCommitFailureRecovers(int failOnPut) throws Exception {
         MvccStorageEngine failing = new MvccStorageEngine(
                 new FailAtPut(failOnPut));
@@ -192,6 +192,55 @@ class Phase22DiskChaosTest {
             assertThat(failing.latestValue(bytes("k"))).isEqualTo(bytes("v"));
         }
         metadata.close();
+    }
+
+    @ParameterizedTest(name = "slow {0}")
+    @ValueSource(longs = {1, 5, 10, 20})
+    void parameterizedSlowDisk(long delayMillis) throws Exception {
+        MvccStorageEngine engine = new MvccStorageEngine(
+                new SlowStorage(delayMillis));
+        TransactionParticipant participant = new TransactionParticipant(
+                "r1", engine, new LockTable(), 60_000);
+        LocalTxnTransport transport = new LocalTxnTransport(participant);
+        RegionTxnClient c1 = new RegionTxnClient("r1",
+                new TxnParticipantClient("n1", "r1", transport), key -> true);
+        TransactionMetadataService metadata =
+                new TransactionMetadataService(
+                        command -> CompletableFuture.completedFuture(1L));
+        DistributedTxnRouter router = new DistributedTxnRouter(
+                new TimestampOracle(), key -> c1, List.of(c1), metadata,
+                new TransactionMetricsRegistry());
+        Transaction txn = router.begin();
+        txn.put(bytes("k"), bytes("v"));
+        router.commit(txn);
+        assertThat(engine.latestValue(bytes("k"))).isEqualTo(bytes("v"));
+        metadata.close();
+    }
+
+    @ParameterizedTest(name = "corrupt {0}")
+    @ValueSource(ints = {2, 4, 6})
+    void parameterizedCorruptionPosition(int byteIndex) throws Exception {
+        Path journalPath = dir.resolve("wal-" + byteIndex + ".log");
+        PersistentTxnJournal journal = new PersistentTxnJournal(
+                journalPath, new TxnJournal.InMemory());
+        journal.recordState(new TxnStateRecord("t1",
+                TxnStateRecord.State.PREWRITE, 1, 0, bytes("k"),
+                List.of(new TxnStateRecord.Mutation(
+                        bytes("k"), bytes("v"), false)))).join();
+        journal.close();
+        byte[] data = Files.readAllBytes(journalPath);
+        if (byteIndex < data.length) {
+            data[byteIndex] ^= 0x01;
+        }
+        Files.write(journalPath, data);
+        try (PersistentTxnJournal reopened = new PersistentTxnJournal(
+                journalPath, new TxnJournal.InMemory())) {
+            // 单记录损坏必抛错；头部损坏同理
+            assertThatThrownBy(reopened::replay)
+                    .isInstanceOf(Exception.class);
+        } catch (java.nio.file.NoSuchFileException e) {
+            // 容忍文件缺失（不适用）
+        }
     }
 
     private static byte[] bytes(String value) {

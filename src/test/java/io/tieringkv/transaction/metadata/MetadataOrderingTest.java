@@ -267,6 +267,41 @@ class MetadataOrderingTest {
         fixture.close();
     }
 
+    @ParameterizedTest(name = "txns {0}")
+    @ValueSource(ints = {1, 2, 4, 8})
+    void parameterizedDecisionIndices(int txnCount) throws Exception {
+        Path log = dir.resolve("idx-" + System.nanoTime() + ".log");
+        java.util.concurrent.atomic.AtomicLong index =
+                new java.util.concurrent.atomic.AtomicLong();
+        TransactionMetadataService service = new TransactionMetadataService(
+                command -> CompletableFuture.completedFuture(
+                        index.incrementAndGet()), log);
+        long previous = -1;
+        for (int i = 0; i < txnCount; i++) {
+            service.register("t" + i, bytes("k"), i,
+                    Map.of("r1", List.of(mut("k", "v", false)))).join();
+            service.prepare("t" + i, i + 1).join();
+            long current = service.state().get("t" + i).decisionIndex();
+            assertThat(current).isGreaterThan(previous);
+            previous = current;
+        }
+        service.close();
+    }
+
+    @ParameterizedTest(name = "rounds {0}")
+    @ValueSource(ints = {1, 2, 5})
+    void parameterizedDuplicateCommit(int rounds) throws Exception {
+        Fixture fixture = fixture();
+        Transaction txn = fixture.router.begin();
+        txn.put(bytes("a1"), bytes("va"));
+        fixture.router.commit(txn);
+        for (int i = 0; i < rounds; i++) {
+            assertThat(fixture.router.recover().committed()).isZero();
+        }
+        assertThat(fixture.r1.latestValue(bytes("a1"))).isEqualTo(bytes("va"));
+        fixture.close();
+    }
+
     private Fixture fixture() throws Exception {
         MvccStorageEngine r1 = new MvccStorageEngine(MemTable.create());
         LockTable l1 = new LockTable();

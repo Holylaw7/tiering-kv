@@ -228,6 +228,60 @@ class LockResolverTest {
         fixture.close();
     }
 
+    @ParameterizedTest(name = "cache ttl {0}")
+    @ValueSource(longs = {5, 10, 50, 100})
+    void parameterizedCacheTtl(long ttlMillis) throws Exception {
+        TxnStatusCache cache = new TxnStatusCache(ttlMillis);
+        long now = System.currentTimeMillis();
+        cache.set("t1", TxnStatusCache.Status.COMMITTED, now);
+        assertThat(cache.get("t1", now + ttlMillis / 2))
+                .isEqualTo(TxnStatusCache.Status.COMMITTED);
+        assertThat(cache.get("t1", now + ttlMillis + 10)).isNull();
+    }
+
+    @ParameterizedTest(name = "orphans {0}")
+    @ValueSource(ints = {1, 2, 4, 8})
+    void parameterizedOrphanResolve(int orphanCount) throws Exception {
+        Fixture fixture = fixture();
+        for (int i = 0; i < orphanCount; i++) {
+            fixture.prewrite("t" + i, "k" + i, "v" + i);
+        }
+        LockResolver resolver = new LockResolver(fixture.metadata,
+                fixture.regionsById(), fixture.hasLock(),
+                new TxnStatusCache(1000));
+        for (int i = 0; i < orphanCount; i++) {
+            assertThat(resolver.resolve("t" + i, bytes("k" + i), 1)
+                    .resolution()).isEqualTo(
+                    LockResolver.Resolution.ROLLED_BACK);
+        }
+        assertThat(fixture.locks1.size()).isZero();
+        fixture.close();
+    }
+
+    @ParameterizedTest(name = "state {0}")
+    @ValueSource(ints = {0, 1, 2})
+    void parameterizedPrimaryStates(int state) throws Exception {
+        Fixture fixture = fixture();
+        fixture.prewrite("t1", "a1", "va");
+        fixture.metadata.register("t1", bytes("a1"), 1,
+                Map.of("r1", List.of(mut("a1", "va", false)))).join();
+        if (state >= 1) {
+            fixture.metadata.prepare("t1", 9).join();
+        }
+        if (state >= 2) {
+            fixture.metadata.commit("t1", 9).join();
+        }
+        LockResolver resolver = new LockResolver(fixture.metadata,
+                fixture.regionsById(), fixture.hasLock(),
+                new TxnStatusCache(1000));
+        LockResolver.Resolution expected = state == 0
+                ? LockResolver.Resolution.ROLLED_BACK
+                : LockResolver.Resolution.COMMITTED;
+        assertThat(resolver.resolve("t1", bytes("a1"), 1).resolution())
+                .isEqualTo(expected);
+        fixture.close();
+    }
+
     private Fixture fixture() throws Exception {
         MvccStorageEngine r1 = new MvccStorageEngine(MemTable.create());
         LockTable l1 = new LockTable();
