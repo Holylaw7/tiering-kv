@@ -20,10 +20,13 @@ public final class CommandPermissionGuard {
     }
 
     public static boolean allows(Role role, String command) {
-        return role.allows(required(command));
+        return role != null && role.allows(required(command));
     }
 
     public static void require(Role role, String command) {
+        if (role == null) {
+            throw new SecurityException("unauthenticated");
+        }
         Permission permission = required(command);
         if (!role.allows(permission)) {
             throw new SecurityException(

@@ -27,8 +27,10 @@ public final class VectorStore {
     public List<ScoredEmbedding> search(float[] query, int topK) {
         List<ScoredEmbedding> results = new ArrayList<>();
         for (Embedding embedding : embeddings.values()) {
-            results.add(new ScoredEmbedding(embedding.id(),
-                    cosine(query, embedding.values())));
+            double score = cosine(query, embedding.values());
+            if (score != 0.0) {
+                results.add(new ScoredEmbedding(embedding.id(), score));
+            }
         }
         results.sort(Comparator.comparingDouble(
                 ScoredEmbedding::score).reversed());

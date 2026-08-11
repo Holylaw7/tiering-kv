@@ -30,11 +30,13 @@ public final class SqlParser {
                     rest = rest.substring(2).trim();
                     startKey = quoted(rest);
                     rest = afterQuoted(rest);
-                    rest = expectAnd(rest);
-                    if (rest.startsWith("key <")) {
-                        rest = rest.substring("key <".length()).trim();
-                        endKey = quoted(rest);
-                        rest = afterQuoted(rest);
+                    if (rest.startsWith("and")) {
+                        rest = rest.substring(3).trim();
+                        if (rest.startsWith("key <")) {
+                            rest = rest.substring("key <".length()).trim();
+                            endKey = quoted(rest);
+                            rest = afterQuoted(rest);
+                        }
                     }
                 } else {
                     throw new IllegalArgumentException(
