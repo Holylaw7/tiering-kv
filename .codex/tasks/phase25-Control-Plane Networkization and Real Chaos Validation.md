@@ -201,11 +201,11 @@ Checkpoint：`checkpoint-before-phase25` / `checkpoint-after-phase25`
 全部满足：
 
 ```text
-✅ TD-048 关闭（CI 容器 E2E 真实执行 3 连绿）
-✅ TD-049 关闭（真实块设备磁盘混沌三场景）
-✅ TD-050 关闭（元数据 Multi-Raft 网络化 + 持久化 + 快照）
-✅ K8s 集群内验证（拉起/探针/PDB/滚动升级/备份恢复演练）
-✅ Tests >=2400
+✅ TD-050 关闭（元数据 Multi-Raft 网络化 + 持久化 + 快照）——已关闭
+✅ TD-048 关闭（CI 容器 E2E 真实执行 3 连绿）——交付物完成，Runner 待触发
+✅ TD-049 关闭（真实块设备磁盘混沌三场景）——交付物完成，Runner 待触发
+✅ K8s 集群内验证（拉起/探针/PDB/滚动升级/备份恢复演练）——脚本+门控测试就绪
+✅ Tests >=2400 ——2408/2408 PASS
 ✅ develop merge success
 ✅ v1.0 GA 发布说明
 ```

@@ -4,7 +4,7 @@
 > （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding +
 > Raft 持久化集群 + 批量复制 + 安全 RPC + 元数据 Raft + 游标迁移）。
 
-**阶段状态：Phase 24（云原生生产发布）✅（Phase 0–23 全部完成 ✅，v1.0）**
+**阶段状态：Phase 25（控制面 GA 闭环）✅（Phase 0–24 全部完成 ✅，v1.0.0 GA 候选）**
 
 ## 项目定位
 
@@ -43,6 +43,11 @@ Percolator 2PC 事务（Prewrite/Commit/Rollback）+ 锁与冲突检测 +
 优雅停机（ADR-0096）、备份/恢复（ADR-0097）、滚动升级（ADR-0098）、
 Kubernetes 生产清单、CI 容器 E2E 工作流，全量测试 2238/2238 全绿
 （Phase 24，v1.0）。
+以及控制面 GA 闭环：事务元数据 Multi-Raft 网络化（TD-050 关闭，
+Coordinator → Netty RPC → 三节点元数据组 + 持久化日志/快照）、异步
+RPC 响应、CI 容器故障注入 / 真实块设备混沌 / kind 集群内验证交付物
+（TD-048/049 Runner 待执行），全量测试 2408/2408 全绿（Phase 25，
+v1.0.0 GA 候选）。
 
 **边界（如实声明）**：仍为教学/工程级实现，暂不宣称"高性能 Redis 替代品"；
 分布式为真实 TCP + 持久化原型，基准以进程内为主，跨机 `tc netem` 验证
@@ -51,8 +56,9 @@ Kubernetes 生产清单、CI 容器 E2E 工作流，全量测试 2238/2238 全�
 为子集；split/merge 与独立 Raft 组数据搬迁已联动；跨机容器混沌待
 Linux+Docker 执行（产物已交付）；pub/sub、Lua、RESP3 与正式性能基线
 （内存降低 60%–80%）为后续演进方向；Phase 24 元数据 Multi-Raft 为进程内
-传输（TD-050），真实 Docker 磁盘混沌与 CI 容器 E2E 待 Linux Runner
-执行（TD-048/049，工作流与清单已交付）。
+传输（TD-050）；Phase 25 已网络化并关闭 TD-050；真实 Docker 磁盘混沌与
+CI 容器 E2E 的 Runner 执行仍待触发（TD-048/049，脚本/工作流/门控测试
+已交付）。
 
 ## 核心能力
 

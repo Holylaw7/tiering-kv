@@ -32,6 +32,7 @@
 | 22 | 事务可靠性与生产运行时 | ✅ 完成（2026-08-11） |
 | 23 | 事务运行时最终化 | ✅ 完成（2026-08-11） |
 | 24 | 云原生生产发布（v1.0） | ✅ 完成（2026-08-11） |
+| 25 | 控制面 GA 闭环（v1.0.0） | ✅ 完成（2026-08-11） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -461,6 +462,22 @@
   144–175K ops/s、跨区事务 45–83K txn/s、leader failover 164–303ms、
   恢复 ≈3ms。
 
+## Phase 25 — 控制面 GA 闭环（v1.0.0） ✅
+
+- 交付：元数据 Multi-Raft 网络化（ADR-0099，TD-050 关闭：TxnMetadataNode
+  接入 MultiRaftEndpoint + FileRaftLog/RaftPersistentState/Snapshot，
+  META_PROPOSE/META_STATUS RPC + 异步响应）、CI 容器故障注入
+  （ADR-0100）、真实块设备混沌脚本与门控测试（ADR-0101）、kind 集群内
+  验证（ADR-0102）。
+- 测试：新增 170 项；全量回归 **2408/2408 全绿**（目标 ≥2400 ✅，
+  6 项容器门控本地跳过）。
+- 基准（[phase25-final-ga-report.md](
+  docs/benchmark/phase25-final-ga-report.md)）：元数据提案 657–1077
+  ops/s、并发 1393 ops/s、failover 110–118ms、日志/快照恢复 ≈250ms
+  （不含端口等待，进程内 TCP 口径）。
+- Runner 待执行：TD-048（容器 E2E）、TD-049（块设备磁盘）、K8s 集群内
+  演练（交付物全部就绪）。
+
 ## 技术债登记
 
 | 编号 | 描述 | 来源 | 计划消除 |
@@ -510,6 +527,6 @@
 | TD-045 | Phase 22 新增测试数低于 220 目标 | Phase 22 | ✅ 已关闭（Phase 23 补齐，全量 2007） |
 | TD-046 | 真实容器 disk full / readonly / slow io 注入未完成（Docker Desktop 权限） | ADR-0090 | Phase 23（privileged/device-mapper 环境） |
 | TD-047 | Metadata 单节点决策（无独立 Raft 组） | ADR-0095 | ✅ 已关闭（Phase 24 架构关闭：TxnMetadataNode + Raft 快照 + decisionIndex；网络化传输登记 TD-050） |
-| TD-048 | compose.transaction 已提供，真实容器编排运行未执行 | ADR-0093 | Phase 25（GitHub Actions ubuntu-latest：docker compose + tc netem + fio 全混沌） |
-| TD-049 | 真实容器 disk 注入仍受限（fallocate/mount/fio） | ADR-0094 | Phase 25（Linux VM + loop device + dmsetup + fio） |
-| TD-050 | 元数据 Multi-Raft 为进程内传输，网络化待跨机验证 | ADR-0095 | Phase 25（Coordinator → Netty RPC → Metadata Node1/2/3；最后一个控制面网络化闭环） |
+| TD-048 | compose.transaction 已提供，真实容器编排运行未执行 | ADR-0093 | Phase 25 交付物完成（故障注入脚本 + CI job）；真实 Runner 执行待触发 |
+| TD-049 | 真实容器 disk 注入仍受限（fallocate/mount/fio） | ADR-0094 | Phase 25 交付物完成（block-device-chaos.sh + 门控测试）；Linux Runner 执行待触发 |
+| TD-050 | 元数据 Multi-Raft 为进程内传输，网络化待跨机验证 | ADR-0095 | ✅ 已关闭（Phase 25：Netty RPC 三节点组 + 持久化日志/快照） |

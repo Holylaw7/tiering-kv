@@ -34,6 +34,8 @@ public final class MultiRaftEndpoint implements AutoCloseable {
     private final RpcClient client;
     private final Map<String, RaftNode> localGroups = new ConcurrentHashMap<>();
     private final Map<String, TxnRpcHandler> txnHandlers = new ConcurrentHashMap<>();
+    private final Map<String, ProposeHandler> proposeHandlers =
+            new ConcurrentHashMap<>();
 
     public MultiRaftEndpoint(String selfId, int port,
                              Map<String, InetSocketAddress> addresses) {
@@ -48,6 +50,7 @@ public final class MultiRaftEndpoint implements AutoCloseable {
         this.server = new RpcServer(port, security);
         this.client = new RpcClient(security);
         this.server.handler(this::handle);
+        this.server.asyncHandler(this::handleAsync);
     }
 
     public void start() throws InterruptedException {
@@ -79,6 +82,20 @@ public final class MultiRaftEndpoint implements AutoCloseable {
         txnHandlers.remove(groupId);
     }
 
+    /** 组提案处理器（ADR-0099）：提案经 leader 本地 propose → 复制 → 提交。 */
+    public interface ProposeHandler {
+        CompletableFuture<Long> propose(byte[] command);
+    }
+
+    public void registerProposeHandler(String groupId,
+                                       ProposeHandler handler) {
+        proposeHandlers.put(groupId, handler);
+    }
+
+    public void unregisterProposeHandler(String groupId) {
+        proposeHandlers.remove(groupId);
+    }
+
     public int groupCount() {
         return localGroups.size();
     }
@@ -92,6 +109,28 @@ public final class MultiRaftEndpoint implements AutoCloseable {
     public CompletableFuture<RpcFrame> callTxn(
             String target, String groupId, RpcMessageType type, byte[] payload) {
         return callFrame(target, groupId, type, payload);
+    }
+
+    /** 元数据提案 RPC（ADR-0099）：leader 返回决策索引，非 leader 重定向。 */
+    public CompletableFuture<Long> callPropose(
+            String target, String groupId, byte[] command) {
+        return callFrame(target, groupId, RpcMessageType.META_PROPOSE,
+                command).thenApply(frame -> {
+            if (frame.type() == RpcMessageType.META_PROPOSE_RESPONSE) {
+                return MetaRaftRpc.decodeProposeResponse(frame.payload());
+            }
+            throw new MetaRaftRpc.NotLeaderException(
+                    new String(frame.payload(),
+                            StandardCharsets.UTF_8));
+        });
+    }
+
+    /** 元数据节点状态 RPC（ADR-0099）：leaderId / state / term。 */
+    public CompletableFuture<MetaRaftRpc.MetaRaftStatus> callMetaStatus(
+            String target, String groupId) {
+        return callFrame(target, groupId, RpcMessageType.META_STATUS,
+                new byte[0]).thenApply(frame ->
+                MetaRaftRpc.decodeStatus(frame.payload()));
     }
 
     private CompletableFuture<RpcFrame> callFrame(
@@ -147,9 +186,49 @@ public final class MultiRaftEndpoint implements AutoCloseable {
                 return new RpcFrame(frame.requestId(), RpcMessageType.TIMEOUT_NOW_RESPONSE,
                         RaftMessageCodec.encode(response));
             }
+            case META_STATUS -> {
+                MetaRaftRpc.MetaRaftStatus status =
+                        new MetaRaftRpc.MetaRaftStatus(node.leaderId(),
+                                node.state().name(), node.currentTerm());
+                return new RpcFrame(frame.requestId(),
+                        RpcMessageType.META_STATUS_RESPONSE,
+                        MetaRaftRpc.encodeStatus(status));
+            }
             default -> throw new IllegalArgumentException(
                     "unexpected frame type " + frame.type());
         }
+    }
+
+    /** 异步入口（ADR-0099）：META_PROPOSE 走异步，其余委托同步处理。 */
+    private CompletableFuture<RpcFrame> handleAsync(RpcFrame frame) {
+        if (frame.type() != RpcMessageType.META_PROPOSE) {
+            return CompletableFuture.completedFuture(handle(frame));
+        }
+        Envelope envelope = decodeEnvelope(frame.payload());
+        ProposeHandler proposeHandler = proposeHandlers.get(
+                envelope.groupId());
+        if (proposeHandler == null) {
+            return CompletableFuture.completedFuture(errorFrame(frame,
+                    new IllegalStateException("no propose handler for group "
+                            + envelope.groupId())));
+        }
+        return proposeHandler.propose(envelope.payload())
+                .handle((index, error) -> {
+                    if (error != null) {
+                        return errorFrame(frame, error);
+                    }
+                    return new RpcFrame(frame.requestId(),
+                            RpcMessageType.META_PROPOSE_RESPONSE,
+                            MetaRaftRpc.encodeProposeResponse(index));
+                });
+    }
+
+    private static RpcFrame errorFrame(RpcFrame request, Throwable error) {
+        String message = error == null ? "meta rpc failure"
+                : error.getMessage() == null
+                ? error.getClass().getSimpleName() : error.getMessage();
+        return new RpcFrame(request.requestId(), RpcMessageType.ERROR,
+                message.getBytes(StandardCharsets.UTF_8));
     }
 
     private static byte[] encodeEnvelope(String groupId, byte[] payload) {

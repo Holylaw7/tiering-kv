@@ -193,6 +193,75 @@ class BackupRestoreEdgeTest {
         closeEngines(engine, restored);
     }
 
+    @ParameterizedTest(name = "versions {0}")
+    @ValueSource(ints = {2, 4, 8})
+    void parameterizedVersionCounts(int versionCount) throws Exception {
+        MvccStorageEngine engine = engine();
+        for (int i = 0; i < versionCount; i++) {
+            engine.putVersion(bytes("k"), bytes("v" + i),
+                    i + 1, (i + 1) * 10, WriteType.PUT);
+        }
+        Path backup = dir.resolve("versions-" + versionCount);
+        BackupManager.backup(backup, new TransactionMetadataState(), engine);
+        MvccStorageEngine restored = restoreMvcc(backup);
+        assertThat(restored.latestValue(bytes("k")))
+                .isEqualTo(bytes("v" + (versionCount - 1)));
+        closeEngines(engine, restored);
+    }
+
+    @ParameterizedTest(name = "primary {0}")
+    @ValueSource(ints = {0, 512, 4096})
+    void parameterizedPrimarySizes(int size) throws Exception {
+        TransactionMetadataState state = new TransactionMetadataState();
+        state.apply(TxnMetaCommand.register("t1", new byte[size], 1,
+                Map.of("r1", List.of())));
+        Path backup = dir.resolve("primary-" + size);
+        BackupManager.backup(backup, state,
+                new MvccStorageEngine(MemTable.create()));
+        assertThat(RestoreManager.restoreMetadata(backup).get("t1")
+                .primary()).hasSize(size);
+    }
+
+    @ParameterizedTest(name = "lifecycle {0}")
+    @ValueSource(ints = {2, 10})
+    void parameterizedLifecycleCounts(int count) throws Exception {
+        TransactionMetadataState state = new TransactionMetadataState();
+        for (int i = 0; i < count; i++) {
+            state.apply(TxnMetaCommand.lifecycle("t" + i, i,
+                    TxnLifecycleState.ACTIVE.name(), 1000 + i));
+        }
+        Path backup = dir.resolve("lifecycles-" + count);
+        BackupManager.backup(backup, state,
+                new MvccStorageEngine(MemTable.create()));
+        assertThat(RestoreManager.restoreMetadata(backup)
+                .lifecycleSnapshot()).hasSize(count);
+    }
+
+    @Test
+    void emptyEngineRoundTrip() throws Exception {
+        Path backup = dir.resolve("empty-engine");
+        BackupManager.backup(backup, new TransactionMetadataState(),
+                new MvccStorageEngine(MemTable.create()));
+        MvccStorageEngine restored = restoreMvcc(backup);
+        assertThat(restored.latestValue(bytes("k"))).isNull();
+        closeEngines(restored);
+    }
+
+    @Test
+    void restoreIncrementalPreservesNewerVersions() throws Exception {
+        MvccStorageEngine engine = engine();
+        engine.putVersion(bytes("k"), bytes("v1"), 1, 10, WriteType.PUT);
+        Path backup = dir.resolve("incremental");
+        BackupManager.backup(backup, new TransactionMetadataState(), engine);
+        engine.putVersion(bytes("k"), bytes("v2"), 2, 20, WriteType.PUT);
+        MvccStorageEngine restored = io.tieringkv.mvcc.index
+                .PersistentMvccIndex.restoreIncremental(
+                        backup.resolve("mvcc.index"), engine.underlying());
+        assertThat(restored.latestValue(bytes("k")))
+                .isEqualTo(bytes("v2"));
+        closeEngines(engine, restored);
+    }
+
     private static MvccStorageEngine engine() {
         return new MvccStorageEngine(MemTable.create());
     }

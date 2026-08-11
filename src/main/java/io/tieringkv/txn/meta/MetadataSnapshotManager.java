@@ -6,6 +6,8 @@ import io.tieringkv.transaction.metadata.TransactionMetadataState;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.EOFException;
@@ -21,9 +23,25 @@ public final class MetadataSnapshotManager {
 
     public static void snapshot(Path file, TransactionMetadataState state)
             throws IOException {
-        try (OutputStream raw = Files.newOutputStream(file);
-             DataOutputStream out = new DataOutputStream(
-                     new BufferedOutputStream(raw))) {
+        Files.write(file, serialize(state));
+    }
+
+    public static TransactionMetadataState load(Path file)
+            throws IOException {
+        TransactionMetadataState state = new TransactionMetadataState();
+        if (!Files.exists(file)) {
+            return state;
+        }
+        loadInto(state, Files.readAllBytes(file));
+        return state;
+    }
+
+    /** 序列化为字节（ADR-0099）：供 Raft SnapshotManager 状态机快照复用。 */
+    public static byte[] serialize(TransactionMetadataState state)
+            throws IOException {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(
+                new BufferedOutputStream(bytes))) {
             Map<String, io.tieringkv.transaction.metadata.TxnMetaEntry>
                     entries = state.snapshot();
             out.writeInt(entries.size());
@@ -56,34 +74,39 @@ public final class MetadataSnapshotManager {
             }
             out.flush();
         }
+        return bytes.toByteArray();
     }
 
-    public static TransactionMetadataState load(Path file)
-            throws IOException {
-        TransactionMetadataState state = new TransactionMetadataState();
-        if (!Files.exists(file)) {
-            return state;
-        }
-        try (InputStream raw = Files.newInputStream(file);
+    /** 反序列化到既有状态（ADR-0099）：快照安装/重启恢复替换状态内容。 */
+    public static void loadInto(TransactionMetadataState state,
+                                byte[] payload) throws IOException {
+        TransactionMetadataState restored = new TransactionMetadataState();
+        try (InputStream raw = new ByteArrayInputStream(payload);
              DataInputStream in = new DataInputStream(
                      new BufferedInputStream(raw))) {
-            int count = in.readInt();
-            for (int i = 0; i < count; i++) {
-                int length = in.readInt();
-                byte[] payload = new byte[length];
-                in.readFully(payload);
-                state.apply(TxnMetaCodec.decode(payload));
-            }
-            int lifecycleCount = in.readInt();
-            for (int i = 0; i < lifecycleCount; i++) {
-                int length = in.readInt();
-                byte[] payload = new byte[length];
-                in.readFully(payload);
-                state.apply(TxnMetaCodec.decode(payload));
-            }
+            readAll(in, restored);
         } catch (EOFException ignored) {
             // 尾部截断容忍
         }
-        return state;
+        state.copyFrom(restored);
+    }
+
+    private static void readAll(DataInputStream in,
+                                TransactionMetadataState state)
+            throws IOException {
+        int count = in.readInt();
+        for (int i = 0; i < count; i++) {
+            int length = in.readInt();
+            byte[] payload = new byte[length];
+            in.readFully(payload);
+            state.apply(TxnMetaCodec.decode(payload));
+        }
+        int lifecycleCount = in.readInt();
+        for (int i = 0; i < lifecycleCount; i++) {
+            int length = in.readInt();
+            byte[] payload = new byte[length];
+            in.readFully(payload);
+            state.apply(TxnMetaCodec.decode(payload));
+        }
     }
 }

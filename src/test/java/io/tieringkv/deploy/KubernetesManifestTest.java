@@ -116,6 +116,154 @@ class KubernetesManifestTest {
                 .contains("tiering-kv-storage-2.tiering-kv-storage");
     }
 
+    @Test
+    void metadataContainerEnvSetsRoleAndDataDir() throws Exception {
+        Map<String, Object> statefulSet = find("StatefulSet.yaml",
+                "StatefulSet", "tiering-kv-meta");
+        List<Map<String, Object>> containers = containers(statefulSet);
+        assertThat(envValue(containers.get(0), "ROLE"))
+                .isEqualTo("metadata");
+        assertThat(envValue(containers.get(0), "DATA_DIR"))
+                .isEqualTo("/data");
+        assertThat(envValue(containers.get(0), "RPC_PORT"))
+                .isEqualTo("7300");
+    }
+
+    @Test
+    void storageContainerEnvSetsParticipantRole() throws Exception {
+        Map<String, Object> statefulSet = find("StatefulSet.yaml",
+                "StatefulSet", "tiering-kv-storage");
+        List<Map<String, Object>> containers = containers(statefulSet);
+        assertThat(envValue(containers.get(0), "ROLE"))
+                .isEqualTo("participant");
+        assertThat(envValue(containers.get(0), "RPC_PORT"))
+                .isEqualTo("7100");
+    }
+
+    @Test
+    void gatewayContainerEnvPointsToMetadataService() throws Exception {
+        Map<String, Object> deployment = find("Gateway.yaml",
+                "Deployment", "tiering-kv-gateway");
+        List<Map<String, Object>> containers = containers(deployment);
+        assertThat(envValue(containers.get(0), "ROLE"))
+                .isEqualTo("gateway");
+        assertThat(envValue(containers.get(0), "METADATA_SERVICE"))
+                .isEqualTo("tiering-kv-meta");
+        assertThat(envValue(containers.get(0), "GATEWAY_PORT"))
+                .isEqualTo("6379");
+    }
+
+    @Test
+    void bothStatefulSetsHavePvcTemplates() throws Exception {
+        for (String name : List.of("tiering-kv-meta",
+                "tiering-kv-storage")) {
+            Map<String, Object> statefulSet = find("StatefulSet.yaml",
+                    "StatefulSet", name);
+            assertThat(volumeClaimTemplates(statefulSet)).hasSize(1);
+            Map<String, Object> claim = volumeClaimTemplates(statefulSet)
+                    .get(0);
+            assertThat(metadata(claim).get("name")).isEqualTo("data");
+        }
+    }
+
+    @Test
+    void storagePdbAlsoKeepsQuorum() throws Exception {
+        Map<String, Object> pdb = find("PodDisruptionBudget.yaml",
+                "PodDisruptionBudget", "tiering-kv-storage-pdb");
+        assertThat(((Number) spec(pdb).get("minAvailable")).intValue())
+                .isEqualTo(2);
+    }
+
+    @Test
+    void gatewayDeploymentHasTwoReplicas() throws Exception {
+        Map<String, Object> deployment = find("Gateway.yaml",
+                "Deployment", "tiering-kv-gateway");
+        assertThat(replicas(deployment)).isEqualTo(2);
+    }
+
+    @Test
+    void startScriptSupportsAllRoles() throws Exception {
+        Map<String, Object> configMap = find("ConfigMap.yaml",
+                "ConfigMap", "tiering-kv-config");
+        String script = (String) data(configMap).get("start.sh");
+        for (String role : List.of("metadata", "participant",
+                "coordinator", "gateway")) {
+            assertThat(script).contains(role);
+        }
+    }
+
+    @Test
+    void statefulSetsGracefulTermination() throws Exception {
+        for (String name : List.of("tiering-kv-meta",
+                "tiering-kv-storage")) {
+            Map<String, Object> statefulSet = find("StatefulSet.yaml",
+                    "StatefulSet", name);
+            assertThat(terminationGracePeriodSeconds(statefulSet))
+                    .isEqualTo(60);
+        }
+    }
+
+    @Test
+    void gatewayGracefulTermination() throws Exception {
+        Map<String, Object> deployment = find("Gateway.yaml",
+                "Deployment", "tiering-kv-gateway");
+        assertThat(terminationGracePeriodSeconds(deployment))
+                .isEqualTo(30);
+    }
+
+    @Test
+    void serviceSelectorsMatchWorkloadTiers() throws Exception {
+        Map<String, Object> metaService = find("Service.yaml",
+                "Service", "tiering-kv-meta");
+        assertThat(selector(spec(metaService)))
+                .containsEntry("tier", "metadata");
+        Map<String, Object> gatewayService = find("Service.yaml",
+                "Service", "tiering-kv-gateway");
+        assertThat(selector(spec(gatewayService)))
+                .containsEntry("tier", "gateway");
+    }
+
+    @Test
+    void secretIsOpaqueType() throws Exception {
+        Map<String, Object> secret = find("Secret.yaml",
+                "Secret", "tiering-kv-secrets");
+        assertThat(secret.get("type")).isEqualTo("Opaque");
+    }
+
+    @Test
+    void statefulSetsDeclareResourceLimits() throws Exception {
+        for (String name : List.of("tiering-kv-meta",
+                "tiering-kv-storage")) {
+            Map<String, Object> statefulSet = find("StatefulSet.yaml",
+                    "StatefulSet", name);
+            Map<String, Object> resources = resources(
+                    containers(statefulSet).get(0));
+            assertThat(resources).containsKey("limits");
+            assertThat(resources).containsKey("requests");
+        }
+    }
+
+    @Test
+    void gatewayRegionsUseHeadlessDnsNames() throws Exception {
+        Map<String, Object> deployment = find("Gateway.yaml",
+                "Deployment", "tiering-kv-gateway");
+        String regions = envValue(containers(deployment).get(0),
+                "REGIONS");
+        assertThat(regions)
+                .contains("r1@tiering-kv-storage-0.tiering-kv-storage:7100")
+                .contains("r2@tiering-kv-storage-1.tiering-kv-storage:7100")
+                .contains("r3@tiering-kv-storage-2.tiering-kv-storage:7100");
+    }
+
+    @Test
+    void pdbFileContainsBothBudgets() throws Exception {
+        List<Map<String, Object>> docs = documents(
+                BASE.resolve("PodDisruptionBudget.yaml"));
+        assertThat(docs).hasSize(2);
+        assertThat(docs).allMatch(document ->
+                "PodDisruptionBudget".equals(document.get("kind")));
+    }
+
     private static int replicas(Map<String, Object> workload) {
         return ((Number) spec(workload).get("replicas")).intValue();
     }
@@ -180,5 +328,45 @@ class KubernetesManifestTest {
     @SuppressWarnings("unchecked")
     private static List<Map<String, Object>> env(Map<String, Object> container) {
         return (List<Map<String, Object>>) container.get("env");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> selector(Map<String, Object> spec) {
+        return (Map<String, Object>) spec.get("selector");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> podSpec(
+            Map<String, Object> workload) {
+        Map<String, Object> template = (Map<String, Object>)
+                spec(workload).get("template");
+        return (Map<String, Object>) template.get("spec");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> volumeClaimTemplates(
+            Map<String, Object> workload) {
+        return (List<Map<String, Object>>) spec(workload)
+                .get("volumeClaimTemplates");
+    }
+
+    private static long terminationGracePeriodSeconds(
+            Map<String, Object> workload) {
+        return ((Number) podSpec(workload)
+                .get("terminationGracePeriodSeconds")).longValue();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> resources(
+            Map<String, Object> container) {
+        return (Map<String, Object>) container.get("resources");
+    }
+
+    private static String envValue(Map<String, Object> container,
+                                   String name) {
+        return env(container).stream()
+                .filter(entry -> name.equals(entry.get("name")))
+                .map(entry -> (String) entry.get("value"))
+                .findFirst().orElse("");
     }
 }

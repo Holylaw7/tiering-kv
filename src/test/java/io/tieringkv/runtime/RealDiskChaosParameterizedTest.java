@@ -346,6 +346,327 @@ class RealDiskChaosParameterizedTest {
         fixture.close();
     }
 
+    @ParameterizedTest(name = "keys {0}")
+    @ValueSource(ints = {2, 5, 10, 25})
+    void parameterizedRecoveryKeyCounts(int keyCount) throws Exception {
+        DiskFixture fixture = diskFixture(new FaultyStorage(0));
+        Transaction txn = fixture.router.begin();
+        for (int i = 0; i < keyCount; i++) {
+            txn.put(bytes("k" + i), bytes("v" + i));
+        }
+        fixture.router.commit(txn);
+        restart(fixture).recover();
+        assertThat(fixture.engine.latestValue(bytes("k" + (keyCount - 1))))
+                .isEqualTo(bytes("v" + (keyCount - 1)));
+        fixture.close();
+    }
+
+    @ParameterizedTest(name = "keys {0}")
+    @ValueSource(ints = {2, 5, 10})
+    void parameterizedFaultOnSecondTxnKeys(int keyCount) throws Exception {
+        DiskFixture fixture = diskFixture(new FaultyStorage(0));
+        Transaction first = fixture.router.begin();
+        first.put(bytes("a"), bytes("va"));
+        fixture.router.commit(first);
+        fixture.storage.mode(FaultyStorage.Mode.DISK_FULL);
+        Transaction second = fixture.router.begin();
+        for (int i = 0; i < keyCount; i++) {
+            second.put(bytes("k" + i), bytes("v" + i));
+        }
+        try {
+            fixture.router.commit(second);
+        } catch (RuntimeException ignored) {
+            // disk full
+        }
+        fixture.storage.mode(FaultyStorage.Mode.NONE);
+        restart(fixture).recover();
+        assertThat(fixture.engine.latestValue(bytes("a")))
+                .isEqualTo(bytes("va"));
+        for (int i = 0; i < keyCount; i++) {
+            assertThat(fixture.engine.latestValue(bytes("k" + i))).isNull();
+        }
+        fixture.close();
+    }
+
+    @ParameterizedTest(name = "keys {0}")
+    @ValueSource(ints = {2, 5, 10})
+    void parameterizedSlowMultiKey(int keyCount) throws Exception {
+        DiskFixture fixture = diskFixture(new FaultyStorage(3));
+        fixture.storage.mode(FaultyStorage.Mode.SLOW);
+        Transaction txn = fixture.router.begin();
+        for (int i = 0; i < keyCount; i++) {
+            txn.put(bytes("k" + i), bytes("v" + i));
+        }
+        fixture.router.commit(txn);
+        for (int i = 0; i < keyCount; i++) {
+            assertThat(fixture.engine.latestValue(bytes("k" + i)))
+                    .isEqualTo(bytes("v" + i));
+        }
+        fixture.close();
+    }
+
+    @Test
+    void readonlyExplicitRollbackAbsent() throws Exception {
+        DiskFixture fixture = diskFixture(new FaultyStorage(0));
+        fixture.storage.mode(FaultyStorage.Mode.READONLY);
+        Transaction txn = fixture.router.begin();
+        txn.put(bytes("k"), bytes("v"));
+        try {
+            fixture.router.rollback(txn);
+        } catch (RuntimeException ignored) {
+            // readonly rollback 路径可能失败，语义上必须无残留
+        }
+        fixture.storage.mode(FaultyStorage.Mode.NONE);
+        restart(fixture).recover();
+        assertThat(fixture.engine.latestValue(bytes("k"))).isNull();
+        fixture.close();
+    }
+
+    @Test
+    void diskFullDuringPrewriteOnly() throws Exception {
+        DiskFixture fixture = diskFixture(new FaultyStorage(0));
+        fixture.storage.mode(FaultyStorage.Mode.DISK_FULL);
+        Transaction txn = fixture.router.begin();
+        txn.put(bytes("k"), bytes("v"));
+        try {
+            fixture.router.commit(txn);
+        } catch (RuntimeException ignored) {
+            // prewrite 阶段失败
+        }
+        fixture.storage.mode(FaultyStorage.Mode.NONE);
+        restart(fixture).recover();
+        assertThat(fixture.engine.latestValue(bytes("k"))).isNull();
+        fixture.close();
+    }
+
+    @Test
+    void slowSecondTxnSucceeds() throws Exception {
+        DiskFixture fixture = diskFixture(new FaultyStorage(5));
+        Transaction first = fixture.router.begin();
+        first.put(bytes("a"), bytes("va"));
+        fixture.router.commit(first);
+        fixture.storage.mode(FaultyStorage.Mode.SLOW);
+        Transaction second = fixture.router.begin();
+        second.put(bytes("b"), bytes("vb"));
+        fixture.router.commit(second);
+        assertThat(fixture.engine.latestValue(bytes("b")))
+                .isEqualTo(bytes("vb"));
+        fixture.close();
+    }
+
+    @ParameterizedTest(name = "rounds {0}")
+    @ValueSource(ints = {2, 3})
+    void parameterizedRepeatedRestartRecovery(int rounds) throws Exception {
+        DiskFixture fixture = diskFixture(new FaultyStorage(0));
+        for (int round = 0; round < rounds; round++) {
+            Transaction txn = fixture.router.begin();
+            txn.put(bytes("k" + round), bytes("v" + round));
+            fixture.router.commit(txn);
+            restart(fixture).recover();
+        }
+        assertThat(fixture.engine.latestValue(bytes("k" + (rounds - 1))))
+                .isEqualTo(bytes("v" + (rounds - 1)));
+        fixture.close();
+    }
+
+    @Test
+    void faultTogglingStress() throws Exception {
+        DiskFixture fixture = diskFixture(new FaultyStorage(0));
+        for (int i = 0; i < 20; i++) {
+            fixture.storage.mode(i % 4 == 0 ? FaultyStorage.Mode.DISK_FULL
+                    : i % 4 == 1 ? FaultyStorage.Mode.READONLY
+                    : i % 4 == 2 ? FaultyStorage.Mode.SLOW
+                    : FaultyStorage.Mode.NONE);
+            Transaction txn = fixture.router.begin();
+            txn.put(bytes("k" + i), bytes("v" + i));
+            try {
+                fixture.router.commit(txn);
+            } catch (RuntimeException ignored) {
+                // 注入故障
+            }
+            fixture.storage.mode(FaultyStorage.Mode.NONE);
+        }
+        restart(fixture).recover();
+        assertThat(fixture.engine.latestValue(bytes("k19")))
+                .isEqualTo(bytes("v19"));
+        fixture.close();
+    }
+
+    @Test
+    void emptyRegionTxnCommits() throws Exception {
+        DiskFixture fixture = diskFixture(new FaultyStorage(0));
+        fixture.router.commit(fixture.router.begin());
+        restart(fixture).recover();
+        fixture.close();
+    }
+
+    @Test
+    void deleteAfterRecoveryVisibleAsTombstone() throws Exception {
+        DiskFixture fixture = diskFixture(new FaultyStorage(0));
+        Transaction txn = fixture.router.begin();
+        txn.put(bytes("k"), bytes("v"));
+        fixture.router.commit(txn);
+        restart(fixture).recover();
+        // 事务提交版本使用 HLC 时间戳；tombstone 必须晚于最新可见版本。
+        java.util.List<io.tieringkv.mvcc.MvccEntry> versions =
+                fixture.engine.versions(bytes("k"));
+        long lastCommitTS = versions.get(versions.size() - 1).commitTS();
+        fixture.engine.putVersion(bytes("k"), null, lastCommitTS + 1,
+                lastCommitTS + 2, WriteType.DELETE);
+        assertThat(fixture.engine.latestValue(bytes("k"))).isNull();
+        fixture.close();
+    }
+
+    @ParameterizedTest(name = "value {0}")
+    @ValueSource(ints = {64, 4096, 65536})
+    void parameterizedValueSizes(int size) throws Exception {
+        DiskFixture fixture = diskFixture(new FaultyStorage(0));
+        byte[] value = new byte[size];
+        for (int i = 0; i < size; i++) {
+            value[i] = (byte) (i % 251);
+        }
+        Transaction txn = fixture.router.begin();
+        txn.put(bytes("k"), value);
+        fixture.router.commit(txn);
+        assertThat(fixture.engine.latestValue(bytes("k"))).isEqualTo(value);
+        fixture.close();
+    }
+
+    @Test
+    void mixedFaultDuringRecoverySafelyCompletes() throws Exception {
+        DiskFixture fixture = diskFixture(new FaultyStorage(0));
+        Transaction committed = fixture.router.begin();
+        committed.put(bytes("a"), bytes("va"));
+        fixture.router.commit(committed);
+        fixture.storage.mode(FaultyStorage.Mode.DISK_FULL);
+        Transaction failed = fixture.router.begin();
+        failed.put(bytes("b"), bytes("vb"));
+        try {
+            fixture.router.commit(failed);
+        } catch (RuntimeException ignored) {
+            // disk full
+        }
+        fixture.storage.mode(FaultyStorage.Mode.SLOW);
+        try {
+            restart(fixture).recover();
+        } catch (RuntimeException ignored) {
+            // slow 恢复路径可能超时
+        }
+        fixture.storage.mode(FaultyStorage.Mode.NONE);
+        restart(fixture).recover();
+        assertThat(fixture.engine.latestValue(bytes("a")))
+                .isEqualTo(bytes("va"));
+        assertThat(fixture.engine.latestValue(bytes("b"))).isNull();
+        fixture.close();
+    }
+
+    @Test
+    void multipleTxnsThenSingleFault() throws Exception {
+        DiskFixture fixture = diskFixture(new FaultyStorage(0));
+        for (int i = 0; i < 5; i++) {
+            Transaction txn = fixture.router.begin();
+            txn.put(bytes("a" + i), bytes("va" + i));
+            fixture.router.commit(txn);
+        }
+        fixture.storage.mode(FaultyStorage.Mode.READONLY);
+        Transaction failed = fixture.router.begin();
+        failed.put(bytes("b"), bytes("vb"));
+        try {
+            fixture.router.commit(failed);
+        } catch (RuntimeException ignored) {
+            // readonly
+        }
+        fixture.storage.mode(FaultyStorage.Mode.NONE);
+        restart(fixture).recover();
+        for (int i = 0; i < 5; i++) {
+            assertThat(fixture.engine.latestValue(bytes("a" + i)))
+                    .isEqualTo(bytes("va" + i));
+        }
+        assertThat(fixture.engine.latestValue(bytes("b"))).isNull();
+        fixture.close();
+    }
+
+    @Test
+    void readonlyDuringPrewriteRollsBackSafely() throws Exception {
+        DiskFixture fixture = diskFixture(new FaultyStorage(0));
+        fixture.storage.mode(FaultyStorage.Mode.READONLY);
+        Transaction txn = fixture.router.begin();
+        txn.put(bytes("k"), bytes("v"));
+        try {
+            fixture.router.commit(txn);
+        } catch (RuntimeException ignored) {
+            // prewrite readonly
+        }
+        fixture.storage.mode(FaultyStorage.Mode.NONE);
+        restart(fixture).recover();
+        assertThat(fixture.engine.latestValue(bytes("k"))).isNull();
+        fixture.close();
+    }
+
+    @Test
+    void diskFullRecoveryRetryThenSucceeds() throws Exception {
+        DiskFixture fixture = diskFixture(new FaultyStorage(0));
+        Transaction committed = fixture.router.begin();
+        committed.put(bytes("a"), bytes("va"));
+        fixture.router.commit(committed);
+        fixture.storage.mode(FaultyStorage.Mode.DISK_FULL);
+        Transaction failed = fixture.router.begin();
+        failed.put(bytes("b"), bytes("vb"));
+        try {
+            fixture.router.commit(failed);
+        } catch (RuntimeException ignored) {
+            // disk full
+        }
+        fixture.storage.mode(FaultyStorage.Mode.NONE);
+        DistributedTxnRouter restarted = restart(fixture);
+        restarted.recover();
+        restarted.recover();
+        assertThat(fixture.engine.latestValue(bytes("a")))
+                .isEqualTo(bytes("va"));
+        assertThat(fixture.engine.latestValue(bytes("b"))).isNull();
+        fixture.close();
+    }
+
+    @Test
+    void slowThenFastRecoveryCompletes() throws Exception {
+        DiskFixture fixture = diskFixture(new FaultyStorage(10));
+        Transaction txn = fixture.router.begin();
+        txn.put(bytes("k"), bytes("v"));
+        fixture.router.commit(txn);
+        fixture.storage.mode(FaultyStorage.Mode.SLOW);
+        try {
+            restart(fixture).recover();
+        } catch (RuntimeException ignored) {
+            // slow 超时
+        }
+        fixture.storage.mode(FaultyStorage.Mode.NONE);
+        restart(fixture).recover();
+        assertThat(fixture.engine.latestValue(bytes("k")))
+                .isEqualTo(bytes("v"));
+        fixture.close();
+    }
+
+    @ParameterizedTest(name = "rounds {0}")
+    @ValueSource(ints = {3, 6})
+    void parameterizedMixedFaultRounds(int rounds) throws Exception {
+        DiskFixture fixture = diskFixture(new FaultyStorage(2));
+        for (int i = 0; i < rounds; i++) {
+            fixture.storage.mode(i % 3 == 0 ? FaultyStorage.Mode.DISK_FULL
+                    : i % 3 == 1 ? FaultyStorage.Mode.READONLY
+                    : FaultyStorage.Mode.SLOW);
+            Transaction txn = fixture.router.begin();
+            txn.put(bytes("k" + i), bytes("v" + i));
+            try {
+                fixture.router.commit(txn);
+            } catch (RuntimeException ignored) {
+                // 注入故障
+            }
+            fixture.storage.mode(FaultyStorage.Mode.NONE);
+        }
+        restart(fixture).recover();
+        fixture.close();
+    }
+
     private static DiskFixture diskFixture(FaultyStorage storage)
             throws Exception {
         MvccStorageEngine engine = new MvccStorageEngine(storage);

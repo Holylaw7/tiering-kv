@@ -77,6 +77,14 @@ public final class TransactionMetadataState {
         return entries.size();
     }
 
+    /** 用另一状态替换内容（ADR-0099）：快照安装/恢复时整组替换。 */
+    public void copyFrom(TransactionMetadataState other) {
+        entries.clear();
+        entries.putAll(other.entries);
+        lifecycle.clear();
+        lifecycle.putAll(other.lifecycle);
+    }
+
     private void update(String txnId,
                         java.util.function.UnaryOperator<TxnMetaEntry> updater) {
         entries.computeIfPresent(txnId, (id, entry) -> updater.apply(entry));

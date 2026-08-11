@@ -160,24 +160,34 @@ loop/dmsetup）、TD-050（元数据 Multi-Raft 网络化：Coordinator → Nett
 RPC → Metadata Node1/2/3，最后一个控制面网络化闭环）；TD-047 已架构
 关闭（Phase 24，TxnMetadataNode + 快照 + decisionIndex）。
 
+Phase 25 已交付（v1.0.0 GA 候选）：元数据 Multi-Raft 网络化（ADR-0099，
+TD-050 关闭：TxnMetadataNode 接入 MultiRaftEndpoint + FileRaftLog/
+RaftPersistentState/Snapshot + META_PROPOSE/META_STATUS RPC + 异步响应）、
+容器混沌/块设备混沌/kind 集群内验证交付物（ADR-0100~0102）；
+新增 170 项测试，全量回归 **2408/2408 全绿**；基准：元数据提案
+657–1077 ops/s、并发 1393 ops/s、failover 110–118ms。
+
+当前剩余：TD-048/049 与 K8s 集群内演练的真实 Runner 执行待 GitHub
+Actions 触发（脚本/工作流/门控测试已就绪）。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 24（云原生生产发布）✅ 已完成（v1.0）**
-  （Phase 0–23 全部完成）；
-- 最近提交：Phase 24 云原生发布合并（详见 git log）；
+- 阶段：**Phase 25（控制面 GA 闭环）✅ 已完成（v1.0.0 GA 候选）**
+  （Phase 0–24 全部完成）；
+- 最近提交：Phase 25 控制面 GA 合并（详见 git log）；
 - 基线：develop 合并 Phase 24；分支策略：feature/* 合并入 develop，
   main 保持稳定；
-- 下一步：真实 CI Runner 容器 E2E 与磁盘混沌、元数据 Multi-Raft 网络化
-  （TD-048/049/050，等待用户指令）。
+- 下一步：触发 GitHub Actions 四 job（JVM/container/kind/block-device）
+  完成 TD-048/049 与 K8s 演练的真实执行记录（等待用户指令）。
 
-项目里程碑：**24 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
+项目里程碑：**25 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
 LFU + WAL + LSM/SSTable + Bloom + Compaction + Migration + mmap +
 BlockCache + Production Runtime + Raft 持久化 + TCP RPC + Snapshot +
 Slot 迁移 + 批量复制 + 安全 RPC + 元数据 Raft + 流式迁移 + 异步提案 +
 证书生命周期 + 混沌验证 + 集群可观测性 + Region + Multi-Raft + 零拷贝 +
 Placement + MVCC + 2PC 事务 + 生命周期 + 锁解析 + 元数据 Multi-Raft +
-健康探针 + 备份恢复 + 滚动升级 + K8s 清单），能力矩阵全 ✅。
+健康探针 + 备份恢复 + 滚动升级 + K8s 清单 + 元数据网络化），能力矩阵全 ✅。
 
 ## 3. 技术栈
 
