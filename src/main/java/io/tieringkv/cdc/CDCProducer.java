@@ -8,14 +8,19 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class CDCProducer {
 
     private final CdcLog log;
-    private final AtomicLong seq = new AtomicLong();
+    private final AtomicLong seq;
 
     public CDCProducer(Path logDir) throws IOException {
-        this.log = CdcLog.open(logDir);
+        this(CdcLog.open(logDir));
     }
 
     public CDCProducer(Path logDir, int maxRecords) throws IOException {
-        this.log = CdcLog.open(logDir, maxRecords);
+        this(CdcLog.open(logDir, maxRecords));
+    }
+
+    private CDCProducer(CdcLog log) {
+        this.log = log;
+        this.seq = new AtomicLong(log.watermark() + 1);
     }
 
     /** 同步分配 seq + 追加：并发 emit 时顺序保持。 */

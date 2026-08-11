@@ -5,6 +5,7 @@ import io.tieringkv.mvcc.WriteType;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.io.IOException;
 import java.util.concurrent.atomic.AtomicLong;
 
 /** MVCC 写入旁路记录器（ADR-0104）：已提交版本 → PITR 归档日志。 */
@@ -12,7 +13,7 @@ public final class MvccPitrRecorder {
 
     private final MvccStorageEngine engine;
     private final WALArchiveManager archive;
-    private final AtomicLong seq = new AtomicLong();
+    private final AtomicLong seq;
     private volatile String regionId = "r1";
     private volatile String txnId = "pitr";
 
@@ -20,6 +21,7 @@ public final class MvccPitrRecorder {
             throws IOException {
         this.engine = engine;
         this.archive = WALArchiveManager.open(archiveDir);
+        this.seq = new AtomicLong(archive.watermark() + 1);
     }
 
     /** 同步分配 seq + 追加：并发写者共享 recorder 时顺序保持。 */
