@@ -1,0 +1,13 @@
+# Phase 31 生产基准报告
+
+Phase 31 · 2026-08-11 · 进程内口径（全球多活跨地域待 CI/裸机）
+
+```text
+PHASE31-BENCH AUTORESHARD 1M-10M ops/s
+PHASE31-BENCH ACTIVE-WRITE 25K-200K ops/s
+PHASE31-BENCH SQL2PC 16.7K-167K txn/s
+PHASE31-BENCH DW-SEARCH 100/1000 ×100 ≈15-40ms
+PHASE31-BENCH CONFLICT-METRICS 10K 次 ≈38-41ms
+```
+
+说明：全球多活双地域写吞吐/冲突率/收敛时间待 Runner 真实执行。

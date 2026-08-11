@@ -210,18 +210,27 @@ Phase 30 已交付（v1.3.0）：动态重分片（ADR-0126）、向量分片迁
 当前剩余：负载驱动自动重分片、SQL 写 2PC 端到端、向量迁移双写联动、
 账单周期滚动（Phase 31）；跨地域 RTT/RTO/RPO 待 CI/裸机执行。
 
+Phase 31 已交付（v1.4.0）：负载驱动自动重分片（ADR-0132）、SQL 写 2PC
+端到端（ADR-0133）、向量双写迁移（ADR-0134）、全球 Active-Active
+（ADR-0135）、账单周期滚动/多云（ADR-0136）、企业控制台（ADR-0137）；
+新增 258 项测试，全量回归 **4000/4000 全绿**。
+
+当前剩余：SQL 2PC 真实接线、控制台 REST 服务、自动重分片并发迁移、
+全球多活网关冲突审计（Phase 32）；跨地域 RTT/冲突率/收敛时间待
+CI/裸机执行。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 30（动态重分片与全球运维）✅ 已完成（v1.3.0）**
-  （Phase 0–29 全部完成）；
-- 最近提交：Phase 30 重分片合并（详见 git log）；
+- 阶段：**Phase 31（自治重分片与全球多活）✅ 已完成（v1.4.0）**
+  （Phase 0–30 全部完成）；
+- 最近提交：Phase 31 全球多活合并（详见 git log）；
 - 基线：develop 合并 Phase 24；分支策略：feature/* 合并入 develop，
   main 保持稳定；
-- 下一步：v1.3.0 发布执行（release.yml）；负载驱动自动重分片、
-  SQL 写 2PC 端到端、向量迁移双写联动、账单周期滚动（Phase 31，
+- 下一步：v1.4.0 发布执行（release.yml）；SQL 2PC 真实接线、控制台
+  REST 服务、自动重分片并发迁移、全球多活网关冲突审计（Phase 32，
   等待用户指令）。
 
-项目里程碑：**30 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
+项目里程碑：**31 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
 LFU + WAL + LSM/SSTable + Bloom + Compaction + Migration + mmap +
 BlockCache + Production Runtime + Raft 持久化 + TCP RPC + Snapshot +
@@ -233,7 +242,8 @@ PITR + CDC + 企业安全 + Operator + CLI + 发布流水线 + 跨地域复制 +
 Geo 事务 + SQL/Vector/SaaS 原型 + 双向复制/CRDT + 容灾 + SQL 引擎 +
 HNSW + SaaS 多租户 + RPC 令牌 + 分布式 SQL + 向量分片 + 五中心全球读 +
 计量/市场 + 告警 + 动态重分片 + 向量迁移 + SQL 写事务 + 全球读水位 +
-账单导出 + 容量模型），能力矩阵全 ✅。
+账单导出 + 容量模型 + 自动重分片 + SQL 2PC + 向量双写 + 全球多活 +
+账单滚动 + 多云 + 控制台），能力矩阵全 ✅。
 
 ## 3. 技术栈
 

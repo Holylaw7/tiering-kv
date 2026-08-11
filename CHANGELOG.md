@@ -108,6 +108,14 @@
   - 查询优化与容量（Goal 7/8）：PredicatePushdown / QueryCache /
     CapacityPlanner；v1.3 发布流水线；
   - 测试：新增 271 项；全量回归 **3742/3742 全绿**（+6 门控跳过）。
+- Phase 31 自治重分片与全球多活：
+  - 自动重分片（ADR-0132）：LoadProbe / AutoReshardController（熔断）；
+  - SQL 写 2PC（ADR-0133）：SqlTxn2PcBridge；
+  - 向量双写（ADR-0134）：VectorDoubleWriteRouter；
+  - 全球 Active-Active（ADR-0135）：ActiveActivePipeline / ConflictMetrics；
+  - 账单滚动（ADR-0136）：BillingScheduler；多云部署/迁移；
+  - 企业控制台（ADR-0137）：ConsoleApi；v1.4 发布流水线；
+  - 测试：新增 258 项；全量回归 **4000/4000 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
