@@ -34,6 +34,7 @@
 | 24 | 云原生生产发布（v1.0） | ✅ 完成（2026-08-11） |
 | 25 | 控制面 GA 闭环（v1.0.0） | ✅ 完成（2026-08-11） |
 | 26 | v1 发布冻结与企业就绪 | ✅ 完成（2026-08-11） |
+| 27 | 跨地域复制与企业集成 | ✅ 完成（2026-08-11） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -491,6 +492,18 @@
   docs/benchmark/v1-final-production-report.md)）：PITR append
   2.7–3.2K ops/s、CDC append 5.9–6.5K ops/s、PITR restore 21–38ms、
   Security 1–10M ops/s、Operator plan 1–5M ops/s（进程内口径）。
+
+## Phase 27 — 跨地域复制与企业集成 ✅
+
+- 交付：Multi-Region Replication（ADR-0108）、Geo Distributed
+  Transaction（ADR-0109）、RBAC 网关/RPC 接线（ADR-0110）、PITR 保留
+  策略（ADR-0111）、CDC 多消费者组（ADR-0112）、SQL/Vector/SaaS 探索
+  原型（ADR-0113）。
+- 测试：新增 264 项；全量回归 **2965/2965 全绿**（目标 ≥2950 ✅）。
+- 基准（[phase27-report.md](docs/benchmark/phase27-report.md)）：
+  SYNC 复制 100–250K ops/s、RBAC 1–10M ops/s、SQL 点查 0.36–0.5M、
+  Vector topK 5.5–14.5K ops/s（进程内口径）。
+- 后续：双向复制/CRDT、完整 SQL、HNSW 生产化、SaaS 多租户（Phase 28+）。
 
 ## 技术债登记
 

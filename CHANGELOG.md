@@ -65,6 +65,17 @@
     TieringKVController + CRD；
   - CLI 与发布：tierctl（七命令）+ release.yml + release-notes.sh；
   - 测试：新增 293 项；全量回归 **2701/2701 全绿**（+6 门控跳过）。
+- Phase 27 跨地域复制与企业集成：
+  - Multi-Region Replication（ADR-0108）：ReplicationPipeline /
+    ReplicaState / LagTracker / ConflictDetector；
+  - Geo 事务（ADR-0109）：GeoDecisionLog / GeoRegionTxnClient /
+    GeoTransactionCoordinator；
+  - RBAC 接线（ADR-0110）：GatewayAuthSession / CommandPermissionGuard /
+    RpcPermissionGuard；
+  - PITR 保留（ADR-0111）：RetentionPolicy / ArchiveLifecycleManager；
+  - CDC 多组（ADR-0112）：ConsumerGroup / CDCConsumerRegistry；
+  - 探索原型（ADR-0113）：sql / vector / saas；
+  - 测试：新增 264 项；全量回归 **2965/2965 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
