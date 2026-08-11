@@ -4,7 +4,7 @@
 > （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding +
 > Raft 持久化集群 + 批量复制 + 安全 RPC + 元数据 Raft + 游标迁移）。
 
-**阶段状态：Phase 26（v1 发布冻结与企业就绪）✅（Phase 0–25 全部完成 ✅，v1.0.0 发布候选）**
+**阶段状态：Phase 27（跨地域复制与企业集成）✅（Phase 0–26 全部完成 ✅，v1.1.0 方向）**
 
 ## 项目定位
 
@@ -52,6 +52,9 @@ v1.0.0 GA 候选）。
 恢复（ADR-0104）+ CDC exactly-once 流式变更（ADR-0105）+ 企业安全
 RBAC（ADR-0106）+ Kubernetes Operator（ADR-0107）+ tierctl CLI +
 v1 发布流水线；全量测试 2701/2701 全绿（Phase 26，v1.0.0 发布候选）。
+以及跨地域复制（async/sync + 冲突标记）+ Geo 分布式事务（决策日志恢复）
++ RBAC 网关/RPC 接线 + PITR 保留策略 + CDC 多消费者组 + SQL/Vector/
+SaaS 探索原型；全量测试 2965/2965 全绿（Phase 27，v1.1.0 方向）。
 
 **边界（如实声明）**：仍为教学/工程级实现，暂不宣称"高性能 Redis 替代品"；
 分布式为真实 TCP + 持久化原型，基准以进程内为主，跨机 `tc netem` 验证

@@ -178,17 +178,25 @@ Kubernetes Operator（ADR-0107）、tierctl CLI、v1 发布流水线；
 当前剩余：跨机 Production Benchmark 与发布流水线执行待 CI Runner；
 RBAC 网关/RPC 接线、PITR 保留策略、CDC fan-out 为 Phase 27。
 
+Phase 27 已交付（v1.1.0 方向）：Multi-Region Replication（ADR-0108）、
+Geo Distributed Transaction（ADR-0109）、RBAC 网关/RPC 接线（ADR-0110）、
+PITR 保留策略（ADR-0111）、CDC 多消费者组（ADR-0112）、SQL/Vector/SaaS
+探索原型（ADR-0113）；新增 264 项测试，全量回归 **2965/2965 全绿**。
+
+当前剩余：双向复制/CRDT、完整 SQL 引擎、HNSW 生产化、SaaS 多租户
+（Phase 28+）；跨机跨地域基准待 CI Runner。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 26（v1 发布冻结与企业就绪）✅ 已完成（v1.0.0 发布候选）**
-  （Phase 0–25 全部完成）；
-- 最近提交：Phase 26 v1 发布合并（详见 git log）；
+- 阶段：**Phase 27（跨地域复制与企业集成）✅ 已完成（v1.1.0 方向）**
+  （Phase 0–26 全部完成）；
+- 最近提交：Phase 27 跨地域合并（详见 git log）；
 - 基线：develop 合并 Phase 24；分支策略：feature/* 合并入 develop，
   main 保持稳定；
-- 下一步：触发 release.yml（v1.0.0-rc1）与 transaction-e2e 四 job；
-  RBAC 接入网关/RPC、PITR 保留策略、CDC fan-out（等待用户指令）。
+- 下一步：v1.1.0 冻结与发布；双向复制/CRDT、完整 SQL、HNSW 生产化、
+  SaaS 多租户（Phase 28，等待用户指令）。
 
-项目里程碑：**26 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
+项目里程碑：**27 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
 LFU + WAL + LSM/SSTable + Bloom + Compaction + Migration + mmap +
 BlockCache + Production Runtime + Raft 持久化 + TCP RPC + Snapshot +
@@ -196,7 +204,8 @@ Slot 迁移 + 批量复制 + 安全 RPC + 元数据 Raft + 流式迁移 + 异步
 证书生命周期 + 混沌验证 + 集群可观测性 + Region + Multi-Raft + 零拷贝 +
 Placement + MVCC + 2PC 事务 + 生命周期 + 锁解析 + 元数据 Multi-Raft +
 健康探针 + 备份恢复 + 滚动升级 + K8s 清单 + 元数据网络化 + 协议冻结 +
-PITR + CDC + 企业安全 + Operator + CLI + 发布流水线），能力矩阵全 ✅。
+PITR + CDC + 企业安全 + Operator + CLI + 发布流水线 + 跨地域复制 +
+Geo 事务 + SQL/Vector/SaaS 原型），能力矩阵全 ✅。
 
 ## 3. 技术栈
 

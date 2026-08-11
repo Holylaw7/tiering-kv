@@ -259,14 +259,14 @@ Checkpoint：`checkpoint-before-phase27` / `checkpoint-after-phase27`
 全部满足：
 
 ```text
-✅ Multi-Region Replication（async/sync 模式 + 冲突标记）
-✅ Geo Distributed Transaction（跨地域提交无丢失无重复）
-✅ RBAC 网关/RPC 接线（AUTH + 权限校验）
-✅ PITR 保留策略（安全水位删除）
-✅ CDC 多消费者组（组间进度隔离）
-✅ SQL/Vector/SaaS 探索原型与路线图
-✅ 单地域全量回归零回退（>=2701 保持，新增 >=250）
-✅ v1.1.0 路线图发布
+✅ Multi-Region Replication（async/sync 模式 + 冲突标记）——已完成（ADR-0108）
+✅ Geo Distributed Transaction（跨地域提交无丢失无重复）——已完成（ADR-0109）
+✅ RBAC 网关/RPC 接线（AUTH + 权限校验）——已完成（ADR-0110）
+✅ PITR 保留策略（安全水位删除）——已完成（ADR-0111）
+✅ CDC 多消费者组（组间进度隔离）——已完成（ADR-0112）
+✅ SQL/Vector/SaaS 探索原型与路线图——已完成（ADR-0113）
+✅ 单地域全量回归零回退——2965/2965 PASS（新增 264）
+✅ v1.1.0 路线图发布——已完成
 ```
 
 ## 11. 后续方向（Phase 28+，不在本阶段范围）
