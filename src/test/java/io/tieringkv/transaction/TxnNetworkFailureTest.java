@@ -18,6 +18,8 @@ import io.tieringkv.transaction.router.TxnTransport;
 import io.tieringkv.transaction.rpc.TxnMessages;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -566,6 +568,198 @@ class TxnNetworkFailureTest {
         assertThat(region.locks().check(bytes("k")).createdAtMillis())
                 .isEqualTo(before.createdAtMillis());
         region.close();
+    }
+
+    @Test
+    void duplicateRollbackAlready() {
+        Local region = region("r1");
+        region.client().prewrite(prewrite("t1", "k", "v")).join();
+        region.client().rollback(rollback("t1")).join();
+        TxnMessages.Response response = region.client().rollback(
+                rollback("t1")).join();
+        assertThat(response.status()).isEqualTo(TxnMessages.Status.ALREADY);
+        region.close();
+    }
+
+    @Test
+    void prewriteAfterCommitAlready() {
+        Local region = region("r1");
+        region.client().prewrite(prewrite("t1", "k", "v")).join();
+        region.client().commit(commit("t1", 2, "k", "v")).join();
+        TxnMessages.Response response = region.client().prewrite(
+                prewrite("t1", "k", "v")).join();
+        assertThat(response.status()).isEqualTo(TxnMessages.Status.ALREADY);
+        region.close();
+    }
+
+    @Test
+    void commitAfterRollbackConflict() {
+        Local region = region("r1");
+        region.client().prewrite(prewrite("t1", "k", "v")).join();
+        region.client().rollback(rollback("t1")).join();
+        TxnMessages.Response response = region.client().commit(
+                commit("t1", 2, "k", "v")).join();
+        assertThat(response.status()).isEqualTo(TxnMessages.Status.CONFLICT);
+        region.close();
+    }
+
+    @Test
+    void randomNetworkLossEventuallySucceeds() {
+        Local region = region("r1");
+        TxnParticipantClient lossy = new TxnParticipantClient("n1", "r1",
+                new LossyTransport(region.transport(), 10));
+        TxnMessages.Response response = lossy.prewrite(
+                prewrite("t1", "k", "v")).join();
+        assertThat(response.succeeded()).isTrue();
+        region.close();
+    }
+
+    @Test
+    void responseDecodeEmptyPayload() {
+        TxnMessages.Response response = io.tieringkv.transaction.rpc
+                .TxnRpcCodec.decodeResponse(new byte[0]);
+        assertThat(response.status()).isEqualTo(TxnMessages.Status.ERROR);
+    }
+
+    @Test
+    void prewriteManyMutations() {
+        Local region = region("r1");
+        List<TxnMessages.Mutation> mutations = new ArrayList<>();
+        for (int i = 0; i < 100; i++) {
+            mutations.add(mut("k" + i, "v" + i, false));
+        }
+        TxnMessages.Response response = region.client().prewrite(
+                new TxnMessages.Prewrite("t1", 1, bytes("k0"),
+                        mutations)).join();
+        assertThat(response.succeeded()).isTrue();
+        assertThat(region.locks().size()).isEqualTo(100);
+        region.close();
+    }
+
+    @Test
+    void routerBeginStateActive() throws Exception {
+        RouterFixture fixture = routerFixture();
+        Transaction txn = fixture.router.begin();
+        assertThat(txn.state()).isEqualTo(Transaction.State.ACTIVE);
+        fixture.close();
+    }
+
+    @Test
+    void routerRollbackWithoutMetadata() throws Exception {
+        Local r1 = region("r1");
+        TimestampOracle oracle = new TimestampOracle();
+        RegionTxnClient c1 = new RegionTxnClient("r1",
+                new TxnParticipantClient("n1", "r1", r1.transport()),
+                key -> true);
+        DistributedTxnRouter router = new DistributedTxnRouter(oracle,
+                key -> c1, List.of(c1), null, null);
+        Transaction txn = router.begin();
+        txn.put(bytes("k"), bytes("v"));
+        router.rollback(txn);
+        assertThat(txn.state()).isEqualTo(Transaction.State.ROLLED_BACK);
+        r1.close();
+    }
+
+    @Test
+    void routerCommitSingleRegionDelete() throws Exception {
+        RouterFixture fixture = routerFixture();
+        Transaction set = fixture.router.begin();
+        set.put(bytes("a1"), bytes("va"));
+        fixture.router.commit(set);
+        Transaction del = fixture.router.begin();
+        del.delete(bytes("a1"));
+        fixture.router.commit(del);
+        assertThat(fixture.r1.engine().latestValue(bytes("a1"))).isNull();
+        fixture.close();
+    }
+
+    @Test
+    void participantStateAfterDuplicateCommit() {
+        Local region = region("r1");
+        region.client().prewrite(prewrite("t1", "k", "v")).join();
+        region.client().commit(commit("t1", 2, "k", "v")).join();
+        region.client().commit(commit("t1", 2, "k", "v")).join();
+        assertThat(region.participant().state("t1"))
+                .isEqualTo(TxnMessages.ParticipantState.COMMITTED);
+        region.close();
+    }
+
+    @Test
+    void transportUnknownTargetSurfacesError() {
+        Local region = region("r1");
+        TxnParticipantClient unknown = new TxnParticipantClient("ghost",
+                "r1", new UnknownTarget());
+        assertThatThrownBy(() -> unknown.prewrite(
+                prewrite("t1", "k", "v")).join())
+                .hasRootCauseInstanceOf(IllegalArgumentException.class);
+        region.close();
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {1, 2, 3})
+    void parameterizedRetryBudget(int failures) {
+        Local region = region("r1");
+        TxnParticipantClient client = new TxnParticipantClient("n1", "r1",
+                new FailNTimes(region.transport(), failures));
+        TxnMessages.Response response = client.prewrite(
+                prewrite("t1", "k", "v")).join();
+        assertThat(response.succeeded()).isTrue();
+        region.close();
+    }
+
+    private static final class LossyTransport implements TxnTransport {
+        private final TxnTransport delegate;
+        private final int lossPercent;
+
+        private LossyTransport(TxnTransport delegate, int lossPercent) {
+            this.delegate = delegate;
+            this.lossPercent = lossPercent;
+        }
+
+        @Override
+        public CompletableFuture<io.tieringkv.cluster.rpc.RpcFrame> call(
+                String target, String regionId,
+                io.tieringkv.cluster.rpc.RpcMessageType type, byte[] payload) {
+            if (java.util.concurrent.ThreadLocalRandom.current()
+                    .nextInt(100) < lossPercent) {
+                return CompletableFuture.failedFuture(
+                        new IllegalStateException("packet loss"));
+            }
+            return delegate.call(target, regionId, type, payload);
+        }
+    }
+
+    private static final class UnknownTarget implements TxnTransport {
+        @Override
+        public CompletableFuture<io.tieringkv.cluster.rpc.RpcFrame> call(
+                String target, String regionId,
+                io.tieringkv.cluster.rpc.RpcMessageType type, byte[] payload) {
+            return CompletableFuture.failedFuture(
+                    new IllegalArgumentException("unknown peer"));
+        }
+    }
+
+    private static final class FailNTimes implements TxnTransport {
+        private final TxnTransport delegate;
+        private final int failCount;
+        private final java.util.concurrent.atomic.AtomicInteger attempts =
+                new java.util.concurrent.atomic.AtomicInteger();
+
+        private FailNTimes(TxnTransport delegate, int failCount) {
+            this.delegate = delegate;
+            this.failCount = failCount;
+        }
+
+        @Override
+        public CompletableFuture<io.tieringkv.cluster.rpc.RpcFrame> call(
+                String target, String regionId,
+                io.tieringkv.cluster.rpc.RpcMessageType type, byte[] payload) {
+            if (attempts.getAndIncrement() < failCount) {
+                return CompletableFuture.failedFuture(
+                        new IllegalStateException("not leader"));
+            }
+            return delegate.call(target, regionId, type, payload);
+        }
     }
 
     // ---------- harness ----------

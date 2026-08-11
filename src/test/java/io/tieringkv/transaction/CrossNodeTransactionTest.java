@@ -20,6 +20,8 @@ import io.tieringkv.transaction.rpc.TxnParticipantRpcHandler;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -258,6 +260,36 @@ class CrossNodeTransactionTest {
         txn.put(bytes("b1"), bytes("vb"));
         fixture.router.commit(txn);
         assertThat(fixture.metrics.snapshot().regionCount()).isEqualTo(2);
+    }
+
+    @ParameterizedTest(name = "keys {0}")
+    @ValueSource(ints = {1, 3, 5, 10, 20})
+    void parameterizedMultiKeyTcpCommit(int keyCount) {
+        Transaction txn = fixture.router.begin();
+        for (int i = 0; i < keyCount; i++) {
+            txn.put(bytes("a" + i), bytes("va" + i));
+            txn.put(bytes("b" + i), bytes("vb" + i));
+        }
+        fixture.router.commit(txn);
+        for (int i = 0; i < keyCount; i++) {
+            assertThat(fixture.r1.latestValue(bytes("a" + i)))
+                    .isEqualTo(bytes("va" + i));
+            assertThat(fixture.r2.latestValue(bytes("b" + i)))
+                    .isEqualTo(bytes("vb" + i));
+        }
+    }
+
+    @Test
+    void crossNodeRollbackCleansAllRegions() {
+        Transaction txn = fixture.router.begin();
+        txn.put(bytes("a1"), bytes("va"));
+        txn.put(bytes("b1"), bytes("vb"));
+        fixture.router.rollback(txn);
+        assertThat(txn.state()).isEqualTo(Transaction.State.ROLLED_BACK);
+        assertThat(fixture.r1.latestValue(bytes("a1"))).isNull();
+        assertThat(fixture.r2.latestValue(bytes("b1"))).isNull();
+        assertThat(fixture.locks1.size()).isZero();
+        assertThat(fixture.locks2.size()).isZero();
     }
 
     // ---------- helpers ----------
