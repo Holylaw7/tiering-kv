@@ -79,6 +79,15 @@ public final class MetricsExporter {
                 t.commitLatencyMs());
         gauge(sb, "txn_latency_ms", "transaction latency ms",
                 t.commitLatencyMs());
+        gauge(sb, "txn_prepare_latency_ms", "prepare latency ms",
+                t.prepareLatencyMs());
+        counter(sb, "txn_network_retry", "network retries",
+                t.networkRetry());
+        gauge(sb, "txn_lock_wait_ms", "lock wait ms", t.lockWaitMs());
+        gauge(sb, "txn_region_count", "participating regions",
+                t.regionCount());
+        gauge(sb, "txn_recovery_time_ms", "recovery time ms",
+                t.recoveryTimeMs());
         MvccMetricsRegistry.Snapshot v = mvcc.snapshot();
         gauge(sb, "mvcc_read_qps", "mvcc reads", v.reads());
         gauge(sb, "mvcc_write_qps", "mvcc writes", v.writes());
@@ -87,6 +96,10 @@ public final class MetricsExporter {
                 v.gcVersions());
         counter(sb, "mvcc_gc_deleted_versions", "gc deleted versions",
                 v.gcVersions());
+        counter(sb, "mvcc_compaction_versions", "compacted versions",
+                v.compactionVersions());
+        counter(sb, "mvcc_compaction_bytes", "compacted bytes",
+                v.compactionBytes());
         gauge(sb, "mvcc_safe_point", "gc safe point", v.safePoint());
         gauge(sb, "redis_txn_latency_ms", "redis auto txn latency ms",
                 g.transactionLatencyMs());

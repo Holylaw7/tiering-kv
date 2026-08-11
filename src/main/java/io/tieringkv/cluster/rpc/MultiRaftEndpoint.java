@@ -33,6 +33,7 @@ public final class MultiRaftEndpoint implements AutoCloseable {
     private final RpcServer server;
     private final RpcClient client;
     private final Map<String, RaftNode> localGroups = new ConcurrentHashMap<>();
+    private final Map<String, TxnRpcHandler> txnHandlers = new ConcurrentHashMap<>();
 
     public MultiRaftEndpoint(String selfId, int port,
                              Map<String, InetSocketAddress> addresses) {
@@ -69,12 +70,32 @@ public final class MultiRaftEndpoint implements AutoCloseable {
         localGroups.remove(groupId);
     }
 
+    /** 注册事务处理器（ADR-0083）：与 Raft 组共用单端口。 */
+    public void registerTxnHandler(String groupId, TxnRpcHandler handler) {
+        txnHandlers.put(groupId, handler);
+    }
+
+    public void unregisterTxnHandler(String groupId) {
+        txnHandlers.remove(groupId);
+    }
+
     public int groupCount() {
         return localGroups.size();
     }
 
     CompletableFuture<RpcFrame> call(String target, String groupId,
                                      RpcMessageType type, byte[] payload) {
+        return callFrame(target, groupId, type, payload);
+    }
+
+    /** 事务 RPC 调用（ADR-0083）：供事务客户端跨节点调用 participant。 */
+    public CompletableFuture<RpcFrame> callTxn(
+            String target, String groupId, RpcMessageType type, byte[] payload) {
+        return callFrame(target, groupId, type, payload);
+    }
+
+    private CompletableFuture<RpcFrame> callFrame(
+            String target, String groupId, RpcMessageType type, byte[] payload) {
         InetSocketAddress address = addresses.get(target);
         if (address == null) {
             return CompletableFuture.failedFuture(
@@ -87,6 +108,11 @@ public final class MultiRaftEndpoint implements AutoCloseable {
 
     private RpcFrame handle(RpcFrame frame) {
         Envelope envelope = decodeEnvelope(frame.payload());
+        TxnRpcHandler txnHandler = txnHandlers.get(envelope.groupId());
+        if (txnHandler != null && frame.type().txn()) {
+            return txnHandler.handle(frame, envelope.groupId(),
+                    envelope.payload());
+        }
         RaftNode node = localGroups.get(envelope.groupId());
         if (node == null) {
             throw new IllegalStateException("no raft group "

@@ -15,6 +15,11 @@ public final class TransactionMetricsRegistry {
     private final LongAdder recoveries = new LongAdder();
     private final LongAdder reads = new LongAdder();
     private final LongAdder commitLatencyNanos = new LongAdder();
+    private final LongAdder prepareLatencyNanos = new LongAdder();
+    private final LongAdder networkRetries = new LongAdder();
+    private final LongAdder lockWaitNanos = new LongAdder();
+    private final LongAdder recoveryTimeNanos = new LongAdder();
+    private final AtomicLong regionCount = new AtomicLong();
     private final AtomicLong active = new AtomicLong();
     private final AtomicLong lockCount = new AtomicLong();
 
@@ -51,6 +56,26 @@ public final class TransactionMetricsRegistry {
         reads.increment();
     }
 
+    public void recordPrepare(long latencyNanos) {
+        prepareLatencyNanos.add(latencyNanos);
+    }
+
+    public void recordNetworkRetry() {
+        networkRetries.increment();
+    }
+
+    public void recordLockWait(long latencyNanos) {
+        lockWaitNanos.add(latencyNanos);
+    }
+
+    public void recordRegionCount(int count) {
+        regionCount.set(count);
+    }
+
+    public void recordRecoveryTime(long latencyNanos) {
+        recoveryTimeNanos.add(latencyNanos);
+    }
+
     public void setLockCount(long count) {
         lockCount.set(count);
     }
@@ -61,7 +86,27 @@ public final class TransactionMetricsRegistry {
                 : commitLatencyNanos.sum() / (double) count / 1_000_000.0;
         return new Snapshot(begins.sum(), active.get(), commits.sum(),
                 rollbacks.sum(), conflicts.sum(), aborts.sum(),
-                recoveries.sum(), reads.sum(), lockCount.get(), avgMs);
+                recoveries.sum(), reads.sum(), lockCount.get(), avgMs,
+                prepareAvgMs(), networkRetries.sum(), lockWaitAvgMs(),
+                regionCount.get(), recoveryTimeAvgMs());
+    }
+
+    private double prepareAvgMs() {
+        long count = begins.sum();
+        return count == 0 ? 0
+                : prepareLatencyNanos.sum() / (double) count / 1_000_000.0;
+    }
+
+    private double lockWaitAvgMs() {
+        long count = begins.sum();
+        return count == 0 ? 0
+                : lockWaitNanos.sum() / (double) count / 1_000_000.0;
+    }
+
+    private double recoveryTimeAvgMs() {
+        long count = recoveries.sum();
+        return count == 0 ? 0
+                : recoveryTimeNanos.sum() / (double) count / 1_000_000.0;
     }
 
     public String sectionText() {
@@ -77,15 +122,25 @@ public final class TransactionMetricsRegistry {
                         + "recovery_txn:%d\r\n"
                         + "read_txn:%d\r\n"
                         + "lock_count:%d\r\n"
-                        + "txn_commit_latency_ms:%.3f\r\n",
+                        + "txn_commit_latency_ms:%.3f\r\n"
+                        + "txn_prepare_latency_ms:%.3f\r\n"
+                        + "txn_network_retry:%d\r\n"
+                        + "txn_lock_wait_ms:%.3f\r\n"
+                        + "txn_region_count:%d\r\n"
+                        + "txn_recovery_time_ms:%.3f\r\n",
                 s.beginTotal(), s.activeTxn(), s.committedTxn(), s.rollbackTxn(),
                 s.conflictTxn(), s.abortTxn(), s.recoveryTxn(), s.readTxn(),
-                s.lockCount(), s.commitLatencyMs());
+                s.lockCount(), s.commitLatencyMs(), s.prepareLatencyMs(),
+                s.networkRetry(), s.lockWaitMs(), s.regionCount(),
+                s.recoveryTimeMs());
     }
 
     public record Snapshot(long beginTotal, long activeTxn, long committedTxn,
                            long rollbackTxn, long conflictTxn, long abortTxn,
                            long recoveryTxn, long readTxn,
-                           long lockCount, double commitLatencyMs) {
+                           long lockCount, double commitLatencyMs,
+                           double prepareLatencyMs, long networkRetry,
+                           double lockWaitMs, long regionCount,
+                           double recoveryTimeMs) {
     }
 }

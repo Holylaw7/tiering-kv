@@ -11,6 +11,8 @@ public final class MvccMetricsRegistry {
     private final LongAdder writes = new LongAdder();
     private final LongAdder gcVersions = new LongAdder();
     private final LongAdder gcBytes = new LongAdder();
+    private final LongAdder compactionVersions = new LongAdder();
+    private final LongAdder compactionBytes = new LongAdder();
     private final AtomicLong versions = new AtomicLong();
     private volatile long safePoint = Long.MIN_VALUE;
 
@@ -35,9 +37,15 @@ public final class MvccMetricsRegistry {
         safePoint = ts;
     }
 
+    public void recordCompaction(long versions, long bytes) {
+        compactionVersions.add(versions);
+        compactionBytes.add(bytes);
+    }
+
     public Snapshot snapshot() {
         return new Snapshot(versions.get(), gcVersions.sum(), gcBytes.sum(),
-                safePoint, reads.sum(), writes.sum());
+                compactionVersions.sum(), compactionBytes.sum(), safePoint,
+                reads.sum(), writes.sum());
     }
 
     public String metricLines() {
@@ -48,13 +56,17 @@ public final class MvccMetricsRegistry {
                         + "mvcc_gc_deleted_versions:%d\r\n"
                         + "mvcc_gc_bytes:%d\r\n"
                         + "mvcc_safe_point:%d\r\n"
+                        + "mvcc_compaction_versions:%d\r\n"
+                        + "mvcc_compaction_bytes:%d\r\n"
                         + "mvcc_read_qps:%d\r\n"
                         + "mvcc_write_qps:%d\r\n",
                 s.versions(), s.gcVersions(), s.gcVersions(), s.gcBytes(),
-                s.safePoint(), s.reads(), s.writes());
+                s.safePoint(), s.compactionVersions(), s.compactionBytes(),
+                s.reads(), s.writes());
     }
 
     public record Snapshot(long versions, long gcVersions, long gcBytes,
+                           long compactionVersions, long compactionBytes,
                            long safePoint, long reads, long writes) {
     }
 }
