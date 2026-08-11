@@ -34,6 +34,32 @@ public final class PersistentMvccIndex {
         MvccIndexWriter.write(path, snapshot);
     }
 
+    /** 快照字节（ADR-0104）：PITR 检查点复用 v1 索引格式。 */
+    public static byte[] snapshotBytes(MvccStorageEngine engine)
+            throws IOException {
+        Path temp = java.nio.file.Files.createTempFile(
+                "mvcc-snapshot", ".idx");
+        try {
+            MvccIndexWriter.write(temp, snapshot(engine));
+            return java.nio.file.Files.readAllBytes(temp);
+        } finally {
+            java.nio.file.Files.deleteIfExists(temp);
+        }
+    }
+
+    /** 从字节恢复（ADR-0104）：PITR 时间线恢复入口。 */
+    public static MvccStorageEngine restoreBytes(
+            byte[] snapshot, StorageEngine storage) throws IOException {
+        Path temp = java.nio.file.Files.createTempFile(
+                "mvcc-restore", ".idx");
+        try {
+            java.nio.file.Files.write(temp, snapshot);
+            return restore(temp, storage);
+        } finally {
+            java.nio.file.Files.deleteIfExists(temp);
+        }
+    }
+
     public static MvccIndexSnapshot load(Path path) throws IOException {
         return MvccIndexReader.read(path);
     }
