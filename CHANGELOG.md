@@ -99,6 +99,15 @@
     ClusterTemplate；
   - 分布式告警（Goal 7）：AlertRule / AlertManager；v1.2 发布流水线；
   - 测试：新增 255 项；全量回归 **3471/3471 全绿**（+6 门控跳过）。
+- Phase 30 动态重分片与全球运维：
+  - 动态重分片（ADR-0126）：ShardRouter / ReshardPlanner / ShardMigration；
+  - 向量迁移（ADR-0127）：ShardMigrationExecutor；
+  - SQL 写事务（ADR-0128）：SqlTxnParser / SqlTxnExecutor；
+  - 全球读水位（ADR-0129）：GlobalReadRouter 水位提供者 + 陈旧度分位；
+  - 账单导出（ADR-0130）：Invoice / InvoiceExporter / BillingPeriod；
+  - 查询优化与容量（Goal 7/8）：PredicatePushdown / QueryCache /
+    CapacityPlanner；v1.3 发布流水线；
+  - 测试：新增 271 项；全量回归 **3742/3742 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
