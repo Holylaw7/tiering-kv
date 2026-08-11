@@ -27,15 +27,27 @@ public final class VectorStore {
     public List<ScoredEmbedding> search(float[] query, int topK) {
         List<ScoredEmbedding> results = new ArrayList<>();
         for (Embedding embedding : embeddings.values()) {
-            double score = cosine(query, embedding.values());
-            if (score != 0.0) {
-                results.add(new ScoredEmbedding(embedding.id(), score));
+            float[] values = embedding.values();
+            if (query.length == 0 || values.length == 0
+                    || isZero(values)) {
+                continue; // 空/全零向量不参与检索
             }
+            results.add(new ScoredEmbedding(embedding.id(),
+                    cosine(query, values)));
         }
         results.sort(Comparator.comparingDouble(
                 ScoredEmbedding::score).reversed());
         return results.size() > topK
                 ? List.copyOf(results.subList(0, topK)) : results;
+    }
+
+    private static boolean isZero(float[] values) {
+        for (float value : values) {
+            if (value != 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public static double cosine(float[] a, float[] b) {
