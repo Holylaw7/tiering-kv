@@ -348,6 +348,15 @@
   - 测试：新增 202 项；全量回归 1725/1725 全绿；
   - 基准（docs/benchmark/phase21-report.md）：单区 58.7–116.4K、
     多区 88.1–110.7K txn/s、恢复 0–0ms、leader 恢复 156–276ms。
+- Phase 22 事务可靠性与生产运行时：
+  - 决策排序（ADR-0087）：decisionIndex + Raft-first，恢复补完 COMMITTED；
+  - 生命周期（ADR-0088）：TTL/心跳/超时自动 abort（txn.ttl-seconds）；
+  - 锁解析（ADR-0089）：LockResolver + TxnStatusCache；
+  - 运行时（ADR-0090）：TCP 端到端 + participant 重启恢复；
+  - 指标：txn_expired/long_running/abort_reason/lock_total/resolve_total；
+  - 测试：新增 124 项（全量回归计数为准）；
+  - 基准（docs/benchmark/phase22-report.md）：SET 128–150K、
+    GET 3.9–25M、跨区 33.6–59.7K、恢复 0–15ms、锁解析 50–129ms。
 - Phase 9 评审处置：确认瓶颈分层（A 4.7M → B 230K → C 150K，瓶颈=协议/调度）；
   登记 TD-020（request→response 对象数优化）与 TD-021（JFR 验收指标）。
 - Phase 8 IO 优化：MmapSSTableReader（零拷贝块读）+ FileChannel baseline、

@@ -29,6 +29,7 @@
 | 19 | MVCC 与事务引擎 | ✅ 完成（2026-08-10） |
 | 20 | 事务生产化与存储优化 | ✅ 完成（2026-08-10） |
 | 21 | 分布式事务网络化与云生产 | ✅ 完成（2026-08-11） |
+| 22 | 事务可靠性与生产运行时 | ✅ 完成（2026-08-11） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -422,6 +423,17 @@
 - 混沌（[phase21-real-chaos-report.md](docs/testing/phase21-real-chaos-report.md)）：
   Docker 三节点 + netem/分区/kill -9 存活恢复；TD-044 登记 disk 混沌未执行。
 
+## Phase 22 — 事务可靠性与生产运行时 ✅
+
+- 交付：decisionIndex + Raft-first 决策排序（ADR-0087）、
+  TransactionLifecycleManager / TxnTimeoutScheduler / TxnHeartbeatManager
+  （ADR-0088）、LockResolver + TxnStatusCache（ADR-0089）、TCP 端到端
+  事务运行时（ADR-0090）、事务/锁指标升级；
+- 基准（[phase22-report.md](docs/benchmark/phase22-report.md)）：
+  SET 128–150K、GET 3.9–25M、跨区 33.6–59.7K、恢复 0–15ms、
+  锁解析 50–129ms；
+- 测试：新增以全量回归计数为准；全量回归 0 failures。
+
 ## 技术债登记
 
 | 编号 | 描述 | 来源 | 计划消除 |
@@ -467,4 +479,6 @@
 | TD-041 | MVCC GC 19–29MB/s（目标 >100）→ 批量删除路径 | ✅ 已关闭（Phase 20，107–285MB/s） |
 | TD-042 | Redis 网关未接 MVCC 自动事务化 | ✅ 已关闭（Phase 20，GET/SET/DEL/MGET/MSET） |
 | TD-043 | 事务/MVCC 未接入 Multi-Raft Region 网络路径，跨机事务验证受限 | ADR-0082 | 部分关闭（Phase 21 TCP 事务协议已覆盖；容器端到端待 Phase 22） |
-| TD-044 | 跨机 disk slow / disk full 混沌未执行 | ADR-0086 | Phase 22（IO 限流/ENOSPC 注入） |
+| TD-044 | 跨机 disk slow / disk full 混沌未执行 | ADR-0086 | 部分关闭（Phase 22 in-JVM 语义覆盖；真实注入受 Docker 权限限制） |
+| TD-045 | Phase 22 新增测试数低于 220 目标 | Phase 22 | Phase 23 参数化/等价场景补齐 |
+| TD-046 | 真实容器 disk full / readonly / slow io 注入未完成（Docker Desktop 权限） | ADR-0090 | Phase 23（privileged/device-mapper 环境） |

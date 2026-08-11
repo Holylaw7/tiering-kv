@@ -4,7 +4,7 @@
 > （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding +
 > Raft 持久化集群 + 批量复制 + 安全 RPC + 元数据 Raft + 游标迁移）。
 
-**阶段状态：Phase 21（分布式事务网络化与云生产）✅（Phase 0–20 全部完成 ✅）**
+**阶段状态：Phase 22（事务可靠性与生产运行时）✅（Phase 0–21 全部完成 ✅）**
 
 ## 项目定位
 
@@ -432,6 +432,24 @@ RaftNode
 - 文档：[基准](docs/benchmark/phase21-report.md) /
   [评审](docs/review/phase21-distributed-transaction-review.md) /
   [混沌](docs/testing/phase21-real-chaos-report.md)。
+
+## 事务可靠性与生产运行时（Phase 22）
+
+- **决策排序**（ADR-0087）：decisionIndex + Raft-first，消除本地日志先行
+  窗口；恢复覆盖元数据 COMMITTED 后 participant 未提交的崩溃窗口；
+- **生命周期**（ADR-0088）：TTL / max-duration / 心跳续约 / 超时自动
+  abort（txn.ttl-seconds / max-duration-seconds）；
+- **锁解析**（ADR-0089）：LockResolver + TxnStatusCache
+  （orphan / primary / secondary）；
+- **运行时**（ADR-0090）：TCP 端到端事务链路 + participant 重启恢复；
+- **指标**：txn_expired_total / long_running / abort_reason /
+  lock_total / lock_resolve_total / lock_wait_seconds；
+- **基准**：SET 128–150K、GET 3.9–25M、跨区 33.6–59.7K txn/s、
+  恢复 0–15ms、锁解析 50–129ms；
+- 文档：[基准](docs/benchmark/phase22-report.md) /
+  [评审](docs/review/phase22-transaction-reliability-review.md) /
+  [混沌](docs/testing/phase22-chaos-report.md) /
+  [部署](docs/deployment/phase22-runtime-deployment.md)。
 
 ## 技术栈
 
