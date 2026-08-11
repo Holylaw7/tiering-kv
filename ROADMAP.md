@@ -33,6 +33,7 @@
 | 23 | 事务运行时最终化 | ✅ 完成（2026-08-11） |
 | 24 | 云原生生产发布（v1.0） | ✅ 完成（2026-08-11） |
 | 25 | 控制面 GA 闭环（v1.0.0） | ✅ 完成（2026-08-11） |
+| 26 | v1 发布冻结与企业就绪 | ✅ 完成（2026-08-11） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -477,6 +478,19 @@
   （不含端口等待，进程内 TCP 口径）。
 - Runner 待执行：TD-048（容器 E2E）、TD-049（块设备磁盘）、K8s 集群内
   演练（交付物全部就绪）。
+
+## Phase 26 — v1 发布冻结与企业就绪 ✅
+
+- 交付：协议冻结（ADR-0103，RESP2/RPC v1/存储格式 v1 + 兼容矩阵）、
+  PITR（ADR-0104，WALArchive/Checkpoint/RestoreTimeline）、CDC
+  （ADR-0105，exactly-once checkpoint）、企业安全（ADR-0106，RBAC +
+  令牌生命周期）、Kubernetes Operator（ADR-0107，CRD + Planner/
+  Controller）、tierctl CLI、v1 发布流水线（release.yml）。
+- 测试：新增 293 项；全量回归 **2701/2701 全绿**（目标 ≥2700 ✅）。
+- 基准（[v1-final-production-report.md](
+  docs/benchmark/v1-final-production-report.md)）：PITR append
+  2.7–3.2K ops/s、CDC append 5.9–6.5K ops/s、PITR restore 21–38ms、
+  Security 1–10M ops/s、Operator plan 1–5M ops/s（进程内口径）。
 
 ## 技术债登记
 

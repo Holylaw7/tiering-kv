@@ -170,24 +170,33 @@ RaftPersistentState/Snapshot + META_PROPOSE/META_STATUS RPC + 异步响应）、
 当前剩余：TD-048/049 与 K8s 集群内演练的真实 Runner 执行待 GitHub
 Actions 触发（脚本/工作流/门控测试已就绪）。
 
+Phase 26 已交付（v1.0.0 发布候选）：v1 协议冻结（ADR-0103）、PITR
+（ADR-0104）、CDC exactly-once（ADR-0105）、企业安全 RBAC（ADR-0106）、
+Kubernetes Operator（ADR-0107）、tierctl CLI、v1 发布流水线；
+新增 293 项测试，全量回归 **2701/2701 全绿**。
+
+当前剩余：跨机 Production Benchmark 与发布流水线执行待 CI Runner；
+RBAC 网关/RPC 接线、PITR 保留策略、CDC fan-out 为 Phase 27。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 25（控制面 GA 闭环）✅ 已完成（v1.0.0 GA 候选）**
-  （Phase 0–24 全部完成）；
-- 最近提交：Phase 25 控制面 GA 合并（详见 git log）；
+- 阶段：**Phase 26（v1 发布冻结与企业就绪）✅ 已完成（v1.0.0 发布候选）**
+  （Phase 0–25 全部完成）；
+- 最近提交：Phase 26 v1 发布合并（详见 git log）；
 - 基线：develop 合并 Phase 24；分支策略：feature/* 合并入 develop，
   main 保持稳定；
-- 下一步：触发 GitHub Actions 四 job（JVM/container/kind/block-device）
-  完成 TD-048/049 与 K8s 演练的真实执行记录（等待用户指令）。
+- 下一步：触发 release.yml（v1.0.0-rc1）与 transaction-e2e 四 job；
+  RBAC 接入网关/RPC、PITR 保留策略、CDC fan-out（等待用户指令）。
 
-项目里程碑：**25 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
+项目里程碑：**26 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
 LFU + WAL + LSM/SSTable + Bloom + Compaction + Migration + mmap +
 BlockCache + Production Runtime + Raft 持久化 + TCP RPC + Snapshot +
 Slot 迁移 + 批量复制 + 安全 RPC + 元数据 Raft + 流式迁移 + 异步提案 +
 证书生命周期 + 混沌验证 + 集群可观测性 + Region + Multi-Raft + 零拷贝 +
 Placement + MVCC + 2PC 事务 + 生命周期 + 锁解析 + 元数据 Multi-Raft +
-健康探针 + 备份恢复 + 滚动升级 + K8s 清单 + 元数据网络化），能力矩阵全 ✅。
+健康探针 + 备份恢复 + 滚动升级 + K8s 清单 + 元数据网络化 + 协议冻结 +
+PITR + CDC + 企业安全 + Operator + CLI + 发布流水线），能力矩阵全 ✅。
 
 ## 3. 技术栈
 

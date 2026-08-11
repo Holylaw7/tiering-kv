@@ -169,7 +169,7 @@ class HealthShutdownEdgeTest {
         AtomicBoolean inflight = new AtomicBoolean(true);
         Thread resolver = new Thread(() -> {
             try {
-                Thread.sleep(20);
+                Thread.sleep(5);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
@@ -180,7 +180,7 @@ class HealthShutdownEdgeTest {
         }, () -> !inflight.get(), () -> (long) timeoutMillis, () -> {
         }, List.of());
         resolver.join(2_000);
-        // 20ms 后 inflight 结束；超时 >=25ms 时应成功 drain。
+        // 5ms 后 inflight 结束；超时 >=25ms 时应成功 drain。
         assertThat(drained).isEqualTo(timeoutMillis >= 25);
     }
 

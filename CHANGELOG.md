@@ -54,6 +54,17 @@
   - 测试：新增 170 项；全量回归 **2408/2408 全绿**（+6 容器门控本地跳过）；
   - 基准（docs/benchmark/phase25-final-ga-report.md）：元数据提案
     657–1077 ops/s、并发 1393 ops/s、failover 110–118ms。
+- Phase 26 v1 发布冻结与企业就绪：
+  - 协议冻结（ADR-0103）：ProtocolVersion + ProtocolCompatibilityTest；
+  - PITR（ADR-0104）：PitrWriteLog / WALArchiveManager / CheckpointManager /
+    RestoreTimeline / MvccPitrRecorder；
+  - CDC（ADR-0105）：ChangeEvent / CDCProducer / CDCConsumer /
+    CDCCheckpoint（exactly-once）；
+  - 安全（ADR-0106）：Permission / Role / CredentialManager；
+  - Operator（ADR-0107）：TieringKVClusterSpec / OperatorPlanner /
+    TieringKVController + CRD；
+  - CLI 与发布：tierctl（七命令）+ release.yml + release-notes.sh；
+  - 测试：新增 293 项；全量回归 **2701/2701 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
