@@ -561,6 +561,148 @@ class Phase38EdgeMatrixTest {
                         org.assertj.core.data.Offset.offset(1e-9));
     }
 
+    @ParameterizedTest(name = "delete {0}")
+    @ValueSource(ints = {1, 5, 10, 25, 50})
+    void stateStoreDeleteRounds(int rounds) {
+        RemoteStateStore store = new RemoteStateStore(dir);
+        for (int i = 0; i < rounds; i++) {
+            store.save("v" + i, snapshot("v" + i, i, 1, false, i),
+                    Map.of());
+        }
+        for (int i = 0; i < rounds; i++) {
+            store.delete("v" + i);
+            assertThat(store.load("v" + i)).isEmpty();
+        }
+    }
+
+    @ParameterizedTest(name = "reopen {0}")
+    @ValueSource(ints = {1, 5, 10, 25, 50})
+    void stateStoreReopenRounds(int rounds) {
+        RemoteStateStore store = new RemoteStateStore(dir);
+        for (int i = 0; i < rounds; i++) {
+            store.save("v1", snapshot("v1", i, 1, false, i),
+                    Map.of());
+            assertThat(new RemoteStateStore(dir).load("v1")
+                    .orElseThrow().value()).isEqualTo(i);
+        }
+    }
+
+    @ParameterizedTest(name = "explore {0}")
+    @ValueSource(doubles = {0.1, 0.3, 0.5, 0.7, 0.9})
+    void rlExplorationRates(double epsilon) {
+        ReinforcementAutonomy autonomy = new ReinforcementAutonomy(
+                0.1, epsilon, 10.0);
+        int explored = 0;
+        for (int i = 0; i < 200; i++) {
+            if (autonomy.chooseAction() != Action.MAINTAIN) {
+                explored++;
+            }
+        }
+        assertThat(explored).isBetween(0, 200);
+    }
+
+    @ParameterizedTest(name = "q {0}")
+    @ValueSource(doubles = {-5.0, -1.0, 0.0, 1.0, 5.0})
+    void rlQInitialBehavior(double reward) {
+        ReinforcementAutonomy autonomy = new ReinforcementAutonomy(
+                1.0, 0.0, 10.0);
+        autonomy.record(Action.MAINTAIN, reward);
+        assertThat(autonomy.q(Action.MAINTAIN)).isEqualTo(reward);
+    }
+
+    @ParameterizedTest(name = "views {0}")
+    @ValueSource(ints = {1, 10, 50, 100, 250})
+    void lifecycleSweepVolumes(int count) {
+        RemoteMaterializationManager manager = manager();
+        for (int i = 0; i < count; i++) {
+            manager.define(new RemoteDefinition("v" + i, "gcp-us",
+                    "aws-us", List.of(new CloudShard("d1",
+                            "aws-us", "m")), Aggregate.SUM));
+        }
+        List<String> expired = new MaterializedViewLifecycle()
+                .sweep(manager, 0,
+                        System.currentTimeMillis() + 1);
+        assertThat(expired).hasSize(count);
+    }
+
+    @ParameterizedTest(name = "ttl {0}")
+    @ValueSource(longs = {1, 100, 1000, 10_000, 100_000})
+    void lifecycleTtlMatrix(long ttl) {
+        MaterializedViewLifecycle lifecycle =
+                new MaterializedViewLifecycle();
+        RemoteSnapshot snapshot = snapshot("v1", 1, 1, false, 1000);
+        assertThat(lifecycle.expired(snapshot, ttl,
+                1000 + ttl)).isFalse();
+    }
+
+    @ParameterizedTest(name = "index {0}")
+    @ValueSource(ints = {0, 2, 7, 21, 99})
+    void signedAttestationIndexes(int index) {
+        byte[] key = "k".getBytes(StandardCharsets.UTF_8);
+        String prev = index == 0 ? "" : "prev";
+        var attestation = new AttestationChain.Attestation(index,
+                "GDPR", "v1", 0, prev,
+                AttestationChain.hash(index, "GDPR", "v1", 0, prev),
+                index);
+        var signed = SignedAttestation.sign(attestation, key);
+        assertThat(new SignatureVerifier().verify(signed, key))
+                .isTrue();
+    }
+
+    @ParameterizedTest(name = "tasks {0}")
+    @ValueSource(ints = {1, 10, 50, 100, 250})
+    void spotMigrationVolumes(int count) {
+        SpotMigrationPlanner planner = new SpotMigrationPlanner();
+        List<SpotOption> options = List.of(
+                new SpotOption("aws-us", 2, 0.5, 100, true),
+                new SpotOption("gcp-us", 3, 0.0, 100, true));
+        for (int i = 0; i < count; i++) {
+            assertThat(planner.plan("t" + i, "aws-us", options,
+                    new SpotTask("t" + i, "us", 10, false),
+                    policy())).isPresent();
+        }
+    }
+
+    @ParameterizedTest(name = "pairs {0}")
+    @ValueSource(ints = {1, 4, 9, 16, 25})
+    void riskScorePairMatrix(int pairs) {
+        IsolationPolicy policy = riskPolicy(pairs + 2, true);
+        for (int i = 0; i < pairs; i++) {
+            policy.allow("t" + i, "t" + (i + 1));
+        }
+        assertThat(new PolicyRiskScorer().score(policy).score())
+                .isBetween(0, 100);
+    }
+
+    @ParameterizedTest(name = "tenants {0}")
+    @ValueSource(ints = {4, 8, 16, 32, 64})
+    void riskDashboardScale(int count) {
+        IsolationPolicy policy = riskPolicy(count, true);
+        policy.allow("t0", "t1");
+        assertThat(new RiskDashboard().scoreByTenant(policy))
+                .hasSize(count);
+    }
+
+    @ParameterizedTest(name = "rounds {0}")
+    @ValueSource(ints = {1, 10, 50, 100, 200})
+    void signedTamperRounds(int rounds) {
+        byte[] key = "k".getBytes(StandardCharsets.UTF_8);
+        AttestationChain chain = new AttestationChain();
+        chain.append("GDPR", "v1", 0, 1);
+        var original = chain.attestations().get(0);
+        var signed = SignedAttestation.sign(original, key);
+        for (int i = 0; i < rounds; i++) {
+            var tampered = new AttestationChain.Attestation(
+                    original.index(), original.regulation(),
+                    original.versionId(), i + 1,
+                    original.prevHash(), original.hash(),
+                    original.timestampMillis());
+            assertThat(new SignatureVerifier().verify(
+                    new SignedAttestation.Signed(tampered,
+                            signed.signature()), key)).isFalse();
+        }
+    }
+
     private static RemoteSnapshot snapshot(String viewId,
                                            double value, long count,
                                            boolean stale,
