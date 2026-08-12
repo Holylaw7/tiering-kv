@@ -862,6 +862,100 @@ class Phase42EdgeMatrixTest {
         assertThat(service.resolvedTs()).isEqualTo(count - 1);
     }
 
+    @ParameterizedTest(name = "count {0}")
+    @ValueSource(ints = {1, 5, 10, 25, 50})
+    void leveledLiveTtlVolumes(int count) {
+        List<Entry> entries = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            entries.add(entry("k" + i, false,
+                    i % 2 == 0 ? 10 : 0));
+        }
+        assertThat(executor.summarize(entries, 100))
+                .hasSize(count / 2);
+    }
+
+    @ParameterizedTest(name = "count {0}")
+    @ValueSource(ints = {1, 5, 10, 25, 50})
+    void pessimisticReentrantVolumes(int count) {
+        PessimisticTransaction txn = new PessimisticTransaction(500);
+        txn.begin("t1");
+        for (int i = 0; i < count; i++) {
+            assertThat(txn.lock("k", "t1", 100, i)).isTrue();
+        }
+    }
+
+    @ParameterizedTest(name = "count {0}")
+    @ValueSource(ints = {1, 5, 10, 25, 50})
+    void asyncTwoPhaseOneVolumes(int count) {
+        AsyncCommitCoordinator coordinator =
+                new AsyncCommitCoordinator();
+        for (int i = 0; i < count; i++) {
+            assertThat(coordinator.commit("t" + i, 2).succeeded())
+                    .isTrue();
+        }
+    }
+
+    @ParameterizedTest(name = "count {0}")
+    @ValueSource(ints = {1, 5, 10, 25, 50})
+    void coprocessorAggregateThresholdVolumes(int count) {
+        CoprocessorExecutor executor = new CoprocessorExecutor();
+        for (int i = 0; i < count; i++) {
+            var request = new CoprocessorRequest(Operator.AGGREGATE,
+                    "a", "z", i, List.of());
+            assertThat(executor.execute(request, rows()))
+                    .hasSize(1);
+        }
+    }
+
+    @ParameterizedTest(name = "count {0}")
+    @ValueSource(ints = {1, 5, 10, 25, 50})
+    void pdCircuitToggleVolumes(int count) {
+        AutonomousPdScheduler scheduler = new AutonomousPdScheduler(
+                100);
+        for (int i = 0; i < count; i++) {
+            scheduler.openCircuit("x");
+            scheduler.resetCircuit();
+            assertThat(scheduler.circuitOpen()).isFalse();
+        }
+    }
+
+    @ParameterizedTest(name = "count {0}")
+    @ValueSource(ints = {1, 5, 10, 25, 50})
+    void topologyRemoveAllVolumes(int count) {
+        TopologyDiscovery discovery = new TopologyDiscovery(1000);
+        for (int i = 0; i < count; i++) {
+            discovery.heartbeat(new Heartbeat("n" + i,
+                    "r1", "az-1", 0), 500);
+        }
+        for (int i = 0; i < count; i++) {
+            discovery.remove("n" + i);
+        }
+        assertThat(discovery.size()).isZero();
+    }
+
+    @ParameterizedTest(name = "count {0}")
+    @ValueSource(ints = {1, 5, 10, 25, 50})
+    void resolvedTsSameVolumes(int count) {
+        ResolvedTimestampService service =
+                new ResolvedTimestampService();
+        service.advance(50);
+        for (int i = 0; i < count; i++) {
+            assertThat(service.advance(50)).isEqualTo(50);
+        }
+    }
+
+    @ParameterizedTest(name = "count {0}")
+    @ValueSource(ints = {1, 5, 10, 25, 50})
+    void leveledExpiredAllVolumes(int count) {
+        var plan = planner.planLevel(1000, 100, 64, 0);
+        List<Entry> entries = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            entries.add(entry("k" + i, false, 10));
+        }
+        assertThat(executor.execute(plan, entries, 100)
+                .deletedEntries()).isEqualTo(count);
+    }
+
     private static List<Row> rows() {
         return List.of(
                 new Row("a", 10),
