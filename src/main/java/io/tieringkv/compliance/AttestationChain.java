@@ -42,8 +42,8 @@ public final class AttestationChain {
     public AttestationChain() {
     }
 
-    /** 测试/高级用途：用给定证明列表构造链。 */
-    AttestationChain(List<Attestation> initial) {
+    /** 重建链：用给定证明列表构造（用于验证/审计恢复）。 */
+    public AttestationChain(List<Attestation> initial) {
         if (initial != null) {
             chain.addAll(initial);
         }
