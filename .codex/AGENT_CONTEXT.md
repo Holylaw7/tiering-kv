@@ -554,6 +554,19 @@ tiering-kv/
 | TD-041 | MVCC GC 19–29MB/s（目标 >100） | Phase 20 |
 | TD-042 | Redis 网关未接 MVCC 自动事务化 | Phase 20 |
 
+## 7.1 Phase 43 状态（v2.6.0 发布候选）
+
+- 分支：`feature/phase43-global-scale-production-baseline`；
+- 交付：门禁收敛 v9（ADR-0213）、跨区一阶段（ADR-0214，TD-079 关闭
+  方向）、多算子联合下推（ADR-0215，TD-080 关闭方向）、TSO 集群化
+  （ADR-0216）、自治 PD 与全球自治联动（ADR-0217）、生产基准 + 真实
+  凭据（ADR-0218，TD-076 关闭方向）、v2.6 冻结（ADR-0219）；
+- 测试：新增 ≥510；全量回归 ≥8867 全绿；
+- 关键修复：TSO restore 恢复语义（水位 + 分配游标双推进）；
+- 剩余：真实 Linux Runner / 跨机 / 跨地域门禁（Phase 44），
+  跨区一阶段规模化、Coprocessor JOIN/GROUP BY 下推、TSO 跨地域容灾、
+  自治 PD 全自动。
+
 ## 8. 会话启动清单
 
 1. `git status` + `git log --oneline -10`；

@@ -232,6 +232,24 @@
     TopologyDiscovery；
   - v2.5 冻结（ADR-0212）：release.yml + Phase42BenchmarkTest；
   - 测试：新增 502 项；全量回归 **8357/8357 全绿**（+6 门控跳过）。
+- Phase 43 全球规模与生产基线收敛（v2.6.0）：
+  - 门禁收敛 v9（ADR-0213）：GateConvergenceV9 收敛表注册表 +
+    GateConvergenceV9Test；
+  - 跨区一阶段提交（ADR-0214，TD-079 关闭方向）：CrossRegionOnePhaseCommit
+    （主副本资格 → 一阶段 / 回退 2PC）；
+  - Coprocessor 多算子联合下推（ADR-0215，TD-080 关闭方向）：
+    CompoundCoprocessorRequest + executeCompound（FILTER → PROJECT →
+    AGGREGATE）；
+  - TSO 集群化（ADR-0216）：TsoService（批量分配 + 单调 + 恢复不回退，
+    恢复推进分配游标越过水位）；
+  - 自治 PD 与全球自治联动（ADR-0217）：GlobalAutonomyPdIntegration
+    （拓扑变化 → 计划 → 政策/地域/AZ 护栏 → 回滚 + 审计）；
+  - 生产基准 + 真实凭据（ADR-0218）：Phase43ProductionBaselineTest
+    （A/B/C 三级 + TiKV 对比口径）+ CredentialProbe（S3/Spot 三模式 +
+    降级登记，TD-076 关闭方向）；
+  - v2.6 冻结（ADR-0219）：release.yml v2.6.0 标签 +
+    Phase43BenchmarkTest/Baseline 接入；
+  - 测试：新增 ≥510 项；全量回归 **≥8867 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager

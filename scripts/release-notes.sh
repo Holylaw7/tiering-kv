@@ -30,3 +30,34 @@ Multi-Raft 分布式事务 KV。
 
 - 详见 docs/release/v1.0.0-release-notes.md
 EOF
+
+if [[ "${VERSION}" == v2.6.0* ]]; then
+  # 支持 v2.6.0-rc1 / v2.6.0 发布标签
+  cat <<EOF
+# Tiering-KV ${VERSION} Release Notes
+
+## 定位
+
+Enterprise-ready Distributed Database v2.6.0：Redis 协议兼容、LSM 冷热
+分层、Multi-Raft 分布式事务、全球规模调度与生产基线收敛。
+
+## 本版本能力
+
+- 跨区一阶段提交（ADR-0214，TD-079 关闭方向）
+- Coprocessor 多算子联合下推（ADR-0215，TD-080 关闭方向）
+- TSO 集群化（ADR-0216）
+- 自治 PD 与全球自治联动（ADR-0217）
+- 生产级 Benchmark 基线 + 真实凭据验证（ADR-0218，TD-076 关闭方向）
+- 真实执行门禁收敛 v9（ADR-0213）
+
+## 质量摘要
+
+- 新增测试 ≥510；全量回归 ≥8867 全绿
+- 基准：见 docs/benchmark/phase43-production-report.md
+- 门禁收敛表：docs/deployment/gate-convergence-v9.md
+
+## 已知限制
+
+- 详见 docs/release/v2.6.0-release-notes.md
+EOF
+fi
