@@ -61,3 +61,34 @@ Enterprise-ready Distributed Database v2.6.0：Redis 协议兼容、LSM 冷热
 - 详见 docs/release/v2.6.0-release-notes.md
 EOF
 fi
+
+if [[ "${VERSION}" == v2.7.0* ]]; then
+  # 支持 v2.7.0-rc1 / v2.7.0 发布标签
+  cat <<EOF
+# Tiering-KV ${VERSION} Release Notes
+
+## 定位
+
+Enterprise-ready Distributed Database v2.7.0：Redis 协议兼容、LSM 冷热
+分层、Multi-Raft 分布式事务、真实执行门禁闭环与全球规模最终化。
+
+## 本版本能力
+
+- 真实执行门禁收敛 v10（ADR-0220）
+- 全局一阶段提交规模化（ADR-0221，TD-079 规模化）
+- Coprocessor 全算子联合下推（ADR-0222，TD-080 规模化）
+- TSO 跨地域容灾（ADR-0223）
+- 自治 PD 全自动（ADR-0224）
+- TiKV 对比基线 + 真实凭据 v2（ADR-0225，TD-076 关闭方向）
+
+## 质量摘要
+
+- 新增测试 ≥520；全量回归 ≥9412 全绿
+- 基准：见 docs/benchmark/phase44-production-report.md
+- 门禁收敛表：docs/deployment/gate-convergence-v10.md
+
+## 已知限制
+
+- 详见 docs/release/v2.7.0-release-notes.md
+EOF
+fi
