@@ -378,6 +378,153 @@ class Phase36EdgeMatrixTest {
                 .isLessThanOrEqualTo(maxNodes);
     }
 
+    @ParameterizedTest(name = "tighten {0}")
+    @ValueSource(ints = {1, 2, 3, 5, 10})
+    void selfFenceTightenSteps(int step) {
+        SelfLearningFence fence = new SelfLearningFence(
+                new Params(20, 10, 8), bounds(), 1, step, 1, 1);
+        fence.recordFailure("x");
+        assertThat(fence.params().maxActionsPerDay())
+                .isEqualTo(20 - step);
+    }
+
+    @ParameterizedTest(name = "min {0}")
+    @ValueSource(ints = {1, 3, 5, 8, 10})
+    void selfFenceLowerBounds(int minActions) {
+        SelfLearningFence fence = new SelfLearningFence(
+                new Params(minActions, 5, 5),
+                new Bounds(minActions, 20, 1, 10, 1, 8),
+                1, 1, 1, 1);
+        for (int i = 0; i < 100; i++) {
+            fence.recordFailure("x");
+        }
+        assertThat(fence.params().maxActionsPerDay())
+                .isEqualTo(minActions);
+    }
+
+    @ParameterizedTest(name = "count {0}")
+    @ValueSource(ints = {1, 5, 10, 25, 50})
+    void cdcUpdateVolumes(int count) {
+        CdcMaterializedViewRefresher refresher = refresher();
+        MaterializedViewManager manager = manager();
+        for (int i = 0; i < count; i++) {
+            refresher.apply(manager, "v1", Aggregate.SUM,
+                    new CdcChange("k", ChangeType.UPDATE, i));
+        }
+        assertThat(manager.query("v1").value())
+                .isEqualTo(count - 1);
+    }
+
+    @ParameterizedTest(name = "count {0}")
+    @ValueSource(ints = {1, 5, 10, 25, 50})
+    void cdcDeleteVolumes(int count) {
+        CdcMaterializedViewRefresher refresher = refresher();
+        MaterializedViewManager manager = manager();
+        for (int i = 0; i < count; i++) {
+            refresher.apply(manager, "v1", Aggregate.SUM,
+                    new CdcChange("k" + i, ChangeType.INSERT, 1));
+        }
+        for (int i = 0; i < count; i++) {
+            refresher.apply(manager, "v1", Aggregate.SUM,
+                    new CdcChange("k" + i, ChangeType.DELETE, 0));
+        }
+        assertThat(manager.query("v1").value()).isZero();
+        assertThat(refresher.trackedKeys("v1")).isZero();
+    }
+
+    @ParameterizedTest(name = "rounds {0}")
+    @ValueSource(ints = {1, 5, 10, 25, 50})
+    void attestationAppendRounds(int rounds) {
+        AttestationChain chain = new AttestationChain();
+        for (int i = 0; i < rounds; i++) {
+            chain.append("GDPR", "v1", i % 3, i);
+        }
+        assertThat(chain.size()).isEqualTo(rounds);
+        assertThat(chain.verify()).isTrue();
+    }
+
+    @ParameterizedTest(name = "regulations {0}")
+    @ValueSource(ints = {1, 2, 3, 4, 5})
+    void attestationMixedRegulations(int count) {
+        AttestationChain chain = new AttestationChain();
+        for (int i = 0; i < count; i++) {
+            chain.append("R" + i, "v1", 0, i);
+        }
+        assertThat(chain.verify()).isTrue();
+    }
+
+    @ParameterizedTest(name = "residency {0}")
+    @ValueSource(strings = {"us", "eu", "cn", "default", "other"})
+    void cloudSchedulerResidencyMatrix(String residency) {
+        CloudCostScheduler scheduler = new CloudCostScheduler();
+        var decision = scheduler.schedule(
+                new ScheduleTask("t", residency, 10, false),
+                List.of(new CloudOption("aws-" + residency, 1,
+                        100, true)),
+                new DataResidencyPolicy(Map.of(
+                        "aws-" + residency, residency)));
+        assertThat(decision).isPresent();
+    }
+
+    @ParameterizedTest(name = "slo {0}")
+    @ValueSource(ints = {0, 1, 2, 3, 4})
+    void cloudSchedulerSloMatrix(int sloCount) {
+        CloudCostScheduler scheduler = new CloudCostScheduler();
+        boolean required = sloCount % 2 == 1;
+        var decision = scheduler.schedule(
+                new ScheduleTask("t", "us", 10, required),
+                List.of(new CloudOption("aws-us", 1, 100,
+                                !required),
+                        new CloudOption("gcp-us", 2, 100, true)),
+                policy());
+        assertThat(decision).isPresent();
+    }
+
+    @ParameterizedTest(name = "rule {0}")
+    @ValueSource(strings = {"open: a -> b", "allow: a b",
+            "allow -> b", "deny: a ->", "allow: -> b"})
+    void policyDslMalformedRejected(String dsl) {
+        org.junit.jupiter.api.Assertions.assertThrows(
+                IllegalArgumentException.class,
+                () -> NetworkPolicyDsl.parse(dsl));
+    }
+
+    @ParameterizedTest(name = "action {0}")
+    @ValueSource(strings = {"allow: t1 -> t2",
+            "deny: t1 -> t2", "allow: t2 -> t3",
+            "deny: t2 -> t3", "allow: t3 -> t1"})
+    void policyCompilerActionMatrix(String rule) {
+        IsolationPolicy policy = new IsolationPolicy();
+        for (int i = 1; i <= 3; i++) {
+            policy.register(new NetworkIsolationDomain(
+                    "t" + i, "vpc", "subnet", true));
+        }
+        new PolicyCompiler().apply(policy, rule);
+        if (rule.startsWith("allow")) {
+            assertThat(policy.whitelistEntries()).hasSize(1);
+        } else {
+            assertThat(policy.whitelistEntries()).isEmpty();
+        }
+    }
+
+    @ParameterizedTest(name = "max {0}")
+    @ValueSource(ints = {10, 11, 15, 20, 100})
+    void sloBudgetCapMatrix(int maxNodes) {
+        BudgetPlan plan = new SloBudgetPlanner().plan(
+                0.0, 0.9, 10, maxNodes);
+        assertThat(plan.suggestedNodes())
+                .isEqualTo(Math.min(maxNodes, 30));
+    }
+
+    @ParameterizedTest(name = "compliance {0}")
+    @ValueSource(doubles = {0.9, 0.91, 0.95, 0.99, 1.0})
+    void sloBudgetMaintainMatrix(double compliance) {
+        BudgetPlan plan = new SloBudgetPlanner().plan(
+                compliance, 0.9, 10, 50);
+        assertThat(plan.action()).isEqualTo(Action.MAINTAIN);
+        assertThat(plan.suggestedNodes()).isEqualTo(10);
+    }
+
     private static SelfLearningFence.Bounds bounds() {
         return new Bounds(1, 20, 1, 10, 1, 8);
     }
