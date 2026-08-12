@@ -4,7 +4,7 @@
 > （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding +
 > Raft 持久化集群 + 批量复制 + 安全 RPC + 元数据 Raft + 游标迁移）。
 
-**阶段状态：Phase 41（真实集成收敛与生产加固）✅（Phase 0–40 全部完成 ✅，v2.4.0）**
+**阶段状态：Phase 42（执行收敛与事务深度）✅（Phase 0–41 全部完成 ✅，v2.5.0）**
 
 ## 项目定位
 
@@ -133,6 +133,13 @@ v2.2.0 发布流水线；全量测试 6878/6878 全绿（Phase 39，v2.2.0）。
 生产级 LSM 演进（leveled compaction 计划 + Immutable MemTable 轮转）+
 PD 等价调度（放置约束 + 均衡计划 + 配额限流）+ v2.4.0 发布流水线；
 全量测试 7855/7855 全绿（Phase 41，v2.4.0）。
+以及执行收敛与事务深度：真实执行门禁收敛表 v8 + JVM 级门禁扩展 +
+Leveled Compaction 执行（合并 + tombstone + TTL + 层级落盘）+
+悲观事务（提前加锁 + 冲突 + 死锁超时）+ Async Commit + resolved-ts
+（单区一阶段 + 回退 2PC + 单调水位）+ Coprocessor SQL 下推（FILTER/
+PROJECT/AGGREGATE）+ 自治 PD 调度（护栏内执行 + 熔断）+ 全球拓扑
+自发现（心跳分组 + 故障剔除）+ v2.5.0 发布流水线；全量测试
+8357/8357 全绿（Phase 42，v2.5.0）。
 
 **边界（如实声明）**：仍为教学/工程级实现，暂不宣称"高性能 Redis 替代品"；
 分布式为真实 TCP + 持久化原型，基准以进程内为主，跨机 `tc netem` 验证

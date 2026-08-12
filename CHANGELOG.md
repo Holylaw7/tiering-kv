@@ -221,6 +221,17 @@
   - PD 等价调度 + v2.4（ADR-0205）：Placement/Rebalance/Quota
     Scheduler + release.yml；
   - 测试：新增 495 项；全量回归 **7855/7855 全绿**（+6 门控跳过）。
+- Phase 42 执行收敛与事务深度（v2.5.0）：
+  - 门禁收敛 v8（ADR-0206）：Phase42ProductionGateTest + EdgeMatrix；
+  - Leveled 执行（ADR-0207）：LeveledCompactionExecutor；
+  - 悲观事务（ADR-0208）：PessimisticTransaction；
+  - Async Commit + resolved-ts（ADR-0209）：AsyncCommitCoordinator +
+    ResolvedTimestampService；
+  - Coprocessor 下推（ADR-0210）：CoprocessorRequest/Executor；
+  - 自治调度 + 拓扑发现（ADR-0211）：AutonomousPdScheduler +
+    TopologyDiscovery；
+  - v2.5 冻结（ADR-0212）：release.yml + Phase42BenchmarkTest；
+  - 测试：新增 502 项；全量回归 **8357/8357 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager

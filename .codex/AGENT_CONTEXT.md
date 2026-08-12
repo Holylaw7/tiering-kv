@@ -321,15 +321,26 @@ BM-001/002、TD-051/054/059/060/063/066/069/072/075）、leveled
 compaction 执行接线、PD 调度器全自动、悲观事务/async commit、
 Coprocessor 下推（Phase 42+）。
 
+Phase 42 已交付（v2.5.0）：真实执行门禁收敛表 v8（ADR-0206）、Leveled
+Compaction 执行（ADR-0207）、悲观事务（ADR-0208）、Async Commit +
+resolved-ts（ADR-0209）、Coprocessor SQL 下推（ADR-0210）、自治 PD
+调度 + 拓扑自发现（ADR-0211）、v2.5.0 发布流水线（ADR-0212）；新增
+502 项测试，全量回归 **8357/8357 全绿**。
+
+当前剩余：真实执行门禁 Linux Runner（TD-048/049、K8S-001、REL-001、
+BM-001/002、TD-051/054/059/060/063/066/069/072/075/078）、跨区
+一阶段、多算子联合下推、TSO 集群化、真实 Runner 全量门禁闭环
+（Phase 43+）。
+
 ## 2. 当前状态
 
-- 阶段：**Phase 41（真实集成收敛与生产加固）✅ 已完成（v2.4.0）**
-  （Phase 0–40 全部完成）；
-- 最近提交：Phase 41 合并（详见 git log）；
+- 阶段：**Phase 42（执行收敛与事务深度）✅ 已完成（v2.5.0）**
+  （Phase 0–41 全部完成）；
+- 最近提交：Phase 42 合并（详见 git log）；
 - 基线：develop 合并 Phase 24；分支策略：feature/* 合并入 develop，
   main 保持稳定；
-- 下一步：v2.4.0 发布执行（release.yml）；真实执行门禁 Linux Runner
-  与 leveled compaction 执行接线（Phase 42，等待用户指令）。
+- 下一步：v2.5.0 发布执行（release.yml）；真实执行门禁 Linux Runner
+  与跨区一阶段/TSO 集群化（Phase 43，等待用户指令）。
 
 项目里程碑：**32 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
