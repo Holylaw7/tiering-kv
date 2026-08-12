@@ -408,6 +408,167 @@ class Phase37EdgeMatrixTest {
                 .isLessThanOrEqualTo(maxNodes);
     }
 
+    @ParameterizedTest(name = "min {0}")
+    @ValueSource(ints = {1, 3, 5, 8, 10})
+    void moFenceLowerBounds(int minActions) {
+        MultiObjectiveFence fence = new MultiObjectiveFence(
+                new Params(minActions, 5, 5),
+                new Bounds(minActions, 20, 1, 10, 1, 8),
+                new Weights(1, 1, 1), 0.8, 0.2, 1, 1);
+        for (int i = 0; i < 100; i++) {
+            fence.record(new Feedback(0.0, 1.0, 0.0));
+        }
+        assertThat(fence.params().maxActionsPerDay())
+                .isEqualTo(minActions);
+    }
+
+    @ParameterizedTest(name = "max {0}")
+    @ValueSource(ints = {5, 10, 20, 50, 100})
+    void moFenceUpperBounds(int maxActions) {
+        MultiObjectiveFence fence = new MultiObjectiveFence(
+                new Params(10, 5, 5),
+                new Bounds(1, maxActions, 1, 10, 1, 8),
+                new Weights(1, 1, 1), 0.8, 0.2, 1, 1);
+        for (int i = 0; i < 100; i++) {
+            fence.record(new Feedback(1.0, 0.0, 1.0));
+        }
+        assertThat(fence.params().maxActionsPerDay())
+                .isLessThanOrEqualTo(maxActions);
+    }
+
+    @ParameterizedTest(name = "views {0}")
+    @ValueSource(ints = {1, 5, 10, 20, 50})
+    void remoteMvViewCounts(int count) {
+        RemoteMaterializationManager manager = remoteManager();
+        for (int i = 0; i < count; i++) {
+            manager.define(new RemoteDefinition("v" + i,
+                    "gcp-us", "aws-us",
+                    List.of(new CloudShard("d1", "aws-us", "m")),
+                    Aggregate.SUM));
+        }
+        assertThat(manager.size()).isEqualTo(count);
+    }
+
+    @ParameterizedTest(name = "full rounds {0}")
+    @ValueSource(ints = {1, 5, 10, 20, 50})
+    void remoteMvFullRefreshRounds(int rounds) {
+        RemoteMaterializationManager manager = remoteManager();
+        manager.define(new RemoteDefinition("v1", "gcp-us",
+                "aws-us", List.of(new CloudShard("d1", "aws-us",
+                        "m")), Aggregate.SUM));
+        for (int i = 0; i < rounds; i++) {
+            manager.refreshFull("v1",
+                    shard -> new io.tieringkv.datamesh
+                            .CloudFederatedExecutor.CloudResult(
+                            shard.domainId(), shard.cloud(), 5, 1));
+        }
+        assertThat(manager.snapshot("v1").value()).isEqualTo(5);
+    }
+
+    @ParameterizedTest(name = "regulations {0}")
+    @ValueSource(ints = {1, 2, 3, 4, 5})
+    void attestationMixedRegulations(int count) {
+        AttestationChain chain = new AttestationChain();
+        for (int i = 0; i < count; i++) {
+            chain.append("R" + i, "v1", 0, i);
+        }
+        String json = new AttestationExporter().toJson(chain);
+        assertThat(new AttestationVerifier().verify(
+                new AttestationExporter().fromJson(json))).isTrue();
+    }
+
+    @ParameterizedTest(name = "rounds {0}")
+    @ValueSource(ints = {1, 10, 25, 50, 100})
+    void attestationExportRounds(int rounds) {
+        AttestationChain chain = new AttestationChain();
+        for (int i = 0; i < rounds; i++) {
+            chain.append("GDPR", "v1", i % 3, i);
+        }
+        assertThat(new AttestationVerifier().verify(
+                new AttestationExporter().fromJson(
+                        new AttestationExporter().toJson(chain))))
+                .isTrue();
+    }
+
+    @ParameterizedTest(name = "price {0}")
+    @ValueSource(doubles = {0.1, 1.0, 5.0, 10.0, 100.0})
+    void spotPriceMatrix(double price) {
+        SpotAwareScheduler scheduler = new SpotAwareScheduler();
+        var decision = scheduler.schedule(
+                new SpotTask("t", "us", 10, false),
+                List.of(
+                        new SpotOption("aws-us", price, 0.0, 100,
+                                true),
+                        new SpotOption("gcp-us", price * 2, 0.0,
+                                100, true)),
+                policy());
+        assertThat(decision.orElseThrow().cloud())
+                .isEqualTo("aws-us");
+    }
+
+    @ParameterizedTest(name = "residency {0}")
+    @ValueSource(strings = {"us", "eu", "cn", "default", "other"})
+    void spotResidencyMatrix(String residency) {
+        SpotAwareScheduler scheduler = new SpotAwareScheduler();
+        var decision = scheduler.schedule(
+                new SpotTask("t", residency, 10, false),
+                List.of(new SpotOption("aws-" + residency, 1,
+                        0.0, 100, true)),
+                new DataResidencyPolicy(Map.of(
+                        "aws-" + residency, residency)));
+        assertThat(decision).isPresent();
+    }
+
+    @ParameterizedTest(name = "tenants {0}")
+    @ValueSource(ints = {5, 10, 20, 50, 100})
+    void policyAuditTenantCounts(int count) {
+        IsolationPolicy policy = policy(count);
+        NetworkPolicyAudit audit = new NetworkPolicyAudit();
+        StringBuilder dsl = new StringBuilder();
+        for (int i = 0; i < count - 1; i++) {
+            dsl.append("allow: t").append(i).append(" -> t")
+                    .append(i + 1).append('\n');
+        }
+        new PolicyCompiler().apply(policy, dsl.toString(), audit);
+        assertThat(audit.size()).isEqualTo(count - 1);
+    }
+
+    @ParameterizedTest(name = "events {0}")
+    @ValueSource(ints = {1, 10, 50, 100, 500})
+    void policyAuditViewVolumes(int count) {
+        NetworkPolicyAudit audit = new NetworkPolicyAudit();
+        for (int i = 0; i < count; i++) {
+            audit.record("src", new PolicyRule(
+                    i % 2 == 0 ? "allow" : "deny",
+                    "t" + (i % 20), "t" + ((i + 1) % 20)), i);
+        }
+        assertThat(new PolicyAuditView().byAction(audit)
+                .values().stream().mapToLong(Long::longValue).sum())
+                .isEqualTo(count);
+    }
+
+    @ParameterizedTest(name = "attainment {0}")
+    @ValueSource(doubles = {0.0, 0.2, 0.5, 0.8, 1.0})
+    void multiSloWeightedDeficit(double attainment) {
+        NegotiationPlan plan = negotiator().negotiate(List.of(
+                new SloInput("a", attainment, 0.9, 1),
+                new SloInput("b", 0.95, 0.9, 1)), 10, 50);
+        assertThat(plan.worstDeficit()).isBetween(0.0, 1.0);
+    }
+
+    @ParameterizedTest(name = "slo count {0}")
+    @ValueSource(ints = {2, 4, 8, 16, 32})
+    void multiSloLargeCounts(int count) {
+        List<SloInput> inputs = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            inputs.add(new SloInput("s" + i,
+                    i % 3 == 0 ? 0.6 : 0.95, 0.9, 1));
+        }
+        NegotiationPlan plan = negotiator().negotiate(inputs,
+                10, 50);
+        assertThat(plan.suggestedNodes()).isBetween(10, 50);
+    }
+
     private static MultiObjectiveFence fence() {
         return new MultiObjectiveFence(new Params(10, 5, 5),
                 bounds(), new Weights(1, 1, 1), 0.8, 0.2, 1, 1);
