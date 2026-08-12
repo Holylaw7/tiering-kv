@@ -112,6 +112,16 @@ public final class MaterializedViewManager {
         return invalidated;
     }
 
+    /** 增量快照写入：CDC 刷新结果（stale=false）。 */
+    public Snapshot updateSnapshot(String viewId, double value,
+                                   long count) {
+        require(viewId);
+        Snapshot snapshot = new Snapshot(viewId, value, count,
+                false, System.currentTimeMillis());
+        snapshots.put(viewId, snapshot);
+        return snapshot;
+    }
+
     /** 查询：返回快照（含 stale 标记），不存在抛异常。 */
     public Snapshot query(String viewId) {
         Snapshot snapshot = snapshots.get(viewId);
