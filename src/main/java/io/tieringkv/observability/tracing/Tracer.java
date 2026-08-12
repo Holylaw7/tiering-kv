@@ -63,6 +63,12 @@ public final class Tracer {
             throw new IllegalStateException(
                     "no active span to end");
         }
+        if (!active.context().equals(context)) {
+            throw new IllegalStateException(
+                    "span end mismatch: expected "
+                            + active.context().spanId()
+                            + " but got " + context.spanId());
+        }
         long duration = System.nanoTime() - active.startNanos();
         if (sampler.sample(context.traceId())) {
             exporter.export(new Span(context.traceId(),
