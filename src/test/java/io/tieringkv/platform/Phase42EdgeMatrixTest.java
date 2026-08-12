@@ -956,6 +956,17 @@ class Phase42EdgeMatrixTest {
                 .deletedEntries()).isEqualTo(count);
     }
 
+    @ParameterizedTest(name = "count {0}")
+    @ValueSource(ints = {1, 5, 10, 25, 50})
+    void pessimisticTxnIdVolumes(int count) {
+        PessimisticTransaction txn = new PessimisticTransaction(500);
+        for (int i = 0; i < count; i++) {
+            txn.begin("t" + i);
+            assertThat(txn.txnId()).isEqualTo("t" + i);
+            txn.rollback();
+        }
+    }
+
     private static List<Row> rows() {
         return List.of(
                 new Row("a", 10),
