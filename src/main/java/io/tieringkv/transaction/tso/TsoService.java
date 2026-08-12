@@ -27,8 +27,22 @@ public final class TsoService {
 
     /** 恢复：只允许推进到更高水位（不回退）。 */
     public long restore(long persistedWatermark) {
-        return watermark.accumulateAndGet(persistedWatermark,
-                Math::max);
+        if (persistedWatermark < 0) {
+            throw new IllegalArgumentException(
+                    "watermark must be non-negative");
+        }
+        long current = watermark.accumulateAndGet(
+                persistedWatermark, Math::max);
+        // 新分配必须越过恢复水位：必要时推进分配游标，绝不回退。
+        while (true) {
+            long allocated = timestamp.get();
+            if (allocated > current) {
+                return current;
+            }
+            if (timestamp.compareAndSet(allocated, current + 1)) {
+                return current;
+            }
+        }
     }
 
     public long watermark() {
