@@ -162,6 +162,15 @@
   - SLO 管理（ADR-0162）：SloManager / SloAlert；
   - v1.8 发布流水线 + JVM 级生产门禁 + 参数化边缘矩阵（ADR-0163）；
   - 测试：新增 360 项；全量回归 **5286/5286 全绿**（+6 门控跳过）。
+- Phase 36 门禁收敛与自学习自治：
+  - 门禁收敛 v2（ADR-0164）：Phase36ProductionGateTest + EdgeMatrix；
+  - 自学习围栏（ADR-0165）：SelfLearningFence（放宽/收紧/熔断/审计）；
+  - CDC 增量物化（ADR-0166）：CdcMaterializedViewRefresher；
+  - 合规持续证明（ADR-0167）：AttestationChain（SHA-256 哈希链）；
+  - 多云成本调度（ADR-0168）：CloudCostScheduler；
+  - 网络策略即代码（ADR-0169）：NetworkPolicyDsl / PolicyCompiler；
+  - SLO 预算容量 + v1.9（ADR-0170）：SloBudgetPlanner + release.yml；
+  - 测试：新增 374 项；全量回归 **5660/5660 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
