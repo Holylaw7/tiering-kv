@@ -629,6 +629,20 @@
 - 后续：真实执行门禁 Linux Runner、自学习多目标优化、CDC 增量状态
   持久化（Phase 37+）。
 
+## Phase 37 — 多目标自治与跨云物化 ✅
+
+- 交付：门禁收敛 v3（ADR-0171）、多目标围栏（ADR-0172）、跨云远端物化
+  （ADR-0173）、第三方证明（ADR-0174）、Spot 竞价（ADR-0175）、策略
+  审计（ADR-0176）、多 SLO 谈判 + v2.0 GA（ADR-0177）。
+- 测试：新增 380 项（surefire 口径）；全量回归 **6040/6040 全绿**
+  （目标 ≥6040 ✅，+6 门控跳过）。
+- 基准（[phase37-production-report.md](
+  docs/benchmark/phase37-production-report.md)）：多目标围栏
+  125K–10M ops/s、远端物化 111K–714K ops/s、spot 调度 1M–10M
+  ops/s、策略审计 30K–357K rules/s。
+- 后续：真实执行门禁 Linux Runner、远端物化增量持久化、spot 实时市场
+  数据（Phase 38+）。
+
 ## 技术债登记
 
 | 编号 | 描述 | 来源 | 计划消除 |

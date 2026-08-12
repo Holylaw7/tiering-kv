@@ -171,6 +171,15 @@
   - 网络策略即代码（ADR-0169）：NetworkPolicyDsl / PolicyCompiler；
   - SLO 预算容量 + v1.9（ADR-0170）：SloBudgetPlanner + release.yml；
   - 测试：新增 374 项；全量回归 **5660/5660 全绿**（+6 门控跳过）。
+- Phase 37 多目标自治与跨云物化（v2.0 GA）：
+  - 门禁收敛 v3（ADR-0171）：Phase37ProductionGateTest + EdgeMatrix；
+  - 多目标围栏（ADR-0172）：MultiObjectiveFence（加权评分）；
+  - 跨云远端物化（ADR-0173）：RemoteMaterializationManager；
+  - 第三方证明（ADR-0174）：AttestationVerifier / AttestationExporter；
+  - Spot 竞价（ADR-0175）：SpotAwareScheduler（中断惩罚）；
+  - 策略审计（ADR-0176）：NetworkPolicyAudit / PolicyAuditView；
+  - 多 SLO 谈判 + v2.0（ADR-0177）：MultiSloNegotiator + release.yml；
+  - 测试：新增 380 项；全量回归 **6040/6040 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
