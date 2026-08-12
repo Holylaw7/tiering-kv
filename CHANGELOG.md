@@ -138,6 +138,19 @@
   - 全球流量治理（ADR-0149）：RegionQuota / PriorityRouter /
     TrafficPolicy；v1.6 发布流水线（release.yml）；
   - 测试：新增 319 项；全量回归 **4570/4570 全绿**（+6 门控跳过）。
+- Phase 34 SaaS 产品化与自治运维闭环：
+  - 控制台 SaaS 产品化（ADR-0150）：SaasConsoleApi / SaasConsoleUiService；
+  - AI 自治闭环（ADR-0151）：AutonomousCapacityController /
+    AutonomousTrafficController（护栏 + 熔断 + 回滚）；
+  - 跨云联邦（ADR-0152）：CloudFederatedExecutor（数据主权联动）；
+  - 合规自动化（ADR-0153）：RegulationMapper / ComplianceReport /
+    AuditExporter；
+  - 可观测性（ADR-0154）：Tracer / TraceSampler / TraceExporter /
+    CostAttribution；
+  - 商业化运营（ADR-0155）：MrrCalculator / TrialConversionTracker /
+    ChurnDetector / CommercialAlert；
+  - v1.7 发布流水线 + JVM 级生产门禁（ADR-0156）；
+  - 测试：新增 356 项；全量回归 **4926/4926 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
