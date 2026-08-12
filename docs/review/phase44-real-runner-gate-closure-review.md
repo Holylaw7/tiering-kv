@@ -31,8 +31,8 @@ Phase 44 完成 8 个 Goal，系统进入 v2.7.0 发布候选：
 
 `CompoundCoprocessorRequest` 扩展 JOIN（等值内连接）、GROUP_BY、
 ORDER_BY、LIMIT；`CoprocessorExecutor.executeCompound` 采用固定链顺序
-JOIN → FILTER → PROJECT → GROUP_BY → ORDER_BY → LIMIT，与上层 SQL
-一致性由等价性测试锁定。
+JOIN → FILTER → PROJECT → AGGREGATE → GROUP_BY → ORDER_BY → LIMIT
+（重复算子按次数应用），与上层 SQL 一致性由等价性测试锁定。
 
 ### TSO 跨地域容灾（Goal 4）⭐⭐
 

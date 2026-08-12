@@ -16,8 +16,8 @@ Phase 44 需要把 JOIN / GROUP BY / ORDER BY / LIMIT 也下推到存储层，
 
 - 新增算子 JOIN（等值内连接）、GROUP_BY（分组聚合）、ORDER_BY、
   LIMIT；
-- 执行链顺序固定：JOIN → FILTER → PROJECT → GROUP_BY → ORDER_BY →
-  LIMIT；
+- 执行链顺序固定：JOIN → FILTER → PROJECT → AGGREGATE → GROUP_BY →
+  ORDER_BY → LIMIT（同一算子出现多次按次数重复应用）；
 - 与 SqlExecutor / 上层 SQL 结果一致性由等价性测试锁定；
 - 新增 Row 元数据（groupKey）支持分组，不影响既有算子语义。
 

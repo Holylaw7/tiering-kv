@@ -44,8 +44,9 @@ public final class CoprocessorExecutor {
     }
 
     /**
-     * 执行多算子链：固定顺序 JOIN → FILTER → PROJECT → GROUP_BY →
-     * ORDER_BY → LIMIT（ADR-0222），与上层 SQL 语义一致。
+     * 执行多算子链：固定顺序 JOIN → FILTER → PROJECT → AGGREGATE →
+     * GROUP_BY → ORDER_BY → LIMIT（ADR-0222），与上层 SQL 语义一致；
+     * 同一算子出现多次时按出现次数重复应用（兼容旧链语义）。
      */
     public List<Row> executeCompound(
             CompoundCoprocessorRequest request, List<Row> rows) {
@@ -60,37 +61,71 @@ public final class CoprocessorExecutor {
                         request.endKey()) < 0)
                 .toList();
         List<Operator> operators = request.operators();
-        if (operators.contains(Operator.JOIN)) {
-            current = join(current, request.joinRows());
-        }
-        if (operators.contains(Operator.FILTER)) {
-            current = execute(new CoprocessorRequest(
-                    Operator.FILTER, request.startKey(),
-                    request.endKey(), request.threshold(),
-                    List.of()), current);
-        }
-        if (operators.contains(Operator.PROJECT)) {
-            current = execute(new CoprocessorRequest(
-                    Operator.PROJECT, request.startKey(),
-                    request.endKey(), request.threshold(),
-                    List.of()), current);
-        }
-        if (operators.contains(Operator.GROUP_BY)) {
-            current = groupBy(current);
-        }
-        if (operators.contains(Operator.ORDER_BY)) {
-            current = current.stream()
-                    .sorted(request.orderDescending()
-                            ? Comparator.comparingDouble(
-                                    Row::value).reversed()
-                            : Comparator.comparingDouble(
-                                    Row::value))
-                    .toList();
-        }
-        if (operators.contains(Operator.LIMIT)) {
-            current = limit(current, request.limit());
+        current = applyRepeated(current, operators,
+                Operator.JOIN, request);
+        current = applyRepeated(current, operators,
+                Operator.FILTER, request);
+        current = applyRepeated(current, operators,
+                Operator.PROJECT, request);
+        current = applyRepeated(current, operators,
+                Operator.AGGREGATE, request);
+        current = applyRepeated(current, operators,
+                Operator.GROUP_BY, request);
+        current = applyRepeated(current, operators,
+                Operator.ORDER_BY, request);
+        current = applyRepeated(current, operators,
+                Operator.LIMIT, request);
+        return current;
+    }
+
+    /** 按固定顺序应用算子，同一算子按出现次数重复。 */
+    private static List<Row> applyRepeated(
+            List<Row> rows, List<Operator> operators,
+            Operator operator,
+            CompoundCoprocessorRequest request) {
+        long count = operators.stream()
+                .filter(operator::equals).count();
+        List<Row> current = rows;
+        for (int i = 0; i < count; i++) {
+            current = switch (operator) {
+                case JOIN -> join(current, request.joinRows());
+                case FILTER -> filter(current,
+                        request.threshold());
+                case PROJECT -> project(current,
+                        request.threshold());
+                case AGGREGATE -> aggregate(current);
+                case GROUP_BY -> groupBy(current);
+                case ORDER_BY -> orderBy(current,
+                        request.orderDescending());
+                case LIMIT -> limit(current, request.limit());
+            };
         }
         return current;
+    }
+
+    private static List<Row> filter(List<Row> rows,
+                                    double threshold) {
+        return rows.stream()
+                .filter(row -> row.value() >= threshold)
+                .toList();
+    }
+
+    private static List<Row> project(List<Row> rows,
+                                     double factor) {
+        return rows.stream()
+                .map(row -> new Row(row.key(),
+                        row.value() * factor))
+                .toList();
+    }
+
+    private static List<Row> orderBy(List<Row> rows,
+                                     boolean descending) {
+        return rows.stream()
+                .sorted(descending
+                        ? Comparator.comparingDouble(
+                                Row::value).reversed()
+                        : Comparator.comparingDouble(Row::value))
+                .toList();
     }
 
     /** 等值内连接：key 相等，value 相加（ADR-0222）。 */
