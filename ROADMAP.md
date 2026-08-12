@@ -643,6 +643,21 @@
 - 后续：真实执行门禁 Linux Runner、远端物化增量持久化、spot 实时市场
   数据（Phase 38+）。
 
+## Phase 38 — 生产收敛与自治智能 ✅
+
+- 交付：门禁收敛 v4（ADR-0178）、远端状态持久化（ADR-0179，TD-064
+  关闭）、强化学习自治（ADR-0180）、物化视图生命周期（ADR-0181）、
+  签名证明（ADR-0182）、Spot 中断迁移（ADR-0183）、风险评分 + v2.1
+  （ADR-0184）。
+- 测试：新增 393 项（surefire 口径）；全量回归 **6433/6433 全绿**
+  （目标 ≥6430 ✅，+6 门控跳过）。
+- 基准（[phase38-production-report.md](
+  docs/benchmark/phase38-production-report.md)）：强化学习 1M–10M
+  ops/s、状态落盘 2.7K–3.8K ops/s、签名 13.9K–172K ops/s、spot 迁移
+  167K–909K ops/s。
+- 后续：真实执行门禁 Linux Runner、多智能体联合学习、签名密钥轮换
+  （Phase 39+）。
+
 ## 技术债登记
 
 | 编号 | 描述 | 来源 | 计划消除 |
