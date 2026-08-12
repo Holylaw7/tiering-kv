@@ -702,6 +702,21 @@
 - 后续：真实 Runner 全量门禁闭环、leveled compaction 执行接线、
   PD 调度器全自动（Phase 42+）。
 
+## Phase 42 — 执行收敛与事务深度 ✅
+
+- 交付：门禁收敛 v8（ADR-0206）、Leveled 执行（ADR-0207）、悲观事务
+  （ADR-0208）、Async Commit + resolved-ts（ADR-0209）、Coprocessor
+  下推（ADR-0210）、自治调度 + 拓扑发现（ADR-0211）、v2.5 冻结
+  （ADR-0212）。
+- 测试：新增 502 项（surefire 口径）；全量回归 **8357/8357 全绿**
+  （目标 ≥8355 ✅，+6 门控跳过）。
+- 基准（[phase42-production-report.md](
+  docs/benchmark/phase42-production-report.md)）：Async Commit
+  1M–10M ops/s、悲观锁 1M–10M ops/s、Coprocessor 500K–10M rows/s、
+  Leveled 执行 500K–2.5M/s。
+- 后续：真实 Runner 全量门禁闭环、跨区一阶段、多算子联合下推、
+  TSO 集群化（Phase 43+）。
+
 ## 技术债登记
 
 | 编号 | 描述 | 来源 | 计划消除 |
