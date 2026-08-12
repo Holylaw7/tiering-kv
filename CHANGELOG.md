@@ -125,6 +125,19 @@
   - v1.5 发布流水线（ADR-0142）；
   - 测试：新增 251 项；全量回归 **4251/4251 全绿**（+6 门控跳过）；
   - 稳定化：迁移/异步客户端全量负载容差、选主 Map 顺序无关断言。
+- Phase 33 SaaS 商业化与自治运维：
+  - SQL 写 2PC 真实协调器（ADR-0144）：SqlTxnCoordinatorAdapter →
+    GeoTransactionCoordinator（决策日志 + 跨地域 prewrite/commit）；
+  - 选主与 Raft term 联动（ADR-0145）：RaftAwareLeaderSelector；
+  - 控制台 UI 原型（ADR-0146）：ConsoleUiService（RBAC 门控）；
+  - SaaS 商业化（ADR-0146）：Subscription / MarketplaceCatalog /
+    BillingSubscription；
+  - AI 容量规划（ADR-0147）：TrendPredictor / AutoCapacityAdvisor；
+  - 数据网格（ADR-0148）：DomainCatalog / FederatedPlanner /
+    FederatedExecutor；
+  - 全球流量治理（ADR-0149）：RegionQuota / PriorityRouter /
+    TrafficPolicy；v1.6 发布流水线（release.yml）；
+  - 测试：新增 319 项；全量回归 **4570/4570 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
