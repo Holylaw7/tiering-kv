@@ -7,7 +7,7 @@ on:
            "v1.4.0-rc*", "v1.4.0", "v1.5.0-rc*", "v1.5.0",
            "v1.6.0-rc*", "v1.6.0", "v1.7.0-rc*", "v1.7.0",
            "v1.8.0-rc*", "v1.8.0", "v1.9.0-rc*", "v1.9.0",
-           "v2.0.0-rc*", "v2.0.0"]
+           "v2.0.0-rc*", "v2.0.0", "v2.1.0-rc*", "v2.1.0"]
   workflow_dispatch:
 
 jobs:
@@ -26,7 +26,7 @@ jobs:
       - name: Test
         run: mvn -q test
       - name: Benchmark
-        run: mvn -q -Dtest='Phase24BenchmarkTest,Phase25BenchmarkTest,Phase26BenchmarkTest,Phase27BenchmarkTest,Phase28BenchmarkTest,Phase29BenchmarkTest,Phase30BenchmarkTest,Phase31BenchmarkTest,Phase32BenchmarkTest,Phase33BenchmarkTest,Phase34BenchmarkTest,Phase35BenchmarkTest,Phase36BenchmarkTest,Phase37BenchmarkTest' -DfailIfNoTests=false test
+        run: mvn -q -Dtest='Phase24BenchmarkTest,Phase25BenchmarkTest,Phase26BenchmarkTest,Phase27BenchmarkTest,Phase28BenchmarkTest,Phase29BenchmarkTest,Phase30BenchmarkTest,Phase31BenchmarkTest,Phase32BenchmarkTest,Phase33BenchmarkTest,Phase34BenchmarkTest,Phase35BenchmarkTest,Phase36BenchmarkTest,Phase37BenchmarkTest,Phase38BenchmarkTest' -DfailIfNoTests=false test
       - name: Security scan
         uses: aquasecurity/trivy-action@0.28.0
         with:

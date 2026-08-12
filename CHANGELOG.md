@@ -180,6 +180,16 @@
   - 策略审计（ADR-0176）：NetworkPolicyAudit / PolicyAuditView；
   - 多 SLO 谈判 + v2.0（ADR-0177）：MultiSloNegotiator + release.yml；
   - 测试：新增 380 项；全量回归 **6040/6040 全绿**（+6 门控跳过）。
+- Phase 38 生产收敛与自治智能（v2.1.0）：
+  - 门禁收敛 v4（ADR-0178）：Phase38ProductionGateTest + EdgeMatrix；
+  - 远端状态持久化（ADR-0179）：RemoteStateStore（TD-064 关闭）；
+  - 强化学习自治（ADR-0180）：ReinforcementAutonomy；
+  - 物化视图生命周期（ADR-0181）：MaterializedViewLifecycle；
+  - 签名证明（ADR-0182）：SignedAttestation / SignatureVerifier；
+  - Spot 中断迁移（ADR-0183）：SpotMigrationPlanner；
+  - 风险评分 + v2.1（ADR-0184）：PolicyRiskScorer / RiskDashboard +
+    release.yml；
+  - 测试：新增 393 项；全量回归 **6433/6433 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
