@@ -190,18 +190,21 @@ class CompoundCoprocessorTest {
     }
 
     @Test
-    void filterAfterProjectMatchesUpperSql() {
+    void filterBeforeProjectMatchesUpperSql() {
+        // ADR-0222 固定顺序：FILTER 先于 PROJECT；
+        // 与上层 SQL「先过滤后投影」语义一致。
         CompoundCoprocessorRequest request = new CompoundCoprocessorRequest(
                 List.of(Operator.PROJECT, Operator.FILTER),
-                "a", "d", 2500);
+                "a", "d", 30);
         List<Row> result = executor.executeCompound(request, rows());
-        double expected = rows().stream()
+        long expected = rows().stream()
                 .filter(r -> r.key().compareTo("a") >= 0
                         && r.key().compareTo("d") < 0)
-                .mapToDouble(r -> r.value() * 2500)
-                .filter(v -> v >= 2500)
+                .filter(r -> r.value() >= 30)
                 .count();
         assertThat(result).hasSize((int) expected);
+        assertThat(result).extracting(Row::value)
+                .containsExactly(1500.0, 2100.0);
     }
 
     @ParameterizedTest(name = "op1={0} op2={1} threshold={2} count={3}")

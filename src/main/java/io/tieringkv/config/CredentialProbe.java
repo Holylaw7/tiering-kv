@@ -40,6 +40,32 @@ public final class CredentialProbe {
         boolean reachable(String endpoint, long timeoutMillis);
     }
 
+    /** 真实 HTTP 探针（ADR-0225）：GET 端点，2xx/3xx/4xx 视为可达。 */
+    public static EndpointProber realHttpProber(long timeoutMillis) {
+        java.net.http.HttpClient client =
+                java.net.http.HttpClient.newBuilder()
+                        .connectTimeout(java.time.Duration
+                                .ofMillis(timeoutMillis))
+                        .build();
+        return (endpoint, timeout) -> {
+            try {
+                var request = java.net.http.HttpRequest
+                        .newBuilder()
+                        .uri(java.net.URI.create(endpoint))
+                        .timeout(java.time.Duration.ofMillis(
+                                timeoutMillis))
+                        .GET().build();
+                var response = client.send(request,
+                        java.net.http.HttpResponse.BodyHandlers
+                                .discarding());
+                return response.statusCode() >= 200
+                        && response.statusCode() < 500;
+            } catch (Exception ignored) {
+                return false;
+            }
+        };
+    }
+
     private final Mode mode;
     private final EndpointProber prober;
     private final long timeoutMillis;

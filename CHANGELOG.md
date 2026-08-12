@@ -250,6 +250,22 @@
   - v2.6 冻结（ADR-0219）：release.yml v2.6.0 标签 +
     Phase43BenchmarkTest/Baseline 接入；
   - 测试：新增 ≥510 项；全量回归 **≥8867 全绿**（+6 门控跳过）。
+- Phase 44 真实执行门禁闭环与全球规模最终化（v2.7.0）：
+  - 门禁收敛 v10（ADR-0220）：GateConvergenceV10 收敛表注册表 +
+    GateConvergenceV10Test；
+  - 全局一阶段规模化（ADR-0221，TD-079 规模化）：
+    GlobalOnePhaseCommit（3 地/5 地 + 回退 2PC + resolved-ts 联动）；
+  - 全算子联合下推（ADR-0222，TD-080 规模化）：JOIN / GROUP_BY /
+    ORDER_BY / LIMIT 固定链顺序；
+  - TSO 跨地域容灾（ADR-0223）：TsoDisasterRecovery（主备 + 切换 +
+    恢复不回退）；
+  - 自治 PD 全自动（ADR-0224）：AutonomousPdFullAutomation（风险分级 +
+    自动执行 + 审批队列 + 人工熔断）；
+  - TiKV 对比基线 + 真实凭据 v2（ADR-0225）：Phase44ProductionBaselineTest
+    （A/B/C/D 四级）+ CredentialProbe.realHttpProber（TD-076 关闭方向）；
+  - v2.7 冻结（ADR-0226）：release.yml v2.7.0 标签 +
+    Phase44BenchmarkTest/Baseline 接入；
+  - 测试：新增 ≥520 项；全量回归 **≥9412 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
