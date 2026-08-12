@@ -210,6 +210,17 @@
   - 在线 Pareto + v2.3（ADR-0198）：OnlineParetoRebalancer +
     release.yml；
   - 测试：新增 482 项；全量回归 **7360/7360 全绿**（+6 门控跳过）。
+- Phase 41 真实集成收敛与生产加固（v2.4.0）：
+  - 门禁收敛 v7（ADR-0199）：Phase41ProductionGateTest + EdgeMatrix；
+  - 真实 S3 接入（ADR-0200）：S3ObjectStorage（fallback）；
+  - Spot 真实数据源（ADR-0201）：SpotMarketDataSource；
+  - 密钥轮换（ADR-0202）：KeyRotationManager（TD-068 关闭）；
+  - 对象生命周期联动（ADR-0203）：ObjectLifecycleManager；
+  - 生产级 LSM（ADR-0204）：LeveledCompactionPlanner +
+    ImmutableMemTableRotator；
+  - PD 等价调度 + v2.4（ADR-0205）：Placement/Rebalance/Quota
+    Scheduler + release.yml；
+  - 测试：新增 495 项；全量回归 **7855/7855 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager

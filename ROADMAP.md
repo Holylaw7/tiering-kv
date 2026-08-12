@@ -687,6 +687,21 @@
 - 后续：真实执行门禁 Linux Runner、真实 S3 API、真实市场做市
   （Phase 41+）。
 
+## Phase 41 — 真实集成收敛与生产加固 ✅
+
+- 交付：门禁收敛 v7（ADR-0199）、真实 S3 接入（ADR-0200）、Spot 真实
+  数据源（ADR-0201）、密钥轮换（ADR-0202）、对象生命周期联动
+  （ADR-0203）、生产级 LSM（ADR-0204）、PD 等价调度 + v2.4
+  （ADR-0205）。
+- 测试：新增 495 项（surefire 口径）；全量回归 **7855/7855 全绿**
+  （目标 ≥7850 ✅，+6 门控跳过）。
+- 基准（[phase41-production-report.md](
+  docs/benchmark/phase41-production-report.md)）：S3 333K–2.5M ops/s、
+  spot 数据源 416.7K–500K ops/s、密钥轮换 108.7K–1M ops/s、
+  leveled 1M–10M ops/s。
+- 后续：真实 Runner 全量门禁闭环、leveled compaction 执行接线、
+  PD 调度器全自动（Phase 42+）。
+
 ## 技术债登记
 
 | 编号 | 描述 | 来源 | 计划消除 |
