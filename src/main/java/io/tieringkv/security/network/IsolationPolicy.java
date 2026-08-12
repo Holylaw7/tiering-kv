@@ -65,6 +65,10 @@ public final class IsolationPolicy {
         return domains.size();
     }
 
+    public java.util.Set<String> tenantIds() {
+        return Set.copyOf(domains.keySet());
+    }
+
     public void clearWhitelist() {
         whitelist.clear();
     }
