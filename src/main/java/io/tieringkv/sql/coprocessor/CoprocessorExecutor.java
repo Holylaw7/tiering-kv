@@ -36,6 +36,28 @@ public final class CoprocessorExecutor {
         };
     }
 
+    /** 执行多算子链：FILTER → PROJECT → AGGREGATE 顺序应用。 */
+    public List<Row> executeCompound(
+            CompoundCoprocessorRequest request, List<Row> rows) {
+        if (request == null || rows == null) {
+            throw new IllegalArgumentException(
+                    "request and rows required");
+        }
+        List<Row> current = rows.stream()
+                .filter(row -> row.key().compareTo(
+                        request.startKey()) >= 0
+                        && row.key().compareTo(
+                        request.endKey()) < 0)
+                .toList();
+        for (Operator operator : request.operators()) {
+            CoprocessorRequest step = new CoprocessorRequest(
+                    operator, request.startKey(), request.endKey(),
+                    request.threshold(), List.of());
+            current = execute(step, current);
+        }
+        return current;
+    }
+
     private static List<Row> aggregate(List<Row> rows) {
         if (rows.isEmpty()) {
             return List.of(new Row("sum", 0));
