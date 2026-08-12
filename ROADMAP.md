@@ -570,6 +570,21 @@
 - 后续：SQL 2PC 真实协调器端到端、控制台 UI/商业化、选主与 Raft term
   联动（Phase 33+）。
 
+## Phase 33 — SaaS 商业化与自治运维 ✅
+
+- 交付：SQL 写 2PC 真实协调器（ADR-0144）、选主与 Raft term 联动
+  （ADR-0145）、控制台 UI 原型 + SaaS 商业化（ADR-0146）、AI 容量规划
+  （ADR-0147）、数据网格联邦查询（ADR-0148）、全球流量治理 + v1.6
+  冻结（ADR-0149）。
+- 测试：新增 319 项（surefire 口径）；全量回归 **4570/4570 全绿**
+  （目标 ≥4450 ✅，+6 门控跳过）。
+- 基准（[phase33-production-report.md](
+  docs/benchmark/phase33-production-report.md)）：SQL 2PC 真实协调器
+  694–3333 txn/s（决策日志落盘）、Raft term 选主 1–10M ops/s、
+  联邦查询 45K–1.11M ops/s、流量治理 250K–3.33M ops/s。
+- 后续：跨地域真实基准与 Linux Runner 执行（TD-048/049、BM-001/002）、
+  控制台 SaaS 产品化、AI 容量自治闭环（Phase 34+）。
+
 ## 技术债登记
 
 | 编号 | 描述 | 来源 | 计划消除 |
