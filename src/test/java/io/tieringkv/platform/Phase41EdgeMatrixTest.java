@@ -821,6 +821,29 @@ class Phase41EdgeMatrixTest {
         assertThat(scheduler.used()).isLessThanOrEqualTo(quota);
     }
 
+    @ParameterizedTest(name = "count {0}")
+    @ValueSource(ints = {1, 5, 10, 25, 50})
+    void s3BucketRoundtrip(int count) {
+        S3ObjectStorage storage = storage();
+        for (int i = 0; i < count; i++) {
+            S3Object object = storage.put("obj-" + i,
+                    new byte[i + 1], i);
+            assertThat(storage.get(object.key()).orElseThrow()
+                    .data()).hasSize(i + 1);
+        }
+    }
+
+    @ParameterizedTest(name = "count {0}")
+    @ValueSource(ints = {1, 5, 10, 25, 50})
+    void placementRoundtrip(int count) {
+        PlacementScheduler scheduler = placement();
+        for (int i = 0; i < count; i++) {
+            scheduler.place("r" + i, "az-" + ((i % 3) + 1), 0);
+        }
+        assertThat(scheduler.regions()).hasSize(count);
+        assertThat(scheduler.epoch()).isZero();
+    }
+
     private static S3ObjectStorage storage() {
         return new S3ObjectStorage("tiering", "");
     }
