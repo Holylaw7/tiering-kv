@@ -200,6 +200,16 @@
   - Pareto 容量 + v2.2（ADR-0191）：ParetoCapacityOptimizer +
     release.yml；
   - 测试：新增 445 项；全量回归 **6878/6878 全绿**（+6 门控跳过）。
+- Phase 40 拓扑感知自治与对象存储收敛（v2.3.0）：
+  - 门禁收敛 v6（ADR-0192）：Phase40ProductionGateTest + EdgeMatrix；
+  - 拓扑联邦自治（ADR-0193）：TopologyFederatedAutonomy；
+  - 对象存储归档（ADR-0194）：ObjectStorageArchive；
+  - 跨链互操作（ADR-0195）：CrossChainAnchor / CrossChainVerifier；
+  - Spot 实时竞价（ADR-0196）：SpotBidEngine；
+  - 学习型加固（ADR-0197）：LearnedHardener；
+  - 在线 Pareto + v2.3（ADR-0198）：OnlineParetoRebalancer +
+    release.yml；
+  - 测试：新增 482 项；全量回归 **7360/7360 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager

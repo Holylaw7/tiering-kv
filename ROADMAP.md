@@ -672,6 +672,21 @@
 - 后续：真实执行门禁 Linux Runner、异步拓扑感知聚合、真实市场 API
   （Phase 40+）。
 
+## Phase 40 — 拓扑感知自治与对象存储收敛 ✅
+
+- 交付：门禁收敛 v6（ADR-0192）、拓扑联邦自治（ADR-0193）、对象存储
+  归档（ADR-0194）、跨链互操作（ADR-0195）、Spot 实时竞价
+  （ADR-0196）、学习型加固（ADR-0197）、在线 Pareto + v2.3
+  （ADR-0198）。
+- 测试：新增 482 项（surefire 口径）；全量回归 **7360/7360 全绿**
+  （目标 ≥7328 ✅，+6 门控跳过）。
+- 基准（[phase40-production-report.md](
+  docs/benchmark/phase40-production-report.md)）：拓扑联邦 200K–1.43M
+  ops/s、归档 500K–2.5M ops/s、跨链 16.9K–108.7K ops/s、竞价
+  333K–435K ops/s。
+- 后续：真实执行门禁 Linux Runner、真实 S3 API、真实市场做市
+  （Phase 41+）。
+
 ## 技术债登记
 
 | 编号 | 描述 | 来源 | 计划消除 |
