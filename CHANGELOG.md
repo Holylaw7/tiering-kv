@@ -151,6 +151,17 @@
     ChurnDetector / CommercialAlert；
   - v1.7 发布流水线 + JVM 级生产门禁（ADR-0156）；
   - 测试：新增 356 项；全量回归 **4926/4926 全绿**（+6 门控跳过）。
+- Phase 35 全球 AI 自治与合规即代码：
+  - 全球受限自治（ADR-0157）：GlobalAutonomyOrchestrator /
+    GlobalTrafficAutonomy（日预算/地域上限/熔断/回滚）；
+  - 跨云物化视图（ADR-0158）：MaterializedViewManager（stale 标记）；
+  - 合规即代码（ADR-0159）：RegulationVersion / RegulationVersionStore /
+    ContinuousAuditPipeline；
+  - 成本优化（ADR-0160）：WorkloadCostOptimizer；
+  - 网络隔离（ADR-0161）：NetworkIsolationDomain / IsolationPolicy；
+  - SLO 管理（ADR-0162）：SloManager / SloAlert；
+  - v1.8 发布流水线 + JVM 级生产门禁 + 参数化边缘矩阵（ADR-0163）；
+  - 测试：新增 360 项；全量回归 **5286/5286 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
