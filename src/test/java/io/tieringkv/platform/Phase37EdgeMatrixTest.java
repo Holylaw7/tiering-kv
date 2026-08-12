@@ -45,7 +45,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class Phase37EdgeMatrixTest {
 
     @ParameterizedTest(name = "cost {0}")
-    @ValueSource(doubles = {0.0, 0.3, 0.7, 1.0})
+    @ValueSource(doubles = {0.0, 0.3, 0.5, 0.7, 1.0})
     void moFenceCostFeedback(double cost) {
         MultiObjectiveFence fence = fence();
         double score = fence.score(new Feedback(cost, 0, 0));
