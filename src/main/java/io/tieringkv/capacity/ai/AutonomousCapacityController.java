@@ -77,6 +77,15 @@ public final class AutonomousCapacityController {
         adjustmentsToday = 0;
     }
 
+    /** 回滚恢复：直接设置节点数，不消耗当日预算。 */
+    public synchronized void restore(int nodes) {
+        if (nodes < 1) {
+            throw new IllegalArgumentException(
+                    "nodes must be positive");
+        }
+        currentNodes = nodes;
+    }
+
     public synchronized int currentNodes() {
         return currentNodes;
     }

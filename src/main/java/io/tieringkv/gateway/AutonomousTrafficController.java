@@ -88,6 +88,10 @@ public final class AutonomousTrafficController {
         return circuitOpen;
     }
 
+    public RegionQuota quota() {
+        return quota;
+    }
+
     /** 回滚：恢复全部已应用调整。 */
     public synchronized void rollback() {
         previous.forEach(quota::setQuota);
