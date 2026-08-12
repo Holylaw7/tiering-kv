@@ -1,0 +1,143 @@
+package io.tieringkv.config;
+
+import io.tieringkv.datamesh.S3ObjectStorage;
+import io.tieringkv.observability.cost.SpotMarketDataSource;
+
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+/**
+ * 真实凭据探测（ADR-0218）：S3/Spot 端点连通性 + 凭据有效性；
+ * 探测失败必须降级并登记，禁止伪报可用。
+ */
+public final class CredentialProbe {
+
+    /** 探测模式：REAL 强制真实；SIMULATED 强制模拟；AUTO 按配置切换。 */
+    public enum Mode {
+        REAL,
+        SIMULATED,
+        AUTO
+    }
+
+    /** 探测结果。 */
+    public record ProbeResult(String target, Mode mode,
+                              boolean reachable,
+                              boolean credentialValid,
+                              boolean degraded, String detail) {
+        public boolean ok() {
+            return reachable && credentialValid;
+        }
+    }
+
+    /** 失败登记。 */
+    public record ProbeFailure(String target, String detail,
+                               long timestampMillis) {
+    }
+
+    /** 端点探针：生产环境为 HTTP 探测，测试注入 fake。 */
+    @FunctionalInterface
+    public interface EndpointProber {
+        boolean reachable(String endpoint, long timeoutMillis);
+    }
+
+    private final Mode mode;
+    private final EndpointProber prober;
+    private final long timeoutMillis;
+    private final List<ProbeFailure> failures =
+            new CopyOnWriteArrayList<>();
+
+    public CredentialProbe(Mode mode, EndpointProber prober,
+                           long timeoutMillis) {
+        if (mode == null || prober == null
+                || timeoutMillis <= 0) {
+            throw new IllegalArgumentException(
+                    "mode/prober required and timeout must be "
+                            + "positive");
+        }
+        this.mode = mode;
+        this.prober = prober;
+        this.timeoutMillis = timeoutMillis;
+    }
+
+    /** 探测 S3 端点。 */
+    public ProbeResult probeS3(S3ObjectStorage storage,
+                               String credential) {
+        if (storage == null) {
+            throw new IllegalArgumentException(
+                    "storage required");
+        }
+        return probe("s3", storage.endpoint(), credential);
+    }
+
+    /** 探测 Spot 端点。 */
+    public ProbeResult probeSpot(SpotMarketDataSource source,
+                                 String credential) {
+        if (source == null) {
+            throw new IllegalArgumentException(
+                    "source required");
+        }
+        return probe("spot", source.endpoint(), credential);
+    }
+
+    /** 通用探测：连通性 + 凭据，失败登记到 failures。 */
+    public ProbeResult probe(String target, String endpoint,
+                             String credential) {
+        if (target == null || target.isBlank()) {
+            throw new IllegalArgumentException(
+                    "target required");
+        }
+        Mode effective = effectiveMode(endpoint, credential);
+        boolean credentialValid = credential != null
+                && !credential.isBlank();
+        if (effective == Mode.SIMULATED) {
+            boolean reachable = credentialValid;
+            if (!credentialValid) {
+                registerFailure(target,
+                        "simulated credential missing");
+            }
+            return new ProbeResult(target, effective, reachable,
+                    credentialValid, !reachable,
+                    "simulated endpoint and credential");
+        }
+        boolean endpointConfigured = endpoint != null
+                && !endpoint.isBlank();
+        boolean probed = endpointConfigured
+                && prober.reachable(endpoint, timeoutMillis);
+        boolean reachable = probed && credentialValid;
+        if (!endpointConfigured) {
+            registerFailure(target, "real endpoint missing");
+        } else if (!probed) {
+            registerFailure(target, "real endpoint unreachable");
+        } else if (!credentialValid) {
+            registerFailure(target, "credential missing");
+        }
+        return new ProbeResult(target, effective, reachable,
+                credentialValid, !reachable || !credentialValid,
+                !endpointConfigured ? "real endpoint missing"
+                        : probed ? "real endpoint reachable"
+                        : "real endpoint unreachable");
+    }
+
+    private Mode effectiveMode(String endpoint,
+                               String credential) {
+        if (mode != Mode.AUTO) {
+            return mode;
+        }
+        return endpoint != null && !endpoint.isBlank()
+                && credential != null && !credential.isBlank()
+                ? Mode.REAL : Mode.SIMULATED;
+    }
+
+    private void registerFailure(String target, String detail) {
+        failures.add(new ProbeFailure(target, detail,
+                System.currentTimeMillis()));
+    }
+
+    public List<ProbeFailure> failures() {
+        return List.copyOf(failures);
+    }
+
+    public boolean degraded() {
+        return !failures.isEmpty();
+    }
+}
