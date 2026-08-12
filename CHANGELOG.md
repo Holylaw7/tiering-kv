@@ -190,6 +190,16 @@
   - 风险评分 + v2.1（ADR-0184）：PolicyRiskScorer / RiskDashboard +
     release.yml；
   - 测试：新增 393 项；全量回归 **6433/6433 全绿**（+6 门控跳过）。
+- Phase 39 多智能体自治与生产验证（v2.2.0）：
+  - 门禁收敛 v5（ADR-0185）：Phase39ProductionGateTest + EdgeMatrix；
+  - 多智能体自治（ADR-0186）：MultiAgentAutonomy（联邦聚合）；
+  - 自动分层（ADR-0187）：AutoTierManager；
+  - 链上锚定（ADR-0188）：ChainAnchor / ChainVerifier；
+  - Spot 市场预测（ADR-0189）：SpotMarketFeed / SpotRatePredictor；
+  - 自适应加固（ADR-0190）：AdaptiveHardener；
+  - Pareto 容量 + v2.2（ADR-0191）：ParetoCapacityOptimizer +
+    release.yml；
+  - 测试：新增 445 项；全量回归 **6878/6878 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
