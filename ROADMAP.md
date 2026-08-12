@@ -658,6 +658,20 @@
 - 后续：真实执行门禁 Linux Runner、多智能体联合学习、签名密钥轮换
   （Phase 39+）。
 
+## Phase 39 — 多智能体自治与生产验证 ✅
+
+- 交付：门禁收敛 v5（ADR-0185）、多智能体自治（ADR-0186）、自动分层
+  （ADR-0187）、链上锚定（ADR-0188）、Spot 市场预测（ADR-0189）、
+  自适应加固（ADR-0190）、Pareto 容量 + v2.2（ADR-0191）。
+- 测试：新增 445 项（surefire 口径）；全量回归 **6878/6878 全绿**
+  （目标 ≥6833 ✅，+6 门控跳过）。
+- 基准（[phase39-production-report.md](
+  docs/benchmark/phase39-production-report.md)）：多智能体 250K–2.5M
+  ops/s、锚定 62.5K–178.6K ops/s、分层 1M–10M ops/s、spot 预测
+  1M–5M ops/s。
+- 后续：真实执行门禁 Linux Runner、异步拓扑感知聚合、真实市场 API
+  （Phase 40+）。
+
 ## 技术债登记
 
 | 编号 | 描述 | 来源 | 计划消除 |
