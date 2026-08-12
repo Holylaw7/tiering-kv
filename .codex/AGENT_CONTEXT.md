@@ -567,6 +567,18 @@ tiering-kv/
   跨区一阶段规模化、Coprocessor JOIN/GROUP BY 下推、TSO 跨地域容灾、
   自治 PD 全自动。
 
+## 7.2 Phase 44 状态（v2.7.0 发布候选）
+
+- 分支：`feature/phase44-real-runner-gate-closure`；
+- 交付：门禁收敛 v10（ADR-0220）、全局一阶段规模化（ADR-0221，
+  TD-079 规模化）、全算子联合下推（ADR-0222，TD-080 规模化）、
+  TSO 跨地域容灾（ADR-0223）、自治 PD 全自动（ADR-0224）、TiKV
+  对比基线 + 真实凭据 v2（ADR-0225，TD-076 关闭方向）、v2.7 冻结
+  （ADR-0226）；
+- 测试：新增 ≥520；全量回归 ≥9412 全绿；
+- 剩余：真实 Runner 门禁（Phase 45），全局一阶段跨云、多表 JOIN /
+  窗口函数、TSO 全球统一时钟、自治 PD 无人值守、TiKV 真实跨机基准。
+
 ## 8. 会话启动清单
 
 1. `git status` + `git log --oneline -10`；
