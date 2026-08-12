@@ -9,7 +9,11 @@ public final class CoprocessorRequest {
     public enum Operator {
         FILTER,
         PROJECT,
-        AGGREGATE
+        AGGREGATE,
+        JOIN,
+        GROUP_BY,
+        ORDER_BY,
+        LIMIT
     }
 
     /** 行：键 + 值。 */
