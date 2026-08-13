@@ -335,6 +335,25 @@
   - v3.1 冻结（ADR-0254）：release.yml v3.1.0 标签 +
     Phase48BenchmarkTest/Baseline 接入；
   - 测试：新增 ≥560 项；全量回归 **≥11625 全绿**（+6 门控跳过）。
+- Phase 49 真实 Runner 闭环归档与跨监管域联邦一致性（v3.2.0）：
+  - 门禁收敛 v15 + 闭环归档（ADR-0255）：GateConvergenceV15
+    （CLOSED / ENV_BLOCKED / REGISTERED_RELEASE 唯一终态）+
+    RunnerClosureArchive（终态快照 + 趋势点 + 告警历史 + 报表）；
+  - 跨监管域联邦仲裁（ADR-0256）：CrossRegulatoryFederationArbitration
+    （cloud → domain 边界发现 + 域级多数仲裁 + 任一域不合格回退 2PC，
+    与 MultiOrg/GlobalUnified/resolved-ts 联动）；
+  - RL 多智能体联邦学习（ADR-0257）：FederatedPushdownLearning
+    （FedAvg 聚合 + 梯度裁剪 + 噪声注入 + 语义一致性检查）；
+  - 商用授时设备接入（ADR-0258）：CommercialTimeDeviceConnector
+    （设备 SPI + 主备切换 + 单调防回拨 + 模拟回退）；
+  - 监管法规库 + 差异报告（ADR-0259）：RegulatoryKnowledgeBase
+    （版本化 + 条款差异 + 摘要校验 + 轮换 + 证书联动）；
+  - TiKV 回归归档 + 真实凭据 v7（ADR-0260）：
+    ProductionBaselineRegressionArchive（快照/趋势/告警/报表）+
+    probeNetworkV7（可达性/认证/权限/配额/延迟/抖动 + 降级登记）；
+  - v3.2 冻结（ADR-0261）：release.yml v3.2.0 标签 +
+    Phase49BenchmarkTest/Baseline 接入；
+  - 测试：新增 ≥570 项；全量回归 **≥12205 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
