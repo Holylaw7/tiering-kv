@@ -64,6 +64,28 @@ public final class CredentialProbe {
         long latencyMillis(String endpoint, long timeoutMillis);
     }
 
+    /** 抖动探针（ADR-0260）：返回毫秒抖动；-1 表示不可测。 */
+    @FunctionalInterface
+    public interface JitterProbe {
+        long jitterMillis(String endpoint, long timeoutMillis);
+    }
+
+    /** v7 网络握手结果：可达性 + 认证 + 权限 + 配额 + 延迟 + 抖动。 */
+    public record NetworkProbeResult(String target, Mode mode,
+                                     boolean reachable,
+                                     boolean credentialValid,
+                                     boolean permissionAllowed,
+                                     boolean quotaOk,
+                                     long latencyMillis,
+                                     long jitterMillis,
+                                     boolean degraded,
+                                     String detail) {
+        public boolean ok() {
+            return reachable && credentialValid
+                    && permissionAllowed && quotaOk && !degraded;
+        }
+    }
+
     /** 真实 HTTP 探针（ADR-0225）：GET 端点，2xx/3xx/4xx 视为可达。 */
     public static EndpointProber realHttpProber(long timeoutMillis) {
         java.net.http.HttpClient client =
@@ -212,6 +234,49 @@ public final class CredentialProbe {
                 false,
                 "reachable, authenticated, authorized, within "
                         + "quota and latency " + observed + "ms");
+    }
+
+    /** v7 网络握手矩阵：六项检查 + 失败登记 + 自动降级。 */
+    public NetworkProbeResult probeNetworkV7(
+            String target, String endpoint, String credential,
+            EndpointProber transport, AuthVerifier auth,
+            PermissionCheck permission, QuotaCheck quota,
+            LatencyProbe latency, JitterProbe jitter,
+            long maxLatencyMillis, long maxJitterMillis) {
+        if (jitter == null || maxJitterMillis < 0) {
+            throw new IllegalArgumentException(
+                    "jitter required and maxJitter must be "
+                            + "non-negative");
+        }
+        ProbeResult base = probeWithLatency(target, endpoint,
+                credential, transport, auth, permission, quota,
+                latency, maxLatencyMillis);
+        long observedLatency = latency.latencyMillis(endpoint,
+                timeoutMillis);
+        if (!base.ok()) {
+            return new NetworkProbeResult(target, base.mode(),
+                    base.reachable(), base.credentialValid(),
+                    false, false, observedLatency, -1, true,
+                    base.detail());
+        }
+        long observedJitter = jitter.jitterMillis(endpoint,
+                timeoutMillis);
+        if (observedJitter < 0
+                || observedJitter > maxJitterMillis) {
+            registerFailure(target,
+                    "jitter " + observedJitter + "ms exceeds "
+                            + "limit " + maxJitterMillis + "ms");
+            return new NetworkProbeResult(target, Mode.REAL,
+                    true, true, true, true, observedLatency,
+                    observedJitter, true,
+                    "degraded: jitter exceeds limit");
+        }
+        return new NetworkProbeResult(target, Mode.REAL, true,
+                true, true, true, observedLatency,
+                observedJitter, false,
+                "v7 network handshake ok: latency "
+                        + observedLatency + "ms, jitter "
+                        + observedJitter + "ms");
     }
 
     private final Mode mode;
