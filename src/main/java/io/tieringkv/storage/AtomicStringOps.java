@@ -40,4 +40,9 @@ public interface AtomicStringOps {
     /** 原子更新：段锁内读旧值 -> 转换 -> 写新值（保留 TTL）；
      * transform 返回 null 表示删除。返回新值或 null。 */
     byte[] update(byte[] key, UnaryOperator<byte[]> transform);
+
+    /** 键版本（WATCH 守卫）：缺失/不支持返回 0。 */
+    default long versionOf(byte[] key) {
+        return 0;
+    }
 }

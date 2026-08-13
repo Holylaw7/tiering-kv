@@ -4,7 +4,10 @@ import io.tieringkv.command.RespCommand;
 import io.tieringkv.protocol.RespVersion;
 import io.tieringkv.pubsub.ConnectionSubscriber;
 import io.tieringkv.pubsub.PubSubBroker;
+import io.tieringkv.storage.types.ByteArrayKey;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,6 +27,7 @@ public final class ConnectionContext {
             new ConnectionSubscriber();
     private boolean inMulti;
     private final List<RespCommand> txnQueue = new ArrayList<>();
+    private final Map<ByteArrayKey, Long> watched = new HashMap<>();
 
     public static ConnectionContext enter() {
         ConnectionContext context = new ConnectionContext();
@@ -99,10 +103,36 @@ public final class ConnectionContext {
         inMulti = false;
     }
 
+    public void watch(ByteArrayKey key, long version) {
+        watched.put(key, version);
+    }
+
+    public Map<ByteArrayKey, Long> watched() {
+        return Map.copyOf(watched);
+    }
+
+    public void unwatchAll() {
+        watched.clear();
+    }
+
+    /** EXEC 前校验：全部被观察键版本一致。 */
+    public boolean versionsMatch(
+            java.util.function.Function<byte[], Long> versionOf) {
+        for (Map.Entry<ByteArrayKey, Long> entry
+                : watched.entrySet()) {
+            long current = versionOf.apply(entry.getKey().data());
+            if (current != entry.getValue()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** 连接关闭清理：退订 + 清空事务 + 重置协议版本。 */
     public void cleanup() {
         SHARED_BROKER.unsubscribeAll(subscriber);
         clearTxnQueue();
+        unwatchAll();
         version = RespVersion.RESP2;
         subscriber.clear();
     }
