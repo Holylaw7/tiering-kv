@@ -2,7 +2,9 @@ package io.tieringkv.storage.memory;
 
 import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.storage.StorageIterator;
+import io.tieringkv.storage.AtomicStringOps;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -21,7 +23,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * <p>写入单写者每段；读取读锁 + 惰性过期检查；DELETE 使用 tombstone；
  * TTL 采用惰性 + 主动混合（ADR-0009）；内存压力回调在锁外触发。
  */
-public final class MemTable implements StorageEngine, AutoCloseable {
+public final class MemTable implements StorageEngine, AtomicStringOps, AutoCloseable {
 
     public static final int SEGMENT_COUNT = 256;
     private static final long DEFAULT_TTL_INTERVAL_MILLIS = 1000;
@@ -401,6 +403,218 @@ public final class MemTable implements StorageEngine, AutoCloseable {
     @Override
     public long size() {
         return liveSize.get();
+    }
+
+    // ---------- 原子字符串操作（ADR-0269：段写锁内 read-modify-write） ----------
+
+    @Override
+    public long increment(byte[] key, long delta) {
+        long now = timeSource.nowMillis();
+        Segment segment = segments[segmentIndex(key)];
+        segment.lock.writeLock().lock();
+        try {
+            KeyValueEntry current = liveOrNull(segment, key, now);
+            long base = current == null ? 0
+                    : Long.parseLong(new String(current.value(),
+                    StandardCharsets.UTF_8));
+            long result = Math.addExact(base, delta);
+            byte[] next = Long.toString(result)
+                    .getBytes(StandardCharsets.UTF_8);
+            applyLiveLocked(segment, KeyValueEntry.live(key, next, now,
+                    remainingTtl(current, now), version.next()), now);
+            return result;
+        } finally {
+            segment.lock.writeLock().unlock();
+        }
+    }
+
+    @Override
+    public int append(byte[] key, byte[] value) {
+        if (value == null) {
+            throw new IllegalArgumentException("null value");
+        }
+        long now = timeSource.nowMillis();
+        Segment segment = segments[segmentIndex(key)];
+        segment.lock.writeLock().lock();
+        try {
+            KeyValueEntry current = liveOrNull(segment, key, now);
+            byte[] base = current == null ? new byte[0] : current.value();
+            byte[] merged = Arrays.copyOf(base,
+                    base.length + value.length);
+            System.arraycopy(value, 0, merged, base.length,
+                    value.length);
+            applyLiveLocked(segment, KeyValueEntry.live(key, merged,
+                    now, remainingTtl(current, now), version.next()),
+                    now);
+            return merged.length;
+        } finally {
+            segment.lock.writeLock().unlock();
+        }
+    }
+
+    @Override
+    public byte[] getSet(byte[] key, byte[] value) {
+        long now = timeSource.nowMillis();
+        Segment segment = segments[segmentIndex(key)];
+        segment.lock.writeLock().lock();
+        try {
+            KeyValueEntry current = liveOrNull(segment, key, now);
+            byte[] old = current == null ? null : current.value();
+            applyLiveLocked(segment, KeyValueEntry.live(key, value,
+                    now, NO_TTL, version.next()), now);
+            return old;
+        } finally {
+            segment.lock.writeLock().unlock();
+        }
+    }
+
+    @Override
+    public byte[] getAndSetPreservingTtl(byte[] key, byte[] value) {
+        long now = timeSource.nowMillis();
+        Segment segment = segments[segmentIndex(key)];
+        segment.lock.writeLock().lock();
+        try {
+            KeyValueEntry current = liveOrNull(segment, key, now);
+            byte[] old = current == null ? null : current.value();
+            applyLiveLocked(segment, KeyValueEntry.live(key, value,
+                    now, remainingTtl(current, now), version.next()),
+                    now);
+            return old;
+        } finally {
+            segment.lock.writeLock().unlock();
+        }
+    }
+
+    @Override
+    public byte[] getDelete(byte[] key) {
+        long now = timeSource.nowMillis();
+        Segment segment = segments[segmentIndex(key)];
+        segment.lock.writeLock().lock();
+        try {
+            KeyValueEntry current = liveOrNull(segment, key, now);
+            if (current == null) {
+                return null;
+            }
+            byte[] old = current.value();
+            KeyValueEntry tombstone = KeyValueEntry.tombstone(key,
+                    now, version.next());
+            segment.list.put(tombstone);
+            memoryManager.remove(current.size());
+            memoryManager.add(tombstone.size());
+            liveSize.decrementAndGet();
+            return old;
+        } finally {
+            segment.lock.writeLock().unlock();
+        }
+    }
+
+    @Override
+    public boolean putIfAbsent(byte[] key, byte[] value) {
+        long now = timeSource.nowMillis();
+        Segment segment = segments[segmentIndex(key)];
+        segment.lock.writeLock().lock();
+        try {
+            if (liveOrNull(segment, key, now) != null) {
+                return false;
+            }
+            applyLiveLocked(segment, KeyValueEntry.live(key, value,
+                    now, NO_TTL, version.next()), now);
+            return true;
+        } finally {
+            segment.lock.writeLock().unlock();
+        }
+    }
+
+    @Override
+    public long ttlMillis(byte[] key) {
+        long now = timeSource.nowMillis();
+        Segment segment = segments[segmentIndex(key)];
+        segment.lock.readLock().lock();
+        try {
+            KeyValueEntry entry = segment.list.get(key);
+            if (entry == null || !entry.isLive(now)) {
+                return -2;
+            }
+            return entry.expireTimestamp() < 0
+                    ? -1 : entry.expireTimestamp() - now;
+        } finally {
+            segment.lock.readLock().unlock();
+        }
+    }
+
+    @Override
+    public boolean persist(byte[] key) {
+        long now = timeSource.nowMillis();
+        Segment segment = segments[segmentIndex(key)];
+        segment.lock.writeLock().lock();
+        try {
+            KeyValueEntry current = liveOrNull(segment, key, now);
+            if (current == null || current.expireTimestamp() < 0) {
+                return false;
+            }
+            applyLiveLocked(segment, KeyValueEntry.live(key,
+                    current.value(), now, NO_TTL, version.next()),
+                    now);
+            return true;
+        } finally {
+            segment.lock.writeLock().unlock();
+        }
+    }
+
+    @Override
+    public boolean expireAt(byte[] key, long expireAtMillis) {
+        long now = timeSource.nowMillis();
+        Segment segment = segments[segmentIndex(key)];
+        segment.lock.writeLock().lock();
+        try {
+            KeyValueEntry current = liveOrNull(segment, key, now);
+            if (current == null) {
+                return false;
+            }
+            if (expireAtMillis <= now) {
+                applyDeleteLocked(segment, key, now, version.next());
+            } else {
+                applyLiveLocked(segment, KeyValueEntry.live(key,
+                        current.value(), now,
+                        expireAtMillis - now, version.next()), now);
+            }
+            return true;
+        } finally {
+            segment.lock.writeLock().unlock();
+        }
+    }
+
+    /** 段内单条应用（写锁内调用）：替换旧条目并维护内存/TTL 调度。 */
+    private void applyLiveLocked(Segment segment,
+                                 KeyValueEntry entry, long now) {
+        KeyValueEntry old = segment.list.putAndGetOld(entry);
+        if (old != null) {
+            memoryManager.remove(old.size());
+            if (old.isLive(now)) {
+                liveSize.decrementAndGet();
+            }
+        }
+        memoryManager.add(entry.size());
+        liveSize.incrementAndGet();
+        if (entry.expireTimestamp() >= 0) {
+            ttlManager.schedule(entry.expireTimestamp(),
+                    entry.version(), segmentIndex(entry.key()),
+                    entry.key());
+        }
+    }
+
+    private static KeyValueEntry liveOrNull(Segment segment,
+                                            byte[] key, long now) {
+        KeyValueEntry entry = segment.list.get(key);
+        return entry != null && entry.isLive(now) ? entry : null;
+    }
+
+    private static long remainingTtl(KeyValueEntry entry, long now) {
+        if (entry == null || entry.expireTimestamp() < 0) {
+            return NO_TTL;
+        }
+        long remaining = entry.expireTimestamp() - now;
+        return remaining > 0 ? remaining : NO_TTL;
     }
 
     @Override

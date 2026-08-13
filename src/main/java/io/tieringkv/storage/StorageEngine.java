@@ -43,6 +43,17 @@ public interface StorageEngine {
         return removed;
     }
 
+    /** 清空全部数据（FLUSHDB/FLUSHALL）：默认快照遍历 + 物理移除。 */
+    default void clear() {
+        java.util.List<byte[]> keys = new ArrayList<>();
+        try (StorageIterator iterator = iterator()) {
+            while (iterator.hasNext()) {
+                keys.add(iterator.next().key());
+            }
+        }
+        removeAll(keys);
+    }
+
     boolean exists(byte[] key);
 
     StorageIterator iterator();
