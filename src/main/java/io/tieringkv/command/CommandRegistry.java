@@ -1,6 +1,7 @@
 package io.tieringkv.command;
 
 import io.tieringkv.pubsub.PubSubBroker;
+import io.tieringkv.session.ConnectionContext;
 
 import java.util.HashMap;
 import java.util.List;
@@ -11,7 +12,7 @@ import java.util.function.Supplier;
 public final class CommandRegistry {
 
     private static final PubSubBroker DEFAULT_BROKER =
-            new PubSubBroker();
+            ConnectionContext.sharedBroker();
 
     private final Map<String, Command> commands;
 
@@ -120,9 +121,20 @@ public final class CommandRegistry {
                 new PubSubCommand("subscribe", DEFAULT_BROKER),
                 new PubSubCommand("unsubscribe", DEFAULT_BROKER),
                 new PubSubCommand("psubscribe", DEFAULT_BROKER),
-                new PubSubCommand("punsubscribe", DEFAULT_BROKER))) {
+                new PubSubCommand("punsubscribe", DEFAULT_BROKER),
+                new MultiCommand(),
+                new DiscardCommand(),
+                new WatchCommand(),
+                new HashCommand("hscan"),
+                new ListCommand("linsert"),
+                new ListCommand("lmove"),
+                new ListCommand("rpoplpush"),
+                new ZSetCommand("zrangebylex"),
+                new ZSetCommand("zlexcount"),
+                new ZSetCommand("zremrangebylex"))) {
             map.put(command.name(), command);
         }
+        map.put("exec", new ExecCommand(new CommandRegistry(map)));
         map.put("command", new CommandCommand(
                 new CommandRegistry(map)));
         return new CommandRegistry(map);
