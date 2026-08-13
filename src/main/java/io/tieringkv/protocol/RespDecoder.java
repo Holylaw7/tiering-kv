@@ -21,6 +21,19 @@ public final class RespDecoder extends ByteToMessageDecoder {
     private static final int MAX_BULK_LENGTH = 512 * 1024 * 1024;
     private static final int MAX_ARRAY_LENGTH = 1024 * 1024;
 
+    /** 单值解码（测试/工具用）：解码输入中的第一个 RESP 值。 */
+    public static RespValue decodeSingle(ByteBuf in) {
+        RespDecoder decoder = new RespDecoder();
+        List<Object> out = new ArrayList<>();
+        try {
+            decoder.decode(null, in, out);
+        } catch (Exception e) {
+            throw new RespProtocolException(
+                    "decode failed: " + e.getMessage());
+        }
+        return out.isEmpty() ? null : (RespValue) out.get(0);
+    }
+
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
         while (in.isReadable()) {
