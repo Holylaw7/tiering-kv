@@ -243,6 +243,37 @@ ADR-0292）+ 阻塞命令（BLPOP/BRPOP 超时语义，ADR-0293）+ 过期事件
 + EXPLAIN + HNSW 持久化，ADR-0295）；命令注册表 109 个；全量测试
 ≥14470 全绿（Phase 54，v3.6.0 RC）。
 
+## 快速开始
+
+```bash
+mvn -q package
+java -jar target/tiering-kv-3.7.0-SNAPSHOT.jar --nodeId n1 --port 6379
+redis-cli PING
+redis-cli SET k v
+redis-cli GET k
+```
+
+完整步骤见 [docs/operations/quickstart.md](docs/operations/quickstart.md)。
+
+## 能力矩阵
+
+| 能力 | 状态 |
+| --- | --- |
+| RESP2/RESP3 + 109 命令 | PRODUCT |
+| 冷热分层 / WAL / LSM / Raft / MVCC / 2PC | PRODUCT |
+| hash/list/set/zset/stream | PRODUCT（基础） |
+| MULTI/EXEC/WATCH | PRODUCT（EXEC 跨段回滚） |
+| Pub/Sub / 消费组 | PRODUCT（本地）/ 基础 |
+| SQL / 向量 / SaaS / AI | EXPERIMENTAL |
+| 量子授时 / S3 / Spot | ADAPTER |
+
+## 文档导航
+
+- [快速开始](docs/operations/quickstart.md)
+- [运维手册](docs/operations/operations-runbook.md)
+- [兼容矩阵](docs/protocol/resp2-compatibility-matrix.md)
+- [性能白皮书](docs/benchmark/final-performance-whitepaper.md)
+
 **边界（如实声明）**：仍为教学/工程级实现，暂不宣称"高性能 Redis 替代品"；
 分布式为真实 TCP + 持久化原型，基准以进程内为主，跨机 `tc netem` 验证
 待 Linux+Docker 环境执行（部署产物已交付）；100B/1KB 零拷贝迁移
@@ -707,7 +738,7 @@ tiering-kv/
 │   ├── architecture/                    # 架构设计（overview / storage / network / concurrency）
 │   ├── adr/                             # 架构决策记录（ADR-0001 ~ 0038）
 │   ├── design/                          # 详细设计（protocol / memory / lsm / bitcask / eviction）
-│   ├── benchmark/                       # 性能报告（计划 + 报告占位）
+│   ├── benchmark/                       # 性能报告
 │   ├── review/                          # 技术评审
 │   └── operations/                      # 运维文档
 │
