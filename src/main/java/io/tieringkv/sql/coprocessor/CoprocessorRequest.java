@@ -13,7 +13,8 @@ public final class CoprocessorRequest {
         JOIN,
         GROUP_BY,
         ORDER_BY,
-        LIMIT
+        LIMIT,
+        WINDOW
     }
 
     /** 行：键 + 值。 */

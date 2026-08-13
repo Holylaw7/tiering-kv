@@ -40,13 +40,14 @@ public final class CoprocessorExecutor {
                             Row::value))
                     .toList();
             case LIMIT -> inRange;
+            case WINDOW -> inRange;
         };
     }
 
     /**
      * 执行多算子链：固定顺序 JOIN → FILTER → PROJECT → AGGREGATE →
-     * GROUP_BY → ORDER_BY → LIMIT（ADR-0222），与上层 SQL 语义一致；
-     * 同一算子出现多次时按出现次数重复应用（兼容旧链语义）。
+     * GROUP_BY → WINDOW → ORDER_BY → LIMIT（ADR-0222/0229），与上层
+     * SQL 语义一致；同一算子出现多次时按出现次数重复应用。
      */
     public List<Row> executeCompound(
             CompoundCoprocessorRequest request, List<Row> rows) {
@@ -72,6 +73,8 @@ public final class CoprocessorExecutor {
         current = applyRepeated(current, operators,
                 Operator.GROUP_BY, request);
         current = applyRepeated(current, operators,
+                Operator.WINDOW, request);
+        current = applyRepeated(current, operators,
                 Operator.ORDER_BY, request);
         current = applyRepeated(current, operators,
                 Operator.LIMIT, request);
@@ -88,13 +91,17 @@ public final class CoprocessorExecutor {
         List<Row> current = rows;
         for (int i = 0; i < count; i++) {
             current = switch (operator) {
-                case JOIN -> join(current, request.joinRows());
+                case JOIN -> joinTables(
+                        join(current, request.joinRows()),
+                        request);
                 case FILTER -> filter(current,
                         request.threshold());
                 case PROJECT -> project(current,
                         request.threshold());
                 case AGGREGATE -> aggregate(current);
                 case GROUP_BY -> groupBy(current);
+                case WINDOW -> window(current,
+                        request.windowFunction());
                 case ORDER_BY -> orderBy(current,
                         request.orderDescending());
                 case LIMIT -> limit(current, request.limit());
@@ -128,6 +135,52 @@ public final class CoprocessorExecutor {
                 .toList();
     }
 
+    /**
+     * 窗口函数：按 key 分区、value 升序（ADR-0229）。
+     * ROW_NUMBER：组内连续编号；RANK：同值同排名。
+     */
+    private static List<Row> window(
+            List<Row> rows,
+            CompoundCoprocessorRequest.WindowFunction function) {
+        if (function == CompoundCoprocessorRequest
+                .WindowFunction.NONE) {
+            return rows;
+        }
+        List<Row> sorted = rows.stream()
+                .sorted(Comparator.comparing(Row::key)
+                        .thenComparingDouble(Row::value))
+                .toList();
+        List<Row> result = new ArrayList<>();
+        int index = 0;
+        while (index < sorted.size()) {
+            String partition = sorted.get(index).key();
+            int end = index;
+            while (end < sorted.size()
+                    && sorted.get(end).key()
+                    .equals(partition)) {
+                end++;
+            }
+            int position = 0;
+            int distinct = 0;
+            double previous = Double.NaN;
+            while (index < end) {
+                double value = sorted.get(index).value();
+                position++;
+                if (!Double.isNaN(previous)
+                        && value != previous) {
+                    distinct++;
+                }
+                double number = function == CompoundCoprocessorRequest
+                        .WindowFunction.ROW_NUMBER
+                        ? position : distinct + 1;
+                result.add(new Row(partition, number));
+                previous = value;
+                index++;
+            }
+        }
+        return result;
+    }
+
     /** 等值内连接：key 相等，value 相加（ADR-0222）。 */
     private static List<Row> join(List<Row> left, List<Row> right) {
         if (right.isEmpty()) {
@@ -143,6 +196,17 @@ public final class CoprocessorExecutor {
             }
         }
         return result;
+    }
+
+    /** 多表等值内连接：按请求顺序依次连接附加表。 */
+    private static List<Row> joinTables(
+            List<Row> rows,
+            CompoundCoprocessorRequest request) {
+        List<Row> current = rows;
+        for (List<Row> table : request.joinTables()) {
+            current = join(current, table);
+        }
+        return current;
     }
 
     /** 分组聚合：按 key 分组求和。 */
