@@ -10,3 +10,9 @@
 ## 流程
 
 RFC（docs/planning/rfc-template.md）→ 评审 → ADR → 分支开发。
+
+## 当前
+
+- RFC-0001（docs/planning/rfc-0001-v4-multi-model.md）：Pending，
+  等待批准；
+- 批准后：ADR-0318 + feature/v4-multi-model。

@@ -199,14 +199,21 @@ class WatchVersionGuardTest {
     @ParameterizedTest(name = "version command {0}")
     @MethodSource("versionCommands")
     void versionBumpsOnWrite(String command, Object[] args) {
-        ConnectionContext context = new ConnectionContext();
-        TestCommandRunner runner =
-                new TestCommandRunner(MemTable.create());
+        MemTable table = MemTable.create();
+        TestCommandRunner runner = new TestCommandRunner(table);
         runner.exec("set", "k", "1");
-        long before = withContext(context,
-                () -> io.tieringkv.storage.memory.MemTable
-                        .create() == null ? 0L : 0L);
-        assertThat(before).isZero();
+        long before = table.versionOf(
+                "k".getBytes(java.nio.charset.StandardCharsets
+                        .UTF_8));
+        runner.exec(command, args);
+        long after = table.versionOf(
+                "k".getBytes(java.nio.charset.StandardCharsets
+                        .UTF_8));
+        if ("del".equals(command)) {
+            assertThat(after).isZero();
+        } else {
+            assertThat(after).isGreaterThan(before);
+        }
     }
 
     static Stream<Arguments> keyCounts() {
