@@ -141,6 +141,8 @@ public final class CommandRegistry {
                 new StreamCommand("xreadgroup"),
                 new StreamCommand("xack"),
                 new StreamCommand("xpending"),
+                new StreamCommand("xclaim"),
+                new StreamCommand("xautoclaim"),
                 new ListCommand("blpop"),
                 new ListCommand("brpop"),
                 new UnwatchCommand())) {

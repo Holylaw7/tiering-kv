@@ -404,3 +404,12 @@ Enterprise-ready Distributed Database v3.7.0：分布式正确性验证、Stream
 - 详见 docs/release/v3.7.0-release-notes.md
 EOF
 fi
+
+if [[ "${VERSION}" == v3.7.0-ga ]]; then
+  cat <<EOF
+# Tiering-KV v3.7.0 GA Release Notes
+
+GA 发布：分布式正确性验证、消费组、事务持久化、文档产品化已完成；
+真实 Runner 门禁 SEALED_GA 封板声明（无远程环境）。
+EOF
+fi
