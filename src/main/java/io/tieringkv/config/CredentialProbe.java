@@ -52,6 +52,12 @@ public final class CredentialProbe {
         boolean allowed(String endpoint, String credential);
     }
 
+    /** 配额校验器（ADR-0246）：真实实现由 Runner 注入。 */
+    @FunctionalInterface
+    public interface QuotaCheck {
+        boolean withinQuota(String endpoint, String credential);
+    }
+
     /** 真实 HTTP 探针（ADR-0225）：GET 端点，2xx/3xx/4xx 视为可达。 */
     public static EndpointProber realHttpProber(long timeoutMillis) {
         java.net.http.HttpClient client =
@@ -139,6 +145,35 @@ public final class CredentialProbe {
         }
         return new ProbeResult(target, Mode.REAL, true, true,
                 false, "reachable, authenticated and authorized");
+    }
+
+    /** 带配额校验的网络握手：可达性 + 认证 + 权限 + 配额。 */
+    public ProbeResult probeWithQuota(
+            String target, String endpoint, String credential,
+            EndpointProber transport, AuthVerifier auth,
+            PermissionCheck permission, QuotaCheck quota) {
+        if (quota == null) {
+            throw new IllegalArgumentException(
+                    "quota required");
+        }
+        ProbeResult base = probeWithPermission(target,
+                endpoint, credential, transport, auth,
+                permission);
+        if (!base.ok()) {
+            return base;
+        }
+        boolean withinQuota = quota.withinQuota(endpoint,
+                credential);
+        if (!withinQuota) {
+            registerFailure(target, "quota exceeded");
+            return new ProbeResult(target, Mode.REAL, true,
+                    false, true,
+                    "degraded: quota exceeded");
+        }
+        return new ProbeResult(target, Mode.REAL, true, true,
+                false,
+                "reachable, authenticated, authorized "
+                        + "and within quota");
     }
 
     private final Mode mode;
