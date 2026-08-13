@@ -248,3 +248,37 @@ Enterprise-ready Distributed Database v3.2.0：Redis 协议兼容、LSM 冷热
 - 详见 docs/release/v3.2.0-release-notes.md
 EOF
 fi
+
+if [[ "${VERSION}" == v3.3.0* ]]; then
+  # 支持 v3.3.0-rc1 / v3.3.0 发布标签
+  cat <<EOF
+# Tiering-KV ${VERSION} Release Notes
+
+## 定位
+
+Enterprise-ready Distributed Database v3.3.0：Redis 协议兼容、LSM 冷热
+分层、Multi-Raft 分布式事务、Redis 命令族补齐。
+
+## 本版本能力
+
+- 字符串命令族（ADR-0269）：INCR/DECR/APPEND/STRLEN/GETSET/SETNX/
+  SETEX/GETDEL/GETRANGE/SETRANGE，段锁原子 + WAL 接入
+- TTL 命令族（ADR-0270）：EXPIRE/PEXPIRE/EXPIREAT/PEXPIREAT/TTL/
+  PTTL/PERSIST，语义与 Redis 对齐
+- 多键命令族（ADR-0271）：MGET/MSET/MSETNX/DEL/EXISTS 批量语义
+- 管理命令族（ADR-0272）：DBSIZE/FLUSHDB/SCAN/TYPE/CONFIG/CLIENT/
+  COMMAND
+- RESP2 兼容矩阵（ADR-0273）：整数/nil/空串/错误/数组形态对齐
+- 网关路由与 CROSSSLOT（ADR-0274）：单键 MOVED + 多键同槽校验
+
+## 质量摘要
+
+- 新增测试 ≥520；全量回归 ≥13190 全绿
+- 基准：见 docs/benchmark/phase51-production-report.md
+- 命令延迟：docs/benchmark/command-latency-report.md
+
+## 已知限制
+
+- 详见 docs/release/v3.3.0-release-notes.md
+EOF
+fi
