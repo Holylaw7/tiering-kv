@@ -20,7 +20,7 @@ public final class StreamCodec {
 
     /** 消费组（ADR-0300）。 */
     public record Group(String name, long lastMs, long lastSeq,
-                        List<Pending> pending) {
+                        List<Pending> pending, int deadLetters) {
     }
 
     /** 未确认条目。 */
@@ -68,6 +68,8 @@ public final class StreamCodec {
                 writeBytes(out, pending.consumer().getBytes(
                         StandardCharsets.UTF_8));
             }
+            out.writeBytes(TypedValueCodec.encodeInt(
+                    group.deadLetters()));
         }
         return out.toByteArray();
     }
@@ -122,9 +124,15 @@ public final class StreamCodec {
                             new String(consumer,
                                     StandardCharsets.UTF_8)));
                 }
+                int deadLetters = 0;
+                if (offset + 4 <= payload.length) {
+                    deadLetters = TypedValueCodec.decodeInt(
+                            payload, offset);
+                    offset += 4;
+                }
                 groups.add(new Group(new String(nameBytes,
                         StandardCharsets.UTF_8), lastMs, lastSeq,
-                        pending));
+                        pending, deadLetters));
             }
         }
         return new Decoded(entries, groups);

@@ -431,6 +431,15 @@
   - 文档产品化（ADR-0302）：quickstart/runbook/白皮书；
   - v3.7 冻结：release.yml v3.7.0 + Phase55 基准；
   - 测试：新增 ≥600 项；全量回归 **≥14730 全绿**（+6 门控跳过）。
+- Phase 56 GA 最终化与生产收口（v3.7.0 GA）：
+  - GA 冻结与发布执行（ADR-0304）；
+  - 真实 Runner 门禁最终复审与封板（ADR-0305，SEALED_GA）；
+  - Jepsen 式 harness 外部化（ADR-0306）；
+  - 消费组高级能力（ADR-0307，XCLAIM/XAUTOCLAIM + 死信）；
+  - 多集群联邦一致性（ADR-0308）；
+  - 运营收尾与 GA 基线（ADR-0309）；
+  - 最终质量门禁（ADR-0310）；
+  - 测试：新增 ≥500 项；全量回归 **≥14880 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager

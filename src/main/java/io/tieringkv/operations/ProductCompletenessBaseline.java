@@ -1,5 +1,7 @@
 package io.tieringkv.operations;
 
+import io.tieringkv.ci.GateConvergenceV17;
+
 import java.util.List;
 
 /**
@@ -118,5 +120,11 @@ public final class ProductCompletenessBaseline {
                 .noneMatch(debt -> debt.note()
                         .contains("next phase"));
         return capabilitiesOk && debtsOk && noRollover;
+    }
+
+    /** GA 判定（ADR-0309）：基线通过 + 门禁终态唯一（含封板）。 */
+    public static boolean gaReady() {
+        return passes() && GateConvergenceV17.closedCount() > 0
+                && GateConvergenceV17.sealedCount() > 0;
     }
 }

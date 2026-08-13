@@ -49,8 +49,66 @@ public final class StreamCommand implements Command {
             case "xreadgroup" -> xreadgroup(args, storage);
             case "xack" -> xack(args, storage);
             case "xpending" -> xpending(args, storage);
+            case "xclaim" -> xclaim(args, storage, false);
+            case "xautoclaim" -> xclaim(args, storage, true);
             default -> RespError.unknownCommand(name);
         };
+    }
+
+    private RespValue xclaim(List<byte[]> args,
+                             StorageEngine storage,
+                             boolean auto) {
+        if (args.size() < 4) {
+            return RespError.wrongArity(name);
+        }
+        byte[] key = args.get(0);
+        String groupName = CommandUtil.text(args.get(1));
+        String consumer = CommandUtil.text(args.get(2));
+        java.util.Set<String> targets = new java.util.HashSet<>();
+        if (!auto) {
+            for (int i = 4; i < args.size(); i++) {
+                targets.add(CommandUtil.text(args.get(i)));
+            }
+        }
+        List<RespValue> claimed = new ArrayList<>();
+        TypeSupport.update(storage, key, current -> {
+            StreamCodec.Decoded decoded = decodeAll(current);
+            List<Group> groups = new ArrayList<>(decoded.groups());
+            int gi = indexOfGroup(groups, groupName);
+            if (gi < 0) {
+                return current;
+            }
+            Group group = groups.get(gi);
+            List<Pending> pending = new ArrayList<>();
+            int deadLetters = group.deadLetters();
+            for (Pending item : group.pending()) {
+                boolean match = auto
+                        ? item.ms() * 1_000_000 + item.seq()
+                        >= CommandUtil.parseLong(args.get(3))
+                        : targets.contains(item.ms() + "-"
+                        + item.seq());
+                if (match) {
+                    if (item.consumer().equals(consumer)) {
+                        deadLetters++;
+                    }
+                    pending.add(new Pending(item.ms(), item.seq(),
+                            consumer));
+                    for (Entry entry : decoded.entries()) {
+                        if (entry.ms() == item.ms()
+                                && entry.seq() == item.seq()) {
+                            claimed.add(entryValue(entry));
+                        }
+                    }
+                } else {
+                    pending.add(item);
+                }
+            }
+            groups.set(gi, new Group(group.name(), group.lastMs(),
+                    group.lastSeq(), pending, deadLetters));
+            return TypedValueCodec.encode(ValueType.STREAM,
+                    StreamCodec.encode(decoded.entries(), groups));
+        });
+        return new RespArray(claimed);
     }
 
     private RespValue xgroup(List<byte[]> args,
@@ -87,7 +145,7 @@ public final class StreamCommand implements Command {
                             List<Group> groups =
                                     new ArrayList<>(decoded.groups());
                             groups.add(new Group(groupName,
-                                    last[0], last[1], List.of()));
+                                    last[0], last[1], List.of(), 0));
                             return TypedValueCodec.encode(
                                     ValueType.STREAM,
                                     StreamCodec.encode(
@@ -197,7 +255,8 @@ public final class StreamCommand implements Command {
                         }
                         deliveredHolder.addAll(delivered);
                         groups.set(gi, new Group(groupName,
-                                lastMs, lastSeq, pending));
+                                lastMs, lastSeq, pending,
+                                group.deadLetters()));
                         return TypedValueCodec.encode(
                                 ValueType.STREAM,
                                 StreamCodec.encode(
@@ -240,7 +299,8 @@ public final class StreamCommand implements Command {
                 }
             }
             groups.set(gi, new Group(group.name(), group.lastMs(),
-                    group.lastSeq(), pending));
+                    group.lastSeq(), pending,
+                    group.deadLetters()));
             return TypedValueCodec.encode(ValueType.STREAM,
                     StreamCodec.encode(decoded.entries(), groups));
         });
