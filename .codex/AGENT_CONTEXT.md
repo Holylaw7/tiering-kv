@@ -334,14 +334,14 @@ BM-001/002、TD-051/054/059/060/063/066/069/072/075/078）、跨区
 
 ## 2. 当前状态
 
-- 阶段：**Phase 53（RESP3 接线、Pub/Sub 网络与事务）✅ 已完成
-  （v3.5.0 RC）**（Phase 0–52 全部完成）；
-- 最近提交：Phase 53 合并（详见 git log）；
-- 基线：develop 合并 Phase 52；分支策略：feature/* 合并入 develop，
+- 阶段：**Phase 54（事务加固、Stream 与生产验证）✅ 已完成
+  （v3.6.0 RC）**（Phase 0–53 全部完成）；
+- 最近提交：Phase 54 合并（详见 git log）；
+- 基线：develop 合并 Phase 53；分支策略：feature/* 合并入 develop，
   main 保持稳定；
-- 下一步：WATCH 全量版本守卫、EXEC 跨段原子、事务持久化、Stream/
-  阻塞命令/过期通知、SQL/向量原型转生产、分布式正确性验证
-  （Phase 54+，等待用户指令）。
+- 下一步：分布式正确性验证（Jepsen 式线性一致性、Raft 边角、
+  升级/备份演练）、Stream 消费组、跨段事务持久化、文档产品化
+  （Phase 55+，等待用户指令）。
 
 项目里程碑：**32 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
@@ -706,6 +706,21 @@ tiering-kv/
 - 剩余：WATCH 全量版本守卫、EXEC 跨段原子、事务持久化、Stream/
   阻塞命令/过期事件通知、SQL/向量原型转生产、分布式正确性验证
   （Phase 54+）。
+
+## 7.12 Phase 54 状态（v3.6.0 RC）
+
+- 分支：`feature/phase54-txn-hardening-stream-production`；
+- 交付：WATCH 版本守卫（ADR-0290，versionOf + EXEC abort +
+  UNWATCH）、EXEC 原子性与回滚（ADR-0291，快照回滚 + ExecJournal）、
+  Stream（ADR-0292，STREAM 标签 5 + XADD/XREAD/XLEN/XRANGE/XTRIM）、
+  阻塞命令（ADR-0293，BLPOP/BRPOP 秒级超时 + 条件通知）、过期通知
+  （ADR-0294，keyspace 事件 + 开关）、SQL/向量生产化（ADR-0295，
+  错误码 + EXPLAIN + HNSW 持久化）；
+- 命令注册表：109 个命令；新增 ≥600 测试；全量回归 ≥14470 全绿
+  （+6 门控跳过）；
+- 剩余：分布式正确性验证（Jepsen 式线性一致性、Raft 边角、
+  升级/备份演练）、Stream 消费组（XGROUP/XREADGROUP）、跨段事务
+  持久化、文档产品化（Phase 55+）。
 
 ## 8. 会话启动清单
 
