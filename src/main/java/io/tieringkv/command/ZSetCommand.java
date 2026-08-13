@@ -48,8 +48,126 @@ public final class ZSetCommand implements Command {
             case "zcount" -> zcount(args, storage);
             case "zrank" -> zrank(args, storage, false);
             case "zrevrank" -> zrank(args, storage, true);
+            case "zrangebylex" -> zrangebylex(args, storage);
+            case "zlexcount" -> zlexcount(args, storage);
+            case "zremrangebylex" -> zremrangebylex(args, storage);
             default -> RespError.unknownCommand(name);
         };
+    }
+
+    private RespValue zrangebylex(List<byte[]> args,
+                                  StorageEngine storage) {
+        if (args.size() < 3) {
+            return RespError.wrongArity(name);
+        }
+        try {
+            LexBound min = parseLexBound(args.get(1));
+            LexBound max = parseLexBound(args.get(2));
+            List<Member> sorted = sorted(decode(
+                    storage.get(args.get(0))), false);
+            List<Member> matched = new ArrayList<>();
+            for (Member member : sorted) {
+                if (inLexRange(member.member(), min, max)) {
+                    matched.add(member);
+                }
+            }
+            List<RespValue> values = new ArrayList<>();
+            for (Member member : matched) {
+                values.add(new RespBulkString(
+                        member.member().data()));
+            }
+            return new RespArray(values);
+        } catch (TypeSupport.WrongTypeException e) {
+            return TypeSupport.wrongType();
+        }
+    }
+
+    private RespValue zlexcount(List<byte[]> args,
+                                StorageEngine storage) {
+        if (args.size() != 3) {
+            return RespError.wrongArity(name);
+        }
+        try {
+            LexBound min = parseLexBound(args.get(1));
+            LexBound max = parseLexBound(args.get(2));
+            long count = sorted(decode(storage.get(args.get(0))),
+                    false).stream()
+                    .filter(member -> inLexRange(
+                            member.member(), min, max))
+                    .count();
+            return new RespInteger(count);
+        } catch (TypeSupport.WrongTypeException e) {
+            return TypeSupport.wrongType();
+        }
+    }
+
+    private RespValue zremrangebylex(List<byte[]> args,
+                                     StorageEngine storage) {
+        if (args.size() != 3) {
+            return RespError.wrongArity(name);
+        }
+        try {
+            LexBound min = parseLexBound(args.get(1));
+            LexBound max = parseLexBound(args.get(2));
+            byte[] key = args.get(0);
+            int before = decode(storage.get(key)).size();
+            TypeSupport.update(storage, key, current -> {
+                List<Member> members = decode(current);
+                members.removeIf(member -> inLexRange(
+                        member.member(), min, max));
+                return members.isEmpty() ? null
+                        : TypedValueCodec.encode(ValueType.ZSET,
+                        ZSetCodec.encode(members));
+            });
+            int after = decode(storage.get(key)).size();
+            return new RespInteger(before - after);
+        } catch (TypeSupport.WrongTypeException e) {
+            return TypeSupport.wrongType();
+        }
+    }
+
+    private record LexBound(byte[] value, boolean inclusive,
+                            boolean infinity,
+                            boolean negativeInfinity) {
+    }
+
+    private static LexBound parseLexBound(byte[] bytes) {
+        String text = CommandUtil.text(bytes);
+        if (text.equals("-")) {
+            return new LexBound(new byte[0], false, true,
+                    true);
+        }
+        if (text.equals("+")) {
+            return new LexBound(new byte[0], false, true,
+                    false);
+        }
+        boolean inclusive = text.startsWith("[");
+        if (inclusive || text.startsWith("(")) {
+            text = text.substring(1);
+        }
+        return new LexBound(text.getBytes(
+                java.nio.charset.StandardCharsets.UTF_8),
+                inclusive, false, false);
+    }
+
+    private static boolean inLexRange(ByteArrayKey member,
+                                      LexBound min,
+                                      LexBound max) {
+        int cmpMin = min.infinity()
+                ? (min.negativeInfinity() ? -1 : 1)
+                : java.util.Arrays.compareUnsigned(member.data(),
+                min.value());
+        int cmpMax = max.infinity()
+                ? (max.negativeInfinity() ? -1 : 1)
+                : java.util.Arrays.compareUnsigned(member.data(),
+                max.value());
+        boolean aboveMin = min.infinity()
+                ? min.negativeInfinity() || cmpMin > 0
+                : min.inclusive() ? cmpMin >= 0 : cmpMin > 0;
+        boolean belowMax = max.infinity()
+                ? !max.negativeInfinity() || cmpMax < 0
+                : max.inclusive() ? cmpMax <= 0 : cmpMax < 0;
+        return aboveMin && belowMax;
     }
 
     private RespValue zadd(List<byte[]> args,
