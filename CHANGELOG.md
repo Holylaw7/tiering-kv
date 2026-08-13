@@ -371,6 +371,20 @@
   - 完成度基线（ADR-0268）：ProductCompletenessBaseline（能力分层 +
     技术债终态 + 判定清单）；
   - 测试：新增 ≥420 项；全量回归 **≥12660 全绿**（+6 门控跳过）。
+- Phase 51 Redis 命令族补齐（v3.3.0 RC）：
+  - 字符串命令族（ADR-0269）：INCR/DECR/INCRBY/DECRBY/APPEND/
+    STRLEN/GETSET/SETNX/SETEX/PSETEX/GETDEL/GETRANGE/SETRANGE，
+    AtomicStringOps 段锁原子 + WAL-first 委托；
+  - TTL 命令族（ADR-0270）：EXPIRE/PEXPIRE/EXPIREAT/PEXPIREAT/
+    TTL/PTTL/PERSIST，复用 TTLManager；
+  - 多键命令族（ADR-0271）：MGET/MSET/MSETNX + DEL/EXISTS 多键
+    （重复键只计一次）；
+  - 管理命令族（ADR-0272）：DBSIZE/FLUSHDB/FLUSHALL/SCAN（快照
+    游标 + MATCH）/TYPE/CONFIG（白名单）/CLIENT/COMMAND；
+  - RESP2 兼容矩阵（ADR-0273）：整数/nil/空串/错误文本/数组；
+  - 网关路由与 CROSSSLOT（ADR-0274）：单键 MOVED + 多键同槽校验；
+  - v3.3 冻结（ADR-0275）：release.yml v3.3.0 + Phase51 基准；
+  - 测试：新增 ≥520 项；全量回归 **≥13190 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager

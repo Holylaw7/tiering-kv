@@ -4,7 +4,7 @@
 > （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding +
 > Raft 持久化集群 + 批量复制 + 安全 RPC + 元数据 Raft + 游标迁移）。
 
-**阶段状态：Phase 50（工程基座与真实 Runner GA）✅（Phase 0–49 全部完成 ✅，v3.2.0 GA）**
+**阶段状态：Phase 51（Redis 命令族补齐）✅（Phase 0–50 全部完成 ✅，v3.3.0 RC）**
 
 ## 项目定位
 
@@ -213,6 +213,14 @@ ADR-0265）+ CI 执行与 GA 发布流水线（checksums + Phase50 基准，
 ADR-0266）+ JMH 基准工程化（MemTable GET / WAL append / SSTable
 随机读，ADR-0267）+ 产品完成度基线（能力分层 + 技术债终态，
 ADR-0268）；全量测试 ≥12660 全绿（Phase 50，v3.2.0 GA）。
+以及 Redis 命令族补齐：字符串命令族（INCR/DECR/APPEND/STRLEN/GETSET/
+SETNX/SETEX/GETDEL/GETRANGE/SETRANGE，段锁原子 + WAL，ADR-0269）+
+TTL 命令族（EXPIRE/PEXPIRE/EXPIREAT/PEXPIREAT/TTL/PTTL/PERSIST，
+ADR-0270）+ 多键命令族（MGET/MSET/MSETNX/DEL/EXISTS，ADR-0271）+
+管理命令族（DBSIZE/FLUSHDB/SCAN/TYPE/CONFIG/CLIENT/COMMAND，
+ADR-0272）+ RESP2 兼容矩阵（ADR-0273）+ 网关命令路由与 CROSSSLOT
+（ADR-0274）；命令注册表从 7 个扩展到 38 个；全量测试 ≥13190 全绿
+（Phase 51，v3.3.0 RC）。
 
 **边界（如实声明）**：仍为教学/工程级实现，暂不宣称"高性能 Redis 替代品"；
 分布式为真实 TCP + 持久化原型，基准以进程内为主，跨机 `tc netem` 验证
