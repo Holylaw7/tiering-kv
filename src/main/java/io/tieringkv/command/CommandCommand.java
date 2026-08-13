@@ -53,6 +53,14 @@ public final class CommandCommand implements Command {
             Map.entry("client", new Object[]{-2, "admin", 0, 0, 0}),
             Map.entry("command", new Object[]{-1, "readonly", 0, 0, 0}));
 
+    private static final java.util.Set<String> READONLY =
+            java.util.Set.of("hget", "hexists", "hlen", "hkeys",
+                    "hvals", "hgetall", "hmget", "llen", "lrange",
+                    "lindex", "scard", "smembers", "sismember",
+                    "srandmember", "sinter", "sunion", "sdiff",
+                    "zscore", "zrange", "zrevrange", "zcard",
+                    "zrangebyscore", "zcount", "zrank", "zrevrank");
+
     private final CommandRegistry registry;
 
     public CommandCommand(CommandRegistry registry) {
@@ -81,7 +89,7 @@ public final class CommandCommand implements Command {
                 for (int i = 1; i < args.size(); i++) {
                     String commandName = CommandUtil.text(args.get(i))
                             .toLowerCase(java.util.Locale.ROOT);
-                    Object[] meta = METADATA.get(commandName);
+                    Object[] meta = metadataFor(commandName);
                     if (meta == null) {
                         result.add(RespNull.ARRAY);
                     } else {
@@ -105,5 +113,18 @@ public final class CommandCommand implements Command {
                         + sub + "'");
             }
         }
+    }
+
+    private Object[] metadataFor(String commandName) {
+        Object[] explicit = METADATA.get(commandName);
+        if (explicit != null) {
+            return explicit;
+        }
+        if (registry.find(commandName) == null) {
+            return null;
+        }
+        String flags = READONLY.contains(commandName)
+                ? "readonly" : "write";
+        return new Object[]{-2, flags, 1, 1, 1};
     }
 }
