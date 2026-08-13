@@ -16,7 +16,8 @@ on:
             "v3.0.0-rc*", "v3.0.0",
             "v3.1.0-rc*", "v3.1.0",
             "v3.2.0-rc*", "v3.2.0",
-            "v3.3.0-rc*", "v3.3.0"]
+            "v3.3.0-rc*", "v3.3.0",
+            "v3.4.0-rc*", "v3.4.0"]
   workflow_dispatch:
 
 jobs:
@@ -35,7 +36,7 @@ jobs:
       - name: Test
         run: mvn -q test
       - name: Benchmark
-        run: mvn -q -Dtest='Phase24BenchmarkTest,Phase25BenchmarkTest,Phase26BenchmarkTest,Phase27BenchmarkTest,Phase28BenchmarkTest,Phase29BenchmarkTest,Phase30BenchmarkTest,Phase31BenchmarkTest,Phase32BenchmarkTest,Phase33BenchmarkTest,Phase34BenchmarkTest,Phase35BenchmarkTest,Phase36BenchmarkTest,Phase37BenchmarkTest,Phase38BenchmarkTest,Phase39BenchmarkTest,Phase40BenchmarkTest,Phase41BenchmarkTest,Phase42BenchmarkTest,Phase43BenchmarkTest,Phase43ProductionBaselineTest,Phase44BenchmarkTest,Phase44ProductionBaselineTest,Phase45BenchmarkTest,Phase45ProductionBaselineTest,Phase46BenchmarkTest,Phase46ProductionBaselineTest,Phase47BenchmarkTest,Phase47ProductionBaselineTest,Phase48BenchmarkTest,Phase48ProductionBaselineTest,Phase49BenchmarkTest,Phase49ProductionBaselineTest,Phase50BenchmarkTest,Phase50ProductionBaselineTest,Phase51BenchmarkTest,Phase51ProductionBaselineTest' -DfailIfNoTests=false test
+        run: mvn -q -Dtest='Phase24BenchmarkTest,Phase25BenchmarkTest,Phase26BenchmarkTest,Phase27BenchmarkTest,Phase28BenchmarkTest,Phase29BenchmarkTest,Phase30BenchmarkTest,Phase31BenchmarkTest,Phase32BenchmarkTest,Phase33BenchmarkTest,Phase34BenchmarkTest,Phase35BenchmarkTest,Phase36BenchmarkTest,Phase37BenchmarkTest,Phase38BenchmarkTest,Phase39BenchmarkTest,Phase40BenchmarkTest,Phase41BenchmarkTest,Phase42BenchmarkTest,Phase43BenchmarkTest,Phase43ProductionBaselineTest,Phase44BenchmarkTest,Phase44ProductionBaselineTest,Phase45BenchmarkTest,Phase45ProductionBaselineTest,Phase46BenchmarkTest,Phase46ProductionBaselineTest,Phase47BenchmarkTest,Phase47ProductionBaselineTest,Phase48BenchmarkTest,Phase48ProductionBaselineTest,Phase49BenchmarkTest,Phase49ProductionBaselineTest,Phase50BenchmarkTest,Phase50ProductionBaselineTest,Phase51BenchmarkTest,Phase51ProductionBaselineTest,Phase52BenchmarkTest,Phase52ProductionBaselineTest' -DfailIfNoTests=false test
       - name: Security scan
         uses: aquasecurity/trivy-action@0.28.0
         with:

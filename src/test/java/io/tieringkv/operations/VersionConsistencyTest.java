@@ -18,7 +18,7 @@ class VersionConsistencyTest {
     void pomHasRevisionProperty() throws Exception {
         String pom = Files.readString(Path.of("pom.xml"));
         assertThat(pom).contains("<revision>");
-        assertThat(pom).contains("3.3.0-SNAPSHOT");
+        assertThat(pom).contains("3.4.0-SNAPSHOT");
     }
 
     @Test
@@ -118,7 +118,7 @@ class VersionConsistencyTest {
                 Arguments.of("scripts/release-notes.sh",
                         "v3.2.0-rc1"),
                 Arguments.of("docs/operations/versioning-and-artifacts.md",
-                        "3.3.0"),
+                        "3.4.0"),
                 Arguments.of("docs/deployment/ci-execution-and-release-v3.2.md",
                         "v3.2.0"),
                 Arguments.of("docs/review/product-completeness-baseline.md",

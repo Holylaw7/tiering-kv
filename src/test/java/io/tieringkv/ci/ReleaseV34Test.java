@@ -11,76 +11,76 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** v3.3.0 冻结与发布流水线（ADR-0275）。 */
-class ReleaseV33Test {
+/** v3.4.0 冻结与发布流水线（ADR-0282）。 */
+class ReleaseV34Test {
 
     private static final Path WORKFLOW = Path.of(".github",
             "workflows", "release.yml");
 
     @Test
-    void v33TagsRegistered() throws Exception {
+    void v34TagsRegistered() throws Exception {
+        String content = Files.readString(WORKFLOW);
+        assertThat(content).contains("v3.4.0-rc*");
+        assertThat(content).contains("v3.4.0");
+    }
+
+    @Test
+    void v33TagsStillRegistered() throws Exception {
         String content = Files.readString(WORKFLOW);
         assertThat(content).contains("v3.3.0-rc*");
         assertThat(content).contains("v3.3.0");
     }
 
     @Test
-    void v32TagsStillRegistered() throws Exception {
+    void benchmarkRunsPhase52Suite() throws Exception {
         String content = Files.readString(WORKFLOW);
-        assertThat(content).contains("v3.2.0-rc*");
-        assertThat(content).contains("v3.2.0");
-    }
-
-    @Test
-    void benchmarkRunsPhase51Suite() throws Exception {
-        String content = Files.readString(WORKFLOW);
-        assertThat(content).contains("Phase51BenchmarkTest");
-        assertThat(content).contains("Phase51ProductionBaselineTest");
+        assertThat(content).contains("Phase52BenchmarkTest");
+        assertThat(content).contains("Phase52ProductionBaselineTest");
     }
 
     @Test
     void releaseNotesExist() {
         assertThat(Path.of("docs", "release",
-                "v3.3.0-release-notes.md").toFile()).exists();
+                "v3.4.0-release-notes.md").toFile()).exists();
     }
 
     @Test
-    void changelogDocumentsV33() throws Exception {
+    void changelogDocumentsV34() throws Exception {
         assertThat(Files.readString(Path.of("CHANGELOG.md")))
-                .contains("3.3.0");
+                .contains("3.4.0");
     }
 
     @Test
-    void roadmapDocumentsV33() throws Exception {
+    void roadmapDocumentsV34() throws Exception {
         assertThat(Files.readString(Path.of("ROADMAP.md")))
-                .contains("3.3.0");
+                .contains("3.4.0");
     }
 
     @Test
-    void readmeDocumentsV33() throws Exception {
+    void readmeDocumentsV34() throws Exception {
         assertThat(Files.readString(Path.of("README.md")))
-                .contains("3.3.0");
+                .contains("3.4.0");
     }
 
     @Test
-    void agentContextDocumentsPhase51() throws Exception {
+    void agentContextDocumentsPhase52() throws Exception {
         assertThat(Files.readString(Path.of(".codex",
-                "AGENT_CONTEXT.md"))).contains("Phase 51");
+                "AGENT_CONTEXT.md"))).contains("Phase 52");
     }
 
     @Test
-    void adr275Present() {
+    void adr282Present() {
         assertThat(Path.of("docs", "adr",
-                "ADR-0275-v3.3-freeze-and-release-pipeline.md")
+                "ADR-0282-pubsub-messaging-and-v3.4-freeze.md")
                 .toFile()).exists();
     }
 
     @Test
-    void commandDocsPresent() {
-        assertThat(Path.of("docs", "design",
-                "command-family-design.md").toFile()).exists();
+    void protocolAndPubsubDocsPresent() {
         assertThat(Path.of("docs", "protocol",
-                "resp2-compatibility-matrix.md").toFile()).exists();
+                "resp3-support.md").toFile()).exists();
+        assertThat(Path.of("docs", "operations",
+                "pubsub-guide.md").toFile()).exists();
     }
 
     @Test
@@ -114,31 +114,37 @@ class ReleaseV33Test {
                         "v1.8.0", "v1.9.0", "v2.0.0", "v2.1.0",
                         "v2.2.0", "v2.3.0", "v2.4.0", "v2.5.0",
                         "v2.6.0", "v2.7.0", "v2.8.0", "v2.9.0",
-                        "v3.0.0", "v3.1.0", "v3.2.0", "v3.3.0")
+                        "v3.0.0", "v3.1.0", "v3.2.0", "v3.3.0",
+                        "v3.4.0")
                 .flatMap(version -> Stream.of(
                         version + "-rc*", version));
     }
 
     static Stream<String> benchmarkClasses() {
         return Stream.concat(
-                java.util.stream.IntStream.rangeClosed(24, 51)
+                java.util.stream.IntStream.rangeClosed(24, 52)
                         .mapToObj(phase -> "Phase"
                                 + phase + "BenchmarkTest"),
-                java.util.stream.IntStream.rangeClosed(43, 51)
+                java.util.stream.IntStream.rangeClosed(43, 52)
                         .mapToObj(phase -> "Phase"
                                 + phase
                                 + "ProductionBaselineTest"));
     }
 
     static Stream<String> commands() {
-        return Stream.of("ping", "echo", "set", "get", "del",
-                        "exists", "info", "incr", "decr", "incrby",
-                        "decrby", "append", "strlen", "getset",
-                        "setnx", "setex", "psetex", "getdel",
-                        "getrange", "setrange", "ttl", "pttl",
-                        "expire", "pexpire", "expireat", "pexpireat",
-                        "persist", "mget", "mset", "msetnx",
-                        "dbsize", "flushdb", "flushall", "scan",
-                        "type", "config", "client", "command");
+        return Stream.of("hset", "hget", "hdel", "hexists", "hlen",
+                        "hkeys", "hvals", "hgetall", "hmget",
+                        "hmset", "hincrby", "hsetnx", "lpush",
+                        "rpush", "lpop", "rpop", "llen", "lrange",
+                        "lindex", "lset", "lrem", "ltrim", "sadd",
+                        "srem", "sismember", "scard", "smembers",
+                        "spop", "srandmember", "sinter", "sunion",
+                        "sdiff", "sinterstore", "sunionstore",
+                        "sdiffstore", "zadd", "zscore", "zrange",
+                        "zrevrange", "zrem", "zcard", "zincrby",
+                        "zrangebyscore", "zcount", "zrank",
+                        "zrevrank", "hello", "subscribe",
+                        "unsubscribe", "psubscribe", "punsubscribe",
+                        "publish");
     }
 }
