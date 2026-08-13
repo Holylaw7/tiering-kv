@@ -72,6 +72,7 @@ public final class TypedValueCodec {
             case LIST -> 2;
             case SET -> 3;
             case ZSET -> 4;
+            case STREAM -> 5;
             case STRING -> throw new IllegalArgumentException(
                     "string stored raw");
         };
@@ -83,6 +84,7 @@ public final class TypedValueCodec {
             case 2 -> ValueType.LIST;
             case 3 -> ValueType.SET;
             case 4 -> ValueType.ZSET;
+            case 5 -> ValueType.STREAM;
             default -> null;
         };
     }

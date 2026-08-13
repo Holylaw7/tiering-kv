@@ -6,5 +6,6 @@ public enum ValueType {
     HASH,
     LIST,
     SET,
-    ZSET
+    ZSET,
+    STREAM
 }
