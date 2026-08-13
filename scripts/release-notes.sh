@@ -413,3 +413,11 @@ GA 发布：分布式正确性验证、消费组、事务持久化、文档产�
 真实 Runner 门禁 SEALED_GA 封板声明（无远程环境）。
 EOF
 fi
+
+if [[ "${VERSION}" == v3.7.1* ]]; then
+  cat <<EOF
+# Tiering-KV ${VERSION} Maintenance Notes
+
+维护模式补丁候选：fix-only、测试先行、全量回归 0 failures。
+EOF
+fi

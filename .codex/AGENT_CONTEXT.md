@@ -334,13 +334,13 @@ BM-001/002、TD-051/054/059/060/063/066/069/072/075/078）、跨区
 
 ## 2. 当前状态
 
-- 阶段：**Phase 56（GA 最终化与生产收口）✅ 已完成（v3.7.0 GA）**
-  （Phase 0–55 全部完成）；
-- 最近提交：Phase 56 合并（详见 git log）；
-- 基线：develop 合并 Phase 55；分支策略：feature/* 合并入 develop，
+- 阶段：**Phase 57（维护模式与 v4 规划）✅ 已完成（fix-only）**
+  （Phase 0–56 全部完成，v3.7.0 GA）；
+- 最近提交：Phase 57 合并（详见 git log）；
+- 基线：develop 合并 Phase 56；分支策略：feature/* 合并入 develop，
   main 保持稳定；
-- 下一步：维护模式（fix-only）与 v4.0 规划；真实 Runner 可用后
-  复审执行（SEALED_GA → CLOSED）（Phase 57+，等待用户指令）。
+- 下一步：v4.0 特性开发（RFC 获批后）；真实 Runner 可用后复审执行
+  （SEALED_GA → CLOSED）；年度复核执行（Phase 58+，等待用户指令）。
 
 项目里程碑：**32 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
