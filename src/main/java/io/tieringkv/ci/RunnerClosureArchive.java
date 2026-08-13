@@ -11,8 +11,7 @@ public final class RunnerClosureArchive {
 
     /** 门禁终态记录。 */
     public record ClosureRecord(String gateId, String phase,
-                                GateConvergenceV15.Disposition
-                                        disposition,
+                                String disposition,
                                 String evidence,
                                 long timestampMillis) {
     }
@@ -39,6 +38,12 @@ public final class RunnerClosureArchive {
     public void record(String gateId, String phase,
                        GateConvergenceV15.Disposition disposition,
                        String evidence) {
+        record(gateId, phase, disposition.name(), evidence);
+    }
+
+    /** 按字符串终态记录（支持任意收敛表版本的终态枚举）。 */
+    public void record(String gateId, String phase,
+                       String disposition, String evidence) {
         if (gateId == null || gateId.isBlank()
                 || phase == null || phase.isBlank()
                 || disposition == null
