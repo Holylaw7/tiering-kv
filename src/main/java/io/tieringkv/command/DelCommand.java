@@ -21,9 +21,13 @@ public final class DelCommand implements Command {
             return RespError.wrongArity(name());
         }
         long removed = 0;
+        List<byte[]> seen = new java.util.ArrayList<>();
         for (byte[] key : args) {
-            if (storage.delete(key)) {
+            boolean duplicate = seen.stream().anyMatch(
+                    other -> java.util.Arrays.equals(other, key));
+            if (!duplicate && storage.delete(key)) {
                 removed++;
+                seen.add(key);
             }
         }
         return new RespInteger(removed);
