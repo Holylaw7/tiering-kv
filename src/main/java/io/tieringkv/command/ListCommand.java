@@ -11,6 +11,7 @@ import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.storage.types.ListCodec;
 import io.tieringkv.storage.types.TypedValueCodec;
 import io.tieringkv.storage.types.ValueType;
+import io.tieringkv.operations.BlockingListNotifier;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,8 +47,60 @@ public final class ListCommand implements Command {
             case "linsert" -> linsert(args, storage);
             case "lmove" -> lmove(args, storage);
             case "rpoplpush" -> rpoplpush(args, storage);
+            case "blpop" -> blockingPop(args, storage, true);
+            case "brpop" -> blockingPop(args, storage, false);
             default -> RespError.unknownCommand(name);
         };
+    }
+
+    private RespValue blockingPop(List<byte[]> args,
+                                  StorageEngine storage,
+                                  boolean left) {
+        if (args.size() < 2) {
+            return RespError.wrongArity(name);
+        }
+        try {
+            long timeout = Math.multiplyExact(
+                    CommandUtil.parseLong(
+                            args.get(args.size() - 1)), 1000);
+            if (timeout < 0) {
+                return new RespError("ERR timeout is negative");
+            }
+            List<byte[]> keys = args.subList(0,
+                    args.size() - 1);
+            for (byte[] key : keys) {
+                RespValue popped = popSingle(storage, key, left);
+                if (popped != RespNull.BULK_STRING) {
+                    return new RespArray(List.of(
+                            new RespBulkString(key), popped));
+                }
+            }
+            long deadline = timeout == 0
+                    ? Long.MAX_VALUE
+                    : System.currentTimeMillis() + timeout;
+            while (System.currentTimeMillis() < deadline) {
+                long remaining = deadline == Long.MAX_VALUE
+                        ? 50 : deadline - System.currentTimeMillis();
+                for (byte[] key : keys) {
+                    BlockingListNotifier.awaitPush(key,
+                            Math.min(remaining, 50));
+                    RespValue popped = popSingle(storage, key,
+                            left);
+                    if (popped != RespNull.BULK_STRING) {
+                        return new RespArray(List.of(
+                                new RespBulkString(key), popped));
+                    }
+                }
+                if (deadline == Long.MAX_VALUE) {
+                    continue;
+                }
+            }
+            return RespNull.ARRAY;
+        } catch (NumberFormatException e) {
+            return new RespError(CommandUtil.NOT_INTEGER);
+        } catch (TypeSupport.WrongTypeException e) {
+            return TypeSupport.wrongType();
+        }
     }
 
     private RespValue linsert(List<byte[]> args,
@@ -87,6 +140,7 @@ public final class ListCommand implements Command {
                                 ValueType.LIST,
                                 ListCodec.encode(elements));
                     });
+            BlockingListNotifier.notifyPush(key);
             return new RespInteger(decode(result).size());
         } catch (PivotNotFoundException e) {
             return new RespInteger(-1);
