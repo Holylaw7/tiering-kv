@@ -84,9 +84,9 @@ class ReleaseV33Test {
     }
 
     @Test
-    void registryHas101Commands() {
+    void registryHas109Commands() {
         assertThat(CommandRegistry.createDefault().size())
-                .isEqualTo(101);
+                .isEqualTo(109);
     }
 
     @ParameterizedTest(name = "tag {0}")

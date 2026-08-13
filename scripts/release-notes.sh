@@ -344,3 +344,33 @@ Enterprise-ready Distributed Database v3.5.0：Redis 协议兼容、LSM 冷热
 - 详见 docs/release/v3.5.0-release-notes.md
 EOF
 fi
+
+if [[ "${VERSION}" == v3.6.0* ]]; then
+  # 支持 v3.6.0-rc1 / v3.6.0 发布标签
+  cat <<EOF
+# Tiering-KV ${VERSION} Release Notes
+
+## 定位
+
+Enterprise-ready Distributed Database v3.6.0：Redis 协议兼容、LSM 冷热
+分层、Multi-Raft 分布式事务、事务加固 / Stream / 生产验证。
+
+## 本版本能力
+
+- WATCH 版本守卫（ADR-0290）：乐观并发校验 + EXEC abort
+- EXEC 原子性与回滚（ADR-0291）：快照回滚 + ExecJournal
+- Stream 数据类型（ADR-0292）：XADD/XREAD/XLEN/XRANGE/XTRIM
+- 阻塞命令（ADR-0293）：BLPOP/BRPOP 超时语义
+- 过期事件通知（ADR-0294）：keyspace 事件 + 开关
+- SQL/向量生产化（ADR-0295）：错误码 + EXPLAIN + HNSW 持久化
+
+## 质量摘要
+
+- 命令注册表 109 个；新增测试 ≥600；全量回归 ≥14470 全绿
+- 基准：见 docs/benchmark/phase54-production-report.md
+
+## 已知限制
+
+- 详见 docs/release/v3.6.0-release-notes.md
+EOF
+fi

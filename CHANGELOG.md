@@ -412,6 +412,16 @@
   - 连接生命周期（ADR-0288）：断线退订 + 清队列 + 版本重置；
   - v3.5 冻结：release.yml v3.5.0 + Phase53 基准；
   - 测试：新增 ≥560 项；全量回归 **≥14140 全绿**（+6 门控跳过）。
+- Phase 54 事务加固、Stream 与生产验证（v3.6.0 RC）：
+  - WATCH 版本守卫（ADR-0290）：versionOf + EXEC abort + UNWATCH；
+  - EXEC 原子性与回滚（ADR-0291）：快照回滚 + ExecJournal；
+  - Stream（ADR-0292）：STREAM 标签 5 + XADD/XREAD/XLEN/XRANGE/
+    XTRIM；
+  - 阻塞命令（ADR-0293）：BLPOP/BRPOP 秒级超时 + 条件通知；
+  - 过期通知（ADR-0294）：keyspace 事件 + 开关；
+  - SQL/向量（ADR-0295）：统一错误码 + EXPLAIN + HNSW 持久化；
+  - v3.6 冻结：release.yml v3.6.0 + Phase54 基准；
+  - 测试：新增 ≥600 项；全量回归 **≥14470 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager

@@ -3,6 +3,7 @@ package io.tieringkv.storage.memory;
 import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.storage.StorageIterator;
 import io.tieringkv.storage.AtomicStringOps;
+import io.tieringkv.operations.KeyspaceNotifications;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -615,6 +616,20 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
         }
     }
 
+    @Override
+    public long versionOf(byte[] key) {
+        long now = timeSource.nowMillis();
+        Segment segment = segments[segmentIndex(key)];
+        segment.lock.readLock().lock();
+        try {
+            KeyValueEntry entry = segment.list.get(key);
+            return entry != null && entry.isLive(now)
+                    ? entry.version() : 0;
+        } finally {
+            segment.lock.readLock().unlock();
+        }
+    }
+
     /** 段内单条应用（写锁内调用）：替换旧条目并维护内存/TTL 调度。 */
     private void applyLiveLocked(Segment segment,
                                  KeyValueEntry entry, long now) {
@@ -717,6 +732,7 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
             segment.list.remove(key);
             memoryManager.remove(current.size());
             liveSize.decrementAndGet();
+            KeyspaceNotifications.publishExpired(key);
             return true;
         } finally {
             segment.lock.writeLock().unlock();
@@ -753,6 +769,7 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
                 segment.list.remove(key);
                 memoryManager.remove(old.size());
                 liveSize.decrementAndGet();
+                KeyspaceNotifications.publishExpired(key);
             }
         } finally {
             segment.lock.writeLock().unlock();

@@ -211,6 +211,12 @@ public final class WALStorageEngine
         return next;
     }
 
+    @Override
+    public long versionOf(byte[] key) {
+        return delegate instanceof AtomicStringOps atomic
+                ? atomic.versionOf(key) : 0;
+    }
+
     private void applyPreservingTtl(byte[] key, byte[] value) {
         if (delegate instanceof AtomicStringOps atomic) {
             atomic.getAndSetPreservingTtl(key, value);

@@ -4,7 +4,7 @@
 > （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding +
 > Raft 持久化集群 + 批量复制 + 安全 RPC + 元数据 Raft + 游标迁移）。
 
-**阶段状态：Phase 53（RESP3 接线、Pub/Sub 网络与事务）✅（Phase 0–52 全部完成 ✅，v3.5.0 RC）**
+**阶段状态：Phase 54（事务加固、Stream 与生产验证）✅（Phase 0–53 全部完成 ✅，v3.6.0 RC）**
 
 ## 项目定位
 
@@ -235,6 +235,13 @@ Pub/Sub 连接级投递（有界队列 + Push，ADR-0284）+ 集群广播 RPC
 事务队列（QUEUED + 结果数组 + DISCARD，ADR-0287）+ 连接生命周期
 清理（ADR-0288）；命令注册表 101 个；全量测试 ≥14140 全绿
 （Phase 53，v3.5.0 RC）。
+以及事务加固、Stream 与生产验证：WATCH 版本守卫（乐观并发校验 +
+EXEC abort，ADR-0290）+ EXEC 原子性与回滚（快照回滚 + ExecJournal，
+ADR-0291）+ Stream 数据类型（XADD/XREAD/XLEN/XRANGE/XTRIM，
+ADR-0292）+ 阻塞命令（BLPOP/BRPOP 超时语义，ADR-0293）+ 过期事件
+通知（keyspace 事件 + 开关，ADR-0294）+ SQL/向量生产化（统一错误码
++ EXPLAIN + HNSW 持久化，ADR-0295）；命令注册表 109 个；全量测试
+≥14470 全绿（Phase 54，v3.6.0 RC）。
 
 **边界（如实声明）**：仍为教学/工程级实现，暂不宣称"高性能 Redis 替代品"；
 分布式为真实 TCP + 持久化原型，基准以进程内为主，跨机 `tc netem` 验证

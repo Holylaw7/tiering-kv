@@ -13,7 +13,7 @@ fi
 MAJOR_MINOR_PATCH="${REVISION%%-*}"
 
 for file in CHANGELOG.md README.md ROADMAP.md \
-  docs/release/v3.5.0-release-notes.md scripts/release-notes.sh; do
+  docs/release/v3.6.0-release-notes.md scripts/release-notes.sh; do
   if ! grep -q "${MAJOR_MINOR_PATCH}" "$file"; then
     echo "version-check: ${file} missing ${MAJOR_MINOR_PATCH}" >&2
     exit 1

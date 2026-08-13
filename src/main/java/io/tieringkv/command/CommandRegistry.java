@@ -131,7 +131,15 @@ public final class CommandRegistry {
                 new ListCommand("rpoplpush"),
                 new ZSetCommand("zrangebylex"),
                 new ZSetCommand("zlexcount"),
-                new ZSetCommand("zremrangebylex"))) {
+                new ZSetCommand("zremrangebylex"),
+                new StreamCommand("xadd"),
+                new StreamCommand("xlen"),
+                new StreamCommand("xrange"),
+                new StreamCommand("xtrim"),
+                new StreamCommand("xread"),
+                new ListCommand("blpop"),
+                new ListCommand("brpop"),
+                new UnwatchCommand())) {
             map.put(command.name(), command);
         }
         map.put("exec", new ExecCommand(new CommandRegistry(map)));

@@ -61,6 +61,7 @@
 | 51 | Redis 命令族补齐（v3.3.0 RC） | ✅ 完成（2026-08-13） |
 | 52 | 数据结构、RESP3 与 Pub/Sub（v3.4.0 RC） | ✅ 完成（2026-08-13） |
 | 53 | RESP3 接线、Pub/Sub 网络与事务（v3.5.0 RC） | ✅ 完成（2026-08-13） |
+| 54 | 事务加固、Stream 与生产验证（v3.6.0 RC） | ✅ 完成（2026-08-13） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -934,6 +935,23 @@
   28–62K ops/s（LOCAL 口径）。
 - 后续：WATCH 全量版本守卫、EXEC 跨段原子、事务持久化、Stream/
   阻塞命令/过期通知、原型转生产（Phase 54+）。
+
+## Phase 54 — 事务加固、Stream 与生产验证 ✅
+
+- 目标：WATCH 版本守卫、EXEC 回滚/日志、Stream、阻塞命令、过期
+  通知、SQL/向量生产化基础。
+- 交付：WATCH 版本守卫（ADR-0290）、EXEC 原子性与回滚（ADR-0291，
+  快照回滚 + ExecJournal）、Stream（ADR-0292，STREAM 标签 + 5 命令）、
+  阻塞命令（ADR-0293，BLPOP/BRPOP）、过期通知（ADR-0294，
+  keyspace 事件）、SQL/向量生产化（ADR-0295，错误码 + EXPLAIN +
+  HNSW 持久化）。
+- 测试：新增 ≥600 项（surefire 口径）；全量回归 **≥14470 全绿**
+  （目标 ≥14470 ✅，+6 门控跳过）。
+- 基准（[phase54-production-report.md](
+  docs/benchmark/phase54-production-report.md)）：WATCH/EXEC
+  62–139K、XADD 1.5–4.4K、XRANGE 30–43K ops/s（LOCAL 口径）。
+- 后续：分布式正确性验证、Stream 消费组、跨段事务持久化、文档
+  产品化（Phase 55+）。
 
 ## 技术债登记
 
