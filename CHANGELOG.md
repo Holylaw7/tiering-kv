@@ -440,6 +440,13 @@
   - 运营收尾与 GA 基线（ADR-0309）；
   - 最终质量门禁（ADR-0310）；
   - 测试：新增 ≥500 项；全量回归 **≥14880 全绿**（+6 门控跳过）。
+- Phase 57 维护模式与 v4 规划：
+  - 维护模式框架（ADR-0311）：hotfix/backport/补丁流水线；
+  - 复审执行包（ADR-0312）：runner-review.sh + 证据模板；
+  - v4 规划框架（ADR-0313）：路线图 + RFC 模板；
+  - 年度复核（ADR-0314）；维护门禁（ADR-0315）；
+  - 发布卫生（ADR-0316）；社区就绪（ADR-0317）；
+  - 测试：新增 ≥300 项；全量回归 **≥14820 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
