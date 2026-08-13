@@ -15,9 +15,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class Phase55ProductionBaselineTest {
 
     @Test
-    void registryHas113Commands() {
+    void registryHas115Commands() {
         assertThat(CommandRegistry.createDefault().size())
-                .isEqualTo(113);
+                .isEqualTo(115);
     }
 
     @Test
