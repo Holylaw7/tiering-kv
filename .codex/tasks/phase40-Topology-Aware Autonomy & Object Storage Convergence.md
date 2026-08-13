@@ -62,18 +62,18 @@ Phase 39 完成多智能体自治。Phase 40 把系统推向**拓扑感知自治
 
 ## 2. Release 前置项（Phase 25–39 遗留，先于新功能执行）
 
-| 编号 | 内容 | 状态 |
-| --- | --- | --- |
-| TD-048 | CI 容器 E2E + 故障注入真实 Runner 执行（3 连绿） | 交付物就绪，待执行 |
-| TD-049 | 真实块设备磁盘混沌（loop/dmsetup/fio/remount） | 交付物就绪，待执行 |
-| K8S-001 | kind 集群内验证（StatefulSet/PDB 驱逐/网关冒烟/备份恢复演练） | 脚本就绪，待执行 |
-| REL-001 | release.yml（v1.1–v2.2）真实运行记录 | 流水线就绪，待触发 |
-| BM-001 | 跨机 Production Benchmark（Gateway×3 / Metadata×3 / Storage×6） | 本地口径完成，跨机待 Runner |
-| BM-002 | 跨地域 RTT/RTO/RPO/冲突率/收敛时间真实基准 | Phase 27–39 进程内完成，跨机待执行 |
-| TD-051/054/059/060/063 | 跨地域真实 2PC/联邦/流量/自治基准 | 进程内完成，跨机待 Runner |
-| TD-066/069 | 真实执行门禁（CI 容器/磁盘混沌/kind/release/跨机跨地域） | Phase 38/39 登记，待 Runner |
-| TD-070 | 多智能体聚合为同步平均，未做异步拓扑感知聚合 | Phase 39 登记 |
-| TD-071 | Spot 市场为模拟数据源，未接入真实市场 API | Phase 39 登记 |
+| 编号                   | 内容                                                            | 状态                               |
+| ---------------------- | --------------------------------------------------------------- | ---------------------------------- |
+| TD-048                 | CI 容器 E2E + 故障注入真实 Runner 执行（3 连绿）                | 交付物就绪，待执行                 |
+| TD-049                 | 真实块设备磁盘混沌（loop/dmsetup/fio/remount）                  | 交付物就绪，待执行                 |
+| K8S-001                | kind 集群内验证（StatefulSet/PDB 驱逐/网关冒烟/备份恢复演练）   | 脚本就绪，待执行                   |
+| REL-001                | release.yml（v1.1–v2.2）真实运行记录                            | 流水线就绪，待触发                 |
+| BM-001                 | 跨机 Production Benchmark（Gateway×3 / Metadata×3 / Storage×6） | 本地口径完成，跨机待 Runner        |
+| BM-002                 | 跨地域 RTT/RTO/RPO/冲突率/收敛时间真实基准                      | Phase 27–39 进程内完成，跨机待执行 |
+| TD-051/054/059/060/063 | 跨地域真实 2PC/联邦/流量/自治基准                               | 进程内完成，跨机待 Runner          |
+| TD-066/069             | 真实执行门禁（CI 容器/磁盘混沌/kind/release/跨机跨地域）        | Phase 38/39 登记，待 Runner        |
+| TD-070                 | 多智能体聚合为同步平均，未做异步拓扑感知聚合                    | Phase 39 登记                      |
+| TD-071                 | Spot 市场为模拟数据源，未接入真实市场 API                       | Phase 39 登记                      |
 
 原则（禁止变更）：
 
@@ -121,7 +121,7 @@ ADR：`ADR-0192 Real Runner Gate Convergence v6`。
 交付：
 
 - `capacity/ai/TopologyFederatedAutonomy`：地域拓扑（就近分组）→
-   分层聚合（本地组 → 全局）；
+  分层聚合（本地组 → 全局）；
 - 拓扑权重可配置，聚合限幅 + 安全上下界 + 审计；
 - 与 MultiAgentAutonomy 联动；
 - 验收：拓扑矩阵 → 分层权重、组/全局一致性、越界拒绝。
@@ -162,7 +162,7 @@ ADR：`ADR-0195 Cross-Chain Attestation Interop`。
 交付：
 
 - `observability/cost/SpotBidEngine`：市场 tick → 出价（价格上限 +
-   中断率约束）→ 中标/未中标；
+  中断率约束）→ 中标/未中标；
 - 与 SpotMarketFeed / SpotRatePredictor 联动；
 - 约束安全 + 幂等；
 - 验收：出价矩阵 + 约束拒绝 + 幂等。
@@ -176,7 +176,7 @@ ADR：`ADR-0196 Real-Time Spot Bidding`。
 交付：
 
 - `security/network/LearnedHardener`：风险评分 × 历史结果 → 阈值
-   自进化（简化学习）；
+  自进化（简化学习）；
 - 阈值变化限幅 + 审计 + 回滚；
 - 与 AdaptiveHardener / PolicyRiskScorer 联动；
 - 验收：学习矩阵 → 阈值变化、越界拒绝。
@@ -190,7 +190,7 @@ ADR：`ADR-0197 Learned Adaptive Hardening`。
 交付：
 
 - `operations/slo/OnlineParetoRebalancer`：指标流 → 周期重算前沿 +
-   重平衡建议；
+  重平衡建议；
 - 与 ParetoCapacityOptimizer 联动；
 - 重平衡限幅 + 幂等；
 - 验收：指标流矩阵 → 前沿更新、限幅、幂等。
@@ -213,14 +213,14 @@ ADR：`ADR-0198`。
 
 必须新增（先 ADR 后代码）：
 
-| ADR | 主题 |
-| --- | --- |
-| ADR-0192 | Real Runner Gate Convergence v6 |
-| ADR-0193 | Topology-Aware Federated Autonomy |
-| ADR-0194 | Object Storage Cold Tier Archive |
-| ADR-0195 | Cross-Chain Attestation Interop |
-| ADR-0196 | Real-Time Spot Bidding |
-| ADR-0197 | Learned Adaptive Hardening |
+| ADR      | 主题                                    |
+| -------- | --------------------------------------- |
+| ADR-0192 | Real Runner Gate Convergence v6         |
+| ADR-0193 | Topology-Aware Federated Autonomy       |
+| ADR-0194 | Object Storage Cold Tier Archive        |
+| ADR-0195 | Cross-Chain Attestation Interop         |
+| ADR-0196 | Real-Time Spot Bidding                  |
+| ADR-0197 | Learned Adaptive Hardening              |
 | ADR-0198 | Online Pareto Rebalancing & v2.3 Freeze |
 
 ## 6. Test Plan
@@ -229,16 +229,16 @@ ADR：`ADR-0198`。
 
 Phase 1-40 全量目标：**>=7328 tests**（当前 6878）。
 
-| Module | Count |
-| --- | ---: |
-| 门禁收敛 v6（JVM 级扩展） | 40 |
-| 拓扑感知联邦学习 | 65 |
-| 对象存储归档 | 60 |
-| 跨链互操作 | 60 |
-| Spot 实时竞价 | 60 |
-| 学习型加固 | 60 |
-| 在线 Pareto 重平衡 | 65 |
-| v2.3 发布/门禁 | 40 |
+| Module                    | Count |
+| ------------------------- | ----: |
+| 门禁收敛 v6（JVM 级扩展） |    40 |
+| 拓扑感知联邦学习          |    65 |
+| 对象存储归档              |    60 |
+| 跨链互操作                |    60 |
+| Spot 实时竞价             |    60 |
+| 学习型加固                |    60 |
+| 在线 Pareto 重平衡        |    65 |
+| v2.3 发布/门禁            |    40 |
 
 ## 7. Documentation Deliverables
 
