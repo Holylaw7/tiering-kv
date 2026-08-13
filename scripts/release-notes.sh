@@ -314,3 +314,33 @@ Enterprise-ready Distributed Database v3.4.0：Redis 协议兼容、LSM 冷热
 - 详见 docs/release/v3.4.0-release-notes.md
 EOF
 fi
+
+if [[ "${VERSION}" == v3.5.0* ]]; then
+  # 支持 v3.5.0-rc1 / v3.5.0 发布标签
+  cat <<EOF
+# Tiering-KV ${VERSION} Release Notes
+
+## 定位
+
+Enterprise-ready Distributed Database v3.5.0：Redis 协议兼容、LSM 冷热
+分层、Multi-Raft 分布式事务、RESP3 接线 / PubSub 网络 / 事务队列。
+
+## 本版本能力
+
+- RESP3 连接级接线（ADR-0283）：HELLO 3 按连接切换编码器
+- Pub/Sub 连接级投递（ADR-0284）：连接订阅者 + Push + 有界队列
+- 集群广播 RPC（ADR-0285）：Netty 转发 + 环回抑制 + 失败登记
+- 高级数据结构命令（ADR-0286）：HSCAN/LINSERT/LMOVE/ZRANGEBYLEX 等
+- MULTI/EXEC 事务队列（ADR-0287）：QUEUED + 原子批量应用
+- 连接生命周期清理（ADR-0288）：断线退订 + 状态重置
+
+## 质量摘要
+
+- 命令注册表 101 个；新增测试 ≥560；全量回归 ≥14140 全绿
+- 基准：见 docs/benchmark/phase53-production-report.md
+
+## 已知限制
+
+- 详见 docs/release/v3.5.0-release-notes.md
+EOF
+fi
