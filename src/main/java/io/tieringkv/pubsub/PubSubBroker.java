@@ -112,6 +112,19 @@ public final class PubSubBroker {
         return set == null ? 0 : set.size();
     }
 
+    /** 退订全部：连接关闭清理（ADR-0288）。 */
+    public void unsubscribeAll(Subscriber subscriber) {
+        if (subscriber == null) {
+            return;
+        }
+        channels.values().forEach(set -> set.remove(subscriber));
+        patterns.values().forEach(set -> set.remove(subscriber));
+        channels.entrySet().removeIf(entry ->
+                entry.getValue().isEmpty());
+        patterns.entrySet().removeIf(entry ->
+                entry.getValue().isEmpty());
+    }
+
     /** 通配：* 匹配任意串，? 匹配单字符（与 SCAN 一致）。 */
     static boolean patternMatches(String pattern,
                                   String channel) {

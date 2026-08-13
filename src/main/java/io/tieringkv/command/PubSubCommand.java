@@ -6,6 +6,8 @@ import io.tieringkv.protocol.RespError;
 import io.tieringkv.protocol.RespInteger;
 import io.tieringkv.protocol.RespValue;
 import io.tieringkv.pubsub.PubSubBroker;
+import io.tieringkv.pubsub.Subscriber;
+import io.tieringkv.session.ConnectionContext;
 import io.tieringkv.storage.StorageEngine;
 
 import java.util.ArrayList;
@@ -63,9 +65,9 @@ public final class PubSubCommand implements Command {
         for (byte[] channel : args) {
             String name = CommandUtil.text(channel);
             if (unsubscribe) {
-                broker.unsubscribe(name, sink());
+                broker.unsubscribe(name, sinkOrContext());
             } else {
-                broker.subscribe(name, sink());
+                broker.subscribe(name, sinkOrContext());
             }
             confirmations.add(confirmation(
                     unsubscribe ? "unsubscribe" : "subscribe",
@@ -83,9 +85,9 @@ public final class PubSubCommand implements Command {
         for (byte[] pattern : args) {
             String name = CommandUtil.text(pattern);
             if (unsubscribe) {
-                broker.punsubscribe(name, sink());
+                broker.punsubscribe(name, sinkOrContext());
             } else {
-                broker.psubscribe(name, sink());
+                broker.psubscribe(name, sinkOrContext());
             }
             confirmations.add(confirmation(
                     unsubscribe ? "punsubscribe" : "psubscribe",
@@ -105,6 +107,11 @@ public final class PubSubCommand implements Command {
 
     private static SubscriberSink sink() {
         return SubscriberSink.INSTANCE;
+    }
+
+    private static Subscriber sinkOrContext() {
+        ConnectionContext context = ConnectionContext.current();
+        return context != null ? context.subscriber() : sink();
     }
 
     /** 默认队列订阅者：测试与 Phase 53 连接接线共用。 */
