@@ -178,6 +178,21 @@ public final class RedisClusterGateway {
     /** 多键命令：全部同槽 + 本地，否则 CROSSSLOT / MOVED。 */
     private RespValue routeMultiKey(String name,
                                     List<byte[]> args, int step) {
+        if (txnHandler != null) {
+            // 事务网关：保留逐键 MOVED 语义，跨槽原子性由事务协调器保证
+            for (int i = 0; i < args.size(); i += step) {
+                if (!isLocal(args.get(i))) {
+                    return moved(args.get(i));
+                }
+            }
+            return switch (name) {
+                case "mget" -> txnHandler.mget(args);
+                case "mset" -> txnHandler.mset(args);
+                case "del" -> transactionalDel(args);
+                default -> commandEngine(storageFor(args.get(0)))
+                        .execute(new RespCommand(name, args));
+            };
+        }
         Set<Integer> slots = new HashSet<>();
         for (int i = 0; i < args.size(); i += step) {
             slots.add(HashSlotRouter.slot(args.get(i)));
@@ -194,6 +209,26 @@ public final class RedisClusterGateway {
         StorageEngine storage = storageFor(args.get(0));
         return commandEngine(storage)
                 .execute(new RespCommand(name, args));
+    }
+
+    /** 事务网关多键 DEL：逐键删除并计数（重复键只计一次）。 */
+    private RespValue transactionalDel(List<byte[]> args) {
+        long removed = 0;
+        List<byte[]> seen = new ArrayList<>();
+        for (byte[] key : args) {
+            boolean duplicate = seen.stream().anyMatch(
+                    other -> java.util.Arrays.equals(other, key));
+            if (duplicate) {
+                continue;
+            }
+            RespValue result = txnHandler.del(key);
+            if (result instanceof RespInteger integer
+                    && integer.value() > 0) {
+                removed++;
+            }
+            seen.add(key);
+        }
+        return new RespInteger(removed);
     }
 
     /** 节点本地命令：本地存储执行（真实 Redis Cluster 语义）。 */
