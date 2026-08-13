@@ -22,7 +22,12 @@ public final class CompoundCoprocessorRequest {
     public enum WindowFunction {
         NONE,
         ROW_NUMBER,
-        RANK
+        RANK,
+        LAG,
+        LEAD,
+        SUM_OVER,
+        COUNT_OVER,
+        AVG_OVER
     }
 
     public CompoundCoprocessorRequest(List<Operator> operators,
