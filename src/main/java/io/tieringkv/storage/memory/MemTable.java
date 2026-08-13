@@ -16,6 +16,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.UnaryOperator;
 
 /**
  * 内存热层：64 段 SkipList + 分段读写锁（ADR-0007 / ADR-0008）。
@@ -579,6 +580,36 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
                         expireAtMillis - now, version.next()), now);
             }
             return true;
+        } finally {
+            segment.lock.writeLock().unlock();
+        }
+    }
+
+    @Override
+    public byte[] update(byte[] key,
+                         UnaryOperator<byte[]> transform) {
+        if (transform == null) {
+            throw new IllegalArgumentException(
+                    "transform required");
+        }
+        long now = timeSource.nowMillis();
+        Segment segment = segments[segmentIndex(key)];
+        segment.lock.writeLock().lock();
+        try {
+            KeyValueEntry current = liveOrNull(segment, key, now);
+            byte[] old = current == null ? null : current.value();
+            byte[] next = transform.apply(old);
+            if (next == null) {
+                if (current != null) {
+                    applyDeleteLocked(segment, key, now,
+                            version.next());
+                }
+                return null;
+            }
+            applyLiveLocked(segment, KeyValueEntry.live(key, next,
+                    now, remainingTtl(current, now),
+                    version.next()), now);
+            return next;
         } finally {
             segment.lock.writeLock().unlock();
         }

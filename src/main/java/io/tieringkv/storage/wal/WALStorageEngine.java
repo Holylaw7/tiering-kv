@@ -6,6 +6,7 @@ import io.tieringkv.storage.StorageIterator;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.function.UnaryOperator;
 
 /**
  * WAL 写路径装饰器（ADR-0016）：先 append WAL，后应用 MemTable；
@@ -186,6 +187,28 @@ public final class WALStorageEngine
         }
         delegate.put(key, value, ttl);
         return true;
+    }
+
+    @Override
+    public synchronized byte[] update(
+            byte[] key, UnaryOperator<byte[]> transform) {
+        if (transform == null) {
+            throw new IllegalArgumentException(
+                    "transform required");
+        }
+        byte[] current = delegate.get(key);
+        byte[] next = transform.apply(current);
+        if (next == null) {
+            wal.append(WALEntry.delete(System.currentTimeMillis(),
+                    key, 0));
+            delegate.delete(key);
+            return null;
+        }
+        long ttl = remainingTtlForWal(key);
+        wal.append(WALEntry.put(System.currentTimeMillis(), key,
+                next, ttl, 0));
+        applyPreservingTtl(key, next);
+        return next;
     }
 
     private void applyPreservingTtl(byte[] key, byte[] value) {

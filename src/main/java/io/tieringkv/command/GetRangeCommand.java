@@ -4,6 +4,8 @@ import io.tieringkv.protocol.RespBulkString;
 import io.tieringkv.protocol.RespError;
 import io.tieringkv.protocol.RespValue;
 import io.tieringkv.storage.StorageEngine;
+import io.tieringkv.storage.types.TypedValueCodec;
+import io.tieringkv.storage.types.ValueType;
 
 import java.util.Arrays;
 import java.util.List;
@@ -23,9 +25,14 @@ public final class GetRangeCommand implements Command {
             return RespError.wrongArity(name());
         }
         try {
+            byte[] value = storage.get(args.get(0));
+            if (value != null
+                    && TypedValueCodec.typeOf(value)
+                    != ValueType.STRING) {
+                return TypeSupport.wrongType();
+            }
             long start = CommandUtil.parseLong(args.get(1));
             long end = CommandUtil.parseLong(args.get(2));
-            byte[] value = storage.get(args.get(0));
             if (value == null) {
                 return new RespBulkString(new byte[0]);
             }
