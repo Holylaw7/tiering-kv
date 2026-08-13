@@ -615,6 +615,18 @@ tiering-kv/
 - 剩余：真实 Runner 门禁（Phase 48），跨云联邦仲裁、RL 多智能体、
   TSO 量子/卫星硬件接入、监管法规自动映射、TiKV 跨机回归告警闭环。
 
+## 7.6 Phase 48 状态（v3.1.0 发布候选）
+
+- 分支：`feature/phase48-real-runner-closure-multi-org-federation`；
+- 交付：门禁收敛 v14 + 发布归档（ADR-0248）、多组织联邦仲裁
+  （ADR-0249）、RL 多智能体下推（ADR-0250）、TSO 量子/卫星硬件适配
+  （ADR-0251）、监管法规自动映射 + 证据链（ADR-0252）、TiKV 跨机
+  回归闭环 + 真实凭据 v6（ADR-0253，TD-076 剩余项）、v3.1 冻结
+  （ADR-0254）；
+- 测试：新增 ≥560；全量回归 ≥11625 全绿；
+- 剩余：真实 Runner 门禁（Phase 49），跨监管域联邦、RL 联邦学习、
+  TSO 量子/卫星商用设备、法规库 + 差异报告、TiKV 跨机回归闭环归档。
+
 ## 8. 会话启动清单
 
 1. `git status` + `git log --oneline -10`；

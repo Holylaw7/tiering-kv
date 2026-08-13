@@ -317,6 +317,24 @@
   - v3.0 冻结（ADR-0247）：release.yml v3.0.0 标签 +
     Phase47BenchmarkTest/Baseline 接入；
   - 测试：新增 ≥550 项；全量回归 **≥11053 全绿**（+6 门控跳过）。
+- Phase 48 真实 Runner 门禁全量闭环与多组织联邦一致性（v3.1.0）：
+  - 门禁收敛 v14 + 发布归档（ADR-0248）：GateConvergenceV14 +
+    ReleaseRecordArchive + GateConvergenceV14Test；
+  - 多组织联邦仲裁（ADR-0249）：MultiOrgFederationArbitration
+    （cloud → organization 映射 + 组织级仲裁 + 回退 2PC）；
+  - RL 多智能体下推（ADR-0250）：MultiAgentPushdownCoordinator
+    （加权 Q 聚合 + 反馈闭环）；
+  - TSO 量子/卫星硬件适配（ADR-0251）：QuantumSatelliteHardwareAdapter
+    （HardwareClock 接口 + 模拟实现 + 故障降级）；
+  - 监管法规自动映射 + 证据链（ADR-0252）：RegulatoryMappingEngine
+    （条款 → 事件 → 证据链）；
+  - TiKV 跨机回归闭环 + 真实凭据 v6（ADR-0253）：
+    Phase48ProductionBaselineTest（自动重跑/趋势/告警）+
+    probeWithLatency（可达性 + 认证 + 权限 + 配额 + 延迟，
+    TD-076 剩余项）；
+  - v3.1 冻结（ADR-0254）：release.yml v3.1.0 标签 +
+    Phase48BenchmarkTest/Baseline 接入；
+  - 测试：新增 ≥560 项；全量回归 **≥11625 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
