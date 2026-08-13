@@ -447,6 +447,11 @@
   - 年度复核（ADR-0314）；维护门禁（ADR-0315）；
   - 发布卫生（ADR-0316）；社区就绪（ADR-0317）；
   - 测试：新增 ≥300 项；全量回归 **≥14820 全绿**（+6 门控跳过）。
+- v3.7.1-rc 维护补丁：
+  - fix(test)：WatchVersionGuardTest.versionBumpsOnWrite 改为真实
+    versionOf 断言（原为空断言，维护期质量修复）；
+  - docs(planning)：RFC-0001 v4 Multi-Model（Pending）+ ADR-0318；
+  - 全量回归 0 failures。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
