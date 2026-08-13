@@ -56,6 +56,16 @@ public final class RespEncoder extends MessageToByteEncoder<RespValue> {
         }
     }
 
+    /** 按连接协议版本编码：RESP3 原生表达新类型，RESP2 回退。 */
+    public static void write(ByteBuf out, RespValue value,
+                             RespVersion version) {
+        if (version == RespVersion.RESP3) {
+            writeV3(out, value);
+        } else {
+            write(out, value);
+        }
+    }
+
     /** RESP3 编码：新类型原生表达；旧类型与 RESP2 一致。 */
     public static void writeV3(ByteBuf out, RespValue value) {
         if (value instanceof RespMap map) {

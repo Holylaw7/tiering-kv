@@ -11,6 +11,9 @@ import io.tieringkv.storage.types.ByteArrayKey;
 import io.tieringkv.storage.types.SetCodec;
 import io.tieringkv.storage.types.TypedValueCodec;
 import io.tieringkv.storage.types.ValueType;
+import io.tieringkv.protocol.RespSet;
+import io.tieringkv.protocol.RespVersion;
+import io.tieringkv.session.ConnectionContext;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -145,7 +148,19 @@ public final class SetFamilyCommand implements Command {
             return RespError.wrongArity(name);
         }
         try {
-            return toArray(decode(storage.get(args.get(0))));
+            Set<ByteArrayKey> members =
+                    decode(storage.get(args.get(0)));
+            ConnectionContext context =
+                    ConnectionContext.current();
+            if (context != null
+                    && context.version() == RespVersion.RESP3) {
+                List<RespValue> values = new ArrayList<>();
+                for (ByteArrayKey member : members) {
+                    values.add(new RespBulkString(member.data()));
+                }
+                return new RespSet(values);
+            }
+            return toArray(members);
         } catch (TypeSupport.WrongTypeException e) {
             return TypeSupport.wrongType();
         }

@@ -3,6 +3,8 @@ package io.tieringkv.command;
 import io.tieringkv.execution.KeyShardExecutor;
 import io.tieringkv.protocol.RespError;
 import io.tieringkv.protocol.RespValue;
+import io.tieringkv.protocol.RespSimpleString;
+import io.tieringkv.session.ConnectionContext;
 import io.tieringkv.storage.StorageEngine;
 
 import java.nio.charset.StandardCharsets;
@@ -31,6 +33,12 @@ public final class CommandEngine {
     }
 
     public RespValue execute(RespCommand command) {
+        ConnectionContext context = ConnectionContext.current();
+        if (context != null && context.inMulti()
+                && !isTxnControl(command.name())) {
+            context.enqueue(command);
+            return new RespSimpleString("QUEUED");
+        }
         // Redis 语义：命令名大小写不敏感；解析器已归一化，此处兜底
         String name = command.name().toLowerCase(Locale.ROOT);
         Command handler = registry.find(name);
@@ -38,6 +46,13 @@ public final class CommandEngine {
             return RespError.unknownCommand(name);
         }
         return handler.execute(command.args(), storage);
+    }
+
+    private static boolean isTxnControl(String name) {
+        return switch (name) {
+            case "multi", "exec", "discard", "watch" -> true;
+            default -> false;
+        };
     }
 
     /**
@@ -48,13 +63,24 @@ public final class CommandEngine {
         if (executor == null) {
             return CompletableFuture.completedFuture(execute(command));
         }
+        ConnectionContext captured = ConnectionContext.current();
         byte[] key = command.args().isEmpty()
                 ? command.name().getBytes(StandardCharsets.UTF_8)
                 : command.args().get(0);
         CompletableFuture<RespValue> future = new CompletableFuture<>();
         executor.submit(key, () -> {
             try {
-                future.complete(execute(command));
+                boolean attached = captured != null;
+                if (attached) {
+                    ConnectionContext.attach(captured);
+                }
+                try {
+                    future.complete(execute(command));
+                } finally {
+                    if (attached) {
+                        ConnectionContext.detach();
+                    }
+                }
             } catch (Throwable t) {
                 future.completeExceptionally(t);
             }
@@ -75,12 +101,23 @@ public final class CommandEngine {
             }
             return;
         }
+        ConnectionContext captured = ConnectionContext.current();
         byte[] key = command.args().isEmpty()
                 ? command.name().getBytes(StandardCharsets.UTF_8)
                 : command.args().get(0);
         executor.submit(key, () -> {
             try {
-                callback.accept(execute(command), null);
+                boolean attached = captured != null;
+                if (attached) {
+                    ConnectionContext.attach(captured);
+                }
+                try {
+                    callback.accept(execute(command), null);
+                } finally {
+                    if (attached) {
+                        ConnectionContext.detach();
+                    }
+                }
             } catch (Throwable t) {
                 callback.accept(null, t);
             }

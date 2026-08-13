@@ -43,8 +43,136 @@ public final class ListCommand implements Command {
             case "lset" -> lset(args, storage);
             case "lrem" -> lrem(args, storage);
             case "ltrim" -> ltrim(args, storage);
+            case "linsert" -> linsert(args, storage);
+            case "lmove" -> lmove(args, storage);
+            case "rpoplpush" -> rpoplpush(args, storage);
             default -> RespError.unknownCommand(name);
         };
+    }
+
+    private RespValue linsert(List<byte[]> args,
+                              StorageEngine storage) {
+        if (args.size() != 4) {
+            return RespError.wrongArity(name);
+        }
+        try {
+            if (storage.get(args.get(0)) == null) {
+                return new RespInteger(0);
+            }
+            String where = CommandUtil.text(args.get(1))
+                    .toLowerCase(java.util.Locale.ROOT);
+            if (!"before".equals(where) && !"after".equals(where)) {
+                return new RespError("ERR syntax error");
+            }
+            byte[] key = args.get(0);
+            byte[] pivot = args.get(2);
+            byte[] value = args.get(3);
+            byte[] result = TypeSupport.update(storage, key,
+                    current -> {
+                        List<byte[]> elements = decode(current);
+                        int index = -1;
+                        for (int i = 0; i < elements.size(); i++) {
+                            if (java.util.Arrays.equals(
+                                    elements.get(i), pivot)) {
+                                index = i;
+                                break;
+                            }
+                        }
+                        if (index == -1) {
+                            throw new PivotNotFoundException();
+                        }
+                        elements.add("after".equals(where)
+                                ? index + 1 : index, value);
+                        return TypedValueCodec.encode(
+                                ValueType.LIST,
+                                ListCodec.encode(elements));
+                    });
+            return new RespInteger(decode(result).size());
+        } catch (PivotNotFoundException e) {
+            return new RespInteger(-1);
+        } catch (TypeSupport.WrongTypeException e) {
+            return TypeSupport.wrongType();
+        }
+    }
+
+    private RespValue lmove(List<byte[]> args,
+                            StorageEngine storage) {
+        if (args.size() != 4) {
+            return RespError.wrongArity(name);
+        }
+        try {
+            String fromSide = CommandUtil.text(args.get(2))
+                    .toLowerCase(java.util.Locale.ROOT);
+            String toSide = CommandUtil.text(args.get(3))
+                    .toLowerCase(java.util.Locale.ROOT);
+            if (!"left".equals(fromSide)
+                    && !"right".equals(fromSide)
+                    || !"left".equals(toSide)
+                    && !"right".equals(toSide)) {
+                return new RespError("ERR syntax error");
+            }
+            RespValue popped = popSingle(storage, args.get(0),
+                    "left".equals(fromSide));
+            if (popped == RespNull.BULK_STRING) {
+                return RespNull.BULK_STRING;
+            }
+            byte[] value = ((RespBulkString) popped).bytes();
+            pushSingle(storage, args.get(1), value,
+                    "left".equals(toSide));
+            return new RespBulkString(value);
+        } catch (TypeSupport.WrongTypeException e) {
+            return TypeSupport.wrongType();
+        }
+    }
+
+    private RespValue rpoplpush(List<byte[]> args,
+                                StorageEngine storage) {
+        if (args.size() != 2) {
+            return RespError.wrongArity(name);
+        }
+        RespValue popped = popSingle(storage, args.get(0), false);
+        if (popped == RespNull.BULK_STRING) {
+            return RespNull.BULK_STRING;
+        }
+        byte[] value = ((RespBulkString) popped).bytes();
+        pushSingle(storage, args.get(1), value, true);
+        return new RespBulkString(value);
+    }
+
+    private RespValue popSingle(StorageEngine storage,
+                                byte[] key, boolean left) {
+        List<byte[]> popped = new ArrayList<>();
+        TypeSupport.update(storage, key, current -> {
+            List<byte[]> elements = decode(current);
+            if (elements.isEmpty()) {
+                return null;
+            }
+            popped.add(elements.remove(left
+                    ? 0 : elements.size() - 1));
+            return elements.isEmpty() ? null
+                    : TypedValueCodec.encode(ValueType.LIST,
+                    ListCodec.encode(elements));
+        });
+        return popped.isEmpty() ? RespNull.BULK_STRING
+                : new RespBulkString(popped.get(0));
+    }
+
+    private void pushSingle(StorageEngine storage, byte[] key,
+                            byte[] value, boolean left) {
+        TypeSupport.update(storage, key, current -> {
+            List<byte[]> elements = decode(current);
+            if (left) {
+                elements.add(0, value);
+            } else {
+                elements.add(value);
+            }
+            return TypedValueCodec.encode(ValueType.LIST,
+                    ListCodec.encode(elements));
+        });
+    }
+
+    private static final class PivotNotFoundException
+            extends RuntimeException {
     }
 
     private RespValue push(List<byte[]> args,

@@ -3,6 +3,7 @@ package io.tieringkv.network.response;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.ByteBufAllocator;
 import io.tieringkv.protocol.RespEncoder;
+import io.tieringkv.protocol.RespVersion;
 import io.tieringkv.protocol.RespValue;
 
 /**
@@ -19,10 +20,14 @@ public final class ResponseBuffer {
     }
 
     public void append(RespValue value) {
+        append(value, RespVersion.RESP2);
+    }
+
+    public void append(RespValue value, RespVersion version) {
         if (buffer == null) {
             buffer = allocator.buffer(256);
         }
-        RespEncoder.write(buffer, value);
+        RespEncoder.write(buffer, value, version);
     }
 
     public boolean isEmpty() {

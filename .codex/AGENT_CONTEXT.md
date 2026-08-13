@@ -334,14 +334,14 @@ BM-001/002、TD-051/054/059/060/063/066/069/072/075/078）、跨区
 
 ## 2. 当前状态
 
-- 阶段：**Phase 52（数据结构、RESP3 与 Pub/Sub）✅ 已完成
-  （v3.4.0 RC）**（Phase 0–51 全部完成）；
-- 最近提交：Phase 52 合并（详见 git log）；
-- 基线：develop 合并 Phase 51；分支策略：feature/* 合并入 develop，
+- 阶段：**Phase 53（RESP3 接线、Pub/Sub 网络与事务）✅ 已完成
+  （v3.5.0 RC）**（Phase 0–52 全部完成）；
+- 最近提交：Phase 53 合并（详见 git log）；
+- 基线：develop 合并 Phase 52；分支策略：feature/* 合并入 develop，
   main 保持稳定；
-- 下一步：RESP3 连接接线 / Pub/Sub 连接投递与集群广播、高级数据结构
-  命令、MULTI/EXEC 事务联动、原型转生产、分布式正确性验证
-  （Phase 53+，等待用户指令）。
+- 下一步：WATCH 全量版本守卫、EXEC 跨段原子、事务持久化、Stream/
+  阻塞命令/过期通知、SQL/向量原型转生产、分布式正确性验证
+  （Phase 54+，等待用户指令）。
 
 项目里程碑：**32 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
@@ -690,6 +690,22 @@ tiering-kv/
 - 剩余：RESP3 连接级接线、Pub/Sub 连接投递与集群广播、高级数据结构
   命令、MULTI/EXEC、SQL/向量原型转生产、分布式正确性验证
   （Phase 53+）。
+
+## 7.11 Phase 53 状态（v3.5.0 RC）
+
+- 分支：`feature/phase53-resp3-wiring-pubsub-network-txn`；
+- 交付：RESP3 连接级接线（ADR-0283，ConnectionContext + 版本感知
+  编码 + HELLO 3 切换）、Pub/Sub 连接投递（ADR-0284，
+  ConnectionSubscriber 有界队列 + Push）、集群广播 RPC（ADR-0285，
+  PUBSUB 帧 32/33 + 环回抑制 + 失败登记）、高级命令（ADR-0286，
+  HSCAN/LINSERT/LMOVE/RPOPLPUSH/ZRANGEBYLEX/ZLEXCOUNT/
+  ZREMRANGEBYLEX）、MULTI/EXEC（ADR-0287，QUEUED + 结果数组 +
+  DISCARD + WATCH 登记）、连接生命周期（ADR-0288，断线清理）；
+- 命令注册表：101 个命令；新增 ≥560 测试；全量回归 ≥14140 全绿
+  （+6 门控跳过）；
+- 剩余：WATCH 全量版本守卫、EXEC 跨段原子、事务持久化、Stream/
+  阻塞命令/过期事件通知、SQL/向量原型转生产、分布式正确性验证
+  （Phase 54+）。
 
 ## 8. 会话启动清单
 
