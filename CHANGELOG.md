@@ -422,6 +422,15 @@
   - SQL/向量（ADR-0295）：统一错误码 + EXPLAIN + HNSW 持久化；
   - v3.6 冻结：release.yml v3.6.0 + Phase54 基准；
   - 测试：新增 ≥600 项；全量回归 **≥14470 全绿**（+6 门控跳过）。
+- Phase 55 分布式正确性、消费组与文档产品化（v3.7.0 RC）：
+  - 线性一致性验证（ADR-0297）：历史 + 线性化点 + 违例拒绝；
+  - Raft 边角矩阵（ADR-0298）：选举/故障转移/追平/少数派；
+  - 升级/备份演练（ADR-0299）：upgrade-drill / restore-drill；
+  - Stream 消费组（ADR-0300）：XGROUP/XREADGROUP/XACK/XPENDING；
+  - 事务日志持久化（ADR-0301）：PersistentExecJournal + CRC；
+  - 文档产品化（ADR-0302）：quickstart/runbook/白皮书；
+  - v3.7 冻结：release.yml v3.7.0 + Phase55 基准；
+  - 测试：新增 ≥600 项；全量回归 **≥14730 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
