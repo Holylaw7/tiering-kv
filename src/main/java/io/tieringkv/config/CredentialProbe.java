@@ -58,6 +58,12 @@ public final class CredentialProbe {
         boolean withinQuota(String endpoint, String credential);
     }
 
+    /** 延迟探针（ADR-0253）：返回毫秒延迟；-1 表示不可达。 */
+    @FunctionalInterface
+    public interface LatencyProbe {
+        long latencyMillis(String endpoint, long timeoutMillis);
+    }
+
     /** 真实 HTTP 探针（ADR-0225）：GET 端点，2xx/3xx/4xx 视为可达。 */
     public static EndpointProber realHttpProber(long timeoutMillis) {
         java.net.http.HttpClient client =
@@ -174,6 +180,38 @@ public final class CredentialProbe {
                 false,
                 "reachable, authenticated, authorized "
                         + "and within quota");
+    }
+
+    /** 带延迟探测的网络握手：可达性 + 认证 + 权限 + 配额 + 延迟。 */
+    public ProbeResult probeWithLatency(
+            String target, String endpoint, String credential,
+            EndpointProber transport, AuthVerifier auth,
+            PermissionCheck permission, QuotaCheck quota,
+            LatencyProbe latency, long maxLatencyMillis) {
+        if (latency == null || maxLatencyMillis < 0) {
+            throw new IllegalArgumentException(
+                    "latency required and maxLatency must be "
+                            + "non-negative");
+        }
+        ProbeResult base = probeWithQuota(target, endpoint,
+                credential, transport, auth, permission, quota);
+        if (!base.ok()) {
+            return base;
+        }
+        long observed = latency.latencyMillis(endpoint,
+                timeoutMillis);
+        if (observed < 0 || observed > maxLatencyMillis) {
+            registerFailure(target,
+                    "latency " + observed + "ms exceeds limit "
+                            + maxLatencyMillis + "ms");
+            return new ProbeResult(target, Mode.REAL, true,
+                    false, true,
+                    "degraded: latency exceeds limit");
+        }
+        return new ProbeResult(target, Mode.REAL, true, true,
+                false,
+                "reachable, authenticated, authorized, within "
+                        + "quota and latency " + observed + "ms");
     }
 
     private final Mode mode;
