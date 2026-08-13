@@ -46,6 +46,12 @@ public final class CredentialProbe {
         boolean valid(String endpoint, String credential);
     }
 
+    /** 权限校验器（ADR-0239）：真实实现由 Runner 注入。 */
+    @FunctionalInterface
+    public interface PermissionCheck {
+        boolean allowed(String endpoint, String credential);
+    }
+
     /** 真实 HTTP 探针（ADR-0225）：GET 端点，2xx/3xx/4xx 视为可达。 */
     public static EndpointProber realHttpProber(long timeoutMillis) {
         java.net.http.HttpClient client =
@@ -106,6 +112,33 @@ public final class CredentialProbe {
                         : "degraded: " + (reachable
                         ? "authentication failed"
                         : "endpoint unreachable or missing"));
+    }
+
+    /** 带权限校验的网络握手：可达性 + 认证 + 权限。 */
+    public ProbeResult probeWithPermission(
+            String target, String endpoint, String credential,
+            EndpointProber transport, AuthVerifier auth,
+            PermissionCheck permission) {
+        if (transport == null || auth == null
+                || permission == null) {
+            throw new IllegalArgumentException(
+                    "transport, auth and permission required");
+        }
+        ProbeResult base = probeAuthenticated(target,
+                endpoint, credential, transport, auth);
+        if (!base.ok()) {
+            return base;
+        }
+        boolean allowed = permission.allowed(endpoint,
+                credential);
+        if (!allowed) {
+            registerFailure(target, "permission denied");
+            return new ProbeResult(target, Mode.REAL, true,
+                    false, true,
+                    "degraded: permission denied");
+        }
+        return new ProbeResult(target, Mode.REAL, true, true,
+                false, "reachable, authenticated and authorized");
     }
 
     private final Mode mode;

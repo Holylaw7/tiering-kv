@@ -137,7 +137,8 @@ public final class CoprocessorExecutor {
 
     /**
      * 窗口函数：按 key 分区、value 升序（ADR-0229）。
-     * ROW_NUMBER：组内连续编号；RANK：同值同排名。
+     * ROW_NUMBER/RANK：编号与排名；LAG/LEAD：偏移取值；
+     * SUM/COUNT/AVG OVER：分区前缀聚合。
      */
     private static List<Row> window(
             List<Row> rows,
@@ -160,9 +161,14 @@ public final class CoprocessorExecutor {
                     .equals(partition)) {
                 end++;
             }
+            List<Double> values = new ArrayList<>();
+            for (int i = index; i < end; i++) {
+                values.add(sorted.get(i).value());
+            }
             int position = 0;
             int distinct = 0;
             double previous = Double.NaN;
+            double prefixSum = 0;
             while (index < end) {
                 double value = sorted.get(index).value();
                 position++;
@@ -172,7 +178,24 @@ public final class CoprocessorExecutor {
                 }
                 double number = function == CompoundCoprocessorRequest
                         .WindowFunction.ROW_NUMBER
-                        ? position : distinct + 1;
+                        ? position
+                        : switch (function) {
+                            case RANK -> distinct + 1;
+                            case LAG -> position == 1
+                                    ? 0 : values.get(position - 2);
+                            case LEAD -> position == values.size()
+                                    ? 0 : values.get(position);
+                            case SUM_OVER -> {
+                                prefixSum += value;
+                                yield prefixSum;
+                            }
+                            case COUNT_OVER -> position;
+                            case AVG_OVER -> {
+                                prefixSum += value;
+                                yield prefixSum / position;
+                            }
+                            default -> value;
+                        };
                 result.add(new Row(partition, number));
                 previous = value;
                 index++;
