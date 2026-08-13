@@ -266,6 +266,23 @@
   - v2.7 冻结（ADR-0226）：release.yml v2.7.0 标签 +
     Phase44BenchmarkTest/Baseline 接入；
   - 测试：新增 ≥520 项；全量回归 **≥9412 全绿**（+6 门控跳过）。
+- Phase 45 真实 Runner 闭环 v11 与多云全球一致性（v2.8.0）：
+  - 门禁收敛 v11（ADR-0227）：GateConvergenceV11 收敛表注册表 +
+    GateConvergenceV11Test；
+  - 跨云全局一阶段（ADR-0228）：MultiCloudOnePhaseCommit（多数云仲裁 +
+    回退 2PC + resolved-ts 联动）；
+  - 多表 JOIN / 窗口函数下推（ADR-0229）：joinTables 多表连接 +
+    ROW_NUMBER/RANK + PushdownCostModel；
+  - TSO 全球统一时钟（ADR-0230）：GlobalTsoClock（GPS/原子钟/NTP
+    混合授时 + 中位数校准 + 单调 + 恢复不回退）；
+  - 自治 PD 无人值守（ADR-0231）：AutonomousPdUnattended（EWMA
+    自校准 + 合规报告 + 熔断）；
+  - TiKV 跨机对比基线 + 真实凭据 v3（ADR-0232）：
+    Phase45ProductionBaselineTest（跨机口径）+ probeAuthenticated
+    （认证握手，TD-076 剩余项）；
+  - v2.8 冻结（ADR-0233）：release.yml v2.8.0 标签 +
+    Phase45BenchmarkTest/Baseline 接入；
+  - 测试：新增 ≥530 项；全量回归 **≥9942 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager
