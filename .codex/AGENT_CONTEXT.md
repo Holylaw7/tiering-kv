@@ -579,6 +579,18 @@ tiering-kv/
 - 剩余：真实 Runner 门禁（Phase 45），全局一阶段跨云、多表 JOIN /
   窗口函数、TSO 全球统一时钟、自治 PD 无人值守、TiKV 真实跨机基准。
 
+## 7.3 Phase 45 状态（v2.8.0 发布候选）
+
+- 分支：`feature/phase45-real-runner-closure-v11-multicloud`；
+- 交付：门禁收敛 v11（ADR-0227）、跨云全局一阶段（ADR-0228）、
+  多表 JOIN / 窗口函数下推（ADR-0229）、TSO 全球统一时钟
+  （ADR-0230）、自治 PD 无人值守（ADR-0231）、TiKV 跨机对比基线 +
+  真实凭据 v3（ADR-0232，TD-076 剩余项）、v2.8 冻结（ADR-0233）；
+- 测试：新增 ≥530；全量回归 ≥9942 全绿；
+- 剩余：真实 Runner 门禁（Phase 46），跨云一阶段规模化、窗口函数
+  全族 / 动态下推、TSO 跨云授时仲裁、无人值守全自动合规证明、
+  TiKV 真实跨机基准定期回归。
+
 ## 8. 会话启动清单
 
 1. `git status` + `git log --oneline -10`；
