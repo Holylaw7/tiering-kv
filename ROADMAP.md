@@ -58,6 +58,7 @@
 | 48 | 真实 Runner 门禁全量闭环与多组织联邦一致性（v3.1.0） | ✅ 完成（2026-08-13） |
 | 49 | 真实 Runner 闭环归档与跨监管域联邦一致性（v3.2.0） | ✅ 完成（2026-08-13） |
 | 50 | 工程基座与真实 Runner GA（v3.2.0 GA） | ✅ 完成（2026-08-13） |
+| 51 | Redis 命令族补齐（v3.3.0 RC） | ✅ 完成（2026-08-13） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -878,6 +879,24 @@
   口径）；跨机项正式封板。
 - 后续：Redis 命令族补齐、数据结构与 RESP3、原型转生产（SQL/向量）、
   分布式正确性验证、文档产品化（Phase 51+）。
+
+## Phase 51 — Redis 命令族补齐 ✅
+
+- 目标：命令面从 7 个扩展到 38 个，RESP2 兼容矩阵 + 网关 CROSSSLOT +
+  并发原子性闭环。
+- 交付：字符串命令族（ADR-0269，AtomicStringOps 段锁原子 + WAL）、
+  TTL 命令族（ADR-0270，复用 TTLManager）、多键命令族（ADR-0271，
+  MGET/MSET/MSETNX/DEL/EXISTS）、管理命令族（ADR-0272，
+  DBSIZE/FLUSHDB/SCAN/TYPE/CONFIG/CLIENT/COMMAND）、RESP2 兼容
+  矩阵（ADR-0273）、网关命令路由与 CROSSSLOT（ADR-0274）、v3.3
+  冻结（ADR-0275）。
+- 测试：新增 ≥520 项（surefire 口径）；全量回归 **≥13190 全绿**
+  （目标 ≥13190 ✅，+6 门控跳过）。
+- 基准（[phase51-production-report.md](
+  docs/benchmark/phase51-production-report.md)）：INCR 0.2–0.9M、
+  MSET 0.1–0.24M、SCAN 43K–1M、TTL 0.33–2M ops/s（LOCAL 口径）。
+- 后续：hash/list/set/zset、RESP3、Pub/Sub、原型转生产、分布式
+  正确性验证（Phase 52+）。
 
 ## 技术债登记
 

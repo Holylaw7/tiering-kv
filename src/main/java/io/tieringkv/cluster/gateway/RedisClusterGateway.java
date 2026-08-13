@@ -2,6 +2,9 @@ package io.tieringkv.cluster.gateway;
 
 import io.tieringkv.cluster.sharding.HashSlotRouter;
 import io.tieringkv.cluster.metrics.GatewayMetricsRegistry;
+import io.tieringkv.command.CommandEngine;
+import io.tieringkv.command.CommandRegistry;
+import io.tieringkv.command.RespCommand;
 import io.tieringkv.protocol.RespArray;
 import io.tieringkv.protocol.RespBulkString;
 import io.tieringkv.protocol.RespError;
@@ -14,9 +17,11 @@ import io.tieringkv.storage.StorageEngine;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Redis Cluster 网关（Phase 17）：GET/SET/DEL/MGET/MSET/INFO/CLUSTER SLOTS；
@@ -31,6 +36,7 @@ public final class RedisClusterGateway {
     private final String localNode;
     private final AutoTransactionExecutor autoTxn;
     private final TransactionCommandHandler txnHandler;
+    private final CommandRegistry commandRegistry;
 
     public RedisClusterGateway(int shardCount,
                                Map<Integer, String> shardLeaders,
@@ -56,6 +62,7 @@ public final class RedisClusterGateway {
         this.txnHandler = autoTxn == null ? null
                 : new TransactionCommandHandler(autoTxn, metrics == null
                 ? new GatewayMetricsRegistry() : metrics);
+        this.commandRegistry = CommandRegistry.createDefault();
     }
 
     public RespValue execute(String name, List<byte[]> args) {
@@ -73,22 +80,48 @@ public final class RedisClusterGateway {
                 return localSet(args);
             }
             case "del" -> {
-                if (args.size() != 1) {
+                if (args.isEmpty()) {
                     return RespError.wrongArity(name);
                 }
-                return localDel(args.get(0));
+                return routeMultiKey("del", args, 1);
             }
             case "mget" -> {
                 if (args.isEmpty()) {
                     return RespError.wrongArity(name);
                 }
-                return localMget(args);
+                return routeMultiKey("mget", args, 1);
             }
             case "mset" -> {
                 if (args.size() < 2 || args.size() % 2 != 0) {
                     return RespError.wrongArity(name);
                 }
-                return localMset(args);
+                return routeMultiKey("mset", args, 2);
+            }
+            case "msetnx" -> {
+                if (args.size() < 2 || args.size() % 2 != 0) {
+                    return RespError.wrongArity(name);
+                }
+                return routeMultiKey("msetnx", args, 2);
+            }
+            case "exists" -> {
+                if (args.isEmpty()) {
+                    return RespError.wrongArity(name);
+                }
+                return routeMultiKey("exists", args, 1);
+            }
+            case "incr", "decr", "incrby", "decrby", "append",
+                    "strlen", "getset", "setnx", "setex", "psetex",
+                    "getdel", "getrange", "setrange", "ttl", "pttl",
+                    "expire", "pexpire", "expireat", "pexpireat",
+                    "persist", "type" -> {
+                if (args.isEmpty()) {
+                    return RespError.wrongArity(name);
+                }
+                return routeSingleKey(name, args);
+            }
+            case "scan", "dbsize", "flushdb", "flushall", "config",
+                    "client", "command" -> {
+                return routeLocal(name, args);
             }
             case "info" -> {
                 String info = "# Server\r\ngateway:tiering-kv\r\n"
@@ -129,6 +162,87 @@ public final class RedisClusterGateway {
 
     private RespValue moved(byte[] key) {
         return new RespError("MOVED " + movedTarget(key));
+    }
+
+    /** 单键命令：本地执行，否则 MOVED。 */
+    private RespValue routeSingleKey(String name,
+                                     List<byte[]> args) {
+        byte[] key = args.get(0);
+        if (!isLocal(key)) {
+            return moved(key);
+        }
+        return commandEngine(storageFor(key))
+                .execute(new RespCommand(name, args));
+    }
+
+    /** 多键命令：全部同槽 + 本地，否则 CROSSSLOT / MOVED。 */
+    private RespValue routeMultiKey(String name,
+                                    List<byte[]> args, int step) {
+        if (txnHandler != null) {
+            // 事务网关：保留逐键 MOVED 语义，跨槽原子性由事务协调器保证
+            for (int i = 0; i < args.size(); i += step) {
+                if (!isLocal(args.get(i))) {
+                    return moved(args.get(i));
+                }
+            }
+            return switch (name) {
+                case "mget" -> txnHandler.mget(args);
+                case "mset" -> txnHandler.mset(args);
+                case "del" -> transactionalDel(args);
+                default -> commandEngine(storageFor(args.get(0)))
+                        .execute(new RespCommand(name, args));
+            };
+        }
+        Set<Integer> slots = new HashSet<>();
+        for (int i = 0; i < args.size(); i += step) {
+            slots.add(HashSlotRouter.slot(args.get(i)));
+        }
+        if (slots.size() > 1) {
+            return new RespError("CROSSSLOT Keys in request don't "
+                    + "hash to the same slot");
+        }
+        for (int i = 0; i < args.size(); i += step) {
+            if (!isLocal(args.get(i))) {
+                return moved(args.get(i));
+            }
+        }
+        StorageEngine storage = storageFor(args.get(0));
+        return commandEngine(storage)
+                .execute(new RespCommand(name, args));
+    }
+
+    /** 事务网关多键 DEL：逐键删除并计数（重复键只计一次）。 */
+    private RespValue transactionalDel(List<byte[]> args) {
+        long removed = 0;
+        List<byte[]> seen = new ArrayList<>();
+        for (byte[] key : args) {
+            boolean duplicate = seen.stream().anyMatch(
+                    other -> java.util.Arrays.equals(other, key));
+            if (duplicate) {
+                continue;
+            }
+            RespValue result = txnHandler.del(key);
+            if (result instanceof RespInteger integer
+                    && integer.value() > 0) {
+                removed++;
+            }
+            seen.add(key);
+        }
+        return new RespInteger(removed);
+    }
+
+    /** 节点本地命令：本地存储执行（真实 Redis Cluster 语义）。 */
+    private RespValue routeLocal(String name, List<byte[]> args) {
+        StorageEngine storage = storages.get(localNode);
+        if (storage == null) {
+            return new RespError("ERR no local storage");
+        }
+        return commandEngine(storage)
+                .execute(new RespCommand(name, args));
+    }
+
+    private CommandEngine commandEngine(StorageEngine storage) {
+        return new CommandEngine(commandRegistry, storage);
     }
 
     private RespValue localGet(byte[] key) {

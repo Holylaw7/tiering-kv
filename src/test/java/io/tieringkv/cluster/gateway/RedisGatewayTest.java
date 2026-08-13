@@ -96,7 +96,7 @@ class RedisGatewayTest {
     @Test
     void mgetLocalValues() {
         n1.put(localKey, bytes("a"));
-        byte[] second = keyInShard(0, 1000);
+        byte[] second = keyInSlot(localKey);
         n1.put(second, bytes("b"));
         RespValue response = gateway.execute("mget",
                 List.of(localKey, second));
@@ -108,7 +108,7 @@ class RedisGatewayTest {
 
     @Test
     void mgetMissingReturnsNulls() {
-        byte[] missing = keyInShard(0, 1000);
+        byte[] missing = keyInSlot(localKey);
         RespValue response = gateway.execute("mget",
                 List.of(localKey, missing));
         RespArray array = (RespArray) response;
@@ -151,18 +151,29 @@ class RedisGatewayTest {
     }
 
     @Test
-    void mgetMixedReturnsMoved() {
+    void mgetMixedReturnsCrossslot() {
         RespValue response = gateway.execute("mget",
                 List.of(localKey, remoteKey));
-        assertThat(((RespError) response).message()).startsWith("MOVED ");
+        assertThat(((RespError) response).message())
+                .startsWith("CROSSSLOT");
     }
 
     @Test
-    void msetMixedReturnsMoved() {
+    void msetMixedReturnsCrossslot() {
         RespValue response = gateway.execute("mset",
                 List.of(localKey, bytes("a"), remoteKey, bytes("b")));
-        assertThat(((RespError) response).message()).startsWith("MOVED ");
+        assertThat(((RespError) response).message())
+                .startsWith("CROSSSLOT");
         assertThat(n1.get(localKey)).isNull();
+    }
+
+    @Test
+    void sameSlotRemoteMultiKeyReturnsMoved() {
+        byte[] remoteSameSlot = keyInSlot(remoteKey);
+        RespValue response = gateway.execute("mget",
+                List.of(remoteKey, remoteSameSlot));
+        assertThat(((RespError) response).message())
+                .startsWith("MOVED ");
     }
 
     @Test
@@ -228,6 +239,19 @@ class RedisGatewayTest {
 
     private static byte[] keyInShard(int shard) {
         return keyInShard(shard, 0);
+    }
+
+    /** 与 anchor 同 slot 的键（跨槽校验用）。 */
+    private byte[] keyInSlot(byte[] anchor) {
+        int target = HashSlotRouter.slot(anchor);
+        for (int i = 0; i < 200_000; i++) {
+            byte[] candidate = ("same-slot-" + i)
+                    .getBytes(StandardCharsets.UTF_8);
+            if (HashSlotRouter.slot(candidate) == target) {
+                return candidate;
+            }
+        }
+        throw new AssertionError("no same-slot key found");
     }
 
     private static byte[] keyInShard(int shard, int start) {

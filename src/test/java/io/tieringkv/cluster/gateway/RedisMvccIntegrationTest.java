@@ -358,10 +358,11 @@ class RedisMvccIntegrationTest {
     }
 
     @Test
-    void delWrongArityRejected() {
+    void delMultiKeySupported() {
         Fixture fixture = singleShard();
         assertThat(fixture.gateway.execute("del", List.of(
-                key("a"), key("b")))).isInstanceOf(RespError.class);
+                key("a"), key("b")))).isInstanceOf(
+                RespInteger.class);
         fixture.close();
     }
 

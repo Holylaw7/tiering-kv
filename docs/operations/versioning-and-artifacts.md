@@ -6,10 +6,10 @@ pom.xml 使用 CI-friendly 版本：
 
 ```xml
 <version>${revision}</version>
-<properties><revision>3.2.0-SNAPSHOT</revision></properties>
+<properties><revision>3.3.0-SNAPSHOT</revision></properties>
 ```
 
-发布时注入正式版本：`mvn -Drevision=3.2.0 package`；
+发布时注入正式版本：`mvn -Drevision=3.3.0 package`；
 flatten-maven-plugin 保证打包 pom 不含占位符。
 
 ## 一致性校验
@@ -17,7 +17,7 @@ flatten-maven-plugin 保证打包 pom 不含占位符。
 `scripts/version-check.sh` 校验 pom revision 出现在：
 
 - CHANGELOG.md / README.md / ROADMAP.md
-- docs/release/v3.2.0-ga-release-notes.md
+- docs/release/v3.3.0-release-notes.md
 - scripts/release-notes.sh
 
 任一缺失即退出非零，禁止发布。

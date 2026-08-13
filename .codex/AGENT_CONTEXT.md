@@ -334,13 +334,13 @@ BM-001/002、TD-051/054/059/060/063/066/069/072/075/078）、跨区
 
 ## 2. 当前状态
 
-- 阶段：**Phase 50（工程基座与真实 Runner GA）✅ 已完成
-  （v3.2.0 GA）**（Phase 0–49 全部完成）；
-- 最近提交：Phase 50 合并（详见 git log）；
-- 基线：develop 合并 Phase 49；分支策略：feature/* 合并入 develop，
+- 阶段：**Phase 51（Redis 命令族补齐）✅ 已完成（v3.3.0 RC）**
+  （Phase 0–50 全部完成）；
+- 最近提交：Phase 51 合并（详见 git log）；
+- 基线：develop 合并 Phase 50；分支策略：feature/* 合并入 develop，
   main 保持稳定；
-- 下一步：Redis 命令族补齐、数据结构与 RESP3、原型转生产、分布式
-  正确性验证、文档产品化（Phase 51+，等待用户指令）。
+- 下一步：hash/list/set/zset、RESP3、Pub/Sub、原型转生产、分布式
+  正确性验证、文档产品化（Phase 52+，等待用户指令）。
 
 项目里程碑：**32 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
@@ -659,6 +659,20 @@ tiering-kv/
 - 剩余：真实 Runner 门禁已正式封板（ENV_BLOCKED_FINAL /
   REGISTERED_RELEASE，待真实环境复审）；Redis 命令族补齐、数据结构
   与 RESP3、原型转生产、分布式正确性验证、文档产品化（Phase 51+）。
+
+## 7.9 Phase 51 状态（v3.3.0 RC）
+
+- 分支：`feature/phase51-redis-command-family`；
+- 交付：字符串命令族（ADR-0269，AtomicStringOps 段锁原子 + WAL-first
+  委托，INCR 0 lost update）、TTL 命令族（ADR-0270，复用
+  TTLManager）、多键命令族（ADR-0271）、管理命令族（ADR-0272，
+  快照 SCAN + CONFIG 白名单 + COMMAND 元数据）、RESP2 兼容矩阵
+  （ADR-0273）、网关命令路由与 CROSSSLOT（ADR-0274）、v3.3 冻结
+  （ADR-0275，release.yml v3.3.0 + Phase51 基准）；
+- 命令注册表：38 个命令；新增 ≥520 测试；全量回归 ≥13190 全绿
+  （+6 门控跳过）；
+- 剩余：hash/list/set/zset、RESP3、Pub/Sub、SQL/向量原型转生产、
+  分布式正确性验证、文档产品化（Phase 52+）。
 
 ## 8. 会话启动清单
 

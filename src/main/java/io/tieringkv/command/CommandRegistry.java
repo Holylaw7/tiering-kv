@@ -33,10 +33,50 @@ public final class CommandRegistry {
                 new GetCommand(),
                 new DelCommand(),
                 new ExistsCommand(),
-                new InfoCommand(infoProvider, sections))) {
+                new InfoCommand(infoProvider, sections),
+                new IncrCommand(),
+                new DecrCommand(),
+                new IncrByCommand(),
+                new DecrByCommand(),
+                new AppendCommand(),
+                new StrlenCommand(),
+                new GetSetCommand(),
+                new SetNxCommand(),
+                new SetExCommand("setex", 1000),
+                new SetExCommand("psetex", 1),
+                new GetDelCommand(),
+                new GetRangeCommand(),
+                new SetRangeCommand(),
+                new TtlCommand("ttl"),
+                new TtlCommand("pttl"),
+                new ExpireCommand("expire", false, 1000),
+                new ExpireCommand("pexpire", false, 1),
+                new ExpireCommand("expireat", true, 1000),
+                new ExpireCommand("pexpireat", true, 1),
+                new PersistCommand(),
+                new MgetCommand(),
+                new MsetCommand(),
+                new MsetNxCommand(),
+                new DbsizeCommand(),
+                new FlushCommand("flushdb"),
+                new FlushCommand("flushall"),
+                new ScanCommand(),
+                new TypeCommand(),
+                new ConfigCommand(),
+                new ClientCommand())) {
             map.put(command.name(), command);
         }
+        map.put("command", new CommandCommand(
+                new CommandRegistry(map)));
         return new CommandRegistry(map);
+    }
+
+    public List<String> names() {
+        return List.copyOf(commands.keySet());
+    }
+
+    public int size() {
+        return commands.size();
     }
 
     public Command find(String name) {
