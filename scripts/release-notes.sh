@@ -154,3 +154,34 @@ Enterprise-ready Distributed Database v2.9.0：Redis 协议兼容、LSM 冷热
 - 详见 docs/release/v2.9.0-release-notes.md
 EOF
 fi
+
+if [[ "${VERSION}" == v3.0.0* ]]; then
+  # 支持 v3.0.0-rc1 / v3.0.0 发布标签
+  cat <<EOF
+# Tiering-KV ${VERSION} Release Notes
+
+## 定位
+
+Enterprise-ready Distributed Database v3.0.0 GA：Redis 协议兼容、LSM
+冷热分层、Multi-Raft 分布式事务、真实 Runner 闭环归档与全球一致性 GA。
+
+## 本版本能力
+
+- 真实执行门禁收敛 v13 + 执行归档（ADR-0241）
+- 跨云一阶段全球统一仲裁（ADR-0242）
+- RL 动态下推（ADR-0243）
+- TSO 量子/卫星授时原型（ADR-0244）
+- 监管级合规证书（ADR-0245）
+- TiKV 跨机回归告警 + 真实凭据 v5（ADR-0246，TD-076 剩余项）
+
+## 质量摘要
+
+- 新增测试 ≥550；全量回归 ≥11053 全绿
+- 基准：见 docs/benchmark/phase47-production-report.md
+- 门禁收敛表：docs/deployment/gate-convergence-v13.md
+
+## 已知限制
+
+- 详见 docs/release/v3.0.0-release-notes.md
+EOF
+fi
