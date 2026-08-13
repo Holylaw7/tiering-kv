@@ -32,4 +32,5 @@ sql/vector/storage/types + gateway + 文档。
 
 ## 评审结论
 
-Pending（等待用户批准后转 ADR-0318 与 feature/v4 分支）。
+Pending（等待用户批准后转 ADR-0318 与 feature/v4-multi-model
+分支）。
