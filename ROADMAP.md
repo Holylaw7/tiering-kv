@@ -57,6 +57,7 @@
 | 47 | 真实 Runner 闭环归档与全球一致性 GA（v3.0.0） | ✅ 完成（2026-08-13） |
 | 48 | 真实 Runner 门禁全量闭环与多组织联邦一致性（v3.1.0） | ✅ 完成（2026-08-13） |
 | 49 | 真实 Runner 闭环归档与跨监管域联邦一致性（v3.2.0） | ✅ 完成（2026-08-13） |
+| 50 | 工程基座与真实 Runner GA（v3.2.0 GA） | ✅ 完成（2026-08-13） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -859,6 +860,24 @@
 - 后续：真实 Runner 门禁真实执行补证（TD-048/049、K8S-001、
   REL-001、BM-001/002、TD-076 等）、联邦学习安全聚合、商用设备
   多厂商驱动、法规源自动订阅（Phase 50+）。
+
+## Phase 50 — 工程基座与真实 Runner GA ✅
+
+- 目标：工程基座可信化 + 真实环境门禁最终处置 + v3.2.0 GA。
+- 交付：版本模型与制品对齐（ADR-0262，revision 注入 + 一致性
+  校验）、结构化日志与脱敏（ADR-0263，slf4j/logback + Redactor +
+  OpsLogger）、质量门禁（ADR-0264，JaCoCo + SpotBugs + 依赖审计 +
+  coverage-check.sh）、门禁最终处置 v16（ADR-0265，唯一终态 +
+  封板）、CI 执行与 GA 流水线（ADR-0266，checksums + Phase50 基准）、
+  JMH 基准工程化（ADR-0267，三条核心路径）、完成度基线（ADR-0268，
+  能力分层 + 技术债终态）。
+- 测试：新增 ≥420 项（surefire 口径）；全量回归 **≥12660 全绿**
+  （目标 ≥12660 ✅，+6 门控跳过）。
+- 基准（[jmh-core-report.md](docs/benchmark/jmh-core-report.md)）：
+  MemTable GET / WAL append / SSTable mmap 随机读（JMH，LOCAL
+  口径）；跨机项正式封板。
+- 后续：Redis 命令族补齐、数据结构与 RESP3、原型转生产（SQL/向量）、
+  分布式正确性验证、文档产品化（Phase 51+）。
 
 ## 技术债登记
 

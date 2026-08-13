@@ -354,6 +354,23 @@
   - v3.2 冻结（ADR-0261）：release.yml v3.2.0 标签 +
     Phase49BenchmarkTest/Baseline 接入；
   - 测试：新增 ≥570 项；全量回归 **≥12205 全绿**（+6 门控跳过）。
+- Phase 50 工程基座与真实 Runner GA（v3.2.0 GA）：
+  - 版本模型与制品对齐（ADR-0262）：pom ${revision} +
+    flatten-maven-plugin + scripts/version-check.sh 一致性校验；
+  - 结构化日志与脱敏（ADR-0263）：slf4j/logback + Redactor +
+    OpsLogger（startup/shutdown/wal/migration/raft/txn/credential）；
+  - 质量门禁（ADR-0264）：JaCoCo 报告 + coverage-check.sh 阈值 +
+    SpotBugs + dependency:analyze + quality-gates.sh；
+  - 门禁最终处置 v16（ADR-0265）：GateConvergenceV16 唯一终态
+    （CLOSED / ENV_BLOCKED_FINAL / REGISTERED_RELEASE），取消滚动
+    defer；
+  - CI 执行与 GA 流水线（ADR-0266）：release.yml checksums 步骤 +
+    Phase50BenchmarkTest/Baseline 接入；
+  - JMH 基准（ADR-0267）：MemTable GET / WAL append / SSTable
+    mmap 随机读 + benchmark-jmh.sh；
+  - 完成度基线（ADR-0268）：ProductCompletenessBaseline（能力分层 +
+    技术债终态 + 判定清单）；
+  - 测试：新增 ≥420 项；全量回归 **≥12660 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager

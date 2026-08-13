@@ -4,7 +4,7 @@
 > （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding +
 > Raft 持久化集群 + 批量复制 + 安全 RPC + 元数据 Raft + 游标迁移）。
 
-**阶段状态：Phase 49（真实 Runner 闭环归档与跨监管域联邦一致性）✅（Phase 0–48 全部完成 ✅，v3.2.0）**
+**阶段状态：Phase 50（工程基座与真实 Runner GA）✅（Phase 0–49 全部完成 ✅，v3.2.0 GA）**
 
 ## 项目定位
 
@@ -205,6 +205,14 @@ v3.1.0 冻结与发布流水线（ADR-0254）；全量测试 ≥11625 全绿
 （设备 SPI + 主备切换，ADR-0258）+ 监管法规库与差异报告（ADR-0259）
 + TiKV 回归归档与真实凭据 v7（ADR-0260）+ v3.2 冻结与发布流水线
 （ADR-0261）；全量测试 ≥12205 全绿（Phase 49，v3.2.0 发布候选）。
+以及工程基座与真实 Runner GA：版本模型与制品对齐（revision 注入 +
+一致性校验，ADR-0262）+ 结构化日志与敏感信息脱敏（slf4j/logback +
+Redactor + OpsLogger，ADR-0263）+ 质量门禁（JaCoCo + SpotBugs +
+依赖审计，ADR-0264）+ 真实执行门禁最终处置 v16（唯一终态 + 封板，
+ADR-0265）+ CI 执行与 GA 发布流水线（checksums + Phase50 基准，
+ADR-0266）+ JMH 基准工程化（MemTable GET / WAL append / SSTable
+随机读，ADR-0267）+ 产品完成度基线（能力分层 + 技术债终态，
+ADR-0268）；全量测试 ≥12660 全绿（Phase 50，v3.2.0 GA）。
 
 **边界（如实声明）**：仍为教学/工程级实现，暂不宣称"高性能 Redis 替代品"；
 分布式为真实 TCP + 持久化原型，基准以进程内为主，跨机 `tc netem` 验证

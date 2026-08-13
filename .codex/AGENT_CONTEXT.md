@@ -334,14 +334,13 @@ BM-001/002、TD-051/054/059/060/063/066/069/072/075/078）、跨区
 
 ## 2. 当前状态
 
-- 阶段：**Phase 49（真实 Runner 闭环归档与跨监管域联邦一致性）✅
-  已完成（v3.2.0 RC）**（Phase 0–48 全部完成）；
-- 最近提交：Phase 49 合并（详见 git log）；
-- 基线：develop 合并 Phase 48；分支策略：feature/* 合并入 develop，
+- 阶段：**Phase 50（工程基座与真实 Runner GA）✅ 已完成
+  （v3.2.0 GA）**（Phase 0–49 全部完成）；
+- 最近提交：Phase 50 合并（详见 git log）；
+- 基线：develop 合并 Phase 49；分支策略：feature/* 合并入 develop，
   main 保持稳定；
-- 下一步：真实执行门禁 Linux Runner 补证（TD-048/049、K8S-001、
-  REL-001、BM-001/002、TD-076 等）与 v3.2.0 GA 发布（Phase 50+，
-  等待用户指令）。
+- 下一步：Redis 命令族补齐、数据结构与 RESP3、原型转生产、分布式
+  正确性验证、文档产品化（Phase 51+，等待用户指令）。
 
 项目里程碑：**32 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
@@ -643,6 +642,23 @@ tiering-kv/
 - 剩余：真实 Runner 门禁补证（TD-048/049、K8S-001、REL-001、
   BM-001/002、TD-076 等，环境阻塞已精确登记）、联邦学习安全聚合、
   商用设备多厂商驱动、法规源自动订阅（Phase 50+）。
+
+## 7.8 Phase 50 状态（v3.2.0 GA）
+
+- 分支：`feature/phase50-engineering-foundation-real-runner-ga`；
+- 交付：版本模型与制品对齐（ADR-0262，pom ${revision} + flatten +
+  version-check.sh）、结构化日志与脱敏（ADR-0263，slf4j/logback +
+  Redactor + OpsLogger）、质量门禁（ADR-0264，JaCoCo +
+  coverage-check.sh + SpotBugs + dependency:analyze）、门禁最终处置
+  v16（ADR-0265，CLOSED / ENV_BLOCKED_FINAL / REGISTERED_RELEASE +
+  封板）、CI 执行与 GA 流水线（ADR-0266，checksums + Phase50 基准）、
+  JMH 基准（ADR-0267，MemTable GET / WAL append / SSTable 随机读）、
+  完成度基线（ADR-0268，ProductCompletenessBaseline 能力分层 +
+  技术债终态 + 判定清单）；
+- 测试：新增 ≥420；全量回归 ≥12660 全绿（+6 门控跳过）；
+- 剩余：真实 Runner 门禁已正式封板（ENV_BLOCKED_FINAL /
+  REGISTERED_RELEASE，待真实环境复审）；Redis 命令族补齐、数据结构
+  与 RESP3、原型转生产、分布式正确性验证、文档产品化（Phase 51+）。
 
 ## 8. 会话启动清单
 
