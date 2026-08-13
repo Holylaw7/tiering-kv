@@ -33,6 +33,7 @@ public final class TypeCommand implements Command {
             case LIST -> "list";
             case SET -> "set";
             case ZSET -> "zset";
+            case STREAM -> "stream";
         });
     }
 }

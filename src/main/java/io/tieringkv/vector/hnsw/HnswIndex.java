@@ -4,6 +4,10 @@ import io.tieringkv.vector.Embedding;
 import io.tieringkv.vector.VectorStore;
 
 import java.util.ArrayList;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.util.Comparator;
 import java.util.List;
 
@@ -54,6 +58,48 @@ public final class HnswIndex {
 
     public int size() {
         return layers.get(0).size();
+    }
+
+    /** 序列化：maxLevel + 各层嵌入（ADR-0295）。 */
+    public byte[] serialize() throws Exception {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(bytes);
+        out.writeInt(maxLevel);
+        for (List<Embedding> layer : layers) {
+            out.writeInt(layer.size());
+            for (Embedding embedding : layer) {
+                out.writeUTF(embedding.id());
+                out.writeInt(embedding.values().length);
+                for (float value : embedding.values()) {
+                    out.writeFloat(value);
+                }
+            }
+        }
+        out.flush();
+        return bytes.toByteArray();
+    }
+
+    /** 反序列化重建（图 + 向量 + 参数）。 */
+    public static HnswIndex deserialize(byte[] bytes)
+            throws Exception {
+        DataInputStream in = new DataInputStream(
+                new ByteArrayInputStream(bytes));
+        int maxLevel = in.readInt();
+        HnswIndex index = new HnswIndex(maxLevel);
+        for (int level = 0; level < maxLevel; level++) {
+            int count = in.readInt();
+            for (int i = 0; i < count; i++) {
+                String id = in.readUTF();
+                int dim = in.readInt();
+                float[] values = new float[dim];
+                for (int d = 0; d < dim; d++) {
+                    values[d] = in.readFloat();
+                }
+                index.layers.get(level).add(
+                        new Embedding(id, values));
+            }
+        }
+        return index;
     }
 
     private int level(int hash) {
