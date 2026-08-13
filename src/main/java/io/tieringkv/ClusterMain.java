@@ -8,6 +8,7 @@ import io.tieringkv.cluster.raft.log.FileRaftLog;
 import io.tieringkv.cluster.raft.log.RaftPersistentState;
 import io.tieringkv.cluster.rpc.MultiRaftEndpoint;
 import io.tieringkv.cluster.rpc.MultiRaftTransport;
+import io.tieringkv.observability.OpsLogger;
 import io.tieringkv.storage.memory.MemTable;
 
 import java.net.InetSocketAddress;
@@ -56,12 +57,14 @@ public final class ClusterMain {
             endpoint.register(group, manager.raftFor(group));
         }
         manager.startAll();
+        OpsLogger.startup("cluster-node", nodeId);
 
         System.out.printf("Tiering-KV cluster node %s listening on %d, "
                         + "groups=%s, data=%s%n",
                 nodeId, endpoint.boundPort(), groups, dataDir);
         CountDownLatch latch = new CountDownLatch(1);
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            OpsLogger.shutdown("cluster-node");
             manager.close();
             endpoint.close();
             latch.countDown();
