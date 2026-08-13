@@ -6,6 +6,8 @@ import io.tieringkv.protocol.RespNull;
 import io.tieringkv.protocol.RespValue;
 import io.tieringkv.storage.AtomicStringOps;
 import io.tieringkv.storage.StorageEngine;
+import io.tieringkv.storage.types.TypedValueCodec;
+import io.tieringkv.storage.types.ValueType;
 
 import java.util.List;
 
@@ -22,6 +24,12 @@ public final class GetSetCommand implements Command {
                              StorageEngine storage) {
         if (args.size() != 2) {
             return RespError.wrongArity(name());
+        }
+        byte[] existing = storage.get(args.get(0));
+        if (existing != null
+                && TypedValueCodec.typeOf(existing)
+                != ValueType.STRING) {
+            return TypeSupport.wrongType();
         }
         byte[] old;
         if (storage instanceof AtomicStringOps atomic) {

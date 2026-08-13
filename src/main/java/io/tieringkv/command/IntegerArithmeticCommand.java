@@ -5,6 +5,8 @@ import io.tieringkv.protocol.RespInteger;
 import io.tieringkv.protocol.RespValue;
 import io.tieringkv.storage.AtomicStringOps;
 import io.tieringkv.storage.StorageEngine;
+import io.tieringkv.storage.types.TypedValueCodec;
+import io.tieringkv.storage.types.ValueType;
 
 import java.util.List;
 
@@ -30,6 +32,12 @@ abstract class IntegerArithmeticCommand implements Command {
         if (args.size() != argCount) {
             return RespError.wrongArity(name);
         }
+        byte[] current = storage.get(args.get(0));
+        if (current != null
+                && TypedValueCodec.typeOf(current)
+                != ValueType.STRING) {
+            return TypeSupport.wrongType();
+        }
         try {
             long delta = argCount == 1
                     ? fixedDelta()
@@ -39,7 +47,6 @@ abstract class IntegerArithmeticCommand implements Command {
             if (storage instanceof AtomicStringOps atomic) {
                 next = atomic.increment(args.get(0), delta);
             } else {
-                byte[] current = storage.get(args.get(0));
                 long base = current == null ? 0
                         : CommandUtil.parseLong(current);
                 next = Math.addExact(base, delta);

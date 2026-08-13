@@ -5,6 +5,8 @@ import io.tieringkv.protocol.RespError;
 import io.tieringkv.protocol.RespNull;
 import io.tieringkv.protocol.RespValue;
 import io.tieringkv.storage.StorageEngine;
+import io.tieringkv.storage.types.TypedValueCodec;
+import io.tieringkv.storage.types.ValueType;
 
 import java.util.List;
 
@@ -22,6 +24,12 @@ public final class GetCommand implements Command {
             return RespError.wrongArity(name());
         }
         byte[] value = storage.get(args.get(0));
-        return value == null ? RespNull.BULK_STRING : new RespBulkString(value);
+        if (value == null) {
+            return RespNull.BULK_STRING;
+        }
+        if (TypedValueCodec.typeOf(value) != ValueType.STRING) {
+            return TypeSupport.wrongType();
+        }
+        return new RespBulkString(value);
     }
 }

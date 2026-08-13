@@ -1,5 +1,7 @@
 package io.tieringkv.storage;
 
+import java.util.function.UnaryOperator;
+
 /**
  * 原子字符串操作（ADR-0269）：单键 read-modify-write 与 TTL 查询/
  * 修改。实现层（MemTable）在段写锁内完成；装饰器（WAL）以 WAL-first
@@ -34,4 +36,8 @@ public interface AtomicStringOps {
 
     /** 设置绝对过期时间（毫秒），返回是否设置。 */
     boolean expireAt(byte[] key, long expireAtMillis);
+
+    /** 原子更新：段锁内读旧值 -> 转换 -> 写新值（保留 TTL）；
+     * transform 返回 null 表示删除。返回新值或 null。 */
+    byte[] update(byte[] key, UnaryOperator<byte[]> transform);
 }

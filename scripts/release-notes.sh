@@ -282,3 +282,35 @@ Enterprise-ready Distributed Database v3.3.0：Redis 协议兼容、LSM 冷热
 - 详见 docs/release/v3.3.0-release-notes.md
 EOF
 fi
+
+if [[ "${VERSION}" == v3.4.0* ]]; then
+  # 支持 v3.4.0-rc1 / v3.4.0 发布标签
+  cat <<EOF
+# Tiering-KV ${VERSION} Release Notes
+
+## 定位
+
+Enterprise-ready Distributed Database v3.4.0：Redis 协议兼容、LSM 冷热
+分层、Multi-Raft 分布式事务、数据结构与 RESP3/PubSub。
+
+## 本版本能力
+
+- 类型化值编码（ADR-0276）：HASH/LIST/SET/ZSET 标签 + 序列化 + 键级 TTL
+- Hash 命令族（ADR-0277）：HSET/HGET/HDEL/HGETALL/HINCRBY 等
+- List 命令族（ADR-0278）：LPUSH/RPUSH/LPOP/RPOP/LRANGE 等
+- Set 命令族（ADR-0279）：SADD/SREM/SINTER/SUNION/SDIFF 等
+- ZSet 命令族（ADR-0280）：ZADD/ZSCORE/ZRANGE/ZINCRBY 等
+- RESP3 协议演进（ADR-0281）：Map/Set/Double/Push + HELLO 3
+- Pub/Sub（ADR-0282）：本地 broker + 模式订阅 + 集群广播 SPI
+
+## 质量摘要
+
+- 新增测试 ≥560；全量回归 ≥13700 全绿
+- 基准：见 docs/benchmark/phase52-production-report.md
+- 数据结构延迟：docs/benchmark/data-structure-latency-report.md
+
+## 已知限制
+
+- 详见 docs/release/v3.4.0-release-notes.md
+EOF
+fi

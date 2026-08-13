@@ -334,13 +334,14 @@ BM-001/002、TD-051/054/059/060/063/066/069/072/075/078）、跨区
 
 ## 2. 当前状态
 
-- 阶段：**Phase 51（Redis 命令族补齐）✅ 已完成（v3.3.0 RC）**
-  （Phase 0–50 全部完成）；
-- 最近提交：Phase 51 合并（详见 git log）；
-- 基线：develop 合并 Phase 50；分支策略：feature/* 合并入 develop，
+- 阶段：**Phase 52（数据结构、RESP3 与 Pub/Sub）✅ 已完成
+  （v3.4.0 RC）**（Phase 0–51 全部完成）；
+- 最近提交：Phase 52 合并（详见 git log）；
+- 基线：develop 合并 Phase 51；分支策略：feature/* 合并入 develop，
   main 保持稳定；
-- 下一步：hash/list/set/zset、RESP3、Pub/Sub、原型转生产、分布式
-  正确性验证、文档产品化（Phase 52+，等待用户指令）。
+- 下一步：RESP3 连接接线 / Pub/Sub 连接投递与集群广播、高级数据结构
+  命令、MULTI/EXEC 事务联动、原型转生产、分布式正确性验证
+  （Phase 53+，等待用户指令）。
 
 项目里程碑：**32 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
@@ -673,6 +674,22 @@ tiering-kv/
   （+6 门控跳过）；
 - 剩余：hash/list/set/zset、RESP3、Pub/Sub、SQL/向量原型转生产、
   分布式正确性验证、文档产品化（Phase 52+）。
+
+## 7.10 Phase 52 状态（v3.4.0 RC）
+
+- 分支：`feature/phase52-data-structures-resp3-pubsub`；
+- 交付：类型化值编码（ADR-0276，TK 标签 + Hash/List/Set/ZSet
+  Codec + AtomicStringOps.update 段锁原子）、Hash 命令族
+  （ADR-0277）、List 命令族（ADR-0278，负数索引/裁剪/空删键）、
+  Set 命令族（ADR-0279，集合运算 + STORE）、ZSet 命令族
+  （ADR-0280，分数排序/范围/ZINCRBY）、RESP3（ADR-0281，
+  Map/Set/Double/Push + HELLO 3 + writeV3）、Pub/Sub（ADR-0282，
+  PubSubBroker + 模式订阅 + PubSubForwarder SPI + 5 命令）；
+- 命令注册表：90 个命令；新增 ≥560 测试；全量回归 ≥13700 全绿
+  （+6 门控跳过）；
+- 剩余：RESP3 连接级接线、Pub/Sub 连接投递与集群广播、高级数据结构
+  命令、MULTI/EXEC、SQL/向量原型转生产、分布式正确性验证
+  （Phase 53+）。
 
 ## 8. 会话启动清单
 

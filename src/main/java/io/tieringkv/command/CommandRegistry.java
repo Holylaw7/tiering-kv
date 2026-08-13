@@ -1,5 +1,7 @@
 package io.tieringkv.command;
 
+import io.tieringkv.pubsub.PubSubBroker;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -7,6 +9,9 @@ import java.util.function.Supplier;
 
 /** 命令注册表：命令名（小写）→ 实现；启动时构建，运行期只读。 */
 public final class CommandRegistry {
+
+    private static final PubSubBroker DEFAULT_BROKER =
+            new PubSubBroker();
 
     private final Map<String, Command> commands;
 
@@ -63,7 +68,59 @@ public final class CommandRegistry {
                 new ScanCommand(),
                 new TypeCommand(),
                 new ConfigCommand(),
-                new ClientCommand())) {
+                new ClientCommand(),
+                new HashCommand("hset"),
+                new HashCommand("hget"),
+                new HashCommand("hdel"),
+                new HashCommand("hexists"),
+                new HashCommand("hlen"),
+                new HashCommand("hkeys"),
+                new HashCommand("hvals"),
+                new HashCommand("hgetall"),
+                new HashCommand("hmget"),
+                new HashCommand("hmset"),
+                new HashCommand("hincrby"),
+                new HashCommand("hsetnx"),
+                new ListCommand("lpush"),
+                new ListCommand("rpush"),
+                new ListCommand("lpop"),
+                new ListCommand("rpop"),
+                new ListCommand("llen"),
+                new ListCommand("lrange"),
+                new ListCommand("lindex"),
+                new ListCommand("lset"),
+                new ListCommand("lrem"),
+                new ListCommand("ltrim"),
+                new SetFamilyCommand("sadd"),
+                new SetFamilyCommand("srem"),
+                new SetFamilyCommand("sismember"),
+                new SetFamilyCommand("scard"),
+                new SetFamilyCommand("smembers"),
+                new SetFamilyCommand("spop"),
+                new SetFamilyCommand("srandmember"),
+                new SetFamilyCommand("sinter"),
+                new SetFamilyCommand("sunion"),
+                new SetFamilyCommand("sdiff"),
+                new SetFamilyCommand("sinterstore"),
+                new SetFamilyCommand("sunionstore"),
+                new SetFamilyCommand("sdiffstore"),
+                new ZSetCommand("zadd"),
+                new ZSetCommand("zscore"),
+                new ZSetCommand("zrange"),
+                new ZSetCommand("zrevrange"),
+                new ZSetCommand("zrem"),
+                new ZSetCommand("zcard"),
+                new ZSetCommand("zincrby"),
+                new ZSetCommand("zrangebyscore"),
+                new ZSetCommand("zcount"),
+                new ZSetCommand("zrank"),
+                new ZSetCommand("zrevrank"),
+                new HelloCommand(),
+                new PubSubCommand("publish", DEFAULT_BROKER),
+                new PubSubCommand("subscribe", DEFAULT_BROKER),
+                new PubSubCommand("unsubscribe", DEFAULT_BROKER),
+                new PubSubCommand("psubscribe", DEFAULT_BROKER),
+                new PubSubCommand("punsubscribe", DEFAULT_BROKER))) {
             map.put(command.name(), command);
         }
         map.put("command", new CommandCommand(

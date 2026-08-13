@@ -385,6 +385,19 @@
   - 网关路由与 CROSSSLOT（ADR-0274）：单键 MOVED + 多键同槽校验；
   - v3.3 冻结（ADR-0275）：release.yml v3.3.0 + Phase51 基准；
   - 测试：新增 ≥520 项；全量回归 **≥13190 全绿**（+6 门控跳过）。
+- Phase 52 数据结构、RESP3 与 Pub/Sub（v3.4.0 RC）：
+  - 类型化值编码（ADR-0276）：HASH/LIST/SET/ZSET 标签 + 序列化 +
+    AtomicStringOps.update 段锁原子（TTL 保留 + null 删键）；
+  - Hash 命令族（ADR-0277）：12 命令含 HINCRBY 原子；
+  - List 命令族（ADR-0278）：10 命令含负数索引/裁剪/空删键；
+  - Set 命令族（ADR-0279）：13 命令含集合运算与 STORE 变体；
+  - ZSet 命令族（ADR-0280）：11 命令含分数排序/范围/ZINCRBY；
+  - RESP3 协议演进（ADR-0281）：Map/Set/Double/BigNumber/Push +
+    writeV3 + HELLO 3（RESP2 零影响）；
+  - Pub/Sub（ADR-0282）：PubSubBroker 本地至少一次 + 模式订阅 +
+    PubSubForwarder SPI + 5 命令；
+  - v3.4 冻结：release.yml v3.4.0 + Phase52 基准；
+  - 测试：新增 ≥560 项；全量回归 **≥13700 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager

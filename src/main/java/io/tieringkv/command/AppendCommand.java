@@ -5,6 +5,8 @@ import io.tieringkv.protocol.RespInteger;
 import io.tieringkv.protocol.RespValue;
 import io.tieringkv.storage.AtomicStringOps;
 import io.tieringkv.storage.StorageEngine;
+import io.tieringkv.storage.types.TypedValueCodec;
+import io.tieringkv.storage.types.ValueType;
 
 import java.util.Arrays;
 import java.util.List;
@@ -24,10 +26,15 @@ public final class AppendCommand implements Command {
             return RespError.wrongArity(name());
         }
         int length;
+        byte[] current = storage.get(args.get(0));
+        if (current != null
+                && TypedValueCodec.typeOf(current)
+                != ValueType.STRING) {
+            return TypeSupport.wrongType();
+        }
         if (storage instanceof AtomicStringOps atomic) {
             length = atomic.append(args.get(0), args.get(1));
         } else {
-            byte[] current = storage.get(args.get(0));
             byte[] base = current == null ? new byte[0] : current;
             byte[] merged = Arrays.copyOf(base,
                     base.length + args.get(1).length);

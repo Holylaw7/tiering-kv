@@ -4,7 +4,7 @@
 > （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding +
 > Raft 持久化集群 + 批量复制 + 安全 RPC + 元数据 Raft + 游标迁移）。
 
-**阶段状态：Phase 51（Redis 命令族补齐）✅（Phase 0–50 全部完成 ✅，v3.3.0 RC）**
+**阶段状态：Phase 52（数据结构、RESP3 与 Pub/Sub）✅（Phase 0–51 全部完成 ✅，v3.4.0 RC）**
 
 ## 项目定位
 
@@ -221,6 +221,12 @@ ADR-0270）+ 多键命令族（MGET/MSET/MSETNX/DEL/EXISTS，ADR-0271）+
 ADR-0272）+ RESP2 兼容矩阵（ADR-0273）+ 网关命令路由与 CROSSSLOT
 （ADR-0274）；命令注册表从 7 个扩展到 38 个；全量测试 ≥13190 全绿
 （Phase 51，v3.3.0 RC）。
+以及数据结构、RESP3 与 Pub/Sub：类型化值编码（HASH/LIST/SET/ZSET
+标签 + 序列化 + 段锁原子 update，ADR-0276）+ Hash/List/Set/ZSet
+命令族（46 命令，ADR-0277~0280）+ RESP3（Map/Set/Double/Push +
+HELLO 3，ADR-0281）+ Pub/Sub（本地 broker + 模式订阅 + 集群广播
+SPI，ADR-0282）；命令注册表从 38 扩展到 90；全量测试 ≥13700 全绿
+（Phase 52，v3.4.0 RC）。
 
 **边界（如实声明）**：仍为教学/工程级实现，暂不宣称"高性能 Redis 替代品"；
 分布式为真实 TCP + 持久化原型，基准以进程内为主，跨机 `tc netem` 验证

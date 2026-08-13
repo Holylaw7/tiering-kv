@@ -59,6 +59,7 @@
 | 49 | 真实 Runner 闭环归档与跨监管域联邦一致性（v3.2.0） | ✅ 完成（2026-08-13） |
 | 50 | 工程基座与真实 Runner GA（v3.2.0 GA） | ✅ 完成（2026-08-13） |
 | 51 | Redis 命令族补齐（v3.3.0 RC） | ✅ 完成（2026-08-13） |
+| 52 | 数据结构、RESP3 与 Pub/Sub（v3.4.0 RC） | ✅ 完成（2026-08-13） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -897,6 +898,22 @@
   MSET 0.1–0.24M、SCAN 43K–1M、TTL 0.33–2M ops/s（LOCAL 口径）。
 - 后续：hash/list/set/zset、RESP3、Pub/Sub、原型转生产、分布式
   正确性验证（Phase 52+）。
+
+## Phase 52 — 数据结构、RESP3 与 Pub/Sub ✅
+
+- 目标：hash/list/set/zset 命令族 + RESP3 additive 协议 + 本地
+  Pub/Sub，命令注册表 38 → 90。
+- 交付：类型化值编码（ADR-0276，TK 标签 + 序列化 + 段锁原子
+  update）、Hash/List/Set/ZSet 命令族（ADR-0277~0280，46 命令）、
+  RESP3（ADR-0281，Map/Set/Double/Push + HELLO 3）、Pub/Sub
+  （ADR-0282，本地 broker + 模式订阅 + 集群广播 SPI）。
+- 测试：新增 ≥560 项（surefire 口径）；全量回归 **≥13700 全绿**
+  （目标 ≥13700 ✅，+6 门控跳过）。
+- 基准（[phase52-production-report.md](
+  docs/benchmark/phase52-production-report.md)）：HSET 67–114K、
+  RPUSH 8.6–33K、SADD 77–132K、ZADD 16–80K ops/s（LOCAL 口径）。
+- 后续：RESP3 连接接线 / Pub/Sub 连接投递与集群广播、高级数据结构
+  命令、MULTI/EXEC 事务联动、原型转生产（Phase 53+）。
 
 ## 技术债登记
 

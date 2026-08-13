@@ -5,5 +5,7 @@ package io.tieringkv.protocol;
  * sealed 封闭类型集合，Decoder / Encoder 可穷举处理，避免隐式状态。
  */
 public sealed interface RespValue
-        permits RespSimpleString, RespError, RespInteger, RespBulkString, RespArray, RespNull {
+        permits RespSimpleString, RespError, RespInteger,
+        RespBulkString, RespArray, RespNull, RespMap, RespSet,
+        RespDouble, RespBigNumber, RespPush {
 }

@@ -5,6 +5,8 @@ import io.tieringkv.protocol.RespInteger;
 import io.tieringkv.protocol.RespValue;
 import io.tieringkv.storage.AtomicStringOps;
 import io.tieringkv.storage.StorageEngine;
+import io.tieringkv.storage.types.TypedValueCodec;
+import io.tieringkv.storage.types.ValueType;
 
 import java.util.List;
 
@@ -23,6 +25,12 @@ public final class SetRangeCommand implements Command {
             return RespError.wrongArity(name());
         }
         try {
+            byte[] current = storage.get(args.get(0));
+            if (current != null
+                    && TypedValueCodec.typeOf(current)
+                    != ValueType.STRING) {
+                return TypeSupport.wrongType();
+            }
             long offset = CommandUtil.parseLong(args.get(1));
             if (offset < 0) {
                 return new RespError("ERR offset is out of range");
@@ -31,7 +39,6 @@ public final class SetRangeCommand implements Command {
                 return new RespError(
                         "ERR string exceeds maximum allowed size");
             }
-            byte[] current = storage.get(args.get(0));
             int needed = (int) offset + args.get(2).length;
             byte[] result = new byte[Math.max(needed,
                     current == null ? 0 : current.length)];
