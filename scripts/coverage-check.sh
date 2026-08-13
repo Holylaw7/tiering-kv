@@ -3,7 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 # 覆盖率门禁（ADR-0264）：解析 JaCoCo CSV，line 覆盖率低于阈值退出非零。
-THRESHOLD="${COVERAGE_THRESHOLD:-30}"
+THRESHOLD="${COVERAGE_THRESHOLD:-70}"
 CSV="target/site/jacoco/jacoco.csv"
 if [[ ! -f "$CSV" ]]; then
   echo "coverage-check: ${CSV} missing; run mvn test first" >&2

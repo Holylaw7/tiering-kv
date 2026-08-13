@@ -10,8 +10,9 @@
 
 ## 覆盖率阈值
 
-`COVERAGE_THRESHOLD` 环境变量（默认 30% line）；低于阈值
-coverage-check.sh 退出非零，禁止伪报达标。
+`COVERAGE_THRESHOLD` 环境变量（默认 70% line；Phase 50 GA 全量回归
+实测 line 覆盖率 92.32%）；低于阈值 coverage-check.sh 退出非零，
+禁止伪报达标。
 
 ## 使用
 
