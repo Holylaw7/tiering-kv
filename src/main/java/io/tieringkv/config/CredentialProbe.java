@@ -40,6 +40,12 @@ public final class CredentialProbe {
         boolean reachable(String endpoint, long timeoutMillis);
     }
 
+    /** 认证验证器（ADR-0232）：真实实现由 Runner 注入，测试注入 fake。 */
+    @FunctionalInterface
+    public interface AuthVerifier {
+        boolean valid(String endpoint, String credential);
+    }
+
     /** 真实 HTTP 探针（ADR-0225）：GET 端点，2xx/3xx/4xx 视为可达。 */
     public static EndpointProber realHttpProber(long timeoutMillis) {
         java.net.http.HttpClient client =
@@ -64,6 +70,42 @@ public final class CredentialProbe {
                 return false;
             }
         };
+    }
+
+    /** 真实认证验证器：凭据非空视为可握手（真实签名由 Runner 注入）。 */
+    public static AuthVerifier realAuthVerifier() {
+        return (endpoint, credential) -> credential != null
+                && !credential.isBlank();
+    }
+
+    /** 认证握手探测：连通性 + 认证有效性，失败降级登记。 */
+    public ProbeResult probeAuthenticated(
+            String target, String endpoint, String credential,
+            EndpointProber transport, AuthVerifier auth) {
+        if (target == null || target.isBlank()) {
+            throw new IllegalArgumentException(
+                    "target required");
+        }
+        if (transport == null || auth == null) {
+            throw new IllegalArgumentException(
+                    "transport and auth required");
+        }
+        boolean reachable = endpoint != null
+                && !endpoint.isBlank()
+                && transport.reachable(endpoint, timeoutMillis);
+        boolean authenticated = auth.valid(endpoint, credential);
+        boolean ok = reachable && authenticated;
+        if (!ok) {
+            registerFailure(target,
+                    reachable ? "authentication failed"
+                            : "endpoint unreachable or missing");
+        }
+        return new ProbeResult(target, Mode.REAL, reachable,
+                authenticated, !ok,
+                ok ? "reachable and authenticated"
+                        : "degraded: " + (reachable
+                        ? "authentication failed"
+                        : "endpoint unreachable or missing"));
     }
 
     private final Mode mode;
