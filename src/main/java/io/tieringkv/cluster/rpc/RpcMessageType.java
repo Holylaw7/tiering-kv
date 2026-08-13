@@ -32,7 +32,9 @@ public enum RpcMessageType {
     META_PROPOSE(28),
     META_PROPOSE_RESPONSE(29),
     META_STATUS(30),
-    META_STATUS_RESPONSE(31);
+    META_STATUS_RESPONSE(31),
+    PUBSUB(32),
+    PUBSUB_RESPONSE(33);
 
     private final int wireValue;
 
@@ -75,6 +77,7 @@ public enum RpcMessageType {
             case TXN_GET -> TXN_GET_RESPONSE;
             case META_PROPOSE -> META_PROPOSE_RESPONSE;
             case META_STATUS -> META_STATUS_RESPONSE;
+            case PUBSUB -> PUBSUB_RESPONSE;
             default -> throw new IllegalArgumentException(
                     "no response type for " + this);
         };
