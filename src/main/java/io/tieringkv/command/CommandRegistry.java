@@ -137,6 +137,10 @@ public final class CommandRegistry {
                 new StreamCommand("xrange"),
                 new StreamCommand("xtrim"),
                 new StreamCommand("xread"),
+                new StreamCommand("xgroup"),
+                new StreamCommand("xreadgroup"),
+                new StreamCommand("xack"),
+                new StreamCommand("xpending"),
                 new ListCommand("blpop"),
                 new ListCommand("brpop"),
                 new UnwatchCommand())) {
