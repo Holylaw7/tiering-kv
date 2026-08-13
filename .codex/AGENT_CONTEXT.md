@@ -334,13 +334,14 @@ BM-001/002、TD-051/054/059/060/063/066/069/072/075/078）、跨区
 
 ## 2. 当前状态
 
-- 阶段：**Phase 42（执行收敛与事务深度）✅ 已完成（v2.5.0）**
-  （Phase 0–41 全部完成）；
-- 最近提交：Phase 42 合并（详见 git log）；
-- 基线：develop 合并 Phase 24；分支策略：feature/* 合并入 develop，
+- 阶段：**Phase 49（真实 Runner 闭环归档与跨监管域联邦一致性）✅
+  已完成（v3.2.0 RC）**（Phase 0–48 全部完成）；
+- 最近提交：Phase 49 合并（详见 git log）；
+- 基线：develop 合并 Phase 48；分支策略：feature/* 合并入 develop，
   main 保持稳定；
-- 下一步：v2.5.0 发布执行（release.yml）；真实执行门禁 Linux Runner
-  与跨区一阶段/TSO 集群化（Phase 43，等待用户指令）。
+- 下一步：真实执行门禁 Linux Runner 补证（TD-048/049、K8S-001、
+  REL-001、BM-001/002、TD-076 等）与 v3.2.0 GA 发布（Phase 50+，
+  等待用户指令）。
 
 项目里程碑：**32 阶段路线图全部完成（2026-08-11）**；定位 = 单机完整冷热
 分层存储 + 分布式生产化 + 生产验证（RESP + Async Server + Shard + Memory +
@@ -626,6 +627,22 @@ tiering-kv/
 - 测试：新增 ≥560；全量回归 ≥11625 全绿；
 - 剩余：真实 Runner 门禁（Phase 49），跨监管域联邦、RL 联邦学习、
   TSO 量子/卫星商用设备、法规库 + 差异报告、TiKV 跨机回归闭环归档。
+
+## 7.7 Phase 49 状态（v3.2.0 发布候选）
+
+- 分支：`feature/phase49-real-runner-closure-archive-cross-regulatory`；
+- 交付：门禁收敛 v15 + 闭环归档（ADR-0255，GateConvergenceV15 +
+  RunnerClosureArchive）、跨监管域联邦仲裁（ADR-0256，域级仲裁 +
+  回退 2PC）、RL 多智能体联邦学习（ADR-0257，FedAvg + 噪声注入 +
+  梯度裁剪）、商用授时设备接入（ADR-0258，设备 SPI + 主备切换 +
+  模拟回退）、监管法规库 + 差异报告（ADR-0259，版本化 + 摘要校验 +
+  轮换）、TiKV 回归归档 + 真实凭据 v7（ADR-0260，
+  ProductionBaselineRegressionArchive + probeNetworkV7）、v3.2 冻结
+  （ADR-0261，release.yml v3.2.0 + Phase49BenchmarkTest/Baseline）；
+- 测试：新增 ≥570；全量回归 ≥12205 全绿（+6 门控跳过）；
+- 剩余：真实 Runner 门禁补证（TD-048/049、K8S-001、REL-001、
+  BM-001/002、TD-076 等，环境阻塞已精确登记）、联邦学习安全聚合、
+  商用设备多厂商驱动、法规源自动订阅（Phase 50+）。
 
 ## 8. 会话启动清单
 
