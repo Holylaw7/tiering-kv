@@ -1,6 +1,7 @@
 package io.tieringkv.network.response;
 
 import io.netty.buffer.ByteBuf;
+import io.tieringkv.protocol.RespVersion;
 import io.tieringkv.protocol.RespValue;
 
 import java.util.function.Consumer;
@@ -15,6 +16,7 @@ public final class ResponseBatcher {
     private final int batchThreshold;
     private final Consumer<ByteBuf> flusher;
     private int pending;
+    private volatile RespVersion version = RespVersion.RESP2;
 
     public ResponseBatcher(ResponseBuffer buffer, int batchThreshold, Consumer<ByteBuf> flusher) {
         this.buffer = buffer;
@@ -23,7 +25,7 @@ public final class ResponseBatcher {
     }
 
     public void offer(RespValue value, boolean noMorePending) {
-        buffer.append(value);
+        buffer.append(value, version);
         pending++;
         if (pending >= batchThreshold || noMorePending) {
             flush();
@@ -37,6 +39,12 @@ public final class ResponseBatcher {
         ByteBuf out = buffer.takeAndReset();
         pending = 0;
         flusher.accept(out);
+    }
+
+    public void setVersion(RespVersion version) {
+        if (version != null) {
+            this.version = version;
+        }
     }
 
     public void close() {

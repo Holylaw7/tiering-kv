@@ -4,6 +4,8 @@ import io.tieringkv.protocol.RespArray;
 import io.tieringkv.protocol.RespBulkString;
 import io.tieringkv.protocol.RespError;
 import io.tieringkv.protocol.RespValue;
+import io.tieringkv.protocol.RespVersion;
+import io.tieringkv.session.ConnectionContext;
 import io.tieringkv.storage.StorageEngine;
 
 import java.util.List;
@@ -33,6 +35,11 @@ public final class HelloCommand implements Command {
         if (version != 2 && version != 3) {
             return new RespError("NOPROTO unsupported protocol "
                     + "version");
+        }
+        ConnectionContext context = ConnectionContext.current();
+        if (context != null) {
+            context.setVersion(version == 3
+                    ? RespVersion.RESP3 : RespVersion.RESP2);
         }
         return new RespArray(List.of(
                 new RespBulkString(CommandUtil.bytes("server")),

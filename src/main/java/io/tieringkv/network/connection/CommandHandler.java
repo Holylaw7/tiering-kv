@@ -9,14 +9,22 @@ import io.tieringkv.command.RespCommand;
 import io.tieringkv.command.RespRequestParser;
 import io.tieringkv.protocol.RespEncoder;
 import io.tieringkv.protocol.RespError;
+import io.tieringkv.protocol.RespArray;
+import io.tieringkv.protocol.RespBulkString;
+import io.tieringkv.protocol.RespPush;
+import io.tieringkv.protocol.RespSimpleString;
+import io.tieringkv.protocol.RespVersion;
 import io.tieringkv.protocol.RespProtocolException;
 import io.tieringkv.protocol.RespValue;
+import io.tieringkv.pubsub.ConnectionSubscriber;
+import io.tieringkv.session.ConnectionContext;
 import io.tieringkv.storage.wal.WalWriteException;
 import io.tieringkv.storage.tiering.BackpressureException;
 import io.tieringkv.monitor.MetricsRegistry;
 import io.tieringkv.network.response.ResponseBatcher;
 import io.tieringkv.network.response.ResponseBuffer;
 
+import java.util.List;
 import java.util.concurrent.CompletionException;
 
 /** 命令入站处理器：解析请求 → 执行 → 写回；协议错误写入后关闭连接。 */
@@ -29,6 +37,7 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
     private final long[] startTimes = new long[4096];
     private int inflight;
     private ResponseBatcher batcher;
+    private ConnectionContext context;
 
     public CommandHandler(CommandEngine engine, MetricsRegistry metrics) {
         this.engine = engine;
@@ -38,6 +47,7 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
     @Override
     public void channelActive(ChannelHandlerContext ctx) {
         metrics.connectionOpened();
+        context = new ConnectionContext();
         batcher = new ResponseBatcher(
                 new ResponseBuffer(ctx.alloc()), 64,
                 buf -> ctx.writeAndFlush(buf));
@@ -45,6 +55,9 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) {
+        if (context != null) {
+            context.cleanup();
+        }
         if (batcher != null) {
             batcher.close();
         }
@@ -55,7 +68,9 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
         if (msg instanceof RespValue value) {
             try {
+                ConnectionContext.attach(context);
                 RespCommand command = RespRequestParser.parse(value);
+                ConnectionContext.detach();
                 long sequence = nextSequence++;
                 startTimes[(int) (sequence & 4095)] = System.nanoTime();
                 metrics.requestStarted();
@@ -88,11 +103,37 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
         if (outcome.close()) {
             metrics.error();
         }
+        batcher.setVersion(context.version());
+        drainPubSub(batcher);
         boolean last = --inflight == 0;
         sequencer.complete(sequence, outcome.value(), ready -> batcher.offer(ready, last));
         if (outcome.close()) {
             batcher.flush();
             ctx.close();
+        }
+    }
+
+    /** 事件循环内：把连接订阅队列编码为 Push（RESP3）/数组（RESP2）。 */
+    private void drainPubSub(ResponseBatcher batcher) {
+        ConnectionSubscriber subscriber = context.subscriber();
+        ConnectionSubscriber.Message message;
+        while ((message = subscriber.poll()) != null) {
+            RespValue push;
+            if (context.version() == RespVersion.RESP3) {
+                push = new RespPush("message", List.of(
+                        new RespBulkString(message.channel()
+                                .getBytes(java.nio.charset
+                                        .StandardCharsets.UTF_8)),
+                        new RespBulkString(message.payload())));
+            } else {
+                push = new RespArray(List.of(
+                        new RespSimpleString("message"),
+                        new RespBulkString(message.channel()
+                                .getBytes(java.nio.charset
+                                        .StandardCharsets.UTF_8)),
+                        new RespBulkString(message.payload())));
+            }
+            batcher.offer(push, false);
         }
     }
 

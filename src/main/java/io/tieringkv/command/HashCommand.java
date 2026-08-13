@@ -12,6 +12,9 @@ import io.tieringkv.storage.types.ByteArrayKey;
 import io.tieringkv.storage.types.HashCodec;
 import io.tieringkv.storage.types.TypedValueCodec;
 import io.tieringkv.storage.types.ValueType;
+import io.tieringkv.protocol.RespMap;
+import io.tieringkv.protocol.RespVersion;
+import io.tieringkv.session.ConnectionContext;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -48,8 +51,56 @@ public final class HashCommand implements Command {
             case "hmget" -> hmget(args, storage);
             case "hincrby" -> hincrby(args, storage);
             case "hsetnx" -> hsetnx(args, storage);
+            case "hscan" -> hscan(args, storage);
             default -> RespError.unknownCommand(name);
         };
+    }
+
+    private RespValue hscan(List<byte[]> args,
+                            StorageEngine storage) {
+        if (args.size() < 2) {
+            return RespError.wrongArity(name);
+        }
+        try {
+            long cursor = CommandUtil.parseLong(args.get(1));
+            String match = null;
+            int count = 10;
+            for (int i = 2; i + 1 < args.size(); i += 2) {
+                String option = CommandUtil.text(args.get(i))
+                        .toLowerCase(java.util.Locale.ROOT);
+                if ("match".equals(option)) {
+                    match = CommandUtil.text(args.get(i + 1));
+                } else if ("count".equals(option)) {
+                    count = (int) CommandUtil.parseLong(
+                            args.get(i + 1));
+                }
+            }
+            if (count <= 0) {
+                count = 10;
+            }
+            Map<ByteArrayKey, byte[]> fields =
+                    loadHash(storage, args.get(0));
+            List<RespValue> flat = new ArrayList<>();
+            for (Map.Entry<ByteArrayKey, byte[]> entry
+                    : fields.entrySet()) {
+                boolean matches = match == null
+                        || ScanCommand.globMatches(match,
+                        entry.getKey().data());
+                if (matches) {
+                    flat.add(new RespBulkString(
+                            entry.getKey().data()));
+                    flat.add(new RespBulkString(
+                            entry.getValue()));
+                }
+            }
+            return new RespArray(List.of(
+                    new RespBulkString(CommandUtil.bytes(0)),
+                    new RespArray(flat)));
+        } catch (NumberFormatException e) {
+            return new RespError(CommandUtil.NOT_INTEGER);
+        } catch (TypeSupport.WrongTypeException e) {
+            return TypeSupport.wrongType();
+        }
     }
 
     private RespValue hset(List<byte[]> args,
@@ -174,6 +225,19 @@ public final class HashCommand implements Command {
         try {
             Map<ByteArrayKey, byte[]> fields =
                     loadHash(storage, args.get(0));
+            ConnectionContext context = ConnectionContext.current();
+            if (context != null
+                    && context.version() == RespVersion.RESP3) {
+                List<RespValue> pairs = new ArrayList<>(
+                        fields.size() * 2);
+                for (Map.Entry<ByteArrayKey, byte[]> entry
+                        : fields.entrySet()) {
+                    pairs.add(new RespBulkString(
+                            entry.getKey().data()));
+                    pairs.add(new RespBulkString(entry.getValue()));
+                }
+                return new RespMap(pairs);
+            }
             List<RespValue> values = new ArrayList<>(
                     fields.size() * 2);
             for (Map.Entry<ByteArrayKey, byte[]> entry
