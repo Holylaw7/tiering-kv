@@ -185,3 +185,35 @@ Enterprise-ready Distributed Database v3.0.0 GA：Redis 协议兼容、LSM
 - 详见 docs/release/v3.0.0-release-notes.md
 EOF
 fi
+
+if [[ "${VERSION}" == v3.1.0* ]]; then
+  # 支持 v3.1.0-rc1 / v3.1.0 发布标签
+  cat <<EOF
+# Tiering-KV ${VERSION} Release Notes
+
+## 定位
+
+Enterprise-ready Distributed Database v3.1.0：Redis 协议兼容、LSM 冷热
+分层、Multi-Raft 分布式事务、真实 Runner 门禁全量闭环与多组织联邦
+一致性。
+
+## 本版本能力
+
+- 真实执行门禁收敛 v14 + 发布记录归档（ADR-0248）
+- 多组织联邦仲裁（ADR-0249）
+- RL 多智能体下推（ADR-0250）
+- TSO 量子/卫星硬件适配（ADR-0251）
+- 监管法规自动映射 + 证据链（ADR-0252）
+- TiKV 跨机回归闭环 + 真实凭据 v6（ADR-0253，TD-076 剩余项）
+
+## 质量摘要
+
+- 新增测试 ≥560；全量回归 ≥11625 全绿
+- 基准：见 docs/benchmark/phase48-production-report.md
+- 门禁收敛表：docs/deployment/gate-convergence-v14.md
+
+## 已知限制
+
+- 详见 docs/release/v3.1.0-release-notes.md
+EOF
+fi
