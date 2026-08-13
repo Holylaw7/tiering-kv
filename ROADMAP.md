@@ -60,6 +60,7 @@
 | 50 | 工程基座与真实 Runner GA（v3.2.0 GA） | ✅ 完成（2026-08-13） |
 | 51 | Redis 命令族补齐（v3.3.0 RC） | ✅ 完成（2026-08-13） |
 | 52 | 数据结构、RESP3 与 Pub/Sub（v3.4.0 RC） | ✅ 完成（2026-08-13） |
+| 53 | RESP3 接线、Pub/Sub 网络与事务（v3.5.0 RC） | ✅ 完成（2026-08-13） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -914,6 +915,25 @@
   RPUSH 8.6–33K、SADD 77–132K、ZADD 16–80K ops/s（LOCAL 口径）。
 - 后续：RESP3 连接接线 / Pub/Sub 连接投递与集群广播、高级数据结构
   命令、MULTI/EXEC 事务联动、原型转生产（Phase 53+）。
+
+## Phase 53 — RESP3 接线、Pub/Sub 网络与事务 ✅
+
+- 目标：RESP3 按连接接线、Pub/Sub 连接投递 + 集群广播 RPC、高级
+  数据结构命令、MULTI/EXEC 事务队列。
+- 交付：RESP3 连接级接线（ADR-0283，ConnectionContext + 版本感知
+  编码）、Pub/Sub 连接投递（ADR-0284，有界队列 + Push）、集群广播
+  RPC（ADR-0285，PUBSUB 帧 + 环回抑制）、高级命令（ADR-0286，
+  HSCAN/LINSERT/LMOVE/ZRANGEBYLEX 等）、MULTI/EXEC（ADR-0287，
+  QUEUED + 结果数组 + DISCARD + WATCH 登记）、连接生命周期
+  （ADR-0288，断线清理）。
+- 测试：新增 ≥560 项（surefire 口径）；全量回归 **≥14140 全绿**
+  （目标 ≥14140 ✅，+6 门控跳过）。
+- 基准（[phase53-production-report.md](
+  docs/benchmark/phase53-production-report.md)）：MULTI/EXEC
+  111–333K、HSCAN 100–156K、LMOVE 333K–1.67M、ZRANGEBYLEX
+  28–62K ops/s（LOCAL 口径）。
+- 后续：WATCH 全量版本守卫、EXEC 跨段原子、事务持久化、Stream/
+  阻塞命令/过期通知、原型转生产（Phase 54+）。
 
 ## 技术债登记
 

@@ -398,6 +398,20 @@
     PubSubForwarder SPI + 5 命令；
   - v3.4 冻结：release.yml v3.4.0 + Phase52 基准；
   - 测试：新增 ≥560 项；全量回归 **≥13700 全绿**（+6 门控跳过）。
+- Phase 53 RESP3 接线、Pub/Sub 网络与事务（v3.5.0 RC）：
+  - RESP3 连接级接线（ADR-0283）：ConnectionContext + 版本感知编码器，
+    HELLO 3 按连接切换；HGETALL/SMEMBERS 按版本返回 Map/Set；
+  - Pub/Sub 连接投递（ADR-0284）：ConnectionSubscriber 有界队列 +
+    丢弃计数 + Push/数组编码；
+  - 集群广播 RPC（ADR-0285）：RPC PUBSUB 帧（32/33）+ 环回抑制 +
+    失败登记；
+  - 高级命令（ADR-0286）：HSCAN/LINSERT/LMOVE/RPOPLPUSH/
+    ZRANGEBYLEX/ZLEXCOUNT/ZREMRANGEBYLEX；
+  - MULTI/EXEC（ADR-0287）：QUEUED 排队 + EXEC 结果数组 + DISCARD +
+    WATCH（无版本守卫登记）；
+  - 连接生命周期（ADR-0288）：断线退订 + 清队列 + 版本重置；
+  - v3.5 冻结：release.yml v3.5.0 + Phase53 基准；
+  - 测试：新增 ≥560 项；全量回归 **≥14140 全绿**（+6 门控跳过）。
 - ADR-0006（RESP2）；依赖：Netty 4.1.115、AssertJ 3.26.3、exec 插件。
 - Phase 2 内存引擎：StorageEngine SPI、64 段 SkipList MemTable、KeyValueEntry
   （版本 / tombstone / TTL / size）、跨段归并有序迭代器、MemoryManager

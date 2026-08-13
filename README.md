@@ -4,7 +4,7 @@
 > （RESP + WAL + MemTable + SSTable + 自动调度 + Key Sharding +
 > Raft 持久化集群 + 批量复制 + 安全 RPC + 元数据 Raft + 游标迁移）。
 
-**阶段状态：Phase 52（数据结构、RESP3 与 Pub/Sub）✅（Phase 0–51 全部完成 ✅，v3.4.0 RC）**
+**阶段状态：Phase 53（RESP3 接线、Pub/Sub 网络与事务）✅（Phase 0–52 全部完成 ✅，v3.5.0 RC）**
 
 ## 项目定位
 
@@ -227,6 +227,14 @@ ADR-0272）+ RESP2 兼容矩阵（ADR-0273）+ 网关命令路由与 CROSSSLOT
 HELLO 3，ADR-0281）+ Pub/Sub（本地 broker + 模式订阅 + 集群广播
 SPI，ADR-0282）；命令注册表从 38 扩展到 90；全量测试 ≥13700 全绿
 （Phase 52，v3.4.0 RC）。
+以及 RESP3 接线、Pub/Sub 网络与事务：RESP3 连接级接线（HELLO 3
+按连接切换编码器，HGETALL/SMEMBERS 按版本返回 Map/Set，ADR-0283）+
+Pub/Sub 连接级投递（有界队列 + Push，ADR-0284）+ 集群广播 RPC
+（PUBSUB 帧 + 环回抑制 + 失败登记，ADR-0285）+ 高级数据结构命令
+（HSCAN/LINSERT/LMOVE/ZRANGEBYLEX 等，ADR-0286）+ MULTI/EXEC
+事务队列（QUEUED + 结果数组 + DISCARD，ADR-0287）+ 连接生命周期
+清理（ADR-0288）；命令注册表 101 个；全量测试 ≥14140 全绿
+（Phase 53，v3.5.0 RC）。
 
 **边界（如实声明）**：仍为教学/工程级实现，暂不宣称"高性能 Redis 替代品"；
 分布式为真实 TCP + 持久化原型，基准以进程内为主，跨机 `tc netem` 验证
