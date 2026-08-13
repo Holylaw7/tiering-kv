@@ -11,76 +11,54 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** v3.5.0 冻结与发布流水线（ADR-0289）。 */
-class ReleaseV35Test {
+/** v3.7.0 冻结与发布流水线（ADR-0303）。 */
+class ReleaseV37Test {
 
     private static final Path WORKFLOW = Path.of(".github",
             "workflows", "release.yml");
 
     @Test
-    void v35TagsRegistered() throws Exception {
-        String content = Files.readString(WORKFLOW);
-        assertThat(content).contains("v3.5.0-rc*");
-        assertThat(content).contains("v3.5.0");
+    void v37TagsRegistered() throws Exception {
+        assertThat(Files.readString(WORKFLOW))
+                .contains("v3.7.0-rc*", "v3.7.0");
     }
 
     @Test
-    void v34TagsStillRegistered() throws Exception {
-        String content = Files.readString(WORKFLOW);
-        assertThat(content).contains("v3.4.0-rc*");
-        assertThat(content).contains("v3.4.0");
+    void v36TagsStillRegistered() throws Exception {
+        assertThat(Files.readString(WORKFLOW))
+                .contains("v3.6.0-rc*", "v3.6.0");
     }
 
     @Test
-    void benchmarkRunsPhase53Suite() throws Exception {
-        String content = Files.readString(WORKFLOW);
-        assertThat(content).contains("Phase53BenchmarkTest");
-        assertThat(content).contains("Phase53ProductionBaselineTest");
+    void benchmarkRunsPhase55Suite() throws Exception {
+        assertThat(Files.readString(WORKFLOW))
+                .contains("Phase55BenchmarkTest",
+                        "Phase55ProductionBaselineTest");
     }
 
     @Test
     void releaseNotesExist() {
         assertThat(Path.of("docs", "release",
-                "v3.5.0-release-notes.md").toFile()).exists();
+                "v3.7.0-release-notes.md").toFile()).exists();
     }
 
     @Test
-    void changelogDocumentsV35() throws Exception {
+    void docsSync() throws Exception {
         assertThat(Files.readString(Path.of("CHANGELOG.md")))
-                .contains("3.5.0");
-    }
-
-    @Test
-    void roadmapDocumentsV35() throws Exception {
+                .contains("3.7.0");
         assertThat(Files.readString(Path.of("ROADMAP.md")))
-                .contains("3.5.0");
-    }
-
-    @Test
-    void readmeDocumentsV35() throws Exception {
+                .contains("3.7.0");
         assertThat(Files.readString(Path.of("README.md")))
-                .contains("3.5.0");
-    }
-
-    @Test
-    void agentContextDocumentsPhase53() throws Exception {
+                .contains("3.7.0");
         assertThat(Files.readString(Path.of(".codex",
-                "AGENT_CONTEXT.md"))).contains("Phase 53");
+                "AGENT_CONTEXT.md"))).contains("Phase 55");
     }
 
     @Test
-    void adr289Present() {
+    void adr303Present() {
         assertThat(Path.of("docs", "adr",
-                "ADR-0289-v3.5-freeze-and-release-pipeline.md")
+                "ADR-0303-v3.7-freeze-and-release-pipeline.md")
                 .toFile()).exists();
-    }
-
-    @Test
-    void wiringAndTxnDocsPresent() {
-        assertThat(Path.of("docs", "protocol",
-                "resp3-connection-wiring.md").toFile()).exists();
-        assertThat(Path.of("docs", "transaction",
-                "multi-exec-guide.md").toFile()).exists();
     }
 
     @Test
@@ -115,27 +93,24 @@ class ReleaseV35Test {
                         "v2.2.0", "v2.3.0", "v2.4.0", "v2.5.0",
                         "v2.6.0", "v2.7.0", "v2.8.0", "v2.9.0",
                         "v3.0.0", "v3.1.0", "v3.2.0", "v3.3.0",
-                        "v3.4.0", "v3.5.0")
+                        "v3.4.0", "v3.5.0", "v3.6.0", "v3.7.0")
                 .flatMap(version -> Stream.of(
                         version + "-rc*", version));
     }
 
     static Stream<String> benchmarkClasses() {
         return Stream.concat(
-                java.util.stream.IntStream.rangeClosed(24, 53)
+                java.util.stream.IntStream.rangeClosed(24, 55)
                         .mapToObj(phase -> "Phase"
                                 + phase + "BenchmarkTest"),
-                java.util.stream.IntStream.rangeClosed(43, 53)
+                java.util.stream.IntStream.rangeClosed(43, 55)
                         .mapToObj(phase -> "Phase"
                                 + phase
                                 + "ProductionBaselineTest"));
     }
 
     static Stream<String> commands() {
-        return Stream.of("hello", "multi", "exec", "discard",
-                        "watch", "hscan", "linsert", "lmove",
-                        "rpoplpush", "zrangebylex", "zlexcount",
-                        "zremrangebylex", "subscribe", "unsubscribe",
-                        "psubscribe", "punsubscribe", "publish");
+        return Stream.of("xgroup", "xreadgroup", "xack",
+                        "xpending");
     }
 }

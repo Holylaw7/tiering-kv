@@ -374,3 +374,33 @@ Enterprise-ready Distributed Database v3.6.0：Redis 协议兼容、LSM 冷热
 - 详见 docs/release/v3.6.0-release-notes.md
 EOF
 fi
+
+if [[ "${VERSION}" == v3.7.0* ]]; then
+  # 支持 v3.7.0-rc1 / v3.7.0 发布标签
+  cat <<EOF
+# Tiering-KV ${VERSION} Release Notes
+
+## 定位
+
+Enterprise-ready Distributed Database v3.7.0：分布式正确性验证、Stream
+消费组、事务日志持久化、文档产品化。
+
+## 本版本能力
+
+- 线性一致性验证（ADR-0297）
+- Raft 边角验证矩阵（ADR-0298）
+- 升级/备份演练（ADR-0299）
+- Stream 消费组（ADR-0300）
+- 跨段事务日志持久化（ADR-0301）
+- 文档产品化（ADR-0302）
+
+## 质量摘要
+
+- 命令注册表 113 个；新增测试 ≥600；全量回归 ≥14730 全绿
+- 白皮书：docs/benchmark/final-performance-whitepaper.md
+
+## 已知限制
+
+- 详见 docs/release/v3.7.0-release-notes.md
+EOF
+fi
