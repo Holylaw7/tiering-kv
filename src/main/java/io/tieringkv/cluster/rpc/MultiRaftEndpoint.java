@@ -176,7 +176,9 @@ public final class MultiRaftEndpoint implements AutoCloseable {
         Envelope envelope = decodeEnvelope(frame.payload());
         authorize(frame.type(), envelope);
         TxnRpcHandler txnHandler = txnHandlers.get(envelope.groupId());
-        if (txnHandler != null && frame.type().txn()) {
+        // REPLICATION 复用业务 handler 信封路由（ADR-0321）
+        if (txnHandler != null && (frame.type().txn()
+                || frame.type() == RpcMessageType.REPLICATION)) {
             return txnHandler.handle(frame, envelope.groupId(),
                     envelope.payload());
         }
