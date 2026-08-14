@@ -21,6 +21,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /** Phase 24 CI E2E 共享夹具：TCP 全链路（coordinator + 2 participants + meta）。 */
 public record Phase24E2EFixture(MultiRaftEndpoint coord,
@@ -99,7 +100,7 @@ public record Phase24E2EFixture(MultiRaftEndpoint coord,
     public void restartParticipantB() throws Exception {
         int port = pb.boundPort();
         pb.close();
-        Thread.sleep(1_000);
+        awaitPortFree(port, 10_000);
         MultiRaftEndpoint restarted = new MultiRaftEndpoint("pb",
                 port, Map.of("pb",
                 new InetSocketAddress("127.0.0.1", port)));
@@ -107,6 +108,25 @@ public record Phase24E2EFixture(MultiRaftEndpoint coord,
         restarted.registerTxnHandler("r2", new TxnParticipantRpcHandler(
                 new TransactionParticipant("r2", engineB,
                         new LockTable(), 60_000)));
+    }
+
+    /** 轮询等待端口释放，替代固定 sleep：慢 runner 上 1s 不足会 BindException。 */
+    private static void awaitPortFree(int port, long timeoutMillis)
+            throws InterruptedException {
+        long deadline = System.nanoTime()
+                + TimeUnit.MILLISECONDS.toNanos(timeoutMillis);
+        while (System.nanoTime() < deadline) {
+            try (ServerSocket probe = new ServerSocket()) {
+                probe.setReuseAddress(true);
+                probe.bind(new InetSocketAddress("127.0.0.1", port));
+                return;
+            } catch (IOException ignored) {
+                Thread.sleep(100);
+            }
+        }
+        throw new IllegalStateException(
+                "port " + port + " still occupied after "
+                        + timeoutMillis + "ms");
     }
 
     private static int freePort() throws IOException {
