@@ -39,7 +39,7 @@ RFC（docs/planning/rfc-template.md）→ 评审 → ADR → 分支开发。
 
 | 里程碑 | 版本 | 范围 | 主要交付物 | ADR | 验收口径 |
 | --- | --- | --- | --- | --- | --- |
-| M1 | v4.0-M1 | 向量存储接入 | HNSW 持久化闭环（索引落盘/重建/加载）、向量 BlockCache 与 mmap 接入、混合检索（SQL WHERE + 向量 top-K） | ADR-0319 | 向量 CRUD 全链路 E2E + 混合检索基准 + 全量回归 |
+| M1 | v4.0-M1 | 向量存储接入 | HNSW 持久化闭环（索引落盘/重建/加载）、向量 BlockCache 与 mmap 接入、混合检索（SQL WHERE + 向量 top-K） | ADR-0319 | ✅ 阶段交付中（2026-08-14）：VectorIndexFile/Store/MmapReader/VectorSqlSearch + E2E + 基准报告 |
 | M2 | v4.0-M2 | 多模型编码 | 类型化值（SQL/JSON/时序/向量）additive 编码、RESP3 类型接线、TTL/过期/迁移对多模型值兼容 | ADR-0320 | 多模型值跨 WAL/SSTable/迁移/复制闭环 + 协议兼容测试 |
 | M3 | v4.0-M3 | 多集群复制接线 | 联邦一致性验证器 → 真实跨集群复制通道（CDC/日志搬运）、冲突策略（last-write / CRDT 选型）、多活故障切换演练 | ADR-0321 | 跨集群复制 E2E + 分区/恢复混沌 + 一致性验证 |
 | M4 | v4.0-GA | 生产收口 | Operator 完整化、多云部署深化、Jepsen 外部化分区注入、真实 Runner 性能基线（冷/热口径） | ADR-0322 | GA 门禁 7/7 ×2 + Jepsen 报告 + 容量模型 |
@@ -51,6 +51,10 @@ RFC（docs/planning/rfc-template.md）→ 评审 → ADR → 分支开发。
 - 现状：HNSW 可持久化（Phase 54），缺存储引擎接入与查询接线；
 - 交付：向量写入经 WAL/SSTable 持久化、mmap 随机读取、混合检索
   （标量过滤 + 向量 top-K）、索引重建与校验；
+- 进度（2026-08-14）：ADR-0319 批准；VectorIndexFile（magic/version/
+  CRC + 原子写）、VectorIndexStore（checkpoint/load/rebuild）、
+  VectorIndexMmapReader（MappedFile + BlockCache）、VectorSqlSearch
+  （SQL 向量索引校验 + 标量过滤）已交付；E2E 与基准报告完成；
 - 约束：v1.0–v3.7 冻结协议不变，新能力 additive + ADR。
 
 ### M2 — 多模型编码
