@@ -3,6 +3,23 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [3.7.1] - 2026-08-14
+
+### Fixed
+
+- 真实 GitHub Runner 门禁连续多轮全绿（build / test / transaction-e2e /
+  release 7/7），TD-048/049 获得真实执行证据；
+- GHCR 镜像命名：统一为 `ghcr.io/holylaw7/tiering-kv`
+  （owner 必须为 GitHub 用户名全小写）；
+- 依赖漏洞：netty 4.1.136.Final / slf4j 2.0.17 / logback 1.5.34，
+  Trivy 0 漏洞；
+- 容器入口契约：事务 compose 与 K8s start.sh 显式 TxnRuntimeMain；
+- CI 稳定化：TestPorts 进程内安全端口分配器（16 个 freePort 调用点
+  迁移）、surefire 失败重跑、Docker BuildKit 瞬时 EOF 构建重试、
+  benchmark 组与功能门禁分离（release 补全 71 类）、build 与全量测试
+  解耦、surefire 堆 1g→2g；
+- 发布说明脚本：移除无条件 v1.0 模板（曾污染所有版本 body）。
+
 ## [Unreleased]
 
 ### Fixed
