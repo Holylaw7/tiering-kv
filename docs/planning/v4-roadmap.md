@@ -41,7 +41,7 @@ RFC（docs/planning/rfc-template.md）→ 评审 → ADR → 分支开发。
 | --- | --- | --- | --- | --- | --- |
 | M1 | v4.0-M1 | 向量存储接入 | HNSW 持久化闭环（索引落盘/重建/加载）、向量 BlockCache 与 mmap 接入、混合检索（SQL WHERE + 向量 top-K） | ADR-0319 | ✅ 阶段交付中（2026-08-14）：VectorIndexFile/Store/MmapReader/VectorSqlSearch + E2E + 基准报告 |
 | M2 | v4.0-M2 | 多模型编码 | 类型化值（SQL/JSON/时序/向量）additive 编码、RESP3 类型接线、TTL/过期/迁移对多模型值兼容 | ADR-0320 | ✅ 完成（2026-08-14）：ValueType 6/7/8 + MultiModelCodec + 命令族 + 自动索引 + WAL/SSTable/迁移/复制闭环 + TTL + RESP3 接线 + 基准报告 |
-| M3 | v4.0-M3 | 多集群复制接线 | 联邦一致性验证器 → 真实跨集群复制通道（CDC/日志搬运）、冲突策略（last-write / CRDT 选型）、多活故障切换演练 | ADR-0321 | ✅ 阶段交付中（2026-08-14）：REPLICATION RPC + EventCodec + LWW + CrossClusterSink/Channel + E2E + 一致性验证接线 |
+| M3 | v4.0-M3 | 多集群复制接线 | 联邦一致性验证器 → 真实跨集群复制通道（CDC/日志搬运）、冲突策略（last-write / CRDT 选型）、多活故障切换演练 | ADR-0321 | ✅ 阶段交付中（2026-08-14）：REPLICATION RPC + EventCodec + LWW + Sink/Channel + 水位持久化 + Pipeline 串联 + 分区混沌 + E2E/一致性验证 |
 | M4 | v4.0-GA | 生产收口 | Operator 完整化、多云部署深化、Jepsen 外部化分区注入、真实 Runner 性能基线（冷/热口径） | ADR-0322 | GA 门禁 7/7 ×2 + Jepsen 报告 + 容量模型 |
 
 ## 各阶段要点
@@ -82,8 +82,10 @@ RFC（docs/planning/rfc-template.md）→ 评审 → ADR → 分支开发。
   （CRC32C）、LwwConflictResolver（timestamp + cluster id + seq 幂等）、
   CrossClusterSink（目标端 LWW 应用）、CrossClusterReplicationChannel
   （复用 MultiRaftEndpoint RPC）已交付；E2E 覆盖单写一致 / 双写收敛 /
-  重复幂等 / FederationConsistencyVerifier 接线；修复端点分发未路由
-  REPLICATION 到业务 handler 的缺陷；
+  重复幂等 / FederationConsistencyVerifier 接线；收尾：CrossClusterWatermark
+  （目标端水位原子落盘 + 重启续传）、CrossClusterReplicaSink
+  （ReplicationPipeline 串联）、分区/恢复混沌（失败缓存重放幂等）；
+  修复端点分发未路由 REPLICATION 到业务 handler 的缺陷；
 - 约束：Raft safety / MVCC consistency / 事务状态机不改。
 
 ### M4 — 生产收口

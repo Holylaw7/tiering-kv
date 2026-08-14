@@ -56,4 +56,26 @@ class CrossClusterSinkTest {
         assertThat(storage.get(
                 "k".getBytes(StandardCharsets.UTF_8))).isNull();
     }
+
+    @Test
+    void watermarkSkipsReplayedEvents() throws Exception {
+        java.nio.file.Path file = java.nio.file.Files
+                .createTempDirectory("sink-wm").resolve("wm.bin");
+        CrossClusterWatermark watermark =
+                new CrossClusterWatermark(file);
+        CrossClusterSink sinkWithWatermark = new CrossClusterSink(
+                storage, resolver, watermark);
+        assertThat(sinkWithWatermark.apply(
+                put(1, "r1", "k", "v1", 100), "cluster-a")).isTrue();
+        assertThat(sinkWithWatermark.apply(
+                put(1, "r1", "k", "v1", 100), "cluster-a")).isFalse();
+        assertThat(sinkWithWatermark.apply(
+                put(2, "r2", "k", "v2", 200), "cluster-b")).isTrue();
+        watermark.close();
+
+        CrossClusterWatermark restored =
+                CrossClusterWatermark.load(file);
+        assertThat(restored.watermark("r1")).isEqualTo(1);
+        assertThat(restored.watermark("r2")).isEqualTo(2);
+    }
 }
