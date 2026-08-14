@@ -2,6 +2,7 @@ package io.tieringkv.command;
 
 import io.tieringkv.pubsub.PubSubBroker;
 import io.tieringkv.session.ConnectionContext;
+import io.tieringkv.vector.indexfile.VectorIndexStore;
 
 import java.util.HashMap;
 import java.util.List;
@@ -31,6 +32,28 @@ public final class CommandRegistry {
     public static CommandRegistry createDefault(
             Supplier<String> infoProvider,
             Map<String, Supplier<String>> sections) {
+        return build(infoProvider, sections, List.of());
+    }
+
+    /**
+     * 带向量命令族的注册表（ADR-0319）：默认注册表保持 115 命令不变，
+     * 需要 VECTOR.ADD/SEARCH/DEL/LEN 时显式传入 VectorIndexStore。
+     */
+    public static CommandRegistry createDefaultWithVector(
+            Supplier<String> infoProvider,
+            Map<String, Supplier<String>> sections,
+            VectorIndexStore vectorStore) {
+        return build(infoProvider, sections, List.of(
+                new VectorCommand("vector.add", vectorStore),
+                new VectorCommand("vector.search", vectorStore),
+                new VectorCommand("vector.del", vectorStore),
+                new VectorCommand("vector.len", vectorStore)));
+    }
+
+    private static CommandRegistry build(
+            Supplier<String> infoProvider,
+            Map<String, Supplier<String>> sections,
+            List<Command> extra) {
         Map<String, Command> map = new HashMap<>();
         for (Command command : List.of(
                 new PingCommand(),
@@ -146,6 +169,9 @@ public final class CommandRegistry {
                 new ListCommand("blpop"),
                 new ListCommand("brpop"),
                 new UnwatchCommand())) {
+            map.put(command.name(), command);
+        }
+        for (Command command : extra) {
             map.put(command.name(), command);
         }
         map.put("exec", new ExecCommand(new CommandRegistry(map)));

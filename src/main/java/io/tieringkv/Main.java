@@ -30,8 +30,10 @@ import io.tieringkv.storage.wal.RecoveryManager;
 import io.tieringkv.storage.wal.WALConfig;
 import io.tieringkv.storage.wal.WALManager;
 import io.tieringkv.storage.wal.WALStorageEngine;
+import io.tieringkv.vector.indexfile.VectorIndexStore;
 
 import java.nio.file.Path;
+import java.util.Map;
 import io.tieringkv.storage.memory.MemoryManager;
 import io.tieringkv.storage.memory.MemTable;
 
@@ -94,8 +96,12 @@ public final class Main {
                 Math.max(1, Runtime.getRuntime().availableProcessors()));
         KeyShardExecutor executor = new KeyShardExecutor(shards, "command-shard");
         MetricsRegistry metrics = new MetricsRegistry();
+        // v4 M1（ADR-0319）：内存向量索引；checkpoint 持久化由配置接线
+        VectorIndexStore vectorStore = new VectorIndexStore(6);
         CommandEngine commandEngine = new CommandEngine(
-                CommandRegistry.createDefault(metrics::infoText), storage, executor);
+                CommandRegistry.createDefaultWithVector(
+                        metrics::infoText, Map.of(), vectorStore),
+                storage, executor);
         TieringKvServer server = new TieringKvServer(
                 serverConfig,
                 commandEngine);
