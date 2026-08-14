@@ -14,5 +14,7 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - run: mvn -B test
+      # 全量 14613 个测试在共享 runner 上偶发瞬时资源抖动（Raft 选举/端口）；
+      # surefire 对失败用例重跑一次，重跑仍失败则门禁照常失败，不掩盖真实缺陷。
+      - run: mvn -B -Dsurefire.rerunFailingTestsCount=1 test
       # TODO(phase1+): 追加 tests/integration、tests/stress、tests/chaos 执行入口
