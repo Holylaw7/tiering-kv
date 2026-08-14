@@ -38,6 +38,10 @@
   cluster id + seq 幂等）、CrossClusterSink/Channel、水位持久化
   （CrossClusterWatermark 原子落盘 + 重启续传）、ReplicationPipeline
   串联（CrossClusterReplicaSink）、分区/恢复混沌与一致性验证接线。
+- v4.0 M4 生产收口（ADR-0322）：CapacityModel（四维容量估算）、
+  Operator 集群状态机 + 多集群拓扑/复制计划器、Jepsen 外部化脚本与
+  CI job、冷/热性能基线（BlockCache 6.3x）、benchmark.sh 真实入口、
+  v4.0.0 发布支持；真实 Runner 门禁 7/7（v4.0.0-rc1）。
 
 ### Fixed
 
