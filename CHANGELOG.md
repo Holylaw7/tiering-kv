@@ -5,6 +5,28 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- GitHub Actions v3.7.0 门禁修复（真实 runner 验证）：
+  - 事务容器入口对齐：compose 显式运行 TxnRuntimeMain（`--node-id` 连字符），
+    不再误入 jar 默认 Main-Class ClusterMain；
+  - kind-e2e：统一集群名（tiering-kv）、镜像全名
+    （ghcr.io/holylaw7/tiering-kv:v3.7.0）、K8s start.sh 显式 TxnRuntimeMain、
+    imagePullPolicy=IfNotPresent、drain 演练加 timeout 并恢复节点调度；
+  - GHCR 命名空间：`ghcr.io/holylaw7/tiering-kv`（owner 必须为全小写
+    GitHub 用户名，原 `tiering-kv/...` 与 `Holylaw7/...` 均被 registry 拒绝）；
+  - 依赖漏洞门禁：netty 4.1.115→4.1.136.Final、slf4j 1.7.36→2.0.17、
+    logback 1.2.13→1.5.34，Trivy 复扫 0 漏洞；
+  - 测试基础设施：进程内安全端口分配器 TestPorts（TTL 保留防 TOCTOU
+    BindException）并迁移全部 freePort 调用点；多 fixture 端口分配重试；
+    jvm-e2e 端口释放轮询替代固定 sleep；
+  - CI 稳定性：surefire 失败用例重跑一次（rerunFailingTestsCount=1）、
+    Docker BuildKit 瞬时 EOF 构建重试、build workflow 与全量测试解耦、
+    surefire 堆 1g→2g；
+  - benchmark 分组：`@Tag("benchmark")` 从功能测试门禁排除
+    （-Dsurefire.excludedGroups=benchmark），release Benchmark 步骤显式
+    覆盖为空并补全 71 个 benchmark 类。
+
 ### Added
 
 - `.codex/` 工程控制中心：MASTER_PROMPT / DEVELOPMENT_RULES / AGENT_CONTEXT /
