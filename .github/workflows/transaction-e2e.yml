@@ -25,7 +25,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - name: Build image
-        run: docker compose -f deploy/docker-compose.transaction.yml build
+        # GitHub runner 的 BuildKit 偶发 gRPC EOF（瞬时基础设施故障）；
+        # 构建幂等，重试 3 次吸收抖动，避免整条 e2e 因一次连接中断失败。
+        run: |
+          for i in 1 2 3; do
+            if docker compose -f deploy/docker-compose.transaction.yml build; then
+              exit 0
+            fi
+            echo "docker build attempt ${i}/3 failed, retrying in 10s..." >&2
+            sleep 10
+          done
+          exit 1
       - name: Start cluster
         run: docker compose -f deploy/docker-compose.transaction.yml up -d --wait
       - name: Health check gateway
@@ -83,8 +93,15 @@ jobs:
       - name: Build and load image
         run: |
           mvn -q -DskipTests package
-          docker build -t ghcr.io/holylaw7/tiering-kv:v3.7.0 -f deploy/Dockerfile .
-          kind load docker-image ghcr.io/holylaw7/tiering-kv:v3.7.0 --name tiering-kv
+          for i in 1 2 3; do
+            if docker build -t ghcr.io/holylaw7/tiering-kv:v3.7.0 -f deploy/Dockerfile .; then
+              kind load docker-image ghcr.io/holylaw7/tiering-kv:v3.7.0 --name tiering-kv
+              exit 0
+            fi
+            echo "docker build attempt ${i}/3 failed, retrying in 10s..." >&2
+            sleep 10
+          done
+          exit 1
       - name: Kind in-cluster validation
         run: |
           TIERINGKV_KIND_CLUSTER=true scripts/kind-e2e.sh run
