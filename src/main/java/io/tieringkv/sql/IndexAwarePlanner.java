@@ -6,9 +6,11 @@ package io.tieringkv.sql;
  */
 public final class IndexAwarePlanner {
 
-    /** 计划提示。 */
+    /** 计划提示（ADR-0319）：含索引类型与维度。 */
     public record PlanHint(String table, String column,
-                           boolean indexed, long entries) {
+                           boolean indexed, long entries,
+                           SqlIndexRegistry.IndexType type,
+                           int dimension) {
     }
 
     private final SqlIndexRegistry registry;
@@ -31,7 +33,14 @@ public final class IndexAwarePlanner {
         long entries = indexed
                 ? registry.index(table, filterColumn).entries()
                 : 0;
-        return new PlanHint(table, filterColumn, indexed, entries);
+        SqlIndexRegistry.IndexType type = indexed
+                ? registry.index(table, filterColumn).type()
+                : SqlIndexRegistry.IndexType.SCALAR;
+        int dimension = indexed
+                ? registry.index(table, filterColumn).dimension()
+                : 0;
+        return new PlanHint(table, filterColumn, indexed, entries,
+                type, dimension);
     }
 
     /** 有索引且非空 → 推荐索引扫描。 */
