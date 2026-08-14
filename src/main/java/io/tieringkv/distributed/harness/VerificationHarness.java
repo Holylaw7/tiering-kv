@@ -42,8 +42,11 @@ public final class VerificationHarness {
 
     /** 运行：并发 PUT/GET 生成历史并校验。 */
     public Report run() throws Exception {
-        ConcurrentHashMap<String, String> store =
-                new ConcurrentHashMap<>();
+        return run(new MemoryVerificationStore());
+    }
+
+    /** 运行：指定存储后端（内存或真实 RESP/TCP）。 */
+    public Report run(VerificationStore store) throws Exception {
         List<Operation> history = new ArrayList<>();
         AtomicLong clock = new AtomicLong();
         ExecutorService pool = Executors.newFixedThreadPool(threads);
@@ -98,7 +101,18 @@ public final class VerificationHarness {
                 ? Integer.parseInt(args[1]) : 200;
         VerificationHarness harness = new VerificationHarness(
                 threads, ops, "k");
-        Report report = harness.run();
+        Report report;
+        if (args.length >= 4 && "resp".equals(args[2])) {
+            try (RespVerificationStore store =
+                         new RespVerificationStore(args[3],
+                                 Integer.parseInt(args[4]))) {
+                report = harness.run(store);
+            }
+            System.out.println("HARNESS store=resp host=" + args[3]
+                    + " port=" + args[4]);
+        } else {
+            report = harness.run();
+        }
         System.out.printf(
                 "HARNESS operations=%d linearizable=%s elapsedMs=%d%n",
                 report.operations(), report.linearizable(),
