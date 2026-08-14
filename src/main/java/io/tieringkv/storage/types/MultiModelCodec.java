@@ -32,9 +32,7 @@ public final class MultiModelCodec {
     // ---------- JSON ----------
 
     public static byte[] encodeJson(String json) {
-        if (json == null) {
-            throw new IllegalArgumentException("json required");
-        }
+        JsonValidator.validate(json);
         byte[] payload = json.getBytes(StandardCharsets.UTF_8);
         return TypedValueCodec.encode(ValueType.JSON, payload);
     }
