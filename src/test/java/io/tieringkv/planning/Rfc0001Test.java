@@ -51,7 +51,7 @@ class Rfc0001Test {
 
     static Stream<Arguments> tokens() {
         return Stream.of("SQL", "向量", "HNSW", "additive",
-                        "feature/v4-multi-model", "Pending")
+                        "feature/v4-multi-model", "Approved")
                 .map(Arguments::of);
     }
 }
