@@ -185,6 +185,23 @@ class MultiRaftTransportTest {
     // ---------- helpers ----------
 
     private TcpFixture tcpFixture(int groupCount, boolean persistent) throws Exception {
+        // 14613 个测试共用 OS 端口空间，freePort() 释放到 bind 之间可能被
+        // 并发占用（TOCTOU）导致 BindException（release runner 实测）。
+        // 失败时关闭已启动端点并重新分配端口重试。
+        Exception last = null;
+        for (int attempt = 0; attempt < 5; attempt++) {
+            try {
+                return tcpFixtureOnce(groupCount, persistent);
+            } catch (Exception e) {
+                last = e;
+            }
+        }
+        throw new IllegalStateException(
+                "tcpFixture failed after 5 attempts", last);
+    }
+
+    private TcpFixture tcpFixtureOnce(int groupCount, boolean persistent)
+            throws Exception {
         int p1 = freePort();
         int p2 = freePort();
         int p3 = freePort();
@@ -195,39 +212,62 @@ class MultiRaftTransportTest {
         Map<String, MultiRaftEndpoint> endpoints = new HashMap<>();
         Map<String, RaftGroupManager> managers = new HashMap<>();
         List<RaftGroupManager> all = new ArrayList<>();
-        for (String nodeId : List.of("n1", "n2", "n3")) {
-            MultiRaftEndpoint endpoint = new MultiRaftEndpoint(
-                    nodeId, addresses.get(nodeId).getPort(), addresses);
-            endpoint.start();
-            MultiRaftNode host = new MultiRaftNode(nodeId);
-            RaftGroupManager manager = new RaftGroupManager(
-                    nodeId, host, RaftTestSupport.ELECTION, 25, 10);
-            endpoints.put(nodeId, endpoint);
-            managers.put(nodeId, manager);
-            all.add(manager);
-        }
-        for (String nodeId : List.of("n1", "n2", "n3")) {
-            RaftGroupManager manager = managers.get(nodeId);
-            for (int g = 0; g < groupCount; g++) {
-                String groupId = "g" + (char) ('A' + g);
-                MultiRaftTransport transport = new MultiRaftTransport(
-                        groupId, endpoints.get(nodeId));
-                if (persistent) {
-                    Path groupDir = dir.resolve(nodeId).resolve(groupId);
-                    manager.createGroupPersistent(groupId, transport, MemTable.create(),
-                            FileRaftLog.open(groupDir.resolve("raftlog"), Durability.SYNC),
-                            RaftPersistentState.open(groupDir),
-                            null);
-                } else {
-                    manager.createGroup(groupId, transport, MemTable.create());
-                }
-                endpoints.get(nodeId).register(groupId, manager.raftFor(groupId));
+        try {
+            for (String nodeId : List.of("n1", "n2", "n3")) {
+                MultiRaftEndpoint endpoint = new MultiRaftEndpoint(
+                        nodeId, addresses.get(nodeId).getPort(), addresses);
+                endpoint.start();
+                MultiRaftNode host = new MultiRaftNode(nodeId);
+                RaftGroupManager manager = new RaftGroupManager(
+                        nodeId, host, RaftTestSupport.ELECTION, 25, 10);
+                endpoints.put(nodeId, endpoint);
+                managers.put(nodeId, manager);
+                all.add(manager);
             }
+            for (String nodeId : List.of("n1", "n2", "n3")) {
+                RaftGroupManager manager = managers.get(nodeId);
+                for (int g = 0; g < groupCount; g++) {
+                    String groupId = "g" + (char) ('A' + g);
+                    MultiRaftTransport transport = new MultiRaftTransport(
+                            groupId, endpoints.get(nodeId));
+                    if (persistent) {
+                        Path groupDir = dir.resolve(nodeId).resolve(groupId);
+                        manager.createGroupPersistent(groupId, transport,
+                                MemTable.create(),
+                                FileRaftLog.open(
+                                        groupDir.resolve("raftlog"),
+                                        Durability.SYNC),
+                                RaftPersistentState.open(groupDir),
+                                null);
+                    } else {
+                        manager.createGroup(groupId, transport,
+                                MemTable.create());
+                    }
+                    endpoints.get(nodeId).register(groupId,
+                            manager.raftFor(groupId));
+                }
+            }
+            for (RaftGroupManager manager : all) {
+                manager.startAll();
+            }
+            return new TcpFixture(endpoints, managers, all);
+        } catch (Exception e) {
+            for (RaftGroupManager manager : all) {
+                try {
+                    manager.close();
+                } catch (RuntimeException ignored) {
+                    // 重试路径：忽略关闭失败
+                }
+            }
+            for (MultiRaftEndpoint endpoint : endpoints.values()) {
+                try {
+                    endpoint.close();
+                } catch (RuntimeException ignored) {
+                    // 重试路径：忽略关闭失败
+                }
+            }
+            throw e;
         }
-        for (RaftGroupManager manager : all) {
-            manager.startAll();
-        }
-        return new TcpFixture(endpoints, managers, all);
     }
 
     private static RaftNode leaderOf(TcpFixture fixture, String groupId)
