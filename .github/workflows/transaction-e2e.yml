@@ -141,3 +141,22 @@ jobs:
       - name: Cleanup
         if: always()
         run: sudo scripts/block-device-chaos.sh cleanup
+
+  jepsen-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - name: Jepsen externalized validation
+        run: scripts/jepsen-run.sh run
+      - name: Collect report
+        if: always()
+        run: cat target/jepsen-report.txt
+      - name: Cleanup
+        if: always()
+        run: scripts/jepsen-run.sh cleanup
