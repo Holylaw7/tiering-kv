@@ -11,7 +11,7 @@ MOUNT_DIR=${TIERINGKV_BLOCK_MOUNT:-/mnt/tiering-kv-block}
 
 case "${1:-setup}" in
   setup)
-    truncate -s 256M "$IMAGE"
+    truncate -s 64M "$IMAGE"
     losetup "$LOOP_DEV" "$IMAGE"
     mkfs.ext4 -q "$LOOP_DEV"
     mkdir -p "$MOUNT_DIR"
@@ -20,7 +20,7 @@ case "${1:-setup}" in
     echo "TIERINGKV_BLOCK_DEVICE_READY=true"
     ;;
   disk-full)
-    fallocate -l 300M "$MOUNT_DIR/fill.bin"
+    fallocate -l 16M "$MOUNT_DIR/fill.bin"
     ;;
   readonly)
     mount -o remount,ro "$MOUNT_DIR"

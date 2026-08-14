@@ -9,5 +9,5 @@ RUN mvn -q -DskipTests package
 
 FROM eclipse-temurin:17-jre
 WORKDIR /app
-COPY --from=build /build/target/tiering-kv-0.1.0-SNAPSHOT.jar /app/tiering-kv.jar
+COPY --from=build /build/target/tiering-kv-*.jar /app/tiering-kv.jar
 ENTRYPOINT ["java", "-Xmx1g", "-jar", "/app/tiering-kv.jar"]
