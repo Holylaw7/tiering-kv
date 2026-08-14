@@ -34,6 +34,9 @@ public final class TypeCommand implements Command {
             case SET -> "set";
             case ZSET -> "zset";
             case STREAM -> "stream";
+            case JSON -> "json";
+            case TIME_SERIES -> "timeseries";
+            case VECTOR -> "vector";
         });
     }
 }
