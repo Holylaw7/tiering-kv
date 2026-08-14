@@ -21,6 +21,8 @@ import io.tieringkv.storage.memory.MemoryManager;
 import io.tieringkv.storage.wal.WALConfig;
 import io.tieringkv.storage.wal.WALManager;
 import io.tieringkv.storage.wal.WALStorageEngine;
+import io.tieringkv.storage.MutableClock;
+import io.tieringkv.storage.memory.MemoryManager;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -173,6 +175,29 @@ class MultiModelPersistenceIntegrationTest {
         } finally {
             cold.close();
         }
+    }
+
+    @Test
+    void ttlExpiryAppliesToAllModelValues() throws Exception {
+        MutableClock clock = new MutableClock(0);
+        MemTable memTable = MemTable.createForTest(clock,
+                new MemoryManager(1 << 30));
+        memTable.put(b("json"), jsonValue(), 1_000);
+        memTable.put(b("series"), seriesValue(), 1_000);
+        memTable.put(b("vector"), vectorValue(), 1_000);
+
+        assertThat(MultiModelCodec.decodeJson(
+                memTable.get(b("json")))).isEqualTo(JSON);
+        assertThat(MultiModelCodec.decodeTimeSeries(
+                memTable.get(b("series"))))
+                .containsExactlyElementsOf(SERIES);
+        assertThat(MultiModelCodec.decodeVector(
+                memTable.get(b("vector")))).containsExactly(VECTOR);
+
+        clock.advance(2_000);
+        assertThat(memTable.get(b("json"))).isNull();
+        assertThat(memTable.get(b("series"))).isNull();
+        assertThat(memTable.get(b("vector"))).isNull();
     }
 
     private static ChangeEvent event(long seq, String key,
