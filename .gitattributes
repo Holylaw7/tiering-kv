@@ -1,0 +1,4 @@
+# 脚本与 CI 配置强制 LF：防止 Windows autocrlf 将 CRLF 带入 Linux runner
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

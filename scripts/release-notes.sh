@@ -1,35 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 生成 v1.0 发布说明（Phase 26 Goal 8）：版本 + 关键能力 + 测试/基准摘要。
+# 生成发布说明：按版本匹配输出，无匹配时输出最小占位。
+# 注意：不得在开头无条件输出模板（曾导致每个版本都拼接 v1.0 内容）。
 VERSION=${1:-v1.0.0-rc1}
-
-cat <<EOF
-# Tiering-KV ${VERSION} Release Notes
-
-## 定位
-
-Enterprise-ready Distributed Database v1.0：Redis 协议兼容、LSM 冷热分层、
-Multi-Raft 分布式事务 KV。
-
-## 本版本能力
-
-- RESP2 + RPC v1 + 存储格式 v1 冻结（ProtocolVersion）
-- PITR 时间点恢复（WALArchive / Checkpoint / RestoreTimeline）
-- CDC exactly-once 流式变更（PUT/DELETE/TXN_COMMIT/REGION_MOVE）
-- Enterprise Security（RBAC 角色/权限 + 令牌轮换/吊销）
-- Kubernetes Operator（TieringKVCluster CRD + Planner/Controller）
-- tierctl 生产 CLI + 发布流水线
-
-## 质量摘要
-
-- 全量回归：mvn test 0 failures
-- 基准：见 docs/benchmark/v1-final-production-report.md
-
-## 已知限制
-
-- 详见 docs/release/v1.0.0-release-notes.md
-EOF
 
 if [[ "${VERSION}" == v2.6.0* ]]; then
   # 支持 v2.6.0-rc1 / v2.6.0 发布标签
@@ -416,8 +390,25 @@ fi
 
 if [[ "${VERSION}" == v3.7.1* ]]; then
   cat <<EOF
-# Tiering-KV ${VERSION} Maintenance Notes
+# Tiering-KV ${VERSION} Maintenance Release Notes
 
-维护模式补丁候选：fix-only、测试先行、全量回归 0 failures。
+维护模式首个补丁版本：真实 GitHub Runner 门禁修复集合，无功能变更。
+
+## 本版本修复
+
+- 真实 Runner 门禁全绿：build / test / transaction-e2e / release
+  连续多轮 7/7（含规划提交回归验证）
+- GHCR 镜像命名：统一为 ghcr.io/holylaw7/tiering-kv（owner 全小写）
+- 依赖漏洞：netty 4.1.136.Final / slf4j 2.0.17 / logback 1.5.34，
+  Trivy 0 漏洞
+- 容器入口契约：事务 compose 与 K8s start.sh 显式 TxnRuntimeMain
+- CI 稳定化：TestPorts 端口分配器、surefire 失败重跑、
+  Docker BuildKit 重试、benchmark 组与功能门禁分离（71 类补全）
+
+## 质量摘要
+
+- 全量回归：mvn test 0 failures（功能门禁 + release Benchmark 71 类）
+- 门禁证据：Actions 连续全绿（commit 580ae34 → cd3db80 → 7b5de37）
+- 发布说明：docs/release/v3.7.1-rc-maintenance-notes.md
 EOF
 fi
