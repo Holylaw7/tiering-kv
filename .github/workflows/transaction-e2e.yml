@@ -79,7 +79,7 @@ jobs:
           cache: maven
       - uses: helm/kind-action@v1
         with:
-          cluster_name: tiering-kv
+          cluster_name: kind
       - name: Build and load image
         run: |
           mvn -q -DskipTests package
@@ -117,7 +117,7 @@ jobs:
           sudo mount -o remount,rw /mnt/tiering-kv-block
       - name: Gated block device chaos tests
         run: |
-          TIERINGKV_CONTAINER_CHAOS=true \
+          TIERINGKV_CONTAINER_CHAOS=true TIERINGKV_BLOCK_DEVICE_READY=true \
             mvn -q -Dtest=RealBlockDeviceChaosTest -DfailIfNoTests=false test
       - name: Cleanup
         if: always()

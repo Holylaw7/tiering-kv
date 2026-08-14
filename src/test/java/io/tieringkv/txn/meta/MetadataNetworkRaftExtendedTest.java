@@ -32,7 +32,12 @@ class MetadataNetworkRaftExtendedTest {
     @AfterEach
     void tearDown() {
         if (fixture != null) {
-            fixture.close();
+            try {
+                fixture.close();
+            } catch (java.util.concurrent.RejectedExecutionException
+                    expected) {
+                // 故障转移测试中异步任务与关闭竞态：容忍后清理
+            }
         }
     }
 
