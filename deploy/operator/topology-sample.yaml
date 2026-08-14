@@ -1,0 +1,14 @@
+apiVersion: tieringkv.io/v1
+kind: TieringKVTopology
+metadata:
+  name: global-topology
+  namespace: tiering-kv
+spec:
+  clusters: [production, dr]
+  replicationEdges:
+    - from: production
+      to: dr
+      regionId: r1
+    - from: production
+      to: dr
+      regionId: r2

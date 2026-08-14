@@ -42,7 +42,7 @@ RFC（docs/planning/rfc-template.md）→ 评审 → ADR → 分支开发。
 | M1 | v4.0-M1 | 向量存储接入 | HNSW 持久化闭环（索引落盘/重建/加载）、向量 BlockCache 与 mmap 接入、混合检索（SQL WHERE + 向量 top-K） | ADR-0319 | ✅ 阶段交付中（2026-08-14）：VectorIndexFile/Store/MmapReader/VectorSqlSearch + E2E + 基准报告 |
 | M2 | v4.0-M2 | 多模型编码 | 类型化值（SQL/JSON/时序/向量）additive 编码、RESP3 类型接线、TTL/过期/迁移对多模型值兼容 | ADR-0320 | ✅ 完成（2026-08-14）：ValueType 6/7/8 + MultiModelCodec + 命令族 + 自动索引 + WAL/SSTable/迁移/复制闭环 + TTL + RESP3 接线 + 基准报告 |
 | M3 | v4.0-M3 | 多集群复制接线 | 联邦一致性验证器 → 真实跨集群复制通道（CDC/日志搬运）、冲突策略（last-write / CRDT 选型）、多活故障切换演练 | ADR-0321 | ✅ 完成（2026-08-14）：REPLICATION RPC + EventCodec + LWW + Sink/Channel + 水位持久化 + Pipeline 串联 + 分区混沌 + E2E/一致性验证 |
-| M4 | v4.0-GA | 生产收口 | Operator 完整化、多云部署深化、Jepsen 外部化分区注入、真实 Runner 性能基线（冷/热口径） | ADR-0322 | ✅ 阶段交付中（2026-08-14）：ADR-0322 + CapacityModel + benchmark.sh + Operator 状态机 + Jepsen 脚本/job + 冷热基线（6.3x） |
+| M4 | v4.0-GA | 生产收口 | Operator 完整化、多云部署深化、Jepsen 外部化分区注入、真实 Runner 性能基线（冷/热口径） | ADR-0322 | ✅ 阶段交付中（2026-08-14）：CapacityModel + Operator 状态机 + 多集群拓扑/计划器 + Jepsen 外部化 + 冷热基线（6.3x）；GA 门禁验证进行中 |
 
 ## 各阶段要点
 
