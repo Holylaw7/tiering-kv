@@ -68,7 +68,9 @@ RFC（docs/planning/rfc-template.md）→ 评审 → ADR → 分支开发。
   （bulk / 嵌套数组 / double 数组）已交付；TYPE 命令支持新类型；
   多模型值命令（JSON.SET/GET、TS.ADD/GET/LEN、VECTOR.SET/GET）与
   WAL 恢复 / SSTable 读写 / 复制投递闭环验证完成；编码基准
-  JSON 2.76M、时序 320K、向量 646K ops/s；
+  JSON 2.76M、时序 320K、向量 646K ops/s；M2 增强：JSON 结构校验
+  （JsonValidator）与向量索引存储层同步（VectorIndexSyncStorageEngine，
+  put/delete 自动维护）；
 - 约束：WAL/SSTable 格式版本冻结，新类型走版本化扩展字段。
 
 ### M3 — 多集群复制接线

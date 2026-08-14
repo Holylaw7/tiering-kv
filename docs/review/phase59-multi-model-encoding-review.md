@@ -35,9 +35,12 @@ additive 编码 + 命令入口 + 持久化/迁移/复制闭环 + RESP3 连接级
 
 ## 已知限制（如实记录）
 
-- JSON 语法合法性由上层解析层负责，存储层不校验；
-- VECTOR 值经通用 `DEL` 删除时不会自动从 VectorIndexStore 移除
-  （删除侧索引同步列入 M3 前接线）；
+- ~~JSON 语法合法性由上层解析层负责，存储层不校验~~ → 已解决：
+  JsonValidator 结构级校验（括号/引号配对、尾随拒绝、顶层字面量），
+  完整语义校验仍由解析层负责；
+- ~~VECTOR 值经通用 `DEL` 删除时不会自动从 VectorIndexStore 移除~~ →
+  已解决：VectorIndexSyncStorageEngine 装饰器在 put/delete 统一维护
+  索引生命周期（含批量路径）；
 - 类型字节空间有限，超 255 需版本化扩展（M3 前足够）；
 - 多模型值的 SQL 谓词/join 语义（M2 仅标量 id 过滤）列入 M3。
 
