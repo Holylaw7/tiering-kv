@@ -34,7 +34,8 @@ data:
     DATA_DIR=${DATA_DIR:-/data}
     case "$ROLE" in
       metadata)
-        exec java -Xmx512m -jar /app/tiering-kv.jar \
+        exec java -Xmx512m -cp /app/tiering-kv.jar \
+          io.tieringkv.runtime.TxnRuntimeMain \
           --role metadata --node-id "$NODE_ID" \
           --rpc-port "$RPC_PORT" --data-dir "$DATA_DIR"
         ;;
@@ -44,13 +45,15 @@ data:
         if [ -z "$REGION_ID" ]; then
           REGION_ID="r${NODE_ID##*-}"
         fi
-        exec java -Xmx1g -jar /app/tiering-kv.jar \
+        exec java -Xmx1g -cp /app/tiering-kv.jar \
+          io.tieringkv.runtime.TxnRuntimeMain \
           --role participant --node-id "$NODE_ID" \
           --region-id "$REGION_ID" --rpc-port "$RPC_PORT" \
           --data-dir "$DATA_DIR"
         ;;
       coordinator)
-        exec java -Xmx512m -jar /app/tiering-kv.jar \
+        exec java -Xmx512m -cp /app/tiering-kv.jar \
+          io.tieringkv.runtime.TxnRuntimeMain \
           --role coordinator --node-id "$NODE_ID" \
           --rpc-port "$RPC_PORT" \
           --metadata-node "$METADATA_SERVICE" \
@@ -58,7 +61,8 @@ data:
           --regions "$REGIONS"
         ;;
       gateway)
-        exec java -Xmx512m -jar /app/tiering-kv.jar \
+        exec java -Xmx512m -cp /app/tiering-kv.jar \
+          io.tieringkv.runtime.TxnRuntimeMain \
           --role gateway --node-id "$NODE_ID" \
           --rpc-port "$RPC_PORT" --gateway-port "${GATEWAY_PORT:-6379}" \
           --metadata-node "$METADATA_SERVICE" \

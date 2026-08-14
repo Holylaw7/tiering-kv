@@ -9,8 +9,8 @@ CLUSTER=${TIERINGKV_KIND_CLUSTER_NAME:-tiering-kv}
 case "${1:-run}" in
   run)
     kind create cluster --name "$CLUSTER"
-    kind load docker-image tiering-kv:3.7.0 --name "$CLUSTER" \
-      2>/dev/null || true
+    kind load docker-image ghcr.io/tiering-kv/tiering-kv:v3.7.0 \
+      --name "$CLUSTER"
     kubectl create namespace tiering-kv || true
     kubectl -n tiering-kv create secret generic tiering-kv-secrets \
       --from-literal=admin-password=ci \

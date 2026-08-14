@@ -22,6 +22,7 @@ spec:
       containers:
         - name: metadata
           image: ghcr.io/tiering-kv/tiering-kv:v3.7.0
+          imagePullPolicy: IfNotPresent
           command: ["/bin/sh", "/etc/tiering-kv/start.sh"]
           env:
             - name: POD_NAME
@@ -96,6 +97,7 @@ spec:
       containers:
         - name: storage
           image: ghcr.io/tiering-kv/tiering-kv:v3.7.0
+          imagePullPolicy: IfNotPresent
           command: ["/bin/sh", "/etc/tiering-kv/start.sh"]
           env:
             - name: POD_NAME

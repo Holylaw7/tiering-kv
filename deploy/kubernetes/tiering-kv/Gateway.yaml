@@ -21,6 +21,7 @@ spec:
       containers:
         - name: gateway
           image: ghcr.io/tiering-kv/tiering-kv:v3.7.0
+          imagePullPolicy: IfNotPresent
           command: ["/bin/sh", "/etc/tiering-kv/start.sh"]
           env:
             - name: POD_NAME
