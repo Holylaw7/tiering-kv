@@ -40,7 +40,7 @@ RFC（docs/planning/rfc-template.md）→ 评审 → ADR → 分支开发。
 | 里程碑 | 版本 | 范围 | 主要交付物 | ADR | 验收口径 |
 | --- | --- | --- | --- | --- | --- |
 | M1 | v4.0-M1 | 向量存储接入 | HNSW 持久化闭环（索引落盘/重建/加载）、向量 BlockCache 与 mmap 接入、混合检索（SQL WHERE + 向量 top-K） | ADR-0319 | ✅ 阶段交付中（2026-08-14）：VectorIndexFile/Store/MmapReader/VectorSqlSearch + E2E + 基准报告 |
-| M2 | v4.0-M2 | 多模型编码 | 类型化值（SQL/JSON/时序/向量）additive 编码、RESP3 类型接线、TTL/过期/迁移对多模型值兼容 | ADR-0320 | 多模型值跨 WAL/SSTable/迁移/复制闭环 + 协议兼容测试 |
+| M2 | v4.0-M2 | 多模型编码 | 类型化值（SQL/JSON/时序/向量）additive 编码、RESP3 类型接线、TTL/过期/迁移对多模型值兼容 | ADR-0320 | ✅ 阶段交付中（2026-08-14）：ValueType 6/7/8 + MultiModelCodec + RESP3 映射 + 基准报告 |
 | M3 | v4.0-M3 | 多集群复制接线 | 联邦一致性验证器 → 真实跨集群复制通道（CDC/日志搬运）、冲突策略（last-write / CRDT 选型）、多活故障切换演练 | ADR-0321 | 跨集群复制 E2E + 分区/恢复混沌 + 一致性验证 |
 | M4 | v4.0-GA | 生产收口 | Operator 完整化、多云部署深化、Jepsen 外部化分区注入、真实 Runner 性能基线（冷/热口径） | ADR-0322 | GA 门禁 7/7 ×2 + Jepsen 报告 + 容量模型 |
 
@@ -62,6 +62,11 @@ RFC（docs/planning/rfc-template.md）→ 评审 → ADR → 分支开发。
 - 现状：值模型以 byte[] 为主，SQL/向量为独立原型；
 - 交付：类型化值编码（additive，向后兼容）、RESP3 类型映射、
   冷热迁移/复制/TTL 对多模型值统一；
+- 进度（2026-08-14）：ADR-0320 批准；ValueType 增加 JSON /
+  TIME_SERIES / VECTOR（类型字节 6/7/8，1–5 冻结）；MultiModelCodec
+  （JSON UTF-8 / 时序 16B 点 / 向量 dim+float[]）+ RESP3 映射
+  （bulk / 嵌套数组 / double 数组）已交付；TYPE 命令支持新类型；
+  编码基准 JSON 2.76M、时序 320K、向量 646K ops/s；
 - 约束：WAL/SSTable 格式版本冻结，新类型走版本化扩展字段。
 
 ### M3 — 多集群复制接线
