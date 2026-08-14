@@ -125,6 +125,12 @@ public final class PubSubBroker {
                 entry.getValue().isEmpty());
     }
 
+    /** 清空全部订阅（测试隔离用）。 */
+    public void clear() {
+        channels.clear();
+        patterns.clear();
+    }
+
     /** 通配：* 匹配任意串，? 匹配单字符（与 SCAN 一致）。 */
     static boolean patternMatches(String pattern,
                                   String channel) {

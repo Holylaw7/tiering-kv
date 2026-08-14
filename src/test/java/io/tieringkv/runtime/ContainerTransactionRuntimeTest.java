@@ -286,7 +286,15 @@ class ContainerTransactionRuntimeTest {
         void restartParticipantB() throws Exception {
             int port = participantBEndpoint.boundPort();
             participantBEndpoint.close();
-            Thread.sleep(1_000); // 等待旧监听释放端口
+            // 等待旧监听释放端口（Linux CI 上 1s 不够，轮询探测）
+            for (int i = 0; i < 50; i++) {
+                try (java.net.ServerSocket probe = new java.net.ServerSocket(
+                        port, 50, java.net.InetAddress.getLoopbackAddress())) {
+                    break;
+                } catch (java.io.IOException e) {
+                    Thread.sleep(100);
+                }
+            }
             MultiRaftEndpoint restarted = new MultiRaftEndpoint("pb",
                     port, Map.of("pb",
                     new InetSocketAddress("127.0.0.1", port)));

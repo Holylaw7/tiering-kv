@@ -3,6 +3,7 @@ package io.tieringkv.pubsub;
 import io.tieringkv.command.TestCommandRunner;
 import io.tieringkv.session.ConnectionContext;
 import io.tieringkv.storage.memory.MemTable;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -16,6 +17,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /** Pub/Sub 连接级投递（ADR-0284/0288）。 */
 class ConnectionPubSubTest {
+
+    @BeforeEach
+    void isolateSharedBroker() {
+        ConnectionContext.sharedBroker().clear();
+    }
 
     private static <T> T withContext(ConnectionContext context,
                                      Supplier<T> action) {

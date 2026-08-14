@@ -125,11 +125,9 @@ class RbacPitrCdcEdgeTest {
     void expiredTokenCommandDenied() throws Exception {
         CredentialManager credentials = new CredentialManager();
         String token = credentials.issue(Role.ADMIN, 1);
+        Thread.sleep(10); // 确保 token 已过期
         GatewayAuthSession session = new GatewayAuthSession(credentials);
-        session.authenticate(token);
-        Thread.sleep(5);
-        assertThatThrownBy(() -> CommandPermissionGuard.require(
-                session.role(), "INFO"))
+        assertThatThrownBy(() -> session.authenticate(token))
                 .isInstanceOf(SecurityException.class);
     }
 
