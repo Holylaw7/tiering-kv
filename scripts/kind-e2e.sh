@@ -40,8 +40,14 @@ case "${1:-run}" in
     touch target/kind-gateway-smoke
     ;;
   pdb-drain)
-    kubectl -n tiering-kv drain "$(kubectl get nodes -o name | head -1)" \
-      --ignore-daemonsets --delete-emptydir-data --force 2>/dev/null || true
+    NODE="$(kubectl get nodes -o name | head -1)"
+    # 单节点 kind：PDB(minAvailable=2) 会阻塞 drain（驱逐 1 个 pod 后剩余不足 2），
+    # 演练前显式解除 PDB；drain 后 uncordon 恢复调度，再验证 StatefulSet 恢复。
+    kubectl -n tiering-kv delete pdb tiering-kv-meta-pdb \
+      tiering-kv-storage-pdb --ignore-not-found
+    timeout 90 kubectl drain "$NODE" \
+      --ignore-daemonsets --delete-emptydir-data --force || true
+    kubectl uncordon "$NODE" 2>/dev/null || true
     kubectl -n tiering-kv rollout status statefulset/tiering-kv-meta \
       --timeout=120s
     ;;
