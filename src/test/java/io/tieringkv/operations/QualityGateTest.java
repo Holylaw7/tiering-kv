@@ -68,7 +68,9 @@ class QualityGateTest {
     void surefireKeepsJacocoAgent() throws Exception {
         String pom = Files.readString(Path.of("pom.xml"));
         assertThat(pom).contains("@{argLine}");
-        assertThat(pom).contains("-Xmx1g");
+        // 意图是 surefire 必须携带 jacoco agent 占位符与 JVM 堆参数；
+        // 具体堆大小由 CI 容量调优决定，不应硬编码（曾与 -Xmx2g 调优冲突）。
+        assertThat(pom).contains("-Xmx");
     }
 
     @ParameterizedTest(name = "plugin {0}")
