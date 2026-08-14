@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
@@ -17,6 +17,9 @@ RFC 获批后：
 - 阶段拆分：SQL 索引接线 → 向量存储接入 → 多模型编码 →
   多集群复制接线；
 - 每阶段 ADR + 全量回归 0 failures。
+
+2026-08-14 批准：RFC-0001 Approved；`feature/v4-multi-model` 已创建；
+阶段一交付 `SqlIndexRegistry`（SQL 索引接线脚手架）。
 
 ## Alternatives
 
