@@ -90,10 +90,9 @@ class ConcurrencyBenchmarkTest {
         System.out.printf(Locale.ROOT,
                 "CONC-BENCH SHARD single=%.0f ops/s sharded=%.0f ops/s speedup=%.2fx%n",
                 single, sharded, sharded / single);
-        // 共享 CI runner 上绝对吞吐波动大（曾偶发低于 0.8x 导致 develop 抖动）；
-        // 0.6 下限仍保留病态退化防护（分片实现不能比单执行器慢一半以上），
-        // 与 Phase15 性能门禁降阈值先例一致，实际 speedup 保留在输出中人工审阅。
-        assertThat(sharded).isGreaterThanOrEqualTo(single * 0.6);
+        // warmup 后真实 runner 实测 speedup≈0.84x（52ad4eb run）；
+        // 0.8 下限保留病态退化防护，实际 speedup 保留在输出中人工审阅。
+        assertThat(sharded).isGreaterThanOrEqualTo(single * 0.8);
     }
 
     private static void runWorkload(
