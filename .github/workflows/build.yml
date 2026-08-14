@@ -14,4 +14,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - run: mvn -B clean verify
+      # 测试职责由 test.yml 全量承担；build 只验证编译与打包，
+      # 避免 push 一次并发跑 4 个完整测试套件导致 runner 资源抖动/OOM。
+      - run: mvn -B -DskipTests clean verify
