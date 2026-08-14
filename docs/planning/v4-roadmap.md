@@ -13,6 +13,61 @@ RFC（docs/planning/rfc-template.md）→ 评审 → ADR → 分支开发。
 
 ## 当前
 
-- RFC-0001（docs/planning/rfc-0001-v4-multi-model.md）：Pending，
-  等待批准；
-- 批准后：ADR-0318 + feature/v4-multi-model。
+- RFC-0001（docs/planning/rfc-0001-v4-multi-model.md）：**Approved**
+  （2026-08-14）→ ADR-0318 Accepted；
+- `feature/v4-multi-model` 分支已创建；
+- 阶段一（SQL 索引接线）已交付：`SqlIndexRegistry` +
+  `IndexAwarePlanner`（含索引选择/拒绝路径）。
+
+## v3.7.1（维护补丁，v4.0 前置）
+
+维护模式首个补丁候选，范围限定为真实 GitHub Runner 门禁暴露的修复，
+不引入新功能：
+
+1. 真实 Runner 门禁全绿（build/test/transaction-e2e/release，7/7 ×2）；
+2. GHCR 镜像命名修正（`ghcr.io/holylaw7/tiering-kv`，owner 全小写）；
+3. 依赖漏洞修复（netty 4.1.136.Final / slf4j 2.0.17 / logback 1.5.34，
+   Trivy 0 漏洞）；
+4. 容器入口契约统一（事务/kind 显式 TxnRuntimeMain）；
+5. CI 稳定化（TestPorts 端口分配器、surefire 失败重跑、BuildKit 重试、
+   benchmark 组与功能门禁分离并补全 71 类）。
+
+验收：连续两轮 7/7 全绿 + Trivy 0 漏洞 + 全量回归 0 failures。
+状态与证据：docs/release/v3.7.1-rc-maintenance-notes.md。
+
+## v4.0 阶段计划
+
+| 里程碑 | 版本 | 范围 | 主要交付物 | ADR | 验收口径 |
+| --- | --- | --- | --- | --- | --- |
+| M1 | v4.0-M1 | 向量存储接入 | HNSW 持久化闭环（索引落盘/重建/加载）、向量 BlockCache 与 mmap 接入、混合检索（SQL WHERE + 向量 top-K） | ADR-0319 | 向量 CRUD 全链路 E2E + 混合检索基准 + 全量回归 |
+| M2 | v4.0-M2 | 多模型编码 | 类型化值（SQL/JSON/时序/向量）additive 编码、RESP3 类型接线、TTL/过期/迁移对多模型值兼容 | ADR-0320 | 多模型值跨 WAL/SSTable/迁移/复制闭环 + 协议兼容测试 |
+| M3 | v4.0-M3 | 多集群复制接线 | 联邦一致性验证器 → 真实跨集群复制通道（CDC/日志搬运）、冲突策略（last-write / CRDT 选型）、多活故障切换演练 | ADR-0321 | 跨集群复制 E2E + 分区/恢复混沌 + 一致性验证 |
+| M4 | v4.0-GA | 生产收口 | Operator 完整化、多云部署深化、Jepsen 外部化分区注入、真实 Runner 性能基线（冷/热口径） | ADR-0322 | GA 门禁 7/7 ×2 + Jepsen 报告 + 容量模型 |
+
+## 各阶段要点
+
+### M1 — 向量存储接入
+
+- 现状：HNSW 可持久化（Phase 54），缺存储引擎接入与查询接线；
+- 交付：向量写入经 WAL/SSTable 持久化、mmap 随机读取、混合检索
+  （标量过滤 + 向量 top-K）、索引重建与校验；
+- 约束：v1.0–v3.7 冻结协议不变，新能力 additive + ADR。
+
+### M2 — 多模型编码
+
+- 现状：值模型以 byte[] 为主，SQL/向量为独立原型；
+- 交付：类型化值编码（additive，向后兼容）、RESP3 类型映射、
+  冷热迁移/复制/TTL 对多模型值统一；
+- 约束：WAL/SSTable 格式版本冻结，新类型走版本化扩展字段。
+
+### M3 — 多集群复制接线
+
+- 现状：联邦一致性验证器已交付（Phase 55），复制通道未接线；
+- 交付：跨集群日志搬运 + 应用端冲突策略 + 一致性验证接入 CI；
+- 约束：Raft safety / MVCC consistency / 事务状态机不改。
+
+### M4 — 生产收口
+
+- Operator 完整化（备份/恢复/滚动升级/多集群编排）；
+- Jepsen 外部化（分区/网络故障注入进真实 Runner）；
+- 性能基线：内存、服务端、生产全链路三级口径，冷/热缓存分开报告。
