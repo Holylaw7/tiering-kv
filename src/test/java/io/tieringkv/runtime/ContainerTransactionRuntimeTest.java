@@ -221,80 +221,109 @@ class ContainerTransactionRuntimeTest {
                                   Path dir) implements AutoCloseable {
 
         static RuntimeFixture start(Path dir) throws Exception {
-            Map<String, InetSocketAddress> addresses = Map.of(
-                    "meta", new InetSocketAddress("127.0.0.1", freePort()),
-                    "pa", new InetSocketAddress("127.0.0.1", freePort()),
-                    "pb", new InetSocketAddress("127.0.0.1", freePort()),
-                    "coord", new InetSocketAddress("127.0.0.1", freePort()));
-            MultiRaftEndpoint meta = new MultiRaftEndpoint("meta",
-                    addresses.get("meta").getPort(), addresses);
-            MultiRaftEndpoint pa = new MultiRaftEndpoint("pa",
-                    addresses.get("pa").getPort(), addresses);
-            MultiRaftEndpoint pb = new MultiRaftEndpoint("pb",
-                    addresses.get("pb").getPort(), addresses);
-            MultiRaftEndpoint coord = new MultiRaftEndpoint("coord",
-                    addresses.get("coord").getPort(), addresses);
-            meta.start();
-            pa.start();
-            pb.start();
-            coord.start();
-            MvccStorageEngine engineA = new MvccStorageEngine(MemTable.create());
-            MvccStorageEngine engineB = new MvccStorageEngine(MemTable.create());
-            LockTable locksA = new LockTable();
-            LockTable locksB = new LockTable();
-            pa.registerTxnHandler("r1", new TxnParticipantRpcHandler(
-                    new TransactionParticipant("r1", engineA, locksA, 60_000)));
-            pb.registerTxnHandler("r2", new TxnParticipantRpcHandler(
-                    new TransactionParticipant("r2", engineB, locksB, 60_000)));
-            Path metaLog = dir.resolve("meta.log");
-            TransactionMetadataService metadata =
-                    new TransactionMetadataService(
-                            payload -> meta.callTxn("meta", "meta",
-                                    RpcMessageType.TXN_METADATA, payload)
-                                    .thenApply(frame -> 1L),
-                            metaLog);
-            meta.registerTxnHandler("meta", (frame, groupId, payload) -> {
-                if (frame.type() == RpcMessageType.TXN_METADATA) {
-                    metadata.applyLocal(
-                            io.tieringkv.transaction.metadata.TxnMetaCodec
-                                    .decode(payload));
-                    return new io.tieringkv.cluster.rpc.RpcFrame(
-                            frame.requestId(),
-                            RpcMessageType.TXN_METADATA_RESPONSE,
-                            io.tieringkv.transaction.rpc.TxnRpcCodec
-                                    .encodeResponse(TxnMessages.Response.ok()));
+            // 14613 个测试共用 OS 端口空间，freePort() 释放到 bind 之间可能被
+            // 并发占用（TOCTOU）导致 BindException；失败时关闭已启动端点并
+            // 重新分配端口重试，吸收共享 runner 的端口抖动。
+            Exception last = null;
+            for (int attempt = 0; attempt < 5; attempt++) {
+                Map<String, InetSocketAddress> addresses = Map.of(
+                        "meta", new InetSocketAddress("127.0.0.1", freePort()),
+                        "pa", new InetSocketAddress("127.0.0.1", freePort()),
+                        "pb", new InetSocketAddress("127.0.0.1", freePort()),
+                        "coord", new InetSocketAddress("127.0.0.1", freePort()));
+                MultiRaftEndpoint meta = new MultiRaftEndpoint("meta",
+                        addresses.get("meta").getPort(), addresses);
+                MultiRaftEndpoint pa = new MultiRaftEndpoint("pa",
+                        addresses.get("pa").getPort(), addresses);
+                MultiRaftEndpoint pb = new MultiRaftEndpoint("pb",
+                        addresses.get("pb").getPort(), addresses);
+                MultiRaftEndpoint coord = new MultiRaftEndpoint("coord",
+                        addresses.get("coord").getPort(), addresses);
+                try {
+                    meta.start();
+                    pa.start();
+                    pb.start();
+                    coord.start();
+                    MvccStorageEngine engineA =
+                            new MvccStorageEngine(MemTable.create());
+                    MvccStorageEngine engineB =
+                            new MvccStorageEngine(MemTable.create());
+                    LockTable locksA = new LockTable();
+                    LockTable locksB = new LockTable();
+                    pa.registerTxnHandler("r1", new TxnParticipantRpcHandler(
+                            new TransactionParticipant("r1", engineA,
+                                    locksA, 60_000)));
+                    pb.registerTxnHandler("r2", new TxnParticipantRpcHandler(
+                            new TransactionParticipant("r2", engineB,
+                                    locksB, 60_000)));
+                    Path metaLog = dir.resolve("meta.log");
+                    TransactionMetadataService metadata =
+                            new TransactionMetadataService(
+                                    payload -> meta.callTxn("meta", "meta",
+                                            RpcMessageType.TXN_METADATA,
+                                            payload).thenApply(frame -> 1L),
+                                    metaLog);
+                    meta.registerTxnHandler("meta",
+                            (frame, groupId, payload) -> {
+                                if (frame.type()
+                                        == RpcMessageType.TXN_METADATA) {
+                                    metadata.applyLocal(
+                                            io.tieringkv.transaction.metadata
+                                                    .TxnMetaCodec
+                                                    .decode(payload));
+                                    return new io.tieringkv.cluster.rpc
+                                            .RpcFrame(
+                                            frame.requestId(),
+                                            RpcMessageType
+                                                    .TXN_METADATA_RESPONSE,
+                                            io.tieringkv.transaction.rpc
+                                                    .TxnRpcCodec
+                                                    .encodeResponse(
+                                                            TxnMessages
+                                                                    .Response
+                                                                    .ok()));
+                                }
+                                throw new IllegalArgumentException(
+                                        "unexpected");
+                            });
+                    RpcTxnTransport transport = new RpcTxnTransport(coord);
+                    TimestampOracle oracle = new TimestampOracle();
+                    RegionTxnClient regionA = new RegionTxnClient("r1",
+                            new TxnParticipantClient("pa", "r1", transport),
+                            key -> key.key().length > 0
+                                    && key.key()[0] == 'a');
+                    RegionTxnClient regionB = new RegionTxnClient("r2",
+                            new TxnParticipantClient("pb", "r2", transport),
+                            key -> key.key().length > 0
+                                    && key.key()[0] == 'b');
+                    List<RegionTxnClient> regions = List.of(regionA, regionB);
+                    DistributedTxnRouter router = new DistributedTxnRouter(
+                            oracle,
+                            key -> key.key().length > 0
+                                    && key.key()[0] == 'b'
+                                    ? regionB : regionA,
+                            regions, metadata,
+                            new TransactionMetricsRegistry());
+                    return new RuntimeFixture(meta, pa, pb, coord,
+                            engineA, engineB, oracle, metadata, router,
+                            regionA, regionB, dir);
+                } catch (Exception e) {
+                    last = e;
+                    closeQuietly(coord);
+                    closeQuietly(pb);
+                    closeQuietly(pa);
+                    closeQuietly(meta);
                 }
-                throw new IllegalArgumentException("unexpected");
-            });
-            RpcTxnTransport transport = new RpcTxnTransport(coord);
-            TimestampOracle oracle = new TimestampOracle();
-            RegionTxnClient regionA = new RegionTxnClient("r1",
-                    new TxnParticipantClient("pa", "r1", transport),
-                    key -> key.key().length > 0 && key.key()[0] == 'a');
-            RegionTxnClient regionB = new RegionTxnClient("r2",
-                    new TxnParticipantClient("pb", "r2", transport),
-                    key -> key.key().length > 0 && key.key()[0] == 'b');
-            List<RegionTxnClient> regions = List.of(regionA, regionB);
-            DistributedTxnRouter router = new DistributedTxnRouter(oracle,
-                    key -> key.key().length > 0 && key.key()[0] == 'b'
-                            ? regionB : regionA,
-                    regions, metadata, new TransactionMetricsRegistry());
-            return new RuntimeFixture(meta, pa, pb, coord, engineA, engineB,
-                    oracle, metadata, router, regionA, regionB, dir);
+            }
+            throw new IllegalStateException(
+                    "failed to start runtime fixture after 5 attempts", last);
         }
 
         void restartParticipantB() throws Exception {
             int port = participantBEndpoint.boundPort();
             participantBEndpoint.close();
-            // 等待旧监听释放端口（Linux CI 上 1s 不够，轮询探测）
-            for (int i = 0; i < 50; i++) {
-                try (java.net.ServerSocket probe = new java.net.ServerSocket(
-                        port, 50, java.net.InetAddress.getLoopbackAddress())) {
-                    break;
-                } catch (java.io.IOException e) {
-                    Thread.sleep(100);
-                }
-            }
+            // 等待旧监听释放端口；超时明确失败，避免掩盖为后续 bind 异常
+            awaitPortFree(port, 10_000);
             MultiRaftEndpoint restarted = new MultiRaftEndpoint("pb",
                     port, Map.of("pb",
                     new InetSocketAddress("127.0.0.1", port)));
@@ -302,6 +331,33 @@ class ContainerTransactionRuntimeTest {
             restarted.registerTxnHandler("r2", new TxnParticipantRpcHandler(
                     new TransactionParticipant("r2", engineB,
                             new LockTable(), 60_000)));
+        }
+
+        private static void awaitPortFree(int port, long timeoutMillis)
+                throws InterruptedException {
+            long deadline = System.nanoTime()
+                    + java.util.concurrent.TimeUnit.MILLISECONDS
+                    .toNanos(timeoutMillis);
+            while (System.nanoTime() < deadline) {
+                try (ServerSocket probe = new ServerSocket(port, 50,
+                        java.net.InetAddress.getLoopbackAddress())) {
+                    return;
+                } catch (IOException ignored) {
+                    Thread.sleep(100);
+                }
+            }
+            throw new IllegalStateException("port " + port
+                    + " still occupied after " + timeoutMillis + "ms");
+        }
+
+        private static void closeQuietly(MultiRaftEndpoint endpoint) {
+            if (endpoint != null) {
+                try {
+                    endpoint.close();
+                } catch (RuntimeException ignored) {
+                    // 重试路径：忽略关闭失败
+                }
+            }
         }
 
         DistributedTxnRouter restartCoordinator() throws Exception {
