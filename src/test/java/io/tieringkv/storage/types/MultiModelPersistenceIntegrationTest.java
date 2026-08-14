@@ -6,6 +6,12 @@ import io.tieringkv.replication.ReplicationPipeline;
 import io.tieringkv.replication.ReplicaSink;
 import io.tieringkv.storage.MutableClock;
 import io.tieringkv.storage.StorageEngine;
+import io.tieringkv.storage.cache.EvictionManager;
+import io.tieringkv.storage.cache.HotnessTracker;
+import io.tieringkv.storage.cache.LFUPolicy;
+import io.tieringkv.storage.cache.TrackingStorageEngine;
+import io.tieringkv.storage.cold.ColdMigration;
+import io.tieringkv.storage.cold.ColdStorageEngine;
 import io.tieringkv.storage.cold.SSTableMeta;
 import io.tieringkv.storage.cold.SSTableReader;
 import io.tieringkv.storage.cold.SSTableWriter;
@@ -128,6 +134,45 @@ class MultiModelPersistenceIntegrationTest {
                 .containsExactlyElementsOf(SERIES);
         assertThat(MultiModelCodec.decodeVector(
                 sink.value("vector"))).containsExactly(VECTOR);
+    }
+
+    @Test
+    void coldMigrationPreservesAllModelValues() throws Exception {
+        WALConfig walConfig = new WALConfig(dir.resolve("wal"),
+                1 << 20, WALConfig.FsyncPolicy.NO);
+        ColdStorageEngine.Config coldConfig =
+                new ColdStorageEngine.Config(dir.resolve("cold"),
+                        4096, 10, 1, 100);
+        MutableClock clock = new MutableClock(0);
+        // 配额收紧到 64B：3 个多模型值 + 条目开销必然全部触发迁移
+        MemoryManager memoryManager = new MemoryManager(64);
+        MemTable memTable = MemTable.createForTest(clock,
+                memoryManager);
+        ColdStorageEngine cold = new ColdStorageEngine(coldConfig);
+        try (WALManager wal = new WALManager(walConfig)) {
+            EvictionManager evictionManager = new EvictionManager(
+                    memTable, memoryManager,
+                    new LFUPolicy(new HotnessTracker(1000)),
+                    new ColdMigration(cold), wal, clock, 64);
+            TrackingStorageEngine storage =
+                    new TrackingStorageEngine(memTable,
+                            evictionManager, clock);
+            storage.put(b("json"), jsonValue());
+            storage.put(b("series"), seriesValue());
+            storage.put(b("vector"), vectorValue());
+
+            assertThat(cold.tablesSnapshot()).isNotEmpty();
+            assertThat(MultiModelCodec.decodeJson(
+                    cold.get(b("json")))).isEqualTo(JSON);
+            assertThat(MultiModelCodec.decodeTimeSeries(
+                    cold.get(b("series"))))
+                    .containsExactlyElementsOf(SERIES);
+            assertThat(MultiModelCodec.decodeVector(
+                    cold.get(b("vector"))))
+                    .containsExactly(VECTOR);
+        } finally {
+            cold.close();
+        }
     }
 
     private static ChangeEvent event(long seq, String key,
