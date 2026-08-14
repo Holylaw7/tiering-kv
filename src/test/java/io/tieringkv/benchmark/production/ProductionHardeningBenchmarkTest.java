@@ -220,9 +220,7 @@ class ProductionHardeningBenchmarkTest {
     }
 
     private static int freePort() throws Exception {
-        try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
+        return io.tieringkv.testkit.TestPorts.freePort();
     }
 
     private static byte[] bytes(String value) {

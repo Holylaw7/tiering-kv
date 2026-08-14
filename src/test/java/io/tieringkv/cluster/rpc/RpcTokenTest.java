@@ -22,9 +22,7 @@ class RpcTokenTest {
     Path dir;
 
     private static int freePort() throws Exception {
-        try (var socket = new java.net.ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
+        return io.tieringkv.testkit.TestPorts.freePort();
     }
 
     @Test

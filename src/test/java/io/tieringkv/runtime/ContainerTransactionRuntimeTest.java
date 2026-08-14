@@ -202,9 +202,7 @@ class ContainerTransactionRuntimeTest {
     }
 
     private static int freePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
+        return io.tieringkv.testkit.TestPorts.freePort();
     }
 
     private record RuntimeFixture(MultiRaftEndpoint metadataEndpoint,

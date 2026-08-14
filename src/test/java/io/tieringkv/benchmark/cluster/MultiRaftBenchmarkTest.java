@@ -264,9 +264,7 @@ class MultiRaftBenchmarkTest {
     }
 
     private static int freePort() throws Exception {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
+        return io.tieringkv.testkit.TestPorts.freePort();
     }
 
     private static byte[] bytes(String value) {
