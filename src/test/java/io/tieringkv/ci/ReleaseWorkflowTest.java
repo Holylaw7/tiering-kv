@@ -112,7 +112,9 @@ class ReleaseWorkflowTest {
     void ghcrImageNameMatches() throws Exception {
         Map<String, Object> build = step("Build image");
         String run = (String) build.get("run");
-        assertThat(run).contains("tiering-kv/tiering-kv");
+        // GHCR 命名空间必须是 GitHub 用户/组织的全小写形式，
+        // 与 release.yml 实际 push 的镜像名保持一致。
+        assertThat(run).contains("ghcr.io/holylaw7/tiering-kv");
     }
 
     private static int indexOf(List<Map<String, Object>> steps,
