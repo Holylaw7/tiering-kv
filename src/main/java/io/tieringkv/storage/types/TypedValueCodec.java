@@ -73,6 +73,9 @@ public final class TypedValueCodec {
             case SET -> 3;
             case ZSET -> 4;
             case STREAM -> 5;
+            case JSON -> 6;
+            case TIME_SERIES -> 7;
+            case VECTOR -> 8;
             case STRING -> throw new IllegalArgumentException(
                     "string stored raw");
         };
@@ -85,6 +88,9 @@ public final class TypedValueCodec {
             case 3 -> ValueType.SET;
             case 4 -> ValueType.ZSET;
             case 5 -> ValueType.STREAM;
+            case 6 -> ValueType.JSON;
+            case 7 -> ValueType.TIME_SERIES;
+            case 8 -> ValueType.VECTOR;
             default -> null;
         };
     }

@@ -7,5 +7,8 @@ public enum ValueType {
     LIST,
     SET,
     ZSET,
-    STREAM
+    STREAM,
+    JSON,
+    TIME_SERIES,
+    VECTOR
 }
