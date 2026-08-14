@@ -5,6 +5,8 @@ services:
       dockerfile: deploy/Dockerfile
     container_name: txn-meta
     command:
+      # 注意：compose 运行 ClusterMain（--nodeId 驼峰）；
+      # TxnRuntimeMain 角色入口使用 --node-id（连字符），勿混用。
       - --role
       - metadata
       - --nodeId

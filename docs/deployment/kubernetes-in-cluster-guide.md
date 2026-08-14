@@ -6,8 +6,8 @@ Phase 25 · 2026-08-11 · ADR-0102
 
 ```bash
 kind create cluster --name tiering-kv
-docker build -t tiering-kv:0.1.0 -f deploy/Dockerfile .
-kind load docker-image tiering-kv:0.1.0
+docker build -t tiering-kv:3.7.0 -f deploy/Dockerfile .
+kind load docker-image tiering-kv:3.7.0
 ```
 
 ## 2. 一键验证
