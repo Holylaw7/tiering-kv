@@ -9,7 +9,7 @@ Test (mvn test)
   → Benchmark (Phase24..50 + Baseline 43..50)
   → Security scan (Trivy)
   → Build image
-→ Publish image (ghcr.io/Holylaw7/tiering-kv:v3.2.0)
+→ Publish image (ghcr.io/holylaw7/tiering-kv:v3.2.0)
   → Checksums (sha256sum)
   → Generate release notes
   → GitHub Release

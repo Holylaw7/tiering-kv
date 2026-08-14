@@ -17,10 +17,10 @@ class MulticloudTest {
     @Test
     void configFields() {
         MulticloudConfig config = new MulticloudConfig(
-                "gp2", "nginx", "ghcr.io/Holylaw7/tiering-kv", 2);
+                "gp2", "nginx", "ghcr.io/holylaw7/tiering-kv", 2);
         assertThat(config.storageClass()).isEqualTo("gp2");
         assertThat(config.ingressClass()).isEqualTo("nginx");
-        assertThat(config.registry()).isEqualTo("ghcr.io/Holylaw7/tiering-kv");
+        assertThat(config.registry()).isEqualTo("ghcr.io/holylaw7/tiering-kv");
         assertThat(config.gatewayReplicas()).isEqualTo(2);
     }
 

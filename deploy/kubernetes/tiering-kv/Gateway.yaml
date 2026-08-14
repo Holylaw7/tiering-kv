@@ -20,7 +20,7 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: gateway
-          image: ghcr.io/Holylaw7/tiering-kv:v3.7.0
+          image: ghcr.io/holylaw7/tiering-kv:v3.7.0
           imagePullPolicy: IfNotPresent
           command: ["/bin/sh", "/etc/tiering-kv/start.sh"]
           env:

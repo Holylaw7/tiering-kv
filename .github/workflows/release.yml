@@ -49,11 +49,11 @@ jobs:
           exit-code: "1"
           ignore-unfixed: true
       - name: Build image
-        run: docker build -t ghcr.io/Holylaw7/tiering-kv:${GITHUB_REF_NAME} -f deploy/Dockerfile .
+        run: docker build -t ghcr.io/holylaw7/tiering-kv:${GITHUB_REF_NAME} -f deploy/Dockerfile .
       - name: Publish image
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          docker push ghcr.io/Holylaw7/tiering-kv:${GITHUB_REF_NAME}
+          docker push ghcr.io/holylaw7/tiering-kv:${GITHUB_REF_NAME}
       - name: Checksums
         run: |
           find target -name '*.jar' -exec sha256sum {} + > target/checksums.sha256

@@ -121,7 +121,7 @@ class Phase31PlatformEdgeTest {
     @Test
     void multicloudConfigMatrix() {
         MulticloudConfig config = new MulticloudConfig(
-                "gp2", "nginx", "ghcr.io/Holylaw7/tiering-kv", 3);
+                "gp2", "nginx", "ghcr.io/holylaw7/tiering-kv", 3);
         assertThat(config.gatewayReplicas()).isEqualTo(3);
     }
 
