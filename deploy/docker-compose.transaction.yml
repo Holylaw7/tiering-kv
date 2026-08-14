@@ -4,12 +4,14 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     container_name: txn-meta
+    # 显式运行 TxnRuntimeMain（--role 分发、--node-id 连字符参数）。
+    # ClusterMain（--nodeId/--port/--peers）仅用于 docker-compose.cluster.yml，
+    # 勿将两套入口参数混用。
+    entrypoint: ["java", "-Xmx1g", "-cp", "/app/tiering-kv.jar", "io.tieringkv.runtime.TxnRuntimeMain"]
     command:
-      # 注意：compose 运行 ClusterMain（--nodeId 驼峰）；
-      # TxnRuntimeMain 角色入口使用 --node-id（连字符），勿混用。
       - --role
       - metadata
-      - --nodeId
+      - --node-id
       - metadata-1
       - --rpc-port
       - "7300"
@@ -25,10 +27,11 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     container_name: txn-participant-a
+    entrypoint: ["java", "-Xmx1g", "-cp", "/app/tiering-kv.jar", "io.tieringkv.runtime.TxnRuntimeMain"]
     command:
       - --role
       - participant
-      - --nodeId
+      - --node-id
       - participant-a
       - --region-id
       - r1
@@ -46,10 +49,11 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     container_name: txn-participant-b
+    entrypoint: ["java", "-Xmx1g", "-cp", "/app/tiering-kv.jar", "io.tieringkv.runtime.TxnRuntimeMain"]
     command:
       - --role
       - participant
-      - --nodeId
+      - --node-id
       - participant-b
       - --region-id
       - r2
@@ -67,10 +71,11 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     container_name: txn-coordinator
+    entrypoint: ["java", "-Xmx1g", "-cp", "/app/tiering-kv.jar", "io.tieringkv.runtime.TxnRuntimeMain"]
     command:
       - --role
       - coordinator
-      - --nodeId
+      - --node-id
       - coordinator-1
       - --rpc-port
       - "7200"
@@ -88,10 +93,11 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     container_name: txn-gateway
+    entrypoint: ["java", "-Xmx1g", "-cp", "/app/tiering-kv.jar", "io.tieringkv.runtime.TxnRuntimeMain"]
     command:
       - --role
       - gateway
-      - --nodeId
+      - --node-id
       - gateway-1
       - --rpc-port
       - "7201"
