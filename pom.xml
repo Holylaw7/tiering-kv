@@ -25,6 +25,10 @@
         <jmh.version>1.37</jmh.version>
         <jacoco.version>0.8.12</jacoco.version>
         <spotbugs.version>4.8.6</spotbugs.version>
+        <!-- benchmark 组默认不排除（本地 mvn test 跑全量）；
+             test/release workflow 显式传 -Dsurefire.excludedGroups=benchmark
+             把性能断言移出功能门禁，release Benchmark 步骤传空值跑全量 -->
+        <surefire.excludedGroups></surefire.excludedGroups>
     </properties>
 
     <dependencies>
@@ -106,6 +110,7 @@
                     <argLine>@{argLine} -Xmx2g</argLine>
                     <forkCount>1</forkCount>
                     <reuseForks>true</reuseForks>
+                    <excludedGroups>${surefire.excludedGroups}</excludedGroups>
                 </configuration>
             </plugin>
             <plugin>
