@@ -82,6 +82,15 @@ public final class RespEncoder extends MessageToByteEncoder<RespValue> {
             for (RespValue element : set.values()) {
                 writeV3(out, element);
             }
+        } else if (value instanceof RespArray array) {
+            // RESP3 数组与 RESP2 头一致，但元素递归使用 RESP3 编码
+            // （修复：数组内 RespDouble 曾回退为 ':' 整数风格）
+            out.writeByte('*');
+            out.writeCharSequence(array.values().size() + "\r\n",
+                    StandardCharsets.US_ASCII);
+            for (RespValue element : array.values()) {
+                writeV3(out, element);
+            }
         } else if (value instanceof RespDouble number) {
             out.writeByte(',');
             out.writeCharSequence(number.value() + "\r\n",
