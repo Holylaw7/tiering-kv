@@ -53,8 +53,8 @@ public final class CommandRegistry {
                 new MultiModelCommand("ts.add"),
                 new MultiModelCommand("ts.get"),
                 new MultiModelCommand("ts.len"),
-                new MultiModelCommand("vector.set"),
-                new MultiModelCommand("vector.get")));
+                new MultiModelCommand("vector.set", vectorStore),
+                new MultiModelCommand("vector.get", vectorStore)));
     }
 
     private static CommandRegistry build(

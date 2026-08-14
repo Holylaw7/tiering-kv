@@ -9,6 +9,7 @@ import io.tieringkv.protocol.RespNull;
 import io.tieringkv.protocol.RespSimpleString;
 import io.tieringkv.protocol.RespValue;
 import io.tieringkv.storage.memory.MemTable;
+import io.tieringkv.vector.indexfile.VectorIndexStore;
 import org.junit.jupiter.api.Test;
 
 import java.nio.charset.StandardCharsets;
@@ -120,5 +121,50 @@ class MultiModelCommandTest {
                 .isInstanceOf(RespError.class);
         assertThat(execute("vector.set", "v"))
                 .isInstanceOf(RespError.class);
+    }
+
+    @Test
+    void vectorSetAutoIndexesIntoVectorStore() {
+        VectorIndexStore index = new VectorIndexStore(4);
+        MultiModelCommand command = new MultiModelCommand(
+                "vector.set", index);
+        RespValue response = command.execute(List.of(
+                bytes("vec-key"), bytes("2"), bytes("1"), bytes("0")),
+                memTable);
+        assertThat(response).isEqualTo(
+                new RespSimpleString("OK"));
+        assertThat(index.size()).isEqualTo(1);
+        assertThat(index.store().search(new float[]{1, 0}, 1)
+                .get(0).id()).isEqualTo("vec-key");
+    }
+
+    @Test
+    void vectorSetOverwriteRefreshesIndex() {
+        VectorIndexStore index = new VectorIndexStore(4);
+        MultiModelCommand command = new MultiModelCommand(
+                "vector.set", index);
+        command.execute(List.of(bytes("k"), bytes("2"),
+                bytes("1"), bytes("0")), memTable);
+        command.execute(List.of(bytes("k"), bytes("2"),
+                bytes("0"), bytes("1")), memTable);
+        assertThat(index.size()).isEqualTo(1);
+        assertThat(index.store().search(new float[]{0, 1}, 1)
+                .get(0).id()).isEqualTo("k");
+    }
+
+    @Test
+    void vectorSetInvalidDoesNotPolluteIndex() {
+        VectorIndexStore index = new VectorIndexStore(4);
+        MultiModelCommand command = new MultiModelCommand(
+                "vector.set", index);
+        RespValue response = command.execute(List.of(
+                bytes("k"), bytes("3"), bytes("1"), bytes("0")),
+                memTable);
+        assertThat(response).isInstanceOf(RespError.class);
+        assertThat(index.size()).isZero();
+    }
+
+    private static byte[] bytes(String value) {
+        return value.getBytes(StandardCharsets.UTF_8);
     }
 }

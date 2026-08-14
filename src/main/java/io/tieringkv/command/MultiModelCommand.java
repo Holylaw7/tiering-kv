@@ -9,6 +9,8 @@ import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.storage.types.MultiModelCodec;
 import io.tieringkv.storage.types.TypedValueCodec;
 import io.tieringkv.storage.types.ValueType;
+import io.tieringkv.vector.Embedding;
+import io.tieringkv.vector.indexfile.VectorIndexStore;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -24,9 +26,20 @@ import java.util.List;
 public final class MultiModelCommand implements Command {
 
     private final String name;
+    private final VectorIndexStore vectorStore;
 
     public MultiModelCommand(String name) {
+        this(name, null);
+    }
+
+    /**
+     * @param vectorStore 可空；非空时 VECTOR.SET 同步写入 M1 检索索引
+     *                    （ADR-0320 自动索引接线）。
+     */
+    public MultiModelCommand(String name,
+                             VectorIndexStore vectorStore) {
         this.name = name;
+        this.vectorStore = vectorStore;
     }
 
     @Override
@@ -163,6 +176,10 @@ public final class MultiModelCommand implements Command {
         }
         storage.put(args.get(0),
                 MultiModelCodec.encodeVector(values));
+        if (vectorStore != null) {
+            vectorStore.put(new Embedding(text(args.get(0)),
+                    values));
+        }
         return new RespSimpleString("OK");
     }
 
