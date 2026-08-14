@@ -319,6 +319,22 @@ class CrossNodeTransactionTest {
                            List<RegionTxnClient> regionClients) {
 
         static Fixture start(Path dir) throws Exception {
+            // 14613 个测试共用 OS 端口空间，freePort() 释放到 bind 之间可能被
+            // 并发占用（TOCTOU）导致 BindException（test/main runner 实测）。
+            // 失败时关闭已启动端点并重新分配端口重试。
+            Exception last = null;
+            for (int attempt = 0; attempt < 5; attempt++) {
+                try {
+                    return startOnce(dir);
+                } catch (Exception e) {
+                    last = e;
+                }
+            }
+            throw new IllegalStateException(
+                    "Fixture.start failed after 5 attempts", last);
+        }
+
+        private static Fixture startOnce(Path dir) throws Exception {
             int p1 = freePort();
             int p2 = freePort();
             int p3 = freePort();
@@ -329,56 +345,74 @@ class CrossNodeTransactionTest {
             MultiRaftEndpoint e1 = new MultiRaftEndpoint("node1", p1, addresses);
             MultiRaftEndpoint e2 = new MultiRaftEndpoint("node2", p2, addresses);
             MultiRaftEndpoint e3 = new MultiRaftEndpoint("node3", p3, addresses);
-            e1.start();
-            e2.start();
-            e3.start();
+            try {
+                e1.start();
+                e2.start();
+                e3.start();
 
-            MvccStorageEngine r1 = new MvccStorageEngine(MemTable.create());
-            MvccStorageEngine r2 = new MvccStorageEngine(MemTable.create());
-            MvccStorageEngine r3 = new MvccStorageEngine(MemTable.create());
-            LockTable l1 = new LockTable();
-            LockTable l2 = new LockTable();
-            LockTable l3 = new LockTable();
-            e1.registerTxnHandler("r1", new TxnParticipantRpcHandler(
-                    new TransactionParticipant("r1", r1, l1, 60_000)));
-            e2.registerTxnHandler("r2", new TxnParticipantRpcHandler(
-                    new TransactionParticipant("r2", r2, l2, 60_000)));
-            e3.registerTxnHandler("r3", new TxnParticipantRpcHandler(
-                    new TransactionParticipant("r3", r3, l3, 60_000)));
+                MvccStorageEngine r1 = new MvccStorageEngine(MemTable.create());
+                MvccStorageEngine r2 = new MvccStorageEngine(MemTable.create());
+                MvccStorageEngine r3 = new MvccStorageEngine(MemTable.create());
+                LockTable l1 = new LockTable();
+                LockTable l2 = new LockTable();
+                LockTable l3 = new LockTable();
+                e1.registerTxnHandler("r1", new TxnParticipantRpcHandler(
+                        new TransactionParticipant("r1", r1, l1, 60_000)));
+                e2.registerTxnHandler("r2", new TxnParticipantRpcHandler(
+                        new TransactionParticipant("r2", r2, l2, 60_000)));
+                e3.registerTxnHandler("r3", new TxnParticipantRpcHandler(
+                        new TransactionParticipant("r3", r3, l3, 60_000)));
 
-            RpcTxnTransport transport1 = new RpcTxnTransport(e1);
-            TimestampOracle oracle = new TimestampOracle();
-            Path metaLog = dir.resolve("meta.log");
-            TransactionMetadataService metadata =
-                    new TransactionMetadataService(
-                            command -> CompletableFuture.completedFuture(1L),
-                            metaLog);
-            TransactionMetricsRegistry metrics =
-                    new TransactionMetricsRegistry();
-            RegionTxnClient c1 = new RegionTxnClient("r1",
-                    new TxnParticipantClient("node1", "r1", transport1),
-                    key -> key.key().length > 0 && key.key()[0] == 'a');
-            RegionTxnClient c2 = new RegionTxnClient("r2",
-                    new TxnParticipantClient("node2", "r2", transport1),
-                    key -> key.key().length > 0 && key.key()[0] == 'b');
-            RegionTxnClient c3 = new RegionTxnClient("r3",
-                    new TxnParticipantClient("node3", "r3", transport1),
-                    key -> key.key().length > 0 && key.key()[0] == 'c');
-            List<RegionTxnClient> clients = List.of(c1, c2, c3);
-            DistributedTxnRouter router = new DistributedTxnRouter(oracle,
-                    key -> {
-                        if (key.key().length == 0) {
-                            return c1;
-                        }
-                        return switch (key.key()[0]) {
-                            case 'b' -> c2;
-                            case 'c' -> c3;
-                            default -> c1;
-                        };
-                    }, clients, metadata, metrics);
-            return new Fixture(e1, e2, e3, r1, r2, r3, l1, l2, l3,
-                    transport1, oracle, metadata, metaLog, metrics, router,
-                    clients);
+                RpcTxnTransport transport1 = new RpcTxnTransport(e1);
+                TimestampOracle oracle = new TimestampOracle();
+                Path metaLog = dir.resolve("meta.log");
+                TransactionMetadataService metadata =
+                        new TransactionMetadataService(
+                                command -> CompletableFuture
+                                        .completedFuture(1L),
+                                metaLog);
+                TransactionMetricsRegistry metrics =
+                        new TransactionMetricsRegistry();
+                RegionTxnClient c1 = new RegionTxnClient("r1",
+                        new TxnParticipantClient("node1", "r1", transport1),
+                        key -> key.key().length > 0 && key.key()[0] == 'a');
+                RegionTxnClient c2 = new RegionTxnClient("r2",
+                        new TxnParticipantClient("node2", "r2", transport1),
+                        key -> key.key().length > 0 && key.key()[0] == 'b');
+                RegionTxnClient c3 = new RegionTxnClient("r3",
+                        new TxnParticipantClient("node3", "r3", transport1),
+                        key -> key.key().length > 0 && key.key()[0] == 'c');
+                List<RegionTxnClient> clients = List.of(c1, c2, c3);
+                DistributedTxnRouter router = new DistributedTxnRouter(oracle,
+                        key -> {
+                            if (key.key().length == 0) {
+                                return c1;
+                            }
+                            return switch (key.key()[0]) {
+                                case 'b' -> c2;
+                                case 'c' -> c3;
+                                default -> c1;
+                            };
+                        }, clients, metadata, metrics);
+                return new Fixture(e1, e2, e3, r1, r2, r3, l1, l2, l3,
+                        transport1, oracle, metadata, metaLog, metrics, router,
+                        clients);
+            } catch (Exception e) {
+                closeQuietly(e3);
+                closeQuietly(e2);
+                closeQuietly(e1);
+                throw e;
+            }
+        }
+
+        private static void closeQuietly(MultiRaftEndpoint endpoint) {
+            if (endpoint != null) {
+                try {
+                    endpoint.close();
+                } catch (RuntimeException ignored) {
+                    // 重试路径：忽略关闭失败
+                }
+            }
         }
 
         java.util.function.Function<ByteKey, RegionTxnClient> regionOf() {
