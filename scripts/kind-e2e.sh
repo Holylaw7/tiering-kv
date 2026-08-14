@@ -8,7 +8,11 @@ CLUSTER=${TIERINGKV_KIND_CLUSTER_NAME:-tiering-kv}
 
 case "${1:-run}" in
   run)
-    kind create cluster --name "$CLUSTER"
+    # workflow 的 helm/kind-action 通常已预建同名校集群；
+    # 独立运行脚本时才创建，避免与预建集群冲突。
+    if ! kind get clusters | grep -qx "$CLUSTER"; then
+      kind create cluster --name "$CLUSTER"
+    fi
     kind load docker-image ghcr.io/tiering-kv/tiering-kv:v3.7.0 \
       --name "$CLUSTER"
     kubectl create namespace tiering-kv || true
