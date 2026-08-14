@@ -16,6 +16,7 @@ import io.tieringkv.memory.MemoryPool;
 import io.tieringkv.monitor.MetricsRegistry;
 import io.tieringkv.network.tcp.TieringKvServer;
 import io.tieringkv.storage.StorageEngine;
+import io.tieringkv.storage.VectorIndexSyncStorageEngine;
 import io.tieringkv.storage.cache.CacheConfig;
 import io.tieringkv.storage.cache.EvictionManager;
 import io.tieringkv.storage.cache.LFUPolicy;
@@ -98,10 +99,13 @@ public final class Main {
         MetricsRegistry metrics = new MetricsRegistry();
         // v4 M1（ADR-0319）：内存向量索引；checkpoint 持久化由配置接线
         VectorIndexStore vectorStore = new VectorIndexStore(6);
+        // M2 增强（ADR-0320）：VECTOR 值 put/delete 经存储层同步索引
+        StorageEngine syncStorage = new VectorIndexSyncStorageEngine(
+                storage, vectorStore);
         CommandEngine commandEngine = new CommandEngine(
                 CommandRegistry.createDefaultWithVector(
                         metrics::infoText, Map.of(), vectorStore),
-                storage, executor);
+                syncStorage, executor);
         TieringKvServer server = new TieringKvServer(
                 serverConfig,
                 commandEngine);
