@@ -28,6 +28,11 @@ public final class VectorStore {
         embeddings.clear();
     }
 
+    /** 全部向量快照（additive，ADR-0319：checkpoint/重建用）。 */
+    public java.util.List<Embedding> embeddings() {
+        return java.util.List.copyOf(embeddings.values());
+    }
+
     public List<ScoredEmbedding> search(float[] query, int topK) {
         List<ScoredEmbedding> results = new ArrayList<>();
         for (Embedding embedding : embeddings.values()) {
