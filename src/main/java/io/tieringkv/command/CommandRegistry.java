@@ -47,7 +47,14 @@ public final class CommandRegistry {
                 new VectorCommand("vector.add", vectorStore),
                 new VectorCommand("vector.search", vectorStore),
                 new VectorCommand("vector.del", vectorStore),
-                new VectorCommand("vector.len", vectorStore)));
+                new VectorCommand("vector.len", vectorStore),
+                new MultiModelCommand("json.set"),
+                new MultiModelCommand("json.get"),
+                new MultiModelCommand("ts.add"),
+                new MultiModelCommand("ts.get"),
+                new MultiModelCommand("ts.len"),
+                new MultiModelCommand("vector.set"),
+                new MultiModelCommand("vector.get")));
     }
 
     private static CommandRegistry build(
