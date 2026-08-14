@@ -13,7 +13,7 @@ case "${1:-run}" in
     if ! kind get clusters | grep -qx "$CLUSTER"; then
       kind create cluster --name "$CLUSTER"
     fi
-    kind load docker-image ghcr.io/tiering-kv/tiering-kv:v3.7.0 \
+    kind load docker-image ghcr.io/Holylaw7/tiering-kv:v3.7.0 \
       --name "$CLUSTER"
     kubectl create namespace tiering-kv || true
     kubectl -n tiering-kv create secret generic tiering-kv-secrets \

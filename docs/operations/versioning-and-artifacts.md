@@ -25,7 +25,7 @@ flatten-maven-plugin 保证打包 pom 不含占位符。
 ## 制品
 
 - fat jar：`target/tiering-kv-${revision}.jar`
-- Docker image：`ghcr.io/tiering-kv/tiering-kv:${tag}`
+- Docker image：`ghcr.io/Holylaw7/tiering-kv:${tag}`
 - checksums：发布流水线生成 `sha256sum` 清单
 
 ## 发布动作

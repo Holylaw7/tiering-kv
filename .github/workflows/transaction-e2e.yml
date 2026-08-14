@@ -83,8 +83,8 @@ jobs:
       - name: Build and load image
         run: |
           mvn -q -DskipTests package
-          docker build -t ghcr.io/tiering-kv/tiering-kv:v3.7.0 -f deploy/Dockerfile .
-          kind load docker-image ghcr.io/tiering-kv/tiering-kv:v3.7.0 --name tiering-kv
+          docker build -t ghcr.io/Holylaw7/tiering-kv:v3.7.0 -f deploy/Dockerfile .
+          kind load docker-image ghcr.io/Holylaw7/tiering-kv:v3.7.0 --name tiering-kv
       - name: Kind in-cluster validation
         run: |
           TIERINGKV_KIND_CLUSTER=true scripts/kind-e2e.sh run
