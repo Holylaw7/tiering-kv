@@ -33,11 +33,17 @@
   多模型值命令 JSON.SET/GET、TS.ADD/GET/LEN、VECTOR.SET/GET、
   VECTOR 值自动索引、WAL/SSTable/迁移/复制闭环、TTL 语义验证、
   RESP3 连接级接线。
+- v4.0 M3 跨集群复制接线（ADR-0321）：REPLICATION RPC 消息类型、
+  ReplicationEventCodec（CRC32C）、LwwConflictResolver（timestamp +
+  cluster id + seq 幂等）、CrossClusterSink/Channel、水位持久化
+  （CrossClusterWatermark 原子落盘 + 重启续传）、ReplicationPipeline
+  串联（CrossClusterReplicaSink）、分区/恢复混沌与一致性验证接线。
 
 ### Fixed
 
 - RESP3 编码：`RespEncoder.writeV3` 补充 RespArray 分支，数组内
   RespDouble 不再回退为 RESP2 `:` 整数风格（v4 M2 接线发现）；
+- RPC 分发：REPLICATION 帧路由到业务 handler（v4 M3 接线发现）。
 
 ### Added
 
