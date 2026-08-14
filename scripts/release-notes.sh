@@ -442,3 +442,37 @@ if [[ "${VERSION}" == v3.7.1* ]]; then
 - 发布说明：docs/release/v3.7.1-rc-maintenance-notes.md
 EOF
 fi
+
+if [[ "${VERSION}" == v4.0.0* ]]; then
+  # 支持 v4.0.0-rc* / v4.0.0 发布标签
+  cat <<EOF
+# Tiering-KV ${VERSION} Release Notes
+
+## 定位
+
+v4.0 生产收口：向量存储接入、多模型编码、跨集群复制、Operator 状态机
+与容量模型。
+
+## 本版本能力
+
+- 向量存储接入（ADR-0319）：VectorIndexFile / VectorIndexStore /
+  VectorIndexMmapReader + VECTOR.ADD/SEARCH/DEL/LEN
+- 多模型编码（ADR-0320）：JSON / TIME_SERIES / VECTOR 类型化值 +
+  JSON.SET/GET、TS.ADD/GET/LEN、VECTOR.SET/GET + RESP3 接线
+- 跨集群复制（ADR-0321）：REPLICATION RPC + LWW + 水位 + Pipeline 串联
+- 生产收口（ADR-0322）：Operator 状态机 + 多集群拓扑 + Jepsen 外部化 +
+  冷/热性能基线 + CapacityModel
+
+## 质量摘要
+
+- 全量回归：mvn test 0 failures（14668 项）
+- 门禁：真实 Runner build/test/transaction-e2e 全绿（含 jepsen-e2e）
+- 基准：向量 mmap 冷/热 6.3x、编码 JSON 2.76M ops/s、
+  复制同步 ack 5748 ops/s
+
+## 已知限制
+
+- LWW 非 CRDT（并发双写低 timestamp 丢弃）；跨集群 2PC 不在 v4.0 范围；
+- 详见各阶段评审文档（docs/review/phase58-60）。
+EOF
+fi
