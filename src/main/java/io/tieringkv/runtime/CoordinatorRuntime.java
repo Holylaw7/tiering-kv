@@ -14,6 +14,7 @@ import io.tieringkv.transaction.router.TxnParticipantClient;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -67,8 +68,12 @@ public final class CoordinatorRuntime {
             int metadataPort = TxnRuntimeMain.port(options,
                     "metadata-port", 7300);
             String regionsSpec = TxnRuntimeMain.require(options, "regions");
+            // ADR-0343 真实 Runner 修正：地址表必须包含 metadata 与
+            // 全部 region host，否则 callTxn 返回 unknown peer
+            // （gateway/coordinator 的元数据与参与者 RPC 全部失败）。
             MultiRaftEndpoint endpoint = new MultiRaftEndpoint(nodeId, rpcPort,
-                    Map.of(nodeId, new InetSocketAddress("0.0.0.0", rpcPort)));
+                    buildRpcAddresses(nodeId, rpcPort, metadataNode,
+                            metadataPort, regionsSpec));
             endpoint.start();
             RpcTxnTransport transport = new RpcTxnTransport(endpoint);
             TimestampOracle oracle = new TimestampOracle();
@@ -132,5 +137,34 @@ public final class CoordinatorRuntime {
             metadata.close();
             endpoint.close();
         }
+    }
+
+    /**
+     * 构建 RPC 地址表（ADR-0343）：自身监听地址 + metadata +
+     * 每个 region 的 participant host（createUnresolved，连接时
+     * 由 Docker DNS 解析，避免启动期 DNS 未就绪即失败）。
+     */
+    static Map<String, InetSocketAddress> buildRpcAddresses(
+            String nodeId, int rpcPort, String metadataNode,
+            int metadataPort, String regionsSpec) {
+        Map<String, InetSocketAddress> addresses = new HashMap<>();
+        addresses.put(nodeId, new InetSocketAddress("0.0.0.0", rpcPort));
+        addresses.put(metadataNode, InetSocketAddress.createUnresolved(
+                metadataNode, metadataPort));
+        for (String spec : regionsSpec.split(",")) {
+            String[] parts = spec.split("@");
+            if (parts.length != 2) {
+                throw new IllegalArgumentException(
+                        "invalid region spec: " + spec);
+            }
+            String[] hostPort = parts[1].split(":");
+            if (hostPort.length != 2) {
+                throw new IllegalArgumentException(
+                        "invalid region endpoint: " + parts[1]);
+            }
+            addresses.put(hostPort[0], InetSocketAddress.createUnresolved(
+                    hostPort[0], Integer.parseInt(hostPort[1])));
+        }
+        return addresses;
     }
 }
