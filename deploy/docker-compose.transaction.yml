@@ -4,6 +4,9 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     container_name: txn-meta
+    # netem 混沌注入（ADR-0343）：容器内 tc 需要 NET_ADMIN 能力。
+    cap_add:
+      - NET_ADMIN
     # 显式运行 TxnRuntimeMain（--role 分发、--node-id 连字符参数）。
     # ClusterMain（--nodeId/--port/--peers）仅用于 docker-compose.cluster.yml，
     # 勿将两套入口参数混用。
@@ -27,6 +30,8 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     container_name: txn-participant-a
+    cap_add:
+      - NET_ADMIN
     entrypoint: ["java", "-Xmx1g", "-cp", "/app/tiering-kv.jar", "io.tieringkv.runtime.TxnRuntimeMain"]
     command:
       - --role
@@ -49,6 +54,8 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     container_name: txn-participant-b
+    cap_add:
+      - NET_ADMIN
     entrypoint: ["java", "-Xmx1g", "-cp", "/app/tiering-kv.jar", "io.tieringkv.runtime.TxnRuntimeMain"]
     command:
       - --role
@@ -71,6 +78,8 @@ services:
       context: ..
       dockerfile: deploy/Dockerfile
     container_name: txn-coordinator
+    cap_add:
+      - NET_ADMIN
     entrypoint: ["java", "-Xmx1g", "-cp", "/app/tiering-kv.jar", "io.tieringkv.runtime.TxnRuntimeMain"]
     command:
       - --role
