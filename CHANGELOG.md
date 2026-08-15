@@ -106,6 +106,12 @@
 
 ### Fixed
 
+- WAL 恢复只读语义（ADR-0342 真实 Runner 演练发现）：
+  RecoveryManager.truncateTail 干净尾部不再以 WRITE 打开，只读
+  文件系统上崩溃恢复可完成；新增 RecoveryManagerReadonlyTest。
+
+### Fixed
+
 - RESP3 编码：`RespEncoder.writeV3` 补充 RespArray 分支，数组内
   RespDouble 不再回退为 RESP2 `:` 整数风格（v4 M2 接线发现）；
 - RPC 分发：REPLICATION 帧路由到业务 handler（v4 M3 接线发现）。

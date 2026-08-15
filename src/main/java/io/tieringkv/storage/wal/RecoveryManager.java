@@ -87,11 +87,19 @@ public final class RecoveryManager {
     }
 
     static void truncateTail(Path path, long lastGoodOffset) throws IOException {
-        try (FileChannel channel = FileChannel.open(path, StandardOpenOption.WRITE)) {
-            long size = channel.size();
-            if (lastGoodOffset < size) {
-                channel.truncate(lastGoodOffset);
-            }
+        long size;
+        try (FileChannel channel = FileChannel.open(path,
+                StandardOpenOption.READ)) {
+            size = channel.size();
+        }
+        if (lastGoodOffset >= size) {
+            // 干净尾部：无需写打开——只读文件系统（ADR-0342 演练发现）
+            // 下恢复仍可完成。
+            return;
+        }
+        try (FileChannel channel = FileChannel.open(path,
+                StandardOpenOption.WRITE)) {
+            channel.truncate(lastGoodOffset);
         }
     }
 

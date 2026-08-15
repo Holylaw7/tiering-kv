@@ -38,6 +38,11 @@ Phase 22/23 覆盖，`block-device-chaos.sh` 与真实 Runner job 存在，
 
 优点：真实文件系统故障下的 WAL 崩溃一致性证据；脚本可复现。
 
+真实 Runner 演练发现并修复：RecoveryManager.truncateTail 在干净
+尾部也以 WRITE 打开 WAL，只读挂载上恢复必然失败——改为先 READ
+探测，仅当存在尾部需截断时才 WRITE 打开（只读文件系统上恢复可
+完成，单元测试覆盖）。
+
 缺点：演练仅限 Linux+root Runner；slow 注入在无 device-mapper 的
 Runner 上跳过（显式登记）。
 
@@ -47,4 +52,5 @@ Runner 上跳过（显式登记）。
 ## Implementation
 
 `scripts/block-device-chaos.sh` 修正、`runtime/RealBlockDeviceExerciseTest`
-新增、`transaction-e2e.yml` 接线、部署文档。
+新增、`RecoveryManager.truncateTail` 只读语义修复 +
+`RecoveryManagerReadonlyTest`、`transaction-e2e.yml` 接线、部署文档。
