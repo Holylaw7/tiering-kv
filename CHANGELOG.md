@@ -71,6 +71,12 @@
   TS.INCRBY 同刻累加/新刻追加原子写、TS.MRANGE 全部 TS 键多键查询、
   TS.REDUCE 全序列聚合扩展；复用 TIME_SERIES 冻结编码，桶按
   floorDiv 对齐）。
+- P2 功能深度（第四交付）：向量多集合命名空间（ADR-0338：
+  VectorCollectionRegistry 集合隔离 + dirty 跟踪 + `<collection>.
+  tvif` 原子 checkpoint + loadAll 恢复 + 自动刷盘；VECTOR.ADD/SEARCH/
+  DEL/LEN 支持 `COLLECTION <name>` 前缀（缺省 default 向后兼容）+
+  VECTOR.LIST/DROP/CHECKPOINT；VectorSqlSearch.bindCollection 集合
+  感知混合检索）。
 
 ### Fixed
 

@@ -70,7 +70,10 @@
   路径语义通过）；时序 ✅（ADR-0337，2026-08-15：TS.RANGE 桶聚合
   AVG/SUM/MIN/MAX/COUNT/FIRST/LAST + COUNT、TS.INCRBY 原子累加、
   TS.MRANGE 多键、TS.REDUCE 全序列聚合）；OBJECT/SCRIPT/ACL 命令族，
-  RESP3 完整类型；
+  RESP3 完整类型；向量多集合 ✅（ADR-0338，2026-08-15：
+  VectorCollectionRegistry 集合隔离 + dirty 跟踪 + 自动 checkpoint +
+  loadAll 恢复；VECTOR.* 支持 COLLECTION 前缀 + LIST/DROP/CHECKPOINT；
+  SQL 混合检索集合接线）；
 - SQL 索引真正接线执行器（谓词/join）、EXPLAIN 落地；
 - 向量多集合命名空间、自动 checkpoint、混合检索 SQL 化；
 - 时序 TS.RANGE/聚合/下采样/压缩；

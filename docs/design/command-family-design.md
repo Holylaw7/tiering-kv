@@ -78,3 +78,15 @@ EXPIRE/PEXPIRE/EXPIREAT/PEXPIREAT → `AtomicStringOps.expireAt`
   键（按键名字典序），非 TS 键跳过（无标签/无 FILTER，已知差异）；
 - TS.REDUCE key [AGGREGATION agg]：全序列聚合（项目扩展，
   [首点时间戳, 聚合值]，空序列 nil array）。
+
+## 向量多集合命名空间（ADR-0338，Phase 69）
+
+- VECTOR.ADD/SEARCH/DEL/LEN 支持可选 `COLLECTION <name>` 前缀
+  （缺省默认集合，向后兼容）；ADD 自动创建集合；搜索不存在集合
+  返回空数组；
+- VECTOR.LIST（[名称, 数量] 字典序数组）、VECTOR.DROP <name>、
+  VECTOR.CHECKPOINT [COLLECTION name]（需配置 checkpoint 目录）；
+- VectorCollectionRegistry：集合隔离 + dirty 跟踪 + `<collection>.
+  tvif` 原子 checkpoint + loadAll 恢复 + 自动刷盘（close 兜底）；
+- VectorSqlSearch.bindCollection(table.column, collection) 后可从
+  注册表解析集合 store 执行混合检索（谓词过滤 + 维度校验）。

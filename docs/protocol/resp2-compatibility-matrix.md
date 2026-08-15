@@ -43,6 +43,8 @@
 | TS.INCRBY | integer（时间戳） | TIMESTAMP 同刻累加/新刻追加 |
 | TS.MRANGE | array（[key,samples]） | 无 FILTER/标签；跳过非 TS 键 |
 | TS.REDUCE | array（[ts,value]） | 项目扩展；空序列 = nil array |
+| VECTOR.ADD/SEARCH/DEL/LEN | OK/array/integer | 支持 COLLECTION 前缀；缺省 default |
+| VECTOR.LIST/DROP/CHECKPOINT | array/integer/OK | CHECKPOINT 需配置目录 |
 
 ## 错误文本
 
@@ -62,4 +64,6 @@
 - JSON SET/DEL 不支持通配/递归路径；JSON 数字经 Jackson 序列化可能
   规范化格式；JSON 命令仅在扩展注册表（createDefaultWithVector）；
 - TS.MRANGE 无标签过滤；聚合子集 AVG/SUM/MIN/MAX/COUNT/FIRST/LAST
-  （RANGE/STD/VAR/TWA 暂缓）；TS.REDUCE 为非标准扩展。
+  （RANGE/STD/VAR/TWA 暂缓）；TS.REDUCE 为非标准扩展；
+- 向量集合为内存索引（未做磁盘 LRU 卸载）；checkpoint 目录级全局
+  配置；VECTOR.SEARCH 仍为暴力检索（HNSW 索引待接线）。
