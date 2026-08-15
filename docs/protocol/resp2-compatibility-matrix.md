@@ -22,6 +22,17 @@
 | DBSIZE | integer | — |
 | TYPE | simple | string / none |
 | SCAN | [cursor, array] | 无效游标 = 空 |
+| SETBIT | integer（旧位） | offset 越界/非 0/1 = ERR |
+| GETBIT | integer 1/0 | 缺失键 = 0 |
+| BITCOUNT | integer | 支持 BYTE/BIT 范围、负索引 |
+| BITPOS | integer | 缺失键 bit=0 → 0 / bit=1 → -1 |
+| BITOP | integer（结果长度） | NOT 仅单源；缺失源按零串 |
+| GEOADD | integer | NX/XX/CH；非法坐标 = ERR |
+| GEOPOS | array（[lon,lat]） | 缺失成员 = nil array |
+| GEODIST | bulk | 缺失成员 = nil；m/km/mi/ft |
+| GEOHASH | array（11 字符） | 缺失成员 = nil |
+| GEOSEARCH | array | FROMMEMBER/FROMLONLAT × BYRADIUS/BYBOX |
+| GEORADIUS(BYMEMBER) | array | STORE/STOREDIST 暂缓 |
 
 ## 错误文本
 
@@ -35,4 +46,6 @@
 ## 已知差异
 
 - CLIENT GETNAME 恒返回 nil（无会话态）；
-- TTL 取整为向下取整（ms/1000）。
+- TTL 取整为向下取整（ms/1000）；
+- GEORADIUS/GEOSEARCH 的 STORE/STOREDIST/GEOSEARCHSTORE 未实现；
+- GEO 检索为 O(N) 精确过滤（未做 geohash 网格剪枝）。

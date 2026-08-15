@@ -33,3 +33,24 @@ EXPIRE/PEXPIRE/EXPIREAT/PEXPIREAT → `AtomicStringOps.expireAt`
   maxclients），GET 大小写不敏感；
 - COMMAND COUNT/INFO：注册表元数据；
 - CLIENT：SETNAME OK / GETNAME nil（无会话态限制）。
+
+## BIT 命令族（ADR-0334，Phase 66）
+
+- SETBIT/GETBIT：位图即字符串（大端字节序，位位置 = 7-offset%8），
+  SETBIT 零字节扩展并保留 TTL（AtomicStringOps 原子更新）；
+- BITCOUNT/BITPOS：支持 `[start end [BYTE|BIT]]` 范围、负索引；
+  BITPOS 缺失键：bit=0 → 0、bit=1 → -1；显式范围未命中 → -1；
+- BITOP AND/OR/XOR/NOT：缺失源按零串，结果长度为最长源；
+  NOT 仅单源；结果全零仍写入目标（Redis 语义）。
+
+## GEO 命令族（ADR-0335，Phase 66）
+
+- GEOADD/GEOPOS/GEODIST/GEOHASH/GEOSEARCH/GEORADIUS/
+  GEORADIUSBYMEMBER；
+- 存储复用 ZSET：score = 52 位 geohash（lat 偶位/lon 奇位，
+  lat ∈ [-85.05112878, 85.05112878]），TYPE=zset、ZRANGE/ZSCORE
+  兼容；GEOHASH 字符串按 Redis 口径（±90 重编码 + 第 11 位 '0'）；
+- 距离：WGS-84 二次平均半径 6372797.560856m haversine；
+- 检索：精确过滤（O(N)），GEOSEARCH 支持 FROMMEMBER/FROMLONLAT ×
+  BYRADIUS/BYBOX + ASC/DESC + COUNT + WITHCOORD/WITHDIST/WITHHASH；
+  STORE/STOREDIST/GEOSEARCHSTORE 暂缓（P2 已知差异）。

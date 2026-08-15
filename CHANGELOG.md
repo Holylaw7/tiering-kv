@@ -54,6 +54,12 @@
   vs 旧暴力 9.9ms、召回 ≥0.9、带版本序列化）、复制流水线增强
   （ADR-0333：批量帧 + sendBatch/sendAsync metrics、水位周期
   checkpoint、ConflictResolver 接口 + LWW 实现）。
+- P2 功能深度（第一交付）：BIT 命令族（ADR-0334：SETBIT/GETBIT/
+  BITCOUNT/BITPOS/BITOP，位图即字符串 + BYTE/BIT 范围 + 原子 TTL
+  保留）与 GEO 命令族（ADR-0335：GEOADD/GEOPOS/GEODIST/GEOHASH/
+  GEOSEARCH/GEORADIUS(BYMEMBER)，ZSET + 52 位 geohash score 存储，
+  Redis 官方文档基准 sqc8b49rny0/sqdtr74hyu0 与 Palermo–Catania
+  166274.1516m 通过；ZSCORE 大整数修复：≤2^53 输出长整型）。
 
 ### Fixed
 

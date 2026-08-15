@@ -61,7 +61,10 @@
 
 ## P2 — 功能深度
 
-- Redis 兼容面：BIT/GEO/OBJECT/SCRIPT/ACL 命令族，RESP3 完整类型；
+- Redis 兼容面：BIT/GEO ✅（ADR-0334/0335，2026-08-15：SETBIT/
+  GETBIT/BITCOUNT/BITPOS/BITOP + GEOADD/GEOPOS/GEODIST/GEOHASH/
+  GEOSEARCH/GEORADIUS(BYMEMBER)，ZSET+52 位 geohash 存储，
+  Redis 官方文档基准通过）；OBJECT/SCRIPT/ACL 命令族，RESP3 完整类型；
 - SQL 索引真正接线执行器（谓词/join）、EXPLAIN 落地；
 - 向量多集合命名空间、自动 checkpoint、混合检索 SQL 化；
 - 时序 TS.RANGE/聚合/下采样/压缩；
