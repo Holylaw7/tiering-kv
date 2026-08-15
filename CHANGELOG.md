@@ -77,6 +77,12 @@
   DEL/LEN 支持 `COLLECTION <name>` 前缀（缺省 default 向后兼容）+
   VECTOR.LIST/DROP/CHECKPOINT；VectorSqlSearch.bindCollection 集合
   感知混合检索）。
+- P2 功能深度（第五交付）：跨集群 2PC（ADR-0339：
+  CrossClusterTxnCoordinator/Participant，ChangeEvent 追加
+  TXN_PREPARE/TXN_ROLLBACK（旧 ordinal 冻结），PREPARE 暂存 →
+  决策先行（CrossClusterDecisionLog 携带 mutations + CRC）→
+  COMMIT 按 LWW 收敛；PREPARE 失败全回滚；recover 幂等补提交；
+  双 endpoint E2E 通过）。
 
 ### Fixed
 

@@ -73,7 +73,10 @@
   RESP3 完整类型；向量多集合 ✅（ADR-0338，2026-08-15：
   VectorCollectionRegistry 集合隔离 + dirty 跟踪 + 自动 checkpoint +
   loadAll 恢复；VECTOR.* 支持 COLLECTION 前缀 + LIST/DROP/CHECKPOINT；
-  SQL 混合检索集合接线）；
+  SQL 混合检索集合接线）；跨集群 2PC ✅（ADR-0339，2026-08-15：
+  CrossClusterTxnCoordinator/Participant + TXN_PREPARE/COMMIT/
+  ROLLBACK 阶段事件 + 携带 mutations 的决策日志恢复 + LWW 冲突
+  收敛，双 endpoint E2E 通过）；
 - SQL 索引真正接线执行器（谓词/join）、EXPLAIN 落地；
 - 向量多集合命名空间、自动 checkpoint、混合检索 SQL 化；
 - 时序 TS.RANGE/聚合/下采样/压缩；
@@ -103,7 +106,7 @@
 | P1b | 缓存/淘汰 | 1 周 | ~150 |
 | P1c | 并发/性能 | 1 周 | ~200 |
 | P1d | v4 模块增强 | 1 周 | ~200 |
-| P2 | 功能深度 | 2–4 周 | ~600 |
+| P2 | 功能深度 | 2–4 周 | ~600 |（BIT/GEO/JSON/TS/向量集合/跨集群 2PC 已完成，余 OBJECT/SCRIPT/ACL 与 RESP3 完整类型）
 | P3 | 混沌/可观测性 | 1–2 周 | ~200 |
 
 每个阶段走"ADR → TDD → 全量回归 → 真实 Runner 门禁"。
