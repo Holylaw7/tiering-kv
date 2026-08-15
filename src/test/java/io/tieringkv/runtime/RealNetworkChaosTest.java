@@ -60,12 +60,14 @@ class RealNetworkChaosTest {
                 last = e; // 重试吸收 loss 抖动
             }
         }
+        // 失败时先抛出底层 IOException，保证 CI 日志能看到真实根因
+        // （而非仅断言 expected=5 but was=0）。
+        if (succeeded < 5 && last != null) {
+            throw last;
+        }
         assertThat(succeeded)
                 .as("netem(%s) 下 5 轮 SET/GET 应最终成功", expectedMode())
                 .isEqualTo(5);
-        if (last != null) {
-            throw last;
-        }
     }
 
     @Test
