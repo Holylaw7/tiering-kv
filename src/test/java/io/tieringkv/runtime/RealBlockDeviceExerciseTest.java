@@ -122,12 +122,15 @@ class RealBlockDeviceExerciseTest {
         return memTable;
     }
 
-    /** 持续写入 1MB 块直到 ENOSPC；文件路径经 holder 回传。 */
+    /**
+     * 持续写入小块直到 ENOSPC；文件路径经 holder 回传。
+     * 块大小 1KB：ENOSPC 时剩余空间必然 <1KB，后续任何新块分配失败。
+     */
     private static void fillUntilFull(Path mountDir, Path[] holder)
             throws IOException {
         Path file = Files.createTempFile(mountDir, "fill-", ".bin");
         holder[0] = file;
-        byte[] block = new byte[1024 * 1024];
+        byte[] block = new byte[1024];
         try (OutputStream out = Files.newOutputStream(file,
                 StandardOpenOption.APPEND)) {
             while (true) {
