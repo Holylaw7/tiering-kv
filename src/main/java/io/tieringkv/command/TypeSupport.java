@@ -60,13 +60,16 @@ final class TypeSupport {
                 StandardCharsets.UTF_8).trim());
     }
 
-    /** Redis 风格分数格式：整数去尾零。 */
+    /**
+     * Redis 风格分数格式：≤2^53 的整数值输出长整型（含 GEO geohash
+     * score，如 3479099956230698），其余按最短 double 表示。
+     */
     static String formatScore(double score) {
         if (Double.isInfinite(score)) {
             return score > 0 ? "inf" : "-inf";
         }
         if (score == Math.rint(score)
-                && Math.abs(score) < 1e15) {
+                && Math.abs(score) <= 9.007199254740992E15) {
             return Long.toString((long) score);
         }
         return Double.toString(score);
