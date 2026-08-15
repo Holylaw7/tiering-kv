@@ -61,6 +61,12 @@ public interface StorageEngine {
     /** 存活 entry 数量（不含 tombstone；过期但未清扫的键仍计数，与 Redis 语义一致）。 */
     long size();
 
+    /** 键版本（ADR-0328，TD-018）：热缓存新鲜度校验；
+     *  默认 0 = 无版本语义（缓存回退 TTL 兜底）。 */
+    default long versionOf(byte[] key) {
+        return 0;
+    }
+
     /** 批量应用（ADR-0048）：默认逐条实现，MemTable 覆盖为分段单锁优化。 */
     default int applyBatch(BatchWriteRequest request) {
         for (Mutation mutation : request.mutations()) {

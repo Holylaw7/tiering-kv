@@ -31,12 +31,21 @@ public final class HotKeyReadCache {
         }
         ByteBuffer wrapped = ByteBuffer.wrap(key);
         CachedValue cached = cache.get(wrapped);
-        if (cached != null && cached.expireAt() > nowMillis) {
-            return cached.value();
+        long currentVersion = storage.versionOf(key);
+        if (cached != null) {
+            // 版本一致即新鲜（消除 TTL 陈旧窗口，ADR-0328）；
+            // 无版本存储（version=0）回退 TTL 兜底。
+            if (cached.version() == currentVersion
+                    && (cached.version() != 0
+                    || cached.expireAt() > nowMillis)) {
+                return cached.value();
+            }
         }
         byte[] value = coalescer.coalesce(wrapped, () -> storage.get(key));
         if (value != null) {
-            cache.put(wrapped, new CachedValue(value, nowMillis + policy.cacheTtlMillis()));
+            cache.put(wrapped, new CachedValue(value,
+                    nowMillis + policy.cacheTtlMillis(),
+                    storage.versionOf(key)));
         }
         return value;
     }
@@ -47,6 +56,7 @@ public final class HotKeyReadCache {
         detector.invalidate(key);
     }
 
-    private record CachedValue(byte[] value, long expireAt) {
+    private record CachedValue(byte[] value, long expireAt,
+                               long version) {
     }
 }
