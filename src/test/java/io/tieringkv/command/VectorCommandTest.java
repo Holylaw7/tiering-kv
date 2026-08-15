@@ -109,7 +109,8 @@ class VectorCommandTest {
     void defaultRegistryUnchangedWithoutVector() {
         CommandRegistry registry = CommandRegistry.createDefault();
         assertThat(registry.find("vector.add")).isNull();
-        // 既有 115 + P2 BIT/GEO 12 = 127（Phase66 基线；JSON 属扩展注册表）
-        assertThat(registry.size()).isEqualTo(127);
+        // 既有 115 + BIT/GEO 12 + OBJECT/ACL/SCRIPT 5 = 132（Phase71 基线；
+        // JSON/TS/向量扩展命令属扩展注册表）
+        assertThat(registry.size()).isEqualTo(132);
     }
 }
