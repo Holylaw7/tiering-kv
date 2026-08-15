@@ -5,6 +5,7 @@ import io.tieringkv.storage.wal.RecoveryManager;
 import io.tieringkv.storage.wal.WALConfig;
 import io.tieringkv.storage.wal.WALManager;
 import io.tieringkv.storage.wal.WALStorageEngine;
+import io.tieringkv.storage.wal.WalWriteException;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
@@ -55,10 +56,19 @@ class RealBlockDeviceExerciseTest {
         Path[] fill = new Path[1];
         assertThatThrownBy(() -> fillUntilFull(mount(), fill))
                 .isInstanceOf(IOException.class);
+        // 前置校验：文件系统确实已满（避免填充满度不足造成误判）
+        long usable = Files.getFileStore(mount()).getUsableSpace();
+        assertThat(usable).as("fill 后可用空间应为 0，实际=%d", usable)
+                .isZero();
+        Path probe = mount().resolve("probe-" + System.nanoTime());
+        assertThatThrownBy(() -> Files.write(probe,
+                new byte[4096])).isInstanceOf(IOException.class);
+        Files.deleteIfExists(probe);
         // 磁盘满：新 WAL 打开/追加必须失败（不允许静默丢失）
         assertThatThrownBy(() -> writeBatch(
                 exerciseDir("diskfull-failed"), 5))
-                .isInstanceOf(IOException.class);
+                .isInstanceOfAny(IOException.class,
+                        WalWriteException.class);
         Files.deleteIfExists(fill[0]);
 
         assertThat(recover(dir).size()).isEqualTo(100);
@@ -77,7 +87,8 @@ class RealBlockDeviceExerciseTest {
         // 新写入必须失败
         assertThatThrownBy(() -> writeBatch(
                 mount().resolve("exercise-readonly-new"), 5))
-                .isInstanceOf(IOException.class);
+                .isInstanceOfAny(IOException.class,
+                        WalWriteException.class);
     }
 
     private static Path exerciseDir(String name) throws IOException {
