@@ -66,7 +66,7 @@ public final class VectorIndexStore {
         return loaded;
     }
 
-    /** 从唯一向量集重建 HNSW 分层（确定性：hash(id) % maxLevel）。 */
+    /** 从唯一向量集重建 HNSW 多层图（ADR-0332，确定性层级）。 */
     public HnswIndex rebuildIndex() {
         HnswIndex index = new HnswIndex(maxLevel);
         index.build(snapshot());

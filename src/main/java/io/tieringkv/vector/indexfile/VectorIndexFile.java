@@ -23,7 +23,8 @@ import java.util.zip.CRC32C;
  *
  * <p>布局：MAGIC("TVIF",4) + VERSION(u8) + MAX_LEVEL(u32) + DIM(u32) +
  * ENTRY_COUNT(u64) + 记录{idLen u16 + id + dim u32 + float[dim]} + CRC32C(u32)。
- * 加载时按 id hash 重建 HNSW 分层（level = hash(id) % max_level，确定性）。
+ * 加载时重建 HNSW 多层图（层级由 HnswIndex 确定性随机分配，
+ * 不依赖插入顺序，ADR-0332）。
  */
 public final class VectorIndexFile {
 
