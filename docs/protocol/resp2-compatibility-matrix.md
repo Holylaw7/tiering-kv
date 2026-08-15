@@ -33,6 +33,12 @@
 | GEOHASH | array（11 字符） | 缺失成员 = nil |
 | GEOSEARCH | array | FROMMEMBER/FROMLONLAT × BYRADIUS/BYBOX |
 | GEORADIUS(BYMEMBER) | array | STORE/STOREDIST 暂缓 |
+| JSON.SET | simple OK / nil | NX/XX；非法 JSON = ERR；扩展注册表 |
+| JSON.GET | bulk | 多路径 = 对象；JSONPath = 匹配数组文本 |
+| JSON.DEL | integer | 根删除整键；通配/递归 DEL 暂缓 |
+| JSON.TYPE/ARRLEN/OBJLEN/STRLEN | bulk/integer/array | legacy 单值；JSONPath 数组 |
+| JSON.OBJKEYS | array | legacy 键数组；JSONPath 数组套数组 |
+| JSON.ARRAPPEND/NUMINCRBY | integer/bulk | 路径未命中 = ERR |
 
 ## 错误文本
 
@@ -48,4 +54,6 @@
 - CLIENT GETNAME 恒返回 nil（无会话态）；
 - TTL 取整为向下取整（ms/1000）；
 - GEORADIUS/GEOSEARCH 的 STORE/STOREDIST/GEOSEARCHSTORE 未实现；
-- GEO 检索为 O(N) 精确过滤（未做 geohash 网格剪枝）。
+- GEO 检索为 O(N) 精确过滤（未做 geohash 网格剪枝）；
+- JSON SET/DEL 不支持通配/递归路径；JSON 数字经 Jackson 序列化可能
+  规范化格式；JSON 命令仅在扩展注册表（createDefaultWithVector）。

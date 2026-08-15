@@ -60,6 +60,12 @@
   GEOSEARCH/GEORADIUS(BYMEMBER)，ZSET + 52 位 geohash score 存储，
   Redis 官方文档基准 sqc8b49rny0/sqdtr74hyu0 与 Palermo–Catania
   166274.1516m 通过；ZSCORE 大整数修复：≤2^53 输出长整型）。
+- P2 功能深度（第二交付）：JSON 路径命令族（ADR-0336：JSON.SET/
+  GET/DEL/TYPE/ARRAPPEND/ARRLEN/OBJKEYS/OBJLEN/STRLEN/NUMINCRBY，
+  扩展注册表；jackson-databind 2.18.2 + 自研 Redis JSON 路径子集
+  `$`/`.field`/`[n]`/`.*`/`[*]`/`..`；SET 支持 NX/XX 与中间对象
+  创建、变更命令原子执行并保留 TTL；RedisJSON 文档示例路径语义
+  通过）。
 
 ### Fixed
 

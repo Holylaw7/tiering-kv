@@ -54,3 +54,15 @@ EXPIRE/PEXPIRE/EXPIREAT/PEXPIREAT → `AtomicStringOps.expireAt`
 - 检索：精确过滤（O(N)），GEOSEARCH 支持 FROMMEMBER/FROMLONLAT ×
   BYRADIUS/BYBOX + ASC/DESC + COUNT + WITHCOORD/WITHDIST/WITHHASH；
   STORE/STOREDIST/GEOSEARCHSTORE 暂缓（P2 已知差异）。
+
+## JSON 路径命令族（ADR-0336，Phase 67）
+
+- JSON.SET/GET/DEL/TYPE/ARRAPPEND/ARRLEN/OBJKEYS/OBJLEN/STRLEN/
+  NUMINCRBY（扩展注册表，默认注册表不包含）；
+- 解析/序列化由 jackson-databind 2.18.2 负责（ADR-0336）；
+- 路径子集：`$`、`.field`、`['field']`、`[n]`（负索引）、`.*`/`[*]`、
+  `..field`/`..*`；SET/DEL/NUMINCRBY/ARRAPPEND 仅支持根与简单字段/
+  索引链（通配/递归变更暂缓，已知差异）；
+- JSON.SET 支持 NX/XX（键级）与缺失中间对象按字段创建；JSON.GET
+  单路径返回序列化值（JSONPath 返回匹配数组文本）、多路径返回对象；
+- 变更命令经 TypeSupport.update 原子执行并保留 TTL。
