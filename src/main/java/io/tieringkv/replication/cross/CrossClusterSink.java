@@ -4,22 +4,23 @@ import io.tieringkv.cdc.ChangeEvent;
 import io.tieringkv.storage.StorageEngine;
 
 /**
- * 跨集群目标端（ADR-0321）：LWW 决策后应用到本地 StorageEngine。
+ * 跨集群目标端（ADR-0321/0333）：冲突策略决策后应用到本地
+ * StorageEngine；策略经 {@link ConflictResolver} 接口可插拔。
  * 被裁决丢弃的事件不落盘。
  */
 public final class CrossClusterSink {
 
     private final StorageEngine storage;
-    private final LwwConflictResolver resolver;
+    private final ConflictResolver resolver;
     private final CrossClusterWatermark watermark;
 
     public CrossClusterSink(StorageEngine storage,
-                            LwwConflictResolver resolver) {
+                            ConflictResolver resolver) {
         this(storage, resolver, null);
     }
 
     public CrossClusterSink(StorageEngine storage,
-                            LwwConflictResolver resolver,
+                            ConflictResolver resolver,
                             CrossClusterWatermark watermark) {
         if (storage == null || resolver == null) {
             throw new IllegalArgumentException(
@@ -52,7 +53,7 @@ public final class CrossClusterSink {
         return true;
     }
 
-    public LwwConflictResolver resolver() {
+    public ConflictResolver resolver() {
         return resolver;
     }
 }

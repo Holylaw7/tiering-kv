@@ -11,12 +11,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * LWW 冲突决策（ADR-0321）：高 timestamp 胜；同 timestamp 按源
  * cluster id 字典序胜；同 region 的 seq 幂等（重放安全）。
  */
-public final class LwwConflictResolver {
+public final class LwwConflictResolver implements ConflictResolver {
 
     private final Map<ByteKey, KeyState> applied =
             new ConcurrentHashMap<>();
 
     /** 返回 true 表示该事件应被应用（比当前状态更新）。 */
+    @Override
     public boolean accept(ChangeEvent event, String originClusterId) {
         if (originClusterId == null) {
             throw new IllegalArgumentException(

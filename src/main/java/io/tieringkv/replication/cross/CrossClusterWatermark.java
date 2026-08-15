@@ -14,11 +14,15 @@ import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.CRC32C;
 
 /**
- * 跨集群复制目标端水位（ADR-0321 M3 收尾）：按 (regionId, seq) 记录
+ * 跨集群复制目标端水位（ADR-0321/0333）：按 (regionId, seq) 记录
  * 已应用水位，原子落盘，重启后跳过已应用事件（幂等续传）。
+ * 支持周期 checkpoint（ADR-0333），close 仍兜底刷盘。
  *
  * <p>文件格式：MAGIC("TKW1") + count u32 + {regionIdLen u16 + regionId
  * + seq i64}[] + CRC32C u32。
@@ -30,6 +34,7 @@ public final class CrossClusterWatermark implements AutoCloseable {
     private final Map<String, Long> watermarks =
             new ConcurrentHashMap<>();
     private final Path file;
+    private volatile ScheduledExecutorService scheduler;
 
     public CrossClusterWatermark(Path file) {
         if (file == null) {
@@ -52,6 +57,39 @@ public final class CrossClusterWatermark implements AutoCloseable {
 
     public int size() {
         return watermarks.size();
+    }
+
+    /**
+     * 启动周期 checkpoint（ADR-0333）：后台 daemon 定时刷盘；
+     * 刷盘失败静默待下次重试，close 兜底。重复调用幂等。
+     */
+    public synchronized void startPeriodicCheckpoint(
+            long intervalMillis) {
+        if (intervalMillis <= 0) {
+            throw new IllegalArgumentException(
+                    "intervalMillis must be positive");
+        }
+        if (scheduler != null) {
+            return;
+        }
+        scheduler = Executors.newSingleThreadScheduledExecutor(
+                runnable -> {
+                    Thread thread = new Thread(runnable,
+                            "cross-cluster-watermark");
+                    thread.setDaemon(true);
+                    return thread;
+                });
+        scheduler.scheduleWithFixedDelay(() -> {
+            try {
+                checkpoint();
+            } catch (IOException ignored) {
+                // 下次周期重试；close 兜底刷盘
+            }
+        }, intervalMillis, intervalMillis, TimeUnit.MILLISECONDS);
+    }
+
+    public boolean periodicCheckpointRunning() {
+        return scheduler != null;
     }
 
     public synchronized void checkpoint() throws IOException {
@@ -139,6 +177,11 @@ public final class CrossClusterWatermark implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
+        ScheduledExecutorService executor = scheduler;
+        if (executor != null) {
+            executor.shutdownNow();
+            scheduler = null;
+        }
         checkpoint();
     }
 }
