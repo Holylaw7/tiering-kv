@@ -47,6 +47,10 @@ public final class MemTableManager
         return active;
     }
 
+    public MemoryManager memoryManager() {
+        return memoryManager;
+    }
+
     public List<MemTable> immutableTables() {
         return List.copyOf(immutable);
     }
@@ -137,6 +141,19 @@ public final class MemTableManager
             }
         }
         return null;
+    }
+
+    /** 跨表版本守卫物理删除（迁移/GC 用，ADR-0324）。 */
+    public boolean removePhysicalIfVersion(byte[] key,
+                                           long expectedVersion) {
+        boolean removed = false;
+        for (int i = immutable.size() - 1; i >= 0; i--) {
+            removed |= immutable.get(i).removePhysicalIfVersion(
+                    key, expectedVersion);
+        }
+        removed |= active.removePhysicalIfVersion(
+                key, expectedVersion);
+        return removed;
     }
 
     @Override
