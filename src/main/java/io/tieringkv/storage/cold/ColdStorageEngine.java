@@ -168,6 +168,33 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
         }
     }
 
+    /** Leveled compaction（ADR-0323）：合并 nextMergeLevel 与下一级表。 */
+    public SSTableMeta compactLeveled(LeveledCompaction leveled)
+            throws IOException {
+        if (leveled == null) {
+            throw new IllegalArgumentException(
+                    "leveled compaction required");
+        }
+        synchronized (lock) {
+            int from = leveled.nextMergeLevel();
+            if (from < 0) {
+                return null;
+            }
+            List<SSTableMeta> inputs = new ArrayList<>();
+            inputs.addAll(leveled.tablesAt(from));
+            inputs.addAll(leveled.tablesAt(from + 1));
+            if (inputs.size() < 2) {
+                return null;
+            }
+            SSTableMeta output = new CompactionTask(
+                    config, inputs, nextTableId).run();
+            nextTableId++;
+            installCompaction(output, inputs);
+            leveled.promote(from, output);
+            return output;
+        }
+    }
+
     public List<SSTableMeta> tablesSnapshot() {
         synchronized (lock) {
             return List.copyOf(tables);
