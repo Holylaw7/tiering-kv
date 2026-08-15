@@ -50,6 +50,10 @@
   生产接入（ADR-0324）；
 - P1b 缓存/淘汰：ARC byte 容量（ADR-0326）、Segment LFU + Async
   Buffer（ADR-0327）、HotCache version check（ADR-0328）。
+- P1d v4 模块增强：HNSW 多层图检索（ADR-0332，20K×64 P99 0.847ms
+  vs 旧暴力 9.9ms、召回 ≥0.9、带版本序列化）、复制流水线增强
+  （ADR-0333：批量帧 + sendBatch/sendAsync metrics、水位周期
+  checkpoint、ConflictResolver 接口 + LWW 实现）。
 
 ### Fixed
 

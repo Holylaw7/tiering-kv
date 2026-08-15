@@ -49,8 +49,13 @@
 
 ### P1d v4 模块增强
 
-- HNSW 图检索（M1 限制）：20K 向量 P99 9.9ms → <1ms；
-- 复制流水线（M3 限制）：批量/异步 ack、水位周期刷盘、CRDT 演进。
+- HNSW 图检索（M1 限制）✅（ADR-0332，2026-08-15）：多层图 +
+  贪心下降 + efSearch，20K×64 检索 P50 0.473ms / P99 0.847ms
+  （旧暴力 9.9ms，下降约 11.7×），召回率 ≥0.9；
+- 复制流水线（M3 限制）✅（ADR-0333，2026-08-15）：批量帧编码
+  （标记 + 长度前缀 + CRC）、sendBatch/sendAsync + 成功/失败计数、
+  水位周期 checkpoint、ConflictResolver 接口 + LWW 实现。
+- 报告：docs/benchmark/phase65-hnsw-search-report.md。
 
 ## P2 — 功能深度
 
