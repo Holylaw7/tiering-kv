@@ -11,7 +11,9 @@ public record ChangeEvent(long seq, EventType type, byte[] key,
         PUT,
         DELETE,
         TXN_COMMIT,
-        REGION_MOVE
+        REGION_MOVE,
+        TXN_PREPARE,
+        TXN_ROLLBACK
     }
 
     public ChangeEvent {

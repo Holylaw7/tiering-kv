@@ -33,6 +33,10 @@ public final class CrossClusterSink {
 
     /** 返回 true 表示事件被接受并应用。 */
     public boolean apply(ChangeEvent event, String originClusterId) {
+        if (event.type() == ChangeEvent.EventType.TXN_PREPARE
+                || event.type() == ChangeEvent.EventType.TXN_ROLLBACK) {
+            return false; // 2PC 阶段事件由 CrossClusterTxnParticipant 处理
+        }
         if (watermark != null
                 && watermark.shouldSkip(event.regionId(),
                 event.seq())) {
