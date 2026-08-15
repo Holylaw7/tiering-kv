@@ -25,6 +25,7 @@
         <jmh.version>1.37</jmh.version>
         <jacoco.version>0.8.12</jacoco.version>
         <spotbugs.version>4.8.6</spotbugs.version>
+        <fabric8.version>6.9.2</fabric8.version>
         <!-- benchmark 组默认不排除（本地 mvn test 跑全量）；
              test/release workflow 显式传 -Dsurefire.excludedGroups=benchmark
              把性能断言移出功能门禁，release Benchmark 步骤传空值跑全量 -->
@@ -90,6 +91,17 @@
             <groupId>org.assertj</groupId>
             <artifactId>assertj-core</artifactId>
             <version>${assertj.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.fabric8</groupId>
+            <artifactId>kubernetes-client</artifactId>
+            <version>${fabric8.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.fabric8</groupId>
+            <artifactId>kubernetes-server-mock</artifactId>
+            <version>${fabric8.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

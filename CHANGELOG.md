@@ -41,7 +41,10 @@
 - v4.0 M4 生产收口（ADR-0322）：CapacityModel（四维容量估算）、
   Operator 集群状态机 + 多集群拓扑/复制计划器、Jepsen 外部化脚本与
   CI job、冷/热性能基线（BlockCache 6.3x）、benchmark.sh 真实入口、
-  v4.0.0 发布支持；真实 Runner 门禁 7/7（v4.0.0-rc1）。
+  v4.0.0 发布支持；M4 增强：真实客户端 RESP Jepsen 链路、多集群
+  故障切换演练、K8s controller 接线（fabric8 kubernetes-client：
+  CRD 模型 + Reconciler + Operator Watch/状态回写）；真实 Runner
+  门禁 7/7（v4.0.0-rc1）。
 
 ### Fixed
 

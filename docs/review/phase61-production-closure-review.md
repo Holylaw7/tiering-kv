@@ -38,13 +38,20 @@ Jepsen 外部化、冷/热性能基线、真实 Runner GA 门禁 7/7 全绿。
 
 ## 已知限制（如实记录）
 
-- Operator 状态机为 Java 模型 + CRD sample，真实 K8s controller
-   reconcile 循环接线（Java operator 框架）未实现；
+- ~~Operator 状态机为 Java 模型 + CRD sample，真实 K8s controller
+  reconcile 循环接线未实现~~ → 已解决：fabric8 kubernetes-client 6.9.2
+  + K8sTieringKVCluster CRD 模型（@Group/@Version/@Plural）、
+  TieringKVReconciler（状态推进 + 动作）、TieringKVOperator
+  （informer Watch + reconcile + 状态回写）、OperatorClient 适配
+  （Fabric8 实现 + 内存 fake 测试）；fabric8 mock 不支持 apiextensions
+  自定义资源 CRUD，K8s 交互以适配器隔离验证；
 - Jepsen 外部化以容器故障注入 + 独立 JVM 线性一致性回归组合证据，
   未接入真实客户端协议链路（M4 后增强）；
 - 冷口径进程内模拟 + root drop caches 双口径，runner 无 root 时
   仅进程内口径；
-- 跨集群 2PC、CRDT 冲突演进不在 v4.0 范围。
+- 跨集群 2PC、CRDT 冲突演进不在 v4.0 范围；
+- 动作执行（upsert 到底层 StatefulSet/Deployment）为 CR 级 createOrReplace，
+  工作负载编排接线列入后续。
 
 ## 后续
 

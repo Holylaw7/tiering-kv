@@ -39,6 +39,19 @@ CrossClusterReplicationChannel（M3）
 目标端 CrossClusterSink（LWW + 水位）
 ```
 
+## K8s Operator 接线（v4 M4 增强）
+
+- CRD 模型：K8sTieringKVCluster（@Group tieringkv.io / @Version v1 /
+  @Plural tieringkvclusters），与 deploy/operator/tieringkvcluster-crd.yaml
+  对齐；
+- Reconciler：TieringKVReconciler（CRD spec/status ↔ 内部模型，复用
+  OperatorPlanner + ClusterStateMachine，输出动作 + 新状态）；
+- Operator：TieringKVOperator（informer Watch → reconcileNow →
+  ActionApplier 执行 → OperatorClient.updateStatus 状态回写）；
+- 运行：`io.tieringkv.operator.k8s.TieringKVOperator` main 入口；
+- 测试：Reconciler 纯逻辑 + Operator 内存 fake（fabric8 mock 对
+  自定义资源 CRUD 支持有限，K8s 交互经 OperatorClient 隔离）。
+
 ## 故障切换演练
 
 - 复制水位持久化保证跨重启续传；
