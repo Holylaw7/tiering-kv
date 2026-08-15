@@ -83,6 +83,11 @@
   决策先行（CrossClusterDecisionLog 携带 mutations + CRC）→
   COMMIT 按 LWW 收敛；PREPARE 失败全回滚；recover 幂等补提交；
   双 endpoint E2E 通过）。
+- P2 剩余项：OBJECT/ACL/SCRIPT 命令族（ADR-0340：OBJECT
+  ENCODING/REFCOUNT/IDLETIME/FREQ 类型映射、ACL 只读子集
+  WHOAMI/LIST/CAT/GETUSER、SCRIPT LOAD/EXISTS/FLUSH SHA1 注册表；
+  EVAL/EVALSHA 显式 scripting engine not available（无 Lua，
+  诚实登记）；默认注册表 127 → 132）。
 
 ### Fixed
 

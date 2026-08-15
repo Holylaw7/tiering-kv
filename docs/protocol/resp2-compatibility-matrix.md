@@ -45,6 +45,10 @@
 | TS.REDUCE | array（[ts,value]） | 项目扩展；空序列 = nil array |
 | VECTOR.ADD/SEARCH/DEL/LEN | OK/array/integer | 支持 COLLECTION 前缀；缺省 default |
 | VECTOR.LIST/DROP/CHECKPOINT | array/integer/OK | CHECKPOINT 需配置目录 |
+| OBJECT ENCODING/REFCOUNT/IDLETIME/FREQ | bulk/integer | 缺失 = nil；FREQ=-1 |
+| ACL WHOAMI/LIST/CAT/GETUSER | bulk/array | 只读子集；SETUSER 暂缓 |
+| SCRIPT LOAD/EXISTS/FLUSH | bulk/array/OK | SHA1 注册表 |
+| EVAL/EVALSHA | error | scripting engine not available（无 Lua） |
 
 ## 错误文本
 
@@ -66,4 +70,6 @@
 - TS.MRANGE 无标签过滤；聚合子集 AVG/SUM/MIN/MAX/COUNT/FIRST/LAST
   （RANGE/STD/VAR/TWA 暂缓）；TS.REDUCE 为非标准扩展；
 - 向量集合为内存索引（未做磁盘 LRU 卸载）；checkpoint 目录级全局
-  配置；VECTOR.SEARCH 仍为暴力检索（HNSW 索引待接线）。
+  配置；VECTOR.SEARCH 仍为暴力检索（HNSW 索引待接线）；
+- OBJECT ENCODING 与真实 Redis 内部编码存在差异（以项目类型系统
+  为准）；ACL 仅默认用户；EVAL 无 Lua 运行时（显式错误）。

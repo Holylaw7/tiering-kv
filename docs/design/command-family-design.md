@@ -90,3 +90,14 @@ EXPIRE/PEXPIRE/EXPIREAT/PEXPIREAT → `AtomicStringOps.expireAt`
   tvif` 原子 checkpoint + loadAll 恢复 + 自动刷盘（close 兜底）；
 - VectorSqlSearch.bindCollection(table.column, collection) 后可从
   注册表解析集合 store 执行混合检索（谓词过滤 + 维度校验）。
+
+## OBJECT / ACL / SCRIPT（ADR-0340，Phase 71）
+
+- OBJECT ENCODING/REFCOUNT/IDLETIME/FREQ：ENCODING 按项目类型系统
+  映射（string 短值 embstr/长值 raw，复合 hashtable/quicklist/
+  skiplist/stream，多模型 json/timeseries/vector）；REFCOUNT=1、
+  IDLETIME=0（无 LRU 跟踪）、FREQ=-1（无 LFU 暴露），缺失键 nil；
+- ACL WHOAMI/LIST/CAT/GETUSER（只读子集，单默认用户 default；
+  SETUSER 与 CAT 命令枚举暂缓，文档登记）；
+- SCRIPT LOAD（SHA1 注册表）/EXISTS/FLUSH；EVAL/EVALSHA 注册但
+  显式返回 scripting engine not available（无 Lua 运行时）。
