@@ -61,15 +61,32 @@ jobs:
         run: |
           # redis-cli 不可用时的最小 RESP 冒烟（读取并断言响应，
           # 禁止“只写不读”的伪冒烟；有界重试吸收 Raft 选举就绪竞态）
-          timeout 30 bash -c '
+          timeout 45 bash -c '
             for i in $(seq 1 10); do
               if exec 3<>/dev/tcp/127.0.0.1/6379 2>/dev/null; then
                 printf "*3\r\n\$3\r\nSET\r\n\$2\r\nk1\r\n\$2\r\nv1\r\n" >&3
-                IFS=$'\r\n' read -r line <&3 || { exec 3<&- 3>&-; sleep 1; continue; }
+                if ! IFS=$'\r\n' read -r -t 3 line <&3; then
+                  echo "attempt $i: SET read failed" >&2
+                  exec 3<&- 3>&-
+                  sleep 1
+                  continue
+                fi
+                echo "attempt $i: SET response=[$line]" >&2
                 if [ "$line" = "+OK" ]; then
                   printf "*2\r\n\$3\r\nGET\r\n\$2\r\nk1\r\n" >&3
-                  IFS=$'\r\n' read -r line <&3 || { exec 3<&- 3>&-; sleep 1; continue; }
-                  IFS=$'\r\n' read -r body <&3 || { exec 3<&- 3>&-; sleep 1; continue; }
+                  if ! IFS=$'\r\n' read -r -t 3 line <&3; then
+                    echo "attempt $i: GET header read failed" >&2
+                    exec 3<&- 3>&-
+                    sleep 1
+                    continue
+                  fi
+                  if ! IFS=$'\r\n' read -r -t 3 body <&3; then
+                    echo "attempt $i: GET body read failed" >&2
+                    exec 3<&- 3>&-
+                    sleep 1
+                    continue
+                  fi
+                  echo "attempt $i: GET header=[$line] body=[$body]" >&2
                   exec 3<&- 3>&-
                   if [ "$line" = "\$2" ] && [ "$body" = "v1" ]; then
                     echo "smoke SET/GET ok (attempt $i)"
@@ -77,6 +94,8 @@ jobs:
                   fi
                 fi
                 exec 3<&- 3>&- 2>/dev/null
+              else
+                echo "attempt $i: connect failed" >&2
               fi
               sleep 1
             done
