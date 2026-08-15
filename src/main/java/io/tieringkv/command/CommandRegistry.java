@@ -61,6 +61,10 @@ public final class CommandRegistry {
                 new MultiModelCommand("ts.add"),
                 new MultiModelCommand("ts.get"),
                 new MultiModelCommand("ts.len"),
+                new TimeSeriesCommand("ts.range"),
+                new TimeSeriesCommand("ts.mrange"),
+                new TimeSeriesCommand("ts.incrby"),
+                new TimeSeriesCommand("ts.reduce"),
                 new MultiModelCommand("vector.set"),
                 new MultiModelCommand("vector.get")));
     }
