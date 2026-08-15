@@ -2,6 +2,7 @@ package io.tieringkv.backup;
 
 import io.tieringkv.mvcc.MvccStorageEngine;
 import io.tieringkv.mvcc.WriteType;
+import io.tieringkv.observability.BackupMetricsRegistry;
 import io.tieringkv.storage.memory.MemTable;
 import io.tieringkv.transaction.metadata.TransactionMetadataState;
 import io.tieringkv.transaction.metadata.TxnMetaCommand;
@@ -67,6 +68,24 @@ class BackupRestoreTest {
         assertThat(restored.latestValue(bytes("k"))).isEqualTo(bytes("v"));
         assertThat(meta.get("t1").state().name()).isEqualTo("COMMITTED");
         ((MemTable) restored.underlying()).close();
+    }
+
+    @Test
+    void backupRestoreFeedMetricsRegistry() throws Exception {
+        MvccStorageEngine engine = new MvccStorageEngine(MemTable.create());
+        engine.putVersion(bytes("k"), bytes("v"), 1, 10, WriteType.PUT);
+        BackupMetricsRegistry metrics = new BackupMetricsRegistry();
+        Path backup = dir.resolve("metric-backup");
+        BackupManager.backup(backup, new TransactionMetadataState(),
+                engine, metrics);
+        assertThat(metrics.snapshot().backups()).isEqualTo(1);
+        assertThat(metrics.snapshot().backupBytes()).isPositive();
+
+        RestoreManager.restoreMetadata(backup, metrics);
+        RestoreManager.restoreMvcc(backup, MemTable.create(), metrics);
+        assertThat(metrics.snapshot().restores()).isEqualTo(2);
+        assertThat(metrics.snapshot().restoreBytes()).isPositive();
+        ((MemTable) engine.underlying()).close();
     }
 
     @ParameterizedTest(name = "keys {0}")

@@ -3,6 +3,7 @@ package io.tieringkv.storage;
 import io.tieringkv.storage.memory.BatchWriteRequest;
 import io.tieringkv.storage.memory.Mutation;
 import io.tieringkv.storage.memory.RawMutation;
+import io.tieringkv.observability.VectorMetricsRegistry;
 import io.tieringkv.storage.types.MultiModelCodec;
 import io.tieringkv.storage.types.TypedValueCodec;
 import io.tieringkv.storage.types.ValueType;
@@ -24,15 +25,24 @@ public final class VectorIndexSyncStorageEngine implements StorageEngine {
 
     private final StorageEngine delegate;
     private final VectorIndexStore vectorStore;
+    private final VectorMetricsRegistry metrics;
 
     public VectorIndexSyncStorageEngine(StorageEngine delegate,
                                         VectorIndexStore vectorStore) {
+        this(delegate, vectorStore, null);
+    }
+
+    /** 可观测性收口（ADR-0344）：可选向量指标注册表（additive）。 */
+    public VectorIndexSyncStorageEngine(StorageEngine delegate,
+                                        VectorIndexStore vectorStore,
+                                        VectorMetricsRegistry metrics) {
         if (delegate == null || vectorStore == null) {
             throw new IllegalArgumentException(
                     "delegate and vectorStore required");
         }
         this.delegate = delegate;
         this.vectorStore = vectorStore;
+        this.metrics = metrics;
     }
 
     @Override
@@ -60,6 +70,9 @@ public final class VectorIndexSyncStorageEngine implements StorageEngine {
                 && TypedValueCodec.typeOf(value) == ValueType.VECTOR) {
             vectorStore.delete(new String(key,
                     StandardCharsets.UTF_8));
+            if (metrics != null) {
+                metrics.recordVectorDelete();
+            }
         }
         return removed;
     }
@@ -108,6 +121,9 @@ public final class VectorIndexSyncStorageEngine implements StorageEngine {
             vectorStore.put(new Embedding(
                     new String(key, StandardCharsets.UTF_8),
                     MultiModelCodec.decodeVector(value)));
+            if (metrics != null) {
+                metrics.recordVectorWrite();
+            }
         }
     }
 }

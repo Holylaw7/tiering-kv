@@ -14,6 +14,11 @@ import io.tieringkv.execution.KeyShardExecutor;
 import io.tieringkv.lifecycle.ShutdownManager;
 import io.tieringkv.memory.MemoryPool;
 import io.tieringkv.monitor.MetricsRegistry;
+import io.tieringkv.observability.BackupMetricsRegistry;
+import io.tieringkv.observability.MultiModelMetricsRegistry;
+import io.tieringkv.observability.ObservabilityRegistry;
+import io.tieringkv.observability.ReplicationMetricsRegistry;
+import io.tieringkv.observability.VectorMetricsRegistry;
 import io.tieringkv.network.tcp.TieringKvServer;
 import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.storage.VectorIndexSyncStorageEngine;
@@ -34,7 +39,6 @@ import io.tieringkv.storage.wal.WALStorageEngine;
 import io.tieringkv.vector.indexfile.VectorIndexStore;
 
 import java.nio.file.Path;
-import java.util.Map;
 import io.tieringkv.storage.memory.MemoryManager;
 import io.tieringkv.storage.memory.MemTable;
 
@@ -99,12 +103,19 @@ public final class Main {
         MetricsRegistry metrics = new MetricsRegistry();
         // v4 M1（ADR-0319）：内存向量索引；checkpoint 持久化由配置接线
         VectorIndexStore vectorStore = new VectorIndexStore(6);
+        // P3 可观测性收口（ADR-0344）：INFO sections + 向量指标喂数
+        ObservabilityRegistry observability = new ObservabilityRegistry(
+                new VectorMetricsRegistry(vectorStore),
+                new ReplicationMetricsRegistry(),
+                new MultiModelMetricsRegistry(),
+                new BackupMetricsRegistry());
         // M2 增强（ADR-0320）：VECTOR 值 put/delete 经存储层同步索引
         StorageEngine syncStorage = new VectorIndexSyncStorageEngine(
-                storage, vectorStore);
+                storage, vectorStore, observability.vector());
         CommandEngine commandEngine = new CommandEngine(
                 CommandRegistry.createDefaultWithVector(
-                        metrics::infoText, Map.of(), vectorStore),
+                        metrics::infoText, observability.infoSections(),
+                        vectorStore),
                 syncStorage, executor);
         TieringKvServer server = new TieringKvServer(
                 serverConfig,

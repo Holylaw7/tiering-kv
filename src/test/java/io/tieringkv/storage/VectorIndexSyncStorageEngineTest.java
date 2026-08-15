@@ -1,6 +1,7 @@
 package io.tieringkv.storage;
 
 import io.tieringkv.storage.memory.MemTable;
+import io.tieringkv.observability.VectorMetricsRegistry;
 import io.tieringkv.storage.types.MultiModelCodec;
 import io.tieringkv.storage.types.TypedValueCodec;
 import io.tieringkv.storage.types.ValueType;
@@ -18,6 +19,10 @@ class VectorIndexSyncStorageEngineTest {
     private final VectorIndexStore index = new VectorIndexStore(4);
     private final StorageEngine storage =
             new VectorIndexSyncStorageEngine(memTable, index);
+    private final VectorMetricsRegistry metrics =
+            new VectorMetricsRegistry(index);
+    private final StorageEngine instrumented =
+            new VectorIndexSyncStorageEngine(memTable, index, metrics);
 
     private static byte[] bytes(String value) {
         return value.getBytes(StandardCharsets.UTF_8);
@@ -76,5 +81,22 @@ class VectorIndexSyncStorageEngineTest {
                 .isEqualTo(ValueType.VECTOR);
         assertThat(MultiModelCodec.decodeVector(read))
                 .containsExactly(0.5f, -1.0f);
+    }
+
+    @Test
+    void vectorMetricsRecordedOnPutAndDelete() {
+        instrumented.put(bytes("v1"),
+                MultiModelCodec.encodeVector(new float[]{1, 0}));
+        assertThat(metrics.snapshot().writes()).isEqualTo(1);
+        assertThat(metrics.snapshot().vectorCount()).isEqualTo(1);
+        assertThat(instrumented.delete(bytes("v1"))).isTrue();
+        assertThat(metrics.snapshot().deletes()).isEqualTo(1);
+        assertThat(metrics.snapshot().vectorCount()).isZero();
+    }
+
+    @Test
+    void nonVectorWritesDoNotCountAsVectorMetrics() {
+        instrumented.put(bytes("s"), bytes("plain"));
+        assertThat(metrics.snapshot().writes()).isZero();
     }
 }
