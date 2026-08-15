@@ -115,6 +115,11 @@
   transaction 栈四后端服务（coordinator/participant-a/
   participant-b/meta）`cap_add: [NET_ADMIN]`，netem 注入在
   container-e2e 真实生效。
+- P3 真实 Runner 门禁暴露：`GatewayRuntime`（ADR-0093）按行解析
+  命令，无法处理 RESP 数组（`RespClient` SET/GET 全部返回
+  `-ERR unknown command`）；改为 RESP2 数组解析 + 标准响应编码，
+  新增 GatewayRuntimeRespTest（7 项），container-e2e 冒烟改为
+  读取并断言 `+OK`/`$2`/`v1`。
 - WAL 恢复只读语义（ADR-0342 真实 Runner 演练发现）：
   RecoveryManager.truncateTail 干净尾部不再以 WRITE 打开，只读
   文件系统上崩溃恢复可完成；新增 RecoveryManagerReadonlyTest。

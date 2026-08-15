@@ -36,3 +36,15 @@ P3 第二项。基线：现有 partition 因镜像缺 tc + `|| true` 静默吞�
 - ADR-0343 已批准；Conventional Commit 拆分
 - container-e2e netem 全阶段真实执行（tc qdisc show 校验非空）
 - 全量回归 0 failures；真实 Runner 门禁 6/6
+
+## 真实 Runner 门禁发现（三次迭代）
+
+1. `scripts/network-chaos.sh: Permission denied`：Windows 提交丢失
+   可执行位（100644），`git update-index --chmod=+x` 修复。
+2. `RTNETLINK answers: Operation not permitted`：容器缺 NET_ADMIN；
+   compose 四后端服务 `cap_add: [NET_ADMIN]`。
+3. `expected: 5 but was: 0`（0.22s 全失败）：根因是
+   `GatewayRuntime` 行协议网关不解析 RESP 数组，`RespClient`
+   每次收到 `-ERR unknown command`；改为 RESP2 数组解析 +
+   标准编码（GatewayRuntimeRespTest 7 项），冒烟步骤改为读取并
+   断言响应，演练失败时先抛底层 IOException（避免吞根因）。

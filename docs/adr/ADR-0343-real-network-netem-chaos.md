@@ -23,6 +23,11 @@ P3 第二项：真实网络混沌。现状：container-chaos.sh 的 partition �
 - **NET_ADMIN 能力**：上述后端容器在 compose 中 `cap_add: [NET_ADMIN]`，
   否则容器内 `tc qdisc add` 报 `Operation not permitted`
   （真实 Runner 首次门禁暴露，已修复）；
+- **网关 RESP 合规修正**：真实 Runner 门禁暴露
+  `GatewayRuntime` 原本按行解析命令，`RespClient` 的 RESP 数组
+  （`*3\r\n$3\r\nSET...`）被当成未知命令返回 `-ERR`；现改为
+  RESP2 数组解析 + 标准响应编码（`+OK`/`$len`/`$-1`/`-ERR`），
+  容器冒烟改为读取并断言响应（禁止只写不读的伪冒烟）；
 - **RealNetworkChaosTest**（Linux + TIERINGKV_NETWORK_CHAOS 门控，
   本地跳过）：经 127.0.0.1:6379 走真实 RESP 链路：
   - `setGetRoundTripUnderNetem`（delay/loss/recovered 三阶段）：5 轮
@@ -40,7 +45,8 @@ P3 第二项：真实网络混沌。现状：container-chaos.sh 的 partition �
 
 ## Consequences
 
-优点：真实 tc netem 证据、镜像自包含、失败显式化。
+优点：真实 tc netem 证据、镜像自包含、失败显式化、网关 RESP
+合规（顺带修复 ADR-0093 网关行协议缺陷）。
 
 缺点：镜像构建增加 apt 层（~1 分钟）；netem 作用于后端容器 egress
 （单方向），RPC 重试语义下等价于双向抖动。
@@ -52,4 +58,5 @@ P3 第二项：真实网络混沌。现状：container-chaos.sh 的 partition �
 `deploy/Dockerfile`（iproute2）、`docker-compose.transaction.yml`
 （cap_add NET_ADMIN）、`scripts/network-chaos.sh`、
 `runtime/RealNetworkChaosTest`、`RespClient.setTimeout`、
+`runtime/GatewayRuntime`（RESP2 解析/编码）、
 `transaction-e2e.yml` container-e2e 接线、部署文档。
