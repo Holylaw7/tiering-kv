@@ -45,6 +45,11 @@
   故障切换演练、K8s controller 接线（fabric8 kubernetes-client：
   CRD 模型 + Reconciler + Operator Watch/状态回写）；真实 Runner
   门禁 7/7（v4.0.0-rc1）。
+- P1a 存储引擎：迁移队列批量/准入/动态 worker（ADR-0325）、
+  Leveled compaction（ADR-0323）、MemTable 轮转 + FlushScheduler
+  生产接入（ADR-0324）；
+- P1b 缓存/淘汰：ARC byte 容量（ADR-0326）、Segment LFU + Async
+  Buffer（ADR-0327）、HotCache version check（ADR-0328）。
 
 ### Fixed
 

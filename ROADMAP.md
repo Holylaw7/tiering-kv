@@ -967,20 +967,20 @@
 | --- | --- | --- | --- |
 | TD-001 | 单 Maven 模块；若模块耦合升高需评估拆分多模块 | ADR-0001 | Phase 7 前评估 |
 | TD-002 | JDK 17 目标下暂不采用虚拟线程 | ADR-0003 | Phase 7 评估升级 JDK 21 |
-| TD-005 | ARC 容量单位当前为 entry count，需改为 byte 口径 | ADR-0012 | Phase 9 出 ADR |
-| TD-006 | LFU 索引更新为全局同步段；演进 Segment LFU + Async Buffer | ADR-0010 | Phase 7 优化 |
+| TD-005 | ARC 容量单位当前为 entry count，需改为 byte 口径 | ADR-0012 | ✅ 已关闭（P1b，ADR-0326，ARCPolicy byte 模式） |
+| TD-006 | LFU 索引更新为全局同步段；演进 Segment LFU + Async Buffer | ADR-0010 | ✅ 已关闭（P1b，ADR-0327，SegmentLFUPolicy） |
 | TD-007 | WAL 恢复单线程（1M ≈ 1s，可接受） | ADR-0016 | Phase 7 评估 parallel replay |
 | TD-008 | Checkpoint 全量快照；演进为 SSTable + Manifest | ADR-0016 | Phase 5 自然解决 |
 | TD-009 | 随机 GET 基准受 OS page cache 影响；需 cold-cache 基准 | ADR-0018 | Phase 9 补测 |
 | TD-010 | pending 迁移缓冲未持久化；需 Migration WAL / Pending Manifest | ADR-0017 | Phase 6 解决 |
 | TD-011 | Flush 为手动触发；需 memory watermark + FlushScheduler | ADR-0017 | Phase 6 解决 |
-| TD-012 | size-tiered 全量合并读放大；评估 leveled compaction | ADR-0019 | Phase 7 评估 |
-| TD-013 | 快照式 Flush → Active/Immutable MemTable 轮转 | ADR-0020 | Phase 7 评估 |
-| TD-014 | 迁移队列准入控制 / 批量 / worker 动态扩缩容 | ADR-0020 | Phase 7/9 评估 |
+| TD-012 | size-tiered 全量合并读放大；评估 leveled compaction | ADR-0019 | ✅ 已关闭（P1a，ADR-0323，LeveledCompaction） |
+| TD-013 | 快照式 Flush → Active/Immutable MemTable 轮转 | ADR-0020 | ✅ 已关闭（P1a，ADR-0324，MemTableManager + FlushScheduler 接入） |
+| TD-014 | 迁移队列准入控制 / 批量 / worker 动态扩缩容 | ADR-0020 | ✅ 已关闭（P1a，ADR-0325，MigrationScheduler 批量/准入/动态 worker） |
 | TD-015 | 全量无锁读（ABA/回收/可见性）→ 暂缓 | ADR-0024 | 验证后新 ADR |
 | TD-016 | Phase 9 三级基准：A 内存 / B 服务端 / C 生产全链路 | ADR-0023 | Phase 9 |
 | TD-017 | 动态重分片（在线扩容） | ADR-0023 | Phase 10 |
-| TD-018 | Hot Cache version check（当前 TTL 兜底） | ADR-0025 | Phase 10 评估 |
+| TD-018 | Hot Cache version check（当前 TTL 兜底） | ADR-0025 | ✅ 已关闭（P1b，ADR-0328，版本校验 + TTL 兜底） |
 | TD-019 | 生产容量模型（吞吐/延迟/内存/磁盘），替代 IO 微优化 | ADR-0026 | Phase 9 |
 | TD-020 | request→response 对象数优化（Future/Lambda/Callback 复用 + 批量写） | ADR-0023 | Phase 10 |
 | TD-021 | Phase 10 以 JFR allocation / GC 对比为优化验收指标 | ADR-0029 | Phase 10 |

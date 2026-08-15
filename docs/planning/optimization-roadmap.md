@@ -15,6 +15,16 @@
 
 ## P1 — 技术债清偿（按价值排序）
 
+### P1a / P1b 状态（2026-08-15）
+
+- P1a 存储引擎三件套 ✅：迁移队列批量/准入/动态 worker（ADR-0325）、
+  Leveled compaction（ADR-0323）、MemTable 轮转 + 生产接入（ADR-0324）；
+- P1b 缓存/淘汰 ✅：ARC byte 容量（ADR-0326）、Segment LFU + Async
+  Buffer（ADR-0327）、HotCache version check（ADR-0328）；
+- 评审：docs/review/phase62-p1a-storage-engine-review.md、
+  docs/review/phase63-p1b-cache-eviction-review.md；TD-005/006/012/
+  013/014/018 已关闭。
+
 ### P1a 存储引擎
 
 - leveled compaction（TD-012）：分层合并，降低读放大；
