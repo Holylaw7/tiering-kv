@@ -103,8 +103,11 @@
   TD-046/049 部分关闭（容器级注入持续跟踪））；真实网络 netem 混沌
   ✅（ADR-0343，2026-08-15：镜像安装 iproute2（修复静默 no-op）、
   network-chaos.sh delay/loss/partition/recover + 应用后校验、
-  RealNetworkChaosTest 三阶段真实 RESP 演练、CI container-e2e
-  全阶段接线）；
+   RealNetworkChaosTest 三阶段真实 RESP 演练、CI container-e2e
+   全阶段接线；真实 Runner 门禁通过——6 轮修复：脚本可执行位 →
+   NET_ADMIN 能力 → 网关 RESP2 合规 → 运行时 RPC 地址表 →
+   CR 剥离读取 → 冒烟独立脚本（嵌套引号）；container-e2e
+   delay/loss/partition/recover 全阶段真实执行）；
 - 向量/复制/多模型 Metrics 进 INFO + Prometheus 端点；
 - OpenTelemetry span 透传；
 - 备份恢复纳入向量索引与复制水位；

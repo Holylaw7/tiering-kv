@@ -64,5 +64,8 @@ P3 第二项。基线：现有 partition 因镜像缺 tc + `|| true` 静默吞�
    WSL 真实 bash 验证通过），workflow 只调
    `timeout 45 scripts/container-smoke.sh`。
 
-状态：修复链 4 轮（可执行位 → NET_ADMIN → RESP 合规 → RPC 地址表），
-待真实 Runner 门禁最终通过后归档。
+状态：✅ 真实 Runner 门禁通过（2026-08-15 run 31890302018：
+container-e2e 15/15 步骤全绿，delay/loss/partition/recover 四阶段
+真实执行）。修复链 6 轮：可执行位 → NET_ADMIN → RESP 合规 →
+RPC 地址表 → CR 剥离读取 → 冒烟独立脚本（嵌套单引号根因）。
+P3 第二项完成，归档。
