@@ -48,3 +48,12 @@ P3 第二项。基线：现有 partition 因镜像缺 tc + `|| true` 静默吞�
    每次收到 `-ERR unknown command`；改为 RESP2 数组解析 +
    标准编码（GatewayRuntimeRespTest 7 项），冒烟步骤改为读取并
    断言响应，演练失败时先抛底层 IOException（避免吞根因）。
+4. 冒烟断言后 `Connection reset by peer`：根因是
+   `CoordinatorRuntime.start` 的 RPC 地址表仅含自身，metadata/
+   participant 的 `callTxn` 立即返回 `unknown peer`（此前冒烟
+   只写不读从未触发真实事务路径）；地址表注册 metadata +
+   全部 region host（createUnresolved），网关异常输出 stderr，
+   冒烟改为有界重试吸收 Raft 就绪竞态。
+
+状态：修复链 4 轮（可执行位 → NET_ADMIN → RESP 合规 → RPC 地址表），
+待真实 Runner 门禁最终通过后归档。

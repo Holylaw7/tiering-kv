@@ -28,6 +28,15 @@ P3 第二项：真实网络混沌。现状：container-chaos.sh 的 partition �
   （`*3\r\n$3\r\nSET...`）被当成未知命令返回 `-ERR`；现改为
   RESP2 数组解析 + 标准响应编码（`+OK`/`$len`/`$-1`/`-ERR`），
   容器冒烟改为读取并断言响应（禁止只写不读的伪冒烟）；
+- **运行时 RPC 地址表修正**：真实 Runner 门禁进一步暴露
+  `CoordinatorRuntime.start` 的 `MultiRaftEndpoint` 地址表只有自身，
+  metadata/participant 的 `callTxn` 全部返回 `unknown peer`，SET
+  后连接被重置；现把 metadata 与全部 region host 注册进地址表
+  （`createUnresolved`，连接时由 Docker DNS 解析）；
+- **网关异常不静默**：连接错误输出到 stderr（容器日志可见），
+  避免再次出现“根因被吞、只能猜”的排查；
+- **冒烟有界重试**：container-e2e 冒烟对 SET/GET 重试 ≤10 次
+  （吸收 Raft 选举就绪竞态），失败仍显式退出；
 - **RealNetworkChaosTest**（Linux + TIERINGKV_NETWORK_CHAOS 门控，
   本地跳过）：经 127.0.0.1:6379 走真实 RESP 链路：
   - `setGetRoundTripUnderNetem`（delay/loss/recovered 三阶段）：5 轮
@@ -46,7 +55,7 @@ P3 第二项：真实网络混沌。现状：container-chaos.sh 的 partition �
 ## Consequences
 
 优点：真实 tc netem 证据、镜像自包含、失败显式化、网关 RESP
-合规（顺带修复 ADR-0093 网关行协议缺陷）。
+合规（顺带修复 ADR-0093 网关行协议缺陷与运行时 RPC 地址表缺陷）。
 
 缺点：镜像构建增加 apt 层（~1 分钟）；netem 作用于后端容器 egress
 （单方向），RPC 重试语义下等价于双向抖动。
@@ -58,5 +67,6 @@ P3 第二项：真实网络混沌。现状：container-chaos.sh 的 partition �
 `deploy/Dockerfile`（iproute2）、`docker-compose.transaction.yml`
 （cap_add NET_ADMIN）、`scripts/network-chaos.sh`、
 `runtime/RealNetworkChaosTest`、`RespClient.setTimeout`、
-`runtime/GatewayRuntime`（RESP2 解析/编码）、
+`runtime/GatewayRuntime`（RESP2 解析/编码 + 异常输出）、
+`runtime/CoordinatorRuntime`（RPC 地址表）、
 `transaction-e2e.yml` container-e2e 接线、部署文档。

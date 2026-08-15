@@ -120,6 +120,12 @@
   `-ERR unknown command`）；改为 RESP2 数组解析 + 标准响应编码，
   新增 GatewayRuntimeRespTest（7 项），container-e2e 冒烟改为
   读取并断言 `+OK`/`$2`/`v1`。
+- P3 真实 Runner 门禁暴露：`CoordinatorRuntime.start` 的
+  `MultiRaftEndpoint` 地址表仅含自身，metadata/participant RPC
+  全部 `unknown peer`，SET 后连接被重置；地址表现注册 metadata
+  与全部 region host（createUnresolved + Docker DNS），新增
+  CoordinatorRuntimeAddressesTest（2 项）；网关连接错误输出到
+  stderr 不再静默；冒烟有界重试吸收 Raft 就绪竞态。
 - WAL 恢复只读语义（ADR-0342 真实 Runner 演练发现）：
   RecoveryManager.truncateTail 干净尾部不再以 WRITE 打开，只读
   文件系统上崩溃恢复可完成；新增 RecoveryManagerReadonlyTest。
