@@ -65,11 +65,11 @@ jobs:
             for i in $(seq 1 10); do
               if exec 3<>/dev/tcp/127.0.0.1/6379 2>/dev/null; then
                 printf "*3\r\n\$3\r\nSET\r\n\$2\r\nk1\r\n\$2\r\nv1\r\n" >&3
-                IFS= read -r line <&3 || { exec 3<&- 3>&-; sleep 1; continue; }
+                IFS=$'\r\n' read -r line <&3 || { exec 3<&- 3>&-; sleep 1; continue; }
                 if [ "$line" = "+OK" ]; then
                   printf "*2\r\n\$3\r\nGET\r\n\$2\r\nk1\r\n" >&3
-                  IFS= read -r line <&3 || { exec 3<&- 3>&-; sleep 1; continue; }
-                  IFS= read -r body <&3 || { exec 3<&- 3>&-; sleep 1; continue; }
+                  IFS=$'\r\n' read -r line <&3 || { exec 3<&- 3>&-; sleep 1; continue; }
+                  IFS=$'\r\n' read -r body <&3 || { exec 3<&- 3>&-; sleep 1; continue; }
                   exec 3<&- 3>&-
                   if [ "$line" = "\$2" ] && [ "$body" = "v1" ]; then
                     echo "smoke SET/GET ok (attempt $i)"
