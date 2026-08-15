@@ -100,7 +100,11 @@
   修正（loop 自动分配/真实填满/cleanup 幂等）+ RealBlockDeviceExerciseTest
   baseline/disk-full/readonly 闭环 + CI block-device-chaos job 接线；
   真实 Runner 演练发现并修复 WAL 只读恢复缺陷；TD-044 关闭、
-  TD-046/049 部分关闭（容器级注入持续跟踪））；真实网络 netem 混沌；
+  TD-046/049 部分关闭（容器级注入持续跟踪））；真实网络 netem 混沌
+  ✅（ADR-0343，2026-08-15：镜像安装 iproute2（修复静默 no-op）、
+  network-chaos.sh delay/loss/partition/recover + 应用后校验、
+  RealNetworkChaosTest 三阶段真实 RESP 演练、CI container-e2e
+  全阶段接线）；
 - 向量/复制/多模型 Metrics 进 INFO + Prometheus 端点；
 - OpenTelemetry span 透传；
 - 备份恢复纳入向量索引与复制水位；

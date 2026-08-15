@@ -103,6 +103,10 @@
   RealBlockDeviceExerciseTest（baseline/disk-full/readonly 三场景
   WAL 写入→恢复闭环，Linux+环境变量门控）、CI block-device-chaos
   job 完整接线。
+- P3 真实网络混沌（ADR-0343）：事务栈镜像安装 iproute2（修复
+  container-chaos partition 因缺 tc 静默 no-op）、network-chaos.sh
+  delay/loss/partition/recover + 应用后 qdisc 校验、RealNetworkChaosTest
+  （真实 RESP 链路三阶段演练）、CI container-e2e 全阶段接线。
 
 ### Fixed
 
