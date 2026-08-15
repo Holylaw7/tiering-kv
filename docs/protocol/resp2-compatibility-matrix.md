@@ -39,6 +39,10 @@
 | JSON.TYPE/ARRLEN/OBJLEN/STRLEN | bulk/integer/array | legacy 单值；JSONPath 数组 |
 | JSON.OBJKEYS | array | legacy 键数组；JSONPath 数组套数组 |
 | JSON.ARRAPPEND/NUMINCRBY | integer/bulk | 路径未命中 = ERR |
+| TS.RANGE | array（[ts,value]） | AGGREGATION 桶聚合 + COUNT；-inf/+inf |
+| TS.INCRBY | integer（时间戳） | TIMESTAMP 同刻累加/新刻追加 |
+| TS.MRANGE | array（[key,samples]） | 无 FILTER/标签；跳过非 TS 键 |
+| TS.REDUCE | array（[ts,value]） | 项目扩展；空序列 = nil array |
 
 ## 错误文本
 
@@ -56,4 +60,6 @@
 - GEORADIUS/GEOSEARCH 的 STORE/STOREDIST/GEOSEARCHSTORE 未实现；
 - GEO 检索为 O(N) 精确过滤（未做 geohash 网格剪枝）；
 - JSON SET/DEL 不支持通配/递归路径；JSON 数字经 Jackson 序列化可能
-  规范化格式；JSON 命令仅在扩展注册表（createDefaultWithVector）。
+  规范化格式；JSON 命令仅在扩展注册表（createDefaultWithVector）；
+- TS.MRANGE 无标签过滤；聚合子集 AVG/SUM/MIN/MAX/COUNT/FIRST/LAST
+  （RANGE/STD/VAR/TWA 暂缓）；TS.REDUCE 为非标准扩展。

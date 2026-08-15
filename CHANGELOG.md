@@ -66,6 +66,11 @@
   `$`/`.field`/`[n]`/`.*`/`[*]`/`..`；SET 支持 NX/XX 与中间对象
   创建、变更命令原子执行并保留 TTL；RedisJSON 文档示例路径语义
   通过）。
+- P2 功能深度（第三交付）：时序命令族（ADR-0337：TS.RANGE 范围 +
+  AGGREGATION 桶聚合 AVG/SUM/MIN/MAX/COUNT/FIRST/LAST + COUNT、
+  TS.INCRBY 同刻累加/新刻追加原子写、TS.MRANGE 全部 TS 键多键查询、
+  TS.REDUCE 全序列聚合扩展；复用 TIME_SERIES 冻结编码，桶按
+  floorDiv 对齐）。
 
 ### Fixed
 

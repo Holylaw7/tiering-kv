@@ -67,7 +67,10 @@
   Redis 官方文档基准通过）；JSON 路径 ✅（ADR-0336，2026-08-15：
   JSON.SET/GET/DEL/TYPE/ARRAPPEND/ARRLEN/OBJKEYS/OBJLEN/STRLEN/
   NUMINCRBY，jackson-databind + 自研路径子集，RedisJSON 文档示例
-  路径语义通过）；OBJECT/SCRIPT/ACL 命令族，RESP3 完整类型；
+  路径语义通过）；时序 ✅（ADR-0337，2026-08-15：TS.RANGE 桶聚合
+  AVG/SUM/MIN/MAX/COUNT/FIRST/LAST + COUNT、TS.INCRBY 原子累加、
+  TS.MRANGE 多键、TS.REDUCE 全序列聚合）；OBJECT/SCRIPT/ACL 命令族，
+  RESP3 完整类型；
 - SQL 索引真正接线执行器（谓词/join）、EXPLAIN 落地；
 - 向量多集合命名空间、自动 checkpoint、混合检索 SQL 化；
 - 时序 TS.RANGE/聚合/下采样/压缩；

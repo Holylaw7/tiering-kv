@@ -66,3 +66,15 @@ EXPIRE/PEXPIRE/EXPIREAT/PEXPIREAT → `AtomicStringOps.expireAt`
 - JSON.SET 支持 NX/XX（键级）与缺失中间对象按字段创建；JSON.GET
   单路径返回序列化值（JSONPath 返回匹配数组文本）、多路径返回对象；
 - 变更命令经 TypeSupport.update 原子执行并保留 TTL。
+
+## 时序命令族（ADR-0337，Phase 68）
+
+- TS.RANGE key from to [AGGREGATION agg bucket] [COUNT n]：范围查询
+  （-inf/+inf），AGGREGATION 按 floorDiv(ts, bucket)*bucket 桶对齐，
+  支持 AVG/SUM/MIN/MAX/COUNT/FIRST/LAST；查询前按时间戳稳定排序；
+- TS.INCRBY key value [TIMESTAMP ts]：同刻累加/新刻追加，原子执行
+  并保留 TTL，返回样本时间戳；
+- TS.MRANGE from to [AGGREGATION agg bucket]：遍历全部 TIME_SERIES
+  键（按键名字典序），非 TS 键跳过（无标签/无 FILTER，已知差异）；
+- TS.REDUCE key [AGGREGATION agg]：全序列聚合（项目扩展，
+  [首点时间戳, 聚合值]，空序列 nil array）。
