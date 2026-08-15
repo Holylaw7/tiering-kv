@@ -9,6 +9,8 @@ import io.tieringkv.storage.StorageEngine;
 
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Locale;
 import java.util.function.BiConsumer;
 
@@ -17,6 +19,11 @@ import java.util.function.BiConsumer;
  * Phase 1 为连接事件循环内同步执行（单连接有序）；key 分片线程池在 Phase 7 落地。
  */
 public final class CommandEngine {
+
+    /** 无参命令 key 字节缓存（ADR-0330，TD-020）：PING/ECHO 等每请求
+     *  不再分配新 byte[]。 */
+    private static final Map<String, byte[]> COMMAND_KEYS =
+            new ConcurrentHashMap<>();
 
     private final CommandRegistry registry;
     private final StorageEngine storage;
@@ -65,7 +72,9 @@ public final class CommandEngine {
         }
         ConnectionContext captured = ConnectionContext.current();
         byte[] key = command.args().isEmpty()
-                ? command.name().getBytes(StandardCharsets.UTF_8)
+                ? COMMAND_KEYS.computeIfAbsent(
+                        command.name(),
+                        name -> name.getBytes(StandardCharsets.UTF_8))
                 : command.args().get(0);
         CompletableFuture<RespValue> future = new CompletableFuture<>();
         executor.submit(key, () -> {

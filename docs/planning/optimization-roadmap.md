@@ -24,6 +24,9 @@
 - 评审：docs/review/phase62-p1a-storage-engine-review.md、
   docs/review/phase63-p1b-cache-eviction-review.md；TD-005/006/012/
   013/014/018 已关闭。
+- P1c 并发/性能 ✅（2026-08-15）：WAL 并行恢复（ADR-0329）、命令
+  路径 allocation 基线（ADR-0330，64B/请求）、JDK 21 虚拟线程 POC
+  （ADR-0331，941K ops/s）；报告 docs/benchmark/phase64-*。
 
 ### P1a 存储引擎
 

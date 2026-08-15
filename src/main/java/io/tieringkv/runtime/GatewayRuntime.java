@@ -24,7 +24,9 @@ public final class GatewayRuntime {
     public static void start(Map<String, String> options) throws Exception {
         RuntimeCoordinator coordinator = RuntimeCoordinator.start(options);
         int port = TxnRuntimeMain.port(options, "gateway-port", 6379);
-        ExecutorService workers = Executors.newCachedThreadPool();
+        boolean virtualThreads = "true".equals(options.get(
+                "virtual-threads"));
+        ExecutorService workers = createWorkerExecutor(virtualThreads);
         try (ServerSocket server = new ServerSocket(port)) {
             System.out.printf("GatewayRuntime %s ready on %d%n",
                     coordinator.nodeId(), port);
@@ -32,6 +34,23 @@ public final class GatewayRuntime {
                 Socket socket = server.accept();
                 workers.submit(() -> serve(coordinator, socket));
             }
+        }
+    }
+
+    /**
+     * 工作执行器（ADR-0331，TD-002）：JDK 21 反射创建虚拟线程执行器，
+     * JDK 17 回退 cached pool（POC 开关 --virtual-threads true）。
+     */
+    static ExecutorService createWorkerExecutor(boolean virtualThreads) {
+        if (!virtualThreads) {
+            return Executors.newCachedThreadPool();
+        }
+        try {
+            return (ExecutorService) Executors.class
+                    .getMethod("newVirtualThreadPerTaskExecutor")
+                    .invoke(null);
+        } catch (ReflectiveOperationException e) {
+            return Executors.newCachedThreadPool();
         }
     }
 
