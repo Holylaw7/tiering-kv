@@ -44,6 +44,11 @@ public final class VectorIndexStore {
         return dim;
     }
 
+    /** 索引最大层级（checkpoint 元数据，ADR-0338）。 */
+    public int maxLevel() {
+        return maxLevel;
+    }
+
     public VectorStore store() {
         return store;
     }

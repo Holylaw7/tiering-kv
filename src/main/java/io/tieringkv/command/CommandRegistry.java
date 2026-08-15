@@ -2,6 +2,7 @@ package io.tieringkv.command;
 
 import io.tieringkv.pubsub.PubSubBroker;
 import io.tieringkv.session.ConnectionContext;
+import io.tieringkv.vector.collection.VectorCollectionRegistry;
 import io.tieringkv.vector.indexfile.VectorIndexStore;
 
 import java.util.HashMap;
@@ -43,11 +44,23 @@ public final class CommandRegistry {
             Supplier<String> infoProvider,
             Map<String, Supplier<String>> sections,
             VectorIndexStore vectorStore) {
+        return createDefaultWithVector(infoProvider, sections,
+                VectorCollectionRegistry.ofDefault(vectorStore));
+    }
+
+    /** 多集合向量注册表（ADR-0338）：集合命令 + LIST/DROP/CHECKPOINT。 */
+    public static CommandRegistry createDefaultWithVector(
+            Supplier<String> infoProvider,
+            Map<String, Supplier<String>> sections,
+            VectorCollectionRegistry registry) {
         return build(infoProvider, sections, List.of(
-                new VectorCommand("vector.add", vectorStore),
-                new VectorCommand("vector.search", vectorStore),
-                new VectorCommand("vector.del", vectorStore),
-                new VectorCommand("vector.len", vectorStore),
+                new VectorCommand("vector.add", registry),
+                new VectorCommand("vector.search", registry),
+                new VectorCommand("vector.del", registry),
+                new VectorCommand("vector.len", registry),
+                new VectorCommand("vector.list", registry),
+                new VectorCommand("vector.drop", registry),
+                new VectorCommand("vector.checkpoint", registry),
                 new JsonCommand("json.set"),
                 new JsonCommand("json.get"),
                 new JsonCommand("json.del"),
