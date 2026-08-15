@@ -67,7 +67,10 @@
   ACL 只读子集、SCRIPT SHA1 注册表；EVAL 显式不可用，无 Lua）；
   RESP3 完整类型 ✅（ADR-0341，2026-08-15：null `_`、HELLO/CONFIG
   map、集合族 set、HGETALL map，字节级 wire 测试双口径）——P2
-  全部完成。
+  全部完成；评审：docs/review/phase71-object-acl-script-review.md、
+  docs/review/phase72-resp3-full-types-review.md；技术债审计关闭
+  12 项（TD-008/009/010/011/016/017/019/032/033/035/037/048），
+  剩余开放 6 项（TD-001/015/038 部分/044/046/049）。
 
 - Redis 兼容面：BIT/GEO ✅（ADR-0334/0335，2026-08-15：SETBIT/
   GETBIT/BITCOUNT/BITPOS/BITOP + GEOADD/GEOPOS/GEODIST/GEOHASH/

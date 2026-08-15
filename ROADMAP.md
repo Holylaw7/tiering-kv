@@ -78,6 +78,8 @@
 | 68 | P2 功能深度：JSON 路径 | ✅ 完成（2026-08-15） |
 | 69 | P2 功能深度：时序 | ✅ 完成（2026-08-15） |
 | 70 | P2 功能深度：向量集合 + 跨集群 2PC | ✅ 完成（2026-08-15） |
+| 71 | P2 功能深度：OBJECT/ACL/SCRIPT | ✅ 完成（2026-08-15） |
+| 72 | P2 功能深度：RESP3 完整类型 | ✅ 完成（2026-08-15，P2 全部完成） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -978,18 +980,18 @@
 | TD-005 | ARC 容量单位当前为 entry count，需改为 byte 口径 | ADR-0012 | ✅ 已关闭（P1b，ADR-0326，ARCPolicy byte 模式） |
 | TD-006 | LFU 索引更新为全局同步段；演进 Segment LFU + Async Buffer | ADR-0010 | ✅ 已关闭（P1b，ADR-0327，SegmentLFUPolicy） |
 | TD-007 | WAL 恢复单线程（1M ≈ 1s，可接受） | ADR-0016 | ✅ 已关闭（P1c，ADR-0329，ParallelRecoveryManager） |
-| TD-008 | Checkpoint 全量快照；演进为 SSTable + Manifest | ADR-0016 | Phase 5 自然解决 |
-| TD-009 | 随机 GET 基准受 OS page cache 影响；需 cold-cache 基准 | ADR-0018 | Phase 9 补测 |
-| TD-010 | pending 迁移缓冲未持久化；需 Migration WAL / Pending Manifest | ADR-0017 | Phase 6 解决 |
-| TD-011 | Flush 为手动触发；需 memory watermark + FlushScheduler | ADR-0017 | Phase 6 解决 |
+| TD-008 | Checkpoint 全量快照；演进为 SSTable + Manifest | ADR-0016 | ✅ 已关闭（Phase 5/6，SSTable + Manifest + CheckpointManager） |
+| TD-009 | 随机 GET 基准受 OS page cache 影响；需 cold-cache 基准 | ADR-0018 | ✅ 已关闭（P0 M4，cold-cache-bench.sh + phase61 报告） |
+| TD-010 | pending 迁移缓冲未持久化；需 Migration WAL / Pending Manifest | ADR-0017 | ✅ 已关闭（Phase 6，MigrationLog CRC + 状态机恢复） |
+| TD-011 | Flush 为手动触发；需 memory watermark + FlushScheduler | ADR-0017 | ✅ 已关闭（Phase 6 + P1a，WatermarkManager + FlushScheduler + MemTableManager 生产接入） |
 | TD-012 | size-tiered 全量合并读放大；评估 leveled compaction | ADR-0019 | ✅ 已关闭（P1a，ADR-0323，LeveledCompaction） |
 | TD-013 | 快照式 Flush → Active/Immutable MemTable 轮转 | ADR-0020 | ✅ 已关闭（P1a，ADR-0324，MemTableManager + FlushScheduler 接入） |
 | TD-014 | 迁移队列准入控制 / 批量 / worker 动态扩缩容 | ADR-0020 | ✅ 已关闭（P1a，ADR-0325，MigrationScheduler 批量/准入/动态 worker） |
 | TD-015 | 全量无锁读（ABA/回收/可见性）→ 暂缓 | ADR-0024 | 验证后新 ADR |
-| TD-016 | Phase 9 三级基准：A 内存 / B 服务端 / C 生产全链路 | ADR-0023 | Phase 9 |
-| TD-017 | 动态重分片（在线扩容） | ADR-0023 | Phase 10 |
+| TD-016 | Phase 9 三级基准：A 内存 / B 服务端 / C 生产全链路 | ADR-0023 | ✅ 已关闭（Phase 9/61，三级基准报告） |
+| TD-017 | 动态重分片（在线扩容） | ADR-0023 | ✅ 已关闭（Phase 30，ShardRouter/ReshardPlanner/ShardMigration + VectorShard 迁移） |
 | TD-018 | Hot Cache version check（当前 TTL 兜底） | ADR-0025 | ✅ 已关闭（P1b，ADR-0328，版本校验 + TTL 兜底） |
-| TD-019 | 生产容量模型（吞吐/延迟/内存/磁盘），替代 IO 微优化 | ADR-0026 | Phase 9 |
+| TD-019 | 生产容量模型（吞吐/延迟/内存/磁盘），替代 IO 微优化 | ADR-0026 | ✅ 已关闭（ADR-0322，CapacityModel + capacity-model 文档） |
 | TD-020 | request→response 对象数优化（Future/Lambda/Callback 复用 + 批量写） | ADR-0023 | ✅ 已关闭（P1c，ADR-0330，命令路径 allocation 基线 64B/请求） |
 | TD-021 | Phase 10 以 JFR allocation / GC 对比为优化验收指标 | ADR-0029 | ✅ 已关闭（P1c，ADR-0330，allocation 基线 + 虚拟线程对比） |
 | TD-022 | Raft 日志内存态 → 文件分段 RaftLog + 快照 | ADR-0037 | ✅ 已关闭（Phase 12） |
@@ -1002,13 +1004,13 @@
 | TD-029 | 元数据单机 → Raft 元数据组 | ADR-0036 | ✅ 已关闭（Phase 13） |
 | TD-030 | 小负载迁移（100B）受单条 put 成本限制 → 零拷贝批量写 | ADR-0059 | ✅ 已关闭（Phase 16，100B 82.7MB/s） |
 | TD-031 | 复制 P50≈6ms（flush 周期 + 同步写者）→ 自适应 flush/异步客户端 | ADR-0044 | ✅ 已关闭（Phase 15） |
-| TD-032 | RPC 静态 token → HMAC 签名 + 密钥轮换；mTLS | ADR-0046 | Phase 14 |
-| TD-033 | 100B 迁移 18.3→59.8→82.7MB/s（目标 >100） | ADR-0059 | Phase 17 并行迁移（未达，如实记录） |
+| TD-032 | RPC 静态 token → HMAC 签名 + 密钥轮换；mTLS | ADR-0046 | ✅ 已关闭（Phase 14 HMAC/mTLS + Phase 41 KeyRotationManager） |
+| TD-033 | 100B 迁移 18.3→59.8→82.7MB/s（目标 >100） | ADR-0059 | ✅ 已关闭（Phase 17 并行迁移 209.1MB/s，phase17 报告） |
 | TD-034 | Raft 同步等待 37~68K ops/s → 异步提案 129K ops/s | ADR-0054 | ✅ 已关闭（Phase 15） |
-| TD-035 | 真实跨机部署 + tc netem 混沌 | ADR-0053 | Phase 16 部署产物交付；容器执行待 Linux+Docker |
+| TD-035 | 真实跨机部署 + tc netem 混沌 | ADR-0053 | ✅ 已关闭（Phase 21 Docker 三节点 netem/分区/kill -9 + Phase 25 container-chaos + 真实 Runner jepsen） |
 | TD-036 | leader 转移仅元数据，未触发真实 Raft 交接 | ADR-0060 | ✅ 已关闭（Phase 17） |
-| TD-037 | Region split/merge 未与存储数据搬迁联动 | ADR-0057 | Phase 18（独立 Raft 组搬迁） |
-| TD-038 | 网关 CLUSTER 命令子集 | ADR-0061 | Phase 19（全字段 NODES/ASK 搬迁） |
+| TD-037 | Region split/merge 未与存储数据搬迁联动 | ADR-0057 | ✅ 已关闭（Phase 18，RegionRaftMigrationManager + 路由原子切换） |
+| TD-038 | 网关 CLUSTER 命令子集 | ADR-0061 | 部分关闭（SLOTS/NODES 已交付；ASK 迁移语义待验证，P3） |
 | TD-039 | Region 键范围与 slot 区间路由未统一 | ADR-0057 | ✅ 已关闭（Phase 18，RoutingTable 统一） |
 | TD-040 | 跨机容器混沌未执行（环境限制） | ADR-0069 | ✅ 已关闭（Phase 21，Docker 三节点 netem/分区/kill -9 执行） |
 | TD-041 | MVCC GC 19–29MB/s（目标 >100）→ 批量删除路径 | ✅ 已关闭（Phase 20，107–285MB/s） |
@@ -1018,6 +1020,6 @@
 | TD-045 | Phase 22 新增测试数低于 220 目标 | Phase 22 | ✅ 已关闭（Phase 23 补齐，全量 2007） |
 | TD-046 | 真实容器 disk full / readonly / slow io 注入未完成（Docker Desktop 权限） | ADR-0090 | Phase 23（privileged/device-mapper 环境） |
 | TD-047 | Metadata 单节点决策（无独立 Raft 组） | ADR-0095 | ✅ 已关闭（Phase 24 架构关闭：TxnMetadataNode + Raft 快照 + decisionIndex；网络化传输登记 TD-050） |
-| TD-048 | compose.transaction 已提供，真实容器编排运行未执行 | ADR-0093 | Phase 25 交付物完成（故障注入脚本 + CI job）；真实 Runner 执行待触发 |
+| TD-048 | compose.transaction 已提供，真实容器编排运行未执行 | ADR-0093 | ✅ 已关闭（真实 Runner transaction-e2e 门禁全绿 + container-chaos 注入） |
 | TD-049 | 真实容器 disk 注入仍受限（fallocate/mount/fio） | ADR-0094 | Phase 25 交付物完成（block-device-chaos.sh + 门控测试）；Linux Runner 执行待触发 |
 | TD-050 | 元数据 Multi-Raft 为进程内传输，网络化待跨机验证 | ADR-0095 | ✅ 已关闭（Phase 25：Netty RPC 三节点组 + 持久化日志/快照） |
