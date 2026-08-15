@@ -24,6 +24,10 @@
 
 ### Added
 
+- ADR-0344（P3 可观测性收口）：observability 注册表（向量/复制/
+  多模型/备份）+ INFO sections + `/metrics/prometheus` 端点；
+  复制/多模型喂数与 OTel 列为 Phase 增量。
+
 - v4.0 M1 向量存储接入（ADR-0319）：VectorIndexFile（magic/version/
   CRC + 原子写）、VectorIndexStore（checkpoint/load/rebuild）、
   VectorIndexMmapReader（MappedFile + BlockCache）、向量命令族

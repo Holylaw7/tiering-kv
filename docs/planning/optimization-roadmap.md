@@ -108,7 +108,9 @@
    NET_ADMIN 能力 → 网关 RESP2 合规 → 运行时 RPC 地址表 →
    CR 剥离读取 → 冒烟独立脚本（嵌套引号）；container-e2e
    delay/loss/partition/recover 全阶段真实执行）；
-- 向量/复制/多模型 Metrics 进 INFO + Prometheus 端点；
+- 向量/复制/多模型/备份 Metrics 收口（ADR-0344，2026-08-15：
+  observability 注册表 + INFO sections + `/metrics/prometheus`
+  端点；复制/多模型喂数与 OTel 列为增量）；
 - OpenTelemetry span 透传；
 - 备份恢复纳入向量索引与复制水位；
 - CI 卫生：JFR/日志 artifact、测试分片、缓存优化。
