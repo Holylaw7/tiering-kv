@@ -966,10 +966,10 @@
 | 编号 | 描述 | 来源 | 计划消除 |
 | --- | --- | --- | --- |
 | TD-001 | 单 Maven 模块；若模块耦合升高需评估拆分多模块 | ADR-0001 | Phase 7 前评估 |
-| TD-002 | JDK 17 目标下暂不采用虚拟线程 | ADR-0003 | Phase 7 评估升级 JDK 21 |
+| TD-002 | JDK 17 目标下暂不采用虚拟线程 | ADR-0003 | ✅ 已关闭（P1c，ADR-0331，JDK 21 虚拟线程 POC 941K ops/s） |
 | TD-005 | ARC 容量单位当前为 entry count，需改为 byte 口径 | ADR-0012 | ✅ 已关闭（P1b，ADR-0326，ARCPolicy byte 模式） |
 | TD-006 | LFU 索引更新为全局同步段；演进 Segment LFU + Async Buffer | ADR-0010 | ✅ 已关闭（P1b，ADR-0327，SegmentLFUPolicy） |
-| TD-007 | WAL 恢复单线程（1M ≈ 1s，可接受） | ADR-0016 | Phase 7 评估 parallel replay |
+| TD-007 | WAL 恢复单线程（1M ≈ 1s，可接受） | ADR-0016 | ✅ 已关闭（P1c，ADR-0329，ParallelRecoveryManager） |
 | TD-008 | Checkpoint 全量快照；演进为 SSTable + Manifest | ADR-0016 | Phase 5 自然解决 |
 | TD-009 | 随机 GET 基准受 OS page cache 影响；需 cold-cache 基准 | ADR-0018 | Phase 9 补测 |
 | TD-010 | pending 迁移缓冲未持久化；需 Migration WAL / Pending Manifest | ADR-0017 | Phase 6 解决 |
@@ -982,8 +982,8 @@
 | TD-017 | 动态重分片（在线扩容） | ADR-0023 | Phase 10 |
 | TD-018 | Hot Cache version check（当前 TTL 兜底） | ADR-0025 | ✅ 已关闭（P1b，ADR-0328，版本校验 + TTL 兜底） |
 | TD-019 | 生产容量模型（吞吐/延迟/内存/磁盘），替代 IO 微优化 | ADR-0026 | Phase 9 |
-| TD-020 | request→response 对象数优化（Future/Lambda/Callback 复用 + 批量写） | ADR-0023 | Phase 10 |
-| TD-021 | Phase 10 以 JFR allocation / GC 对比为优化验收指标 | ADR-0029 | Phase 10 |
+| TD-020 | request→response 对象数优化（Future/Lambda/Callback 复用 + 批量写） | ADR-0023 | ✅ 已关闭（P1c，ADR-0330，命令路径 allocation 基线 64B/请求） |
+| TD-021 | Phase 10 以 JFR allocation / GC 对比为优化验收指标 | ADR-0029 | ✅ 已关闭（P1c，ADR-0330，allocation 基线 + 虚拟线程对比） |
 | TD-022 | Raft 日志内存态 → 文件分段 RaftLog + 快照 | ADR-0037 | ✅ 已关闭（Phase 12） |
 | TD-023 | 进程内直调 → Netty TCP RPC + 超时重试 | ADR-0037 | ✅ 已关闭（Phase 12） |
 | TD-024 | 复制滞后 13–35ms → CommitNotifier 立即补发（<1ms） | ADR-0037 | ✅ 已关闭（Phase 12） |

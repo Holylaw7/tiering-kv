@@ -56,6 +56,8 @@
   （标记 + 长度前缀 + CRC）、sendBatch/sendAsync + 成功/失败计数、
   水位周期 checkpoint、ConflictResolver 接口 + LWW 实现。
 - 报告：docs/benchmark/phase65-hnsw-search-report.md。
+- 评审：docs/review/phase65-p1d-v4-module-enhancement-review.md；
+  TD-002/007/020/021 随归档关闭。
 
 ## P2 — 功能深度
 
