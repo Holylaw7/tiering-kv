@@ -1016,10 +1016,10 @@
 | TD-041 | MVCC GC 19–29MB/s（目标 >100）→ 批量删除路径 | ✅ 已关闭（Phase 20，107–285MB/s） |
 | TD-042 | Redis 网关未接 MVCC 自动事务化 | ✅ 已关闭（Phase 20，GET/SET/DEL/MGET/MSET） |
 | TD-043 | 事务/MVCC 未接入 Multi-Raft Region 网络路径，跨机事务验证受限 | ADR-0082 | ✅ 已关闭（Phase 21 TCP 事务协议 + Phase 23 运行时 + Phase 24 CI 容器 E2E 交付） |
-| TD-044 | 跨机 disk slow / disk full 混沌未执行 | ADR-0086 | 部分关闭（Phase 22 in-JVM 语义覆盖；真实注入受 Docker 权限限制） |
+| TD-044 | 跨机 disk slow / disk full 混沌未执行 | ADR-0086 | ✅ 已关闭（Phase 22 in-JVM 语义 + ADR-0342 真实块设备 disk-full/readonly 闭环，真实 Runner 通过） |
 | TD-045 | Phase 22 新增测试数低于 220 目标 | Phase 22 | ✅ 已关闭（Phase 23 补齐，全量 2007） |
-| TD-046 | 真实容器 disk full / readonly / slow io 注入未完成（Docker Desktop 权限） | ADR-0090 | Phase 23（privileged/device-mapper 环境） |
+| TD-046 | 真实容器 disk full / readonly / slow io 注入未完成（Docker Desktop 权限） | ADR-0090 | 部分关闭（ADR-0342 真实块设备闭环证据；容器级注入持续跟踪 P3） |
 | TD-047 | Metadata 单节点决策（无独立 Raft 组） | ADR-0095 | ✅ 已关闭（Phase 24 架构关闭：TxnMetadataNode + Raft 快照 + decisionIndex；网络化传输登记 TD-050） |
 | TD-048 | compose.transaction 已提供，真实容器编排运行未执行 | ADR-0093 | ✅ 已关闭（真实 Runner transaction-e2e 门禁全绿 + container-chaos 注入） |
-| TD-049 | 真实容器 disk 注入仍受限（fallocate/mount/fio） | ADR-0094 | Phase 25 交付物完成（block-device-chaos.sh + 门控测试）；Linux Runner 执行待触发 |
+| TD-049 | 真实容器 disk 注入仍受限（fallocate/mount/fio） | ADR-0094 | 部分关闭（ADR-0342 block-device-chaos 真实 loop/dmsetup 闭环，真实 Runner 通过；容器级注入持续跟踪 P3） |
 | TD-050 | 元数据 Multi-Raft 为进程内传输，网络化待跨机验证 | ADR-0095 | ✅ 已关闭（Phase 25：Netty RPC 三节点组 + 持久化日志/快照） |
