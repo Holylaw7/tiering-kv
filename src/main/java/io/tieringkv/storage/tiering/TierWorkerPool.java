@@ -49,6 +49,24 @@ public final class TierWorkerPool implements AutoCloseable {
         }
     }
 
+    /** 动态调整 worker 数（ADR-0325）：core/max 联动，立即生效。 */
+    public void adjust(int workers) {
+        if (workers <= 0) {
+            throw new IllegalArgumentException(
+                    "workers must be positive");
+        }
+        // setCorePoolSize 要求 core <= max：扩大时先扩 max，缩小时先缩 core
+        if (workers > executor.getMaximumPoolSize()) {
+            executor.setMaximumPoolSize(workers);
+        }
+        executor.setCorePoolSize(workers);
+        executor.setMaximumPoolSize(workers);
+    }
+
+    public int workers() {
+        return executor.getMaximumPoolSize();
+    }
+
     public int activeCount() {
         return executor.getActiveCount();
     }
