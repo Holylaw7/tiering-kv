@@ -59,7 +59,11 @@
 - 评审：docs/review/phase65-p1d-v4-module-enhancement-review.md；
   TD-002/007/020/021 随归档关闭。
 
-## P2 — 功能深度
+## P2 — 功能深度（主体完成，2026-08-15 归档）
+
+- 归档评审：docs/review/phase70-p2-functional-depth-review.md；
+  BIT/GEO、JSON 路径、时序、向量多集合、跨集群 2PC 已交付；
+  剩余 OBJECT/SCRIPT/ACL 与 RESP3 完整类型继续按本路线图推进。
 
 - Redis 兼容面：BIT/GEO ✅（ADR-0334/0335，2026-08-15：SETBIT/
   GETBIT/BITCOUNT/BITPOS/BITOP + GEOADD/GEOPOS/GEODIST/GEOHASH/
