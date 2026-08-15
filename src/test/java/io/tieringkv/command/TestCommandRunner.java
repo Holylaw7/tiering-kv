@@ -13,8 +13,12 @@ public final class TestCommandRunner {
     private final CommandEngine engine;
 
     public TestCommandRunner(StorageEngine storage) {
-        this.engine = new CommandEngine(
-                CommandRegistry.createDefault(), storage);
+        this(storage, CommandRegistry.createDefault());
+    }
+
+    public TestCommandRunner(StorageEngine storage,
+                             CommandRegistry registry) {
+        this.engine = new CommandEngine(registry, storage);
     }
 
     public RespValue exec(String name, Object... args) {
