@@ -98,6 +98,11 @@
 - 技术债审计（2026-08-15）：关闭 12 项已解决 TD（008/009/010/011/
   016/017/019/032/033/035/037/048），开放 18 → 6 项
   （TD-001/015/038 部分/044/046/049，后四项属 P3 真实故障注入）。
+- P3 真实磁盘故障注入（ADR-0342）：block-device-chaos.sh 修正
+  （loop 自动分配 + dd 真实填满 + slow 优雅跳过 + cleanup 幂等）、
+  RealBlockDeviceExerciseTest（baseline/disk-full/readonly 三场景
+  WAL 写入→恢复闭环，Linux+环境变量门控）、CI block-device-chaos
+  job 完整接线。
 
 ### Fixed
 

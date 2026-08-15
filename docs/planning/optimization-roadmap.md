@@ -96,7 +96,10 @@
 
 ## P3 — 可靠性 / 可观测性 / 运维
 
-- 真实磁盘故障注入（TD-049）、真实网络 netem 混沌；
+- 真实磁盘故障注入 ✅（ADR-0342，2026-08-15：block-device-chaos.sh
+  修正（loop 自动分配/真实填满/cleanup 幂等）+ RealBlockDeviceExerciseTest
+  baseline/disk-full/readonly 闭环 + CI block-device-chaos job 接线；
+  TD-044/046 保留容器级跟踪）；真实网络 netem 混沌；
 - 向量/复制/多模型 Metrics 进 INFO + Prometheus 端点；
 - OpenTelemetry span 透传；
 - 备份恢复纳入向量索引与复制水位；
