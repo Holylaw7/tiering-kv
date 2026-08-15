@@ -941,7 +941,8 @@ public final class RaftNode implements AutoCloseable {
         }
     }
 
-    private long lastLogIndex() {
+    /** 本地日志最后一条索引（leader 交接/健康检查可观测性）。 */
+    public long lastLogIndex() {
         return cacheLastIndexLocked();
     }
 

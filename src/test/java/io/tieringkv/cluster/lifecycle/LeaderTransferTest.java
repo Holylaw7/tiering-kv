@@ -87,7 +87,9 @@ class LeaderTransferTest {
                     .get(5, TimeUnit.SECONDS)).isFalse();
             fixture.clearDrop();
             awaitTrue("target catches up", () ->
-                    target.logSize() == leader.logSize(), 5000);
+                    target.logSize() == leader.logSize()
+                            && leader.replication().matchIndex(target.id())
+                            >= leader.lastLogIndex(), 5000);
             assertThat(leader.transferLeadership(target.id())
                     .get(5, TimeUnit.SECONDS)).isTrue();
         }
