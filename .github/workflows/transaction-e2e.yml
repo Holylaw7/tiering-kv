@@ -129,15 +129,18 @@ jobs:
       - name: Block device setup
         run: |
           sudo scripts/block-device-chaos.sh setup
-          sudo scripts/block-device-chaos.sh disk-full
-          sudo scripts/block-device-chaos.sh cleanup
-          sudo scripts/block-device-chaos.sh setup
-          sudo mount -o remount,ro /mnt/tiering-kv-block
-          sudo mount -o remount,rw /mnt/tiering-kv-block
-      - name: Gated block device chaos tests
+      - name: Gated block device smoke + exercise (baseline, disk-full)
         run: |
           TIERINGKV_CONTAINER_CHAOS=true TIERINGKV_BLOCK_DEVICE_READY=true \
-            mvn -q -Dtest=RealBlockDeviceChaosTest -DfailIfNoTests=false test
+            mvn -q -Dtest=RealBlockDeviceChaosTest,RealBlockDeviceExerciseTest \
+            -DfailIfNoTests=false test
+      - name: Readonly block device exercise
+        run: |
+          sudo scripts/block-device-chaos.sh readonly
+          TIERINGKV_CONTAINER_CHAOS=true TIERINGKV_BLOCK_READONLY=true \
+            mvn -q -Dtest=RealBlockDeviceExerciseTest#readonlyAppendFailsWithoutLoss \
+            -DfailIfNoTests=false test
+          sudo mount -o remount,rw /mnt/tiering-kv-block
       - name: Cleanup
         if: always()
         run: sudo scripts/block-device-chaos.sh cleanup
