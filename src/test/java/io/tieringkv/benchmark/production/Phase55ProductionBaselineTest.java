@@ -17,7 +17,7 @@ class Phase55ProductionBaselineTest {
     @Test
     void registryHas115Commands() {
         assertThat(CommandRegistry.createDefault().size())
-                .isEqualTo(115);
+                .isEqualTo(127);
     }
 
     @Test

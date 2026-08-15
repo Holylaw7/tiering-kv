@@ -109,7 +109,7 @@ class VectorCommandTest {
     void defaultRegistryUnchangedWithoutVector() {
         CommandRegistry registry = CommandRegistry.createDefault();
         assertThat(registry.find("vector.add")).isNull();
-        // 既有 115 命令断言保持不变（Phase51-56 基线）
-        assertThat(registry.size()).isEqualTo(115);
+        // 既有 115 + P2 BIT/GEO 12 = 127（Phase66 基线）
+        assertThat(registry.size()).isEqualTo(127);
     }
 }
