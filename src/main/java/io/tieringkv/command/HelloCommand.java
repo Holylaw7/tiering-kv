@@ -3,6 +3,7 @@ package io.tieringkv.command;
 import io.tieringkv.protocol.RespArray;
 import io.tieringkv.protocol.RespBulkString;
 import io.tieringkv.protocol.RespError;
+import io.tieringkv.protocol.RespMap;
 import io.tieringkv.protocol.RespValue;
 import io.tieringkv.protocol.RespVersion;
 import io.tieringkv.session.ConnectionContext;
@@ -41,7 +42,7 @@ public final class HelloCommand implements Command {
             context.setVersion(version == 3
                     ? RespVersion.RESP3 : RespVersion.RESP2);
         }
-        return new RespArray(List.of(
+        List<RespValue> pairs = List.of(
                 new RespBulkString(CommandUtil.bytes("server")),
                 new RespBulkString(CommandUtil.bytes(
                         "tiering-kv")),
@@ -51,6 +52,11 @@ public final class HelloCommand implements Command {
                 new RespBulkString(CommandUtil.bytes(
                         Long.toString(version))),
                 new RespBulkString(CommandUtil.bytes("mode")),
-                new RespBulkString(CommandUtil.bytes("standalone"))));
+                new RespBulkString(CommandUtil.bytes("standalone")));
+        if (context != null
+                && context.version() == RespVersion.RESP3) {
+            return new RespMap(pairs);
+        }
+        return new RespArray(pairs);
     }
 }

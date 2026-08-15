@@ -3,8 +3,11 @@ package io.tieringkv.command;
 import io.tieringkv.protocol.RespArray;
 import io.tieringkv.protocol.RespBulkString;
 import io.tieringkv.protocol.RespError;
+import io.tieringkv.protocol.RespMap;
 import io.tieringkv.protocol.RespSimpleString;
 import io.tieringkv.protocol.RespValue;
+import io.tieringkv.protocol.RespVersion;
+import io.tieringkv.session.ConnectionContext;
 import io.tieringkv.storage.StorageEngine;
 
 import java.util.ArrayList;
@@ -58,6 +61,12 @@ public final class ConfigCommand implements Command {
                         entries.add(new RespBulkString(
                                 CommandUtil.bytes(entry.getValue())));
                     }
+                }
+                ConnectionContext context =
+                        ConnectionContext.current();
+                if (context != null
+                        && context.version() == RespVersion.RESP3) {
+                    return new RespMap(entries);
                 }
                 return new RespArray(entries);
             }

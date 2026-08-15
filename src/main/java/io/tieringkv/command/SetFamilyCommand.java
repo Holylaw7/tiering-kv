@@ -201,7 +201,15 @@ public final class SetFamilyCommand implements Command {
                         : new RespBulkString(
                         removed.get(0).data());
             }
-            return toArray(new LinkedHashSet<>(removed));
+            Set<ByteArrayKey> removedSet =
+                    new LinkedHashSet<>(removed);
+            ConnectionContext context =
+                    ConnectionContext.current();
+            if (context != null
+                    && context.version() == RespVersion.RESP3) {
+                return toSet(removedSet);
+            }
+            return toArray(removedSet);
         } catch (NumberFormatException e) {
             return new RespError(CommandUtil.NOT_INTEGER);
         } catch (TypeSupport.WrongTypeException e) {
@@ -226,18 +234,20 @@ public final class SetFamilyCommand implements Command {
             long count = CommandUtil.parseLong(args.get(1));
             List<ByteArrayKey> result = new ArrayList<>();
             if (count >= 0) {
-                for (long i = 0; i < count
-                        && !ordered.isEmpty(); i++) {
-                    result.add(ordered.get(random.nextInt(
-                            ordered.size())));
+                // 正值：抽后移除，保证结果去重（Redis 语义）
+                List<ByteArrayKey> pool = new ArrayList<>(ordered);
+                for (long i = 0; i < count && !pool.isEmpty(); i++) {
+                    result.add(pool.remove(random.nextInt(
+                            pool.size())));
                 }
             } else {
+                // 负值：允许重复元素
                 for (long i = 0; i < -count; i++) {
                     result.add(ordered.get(random.nextInt(
                             ordered.size())));
                 }
             }
-            return toArray(new LinkedHashSet<>(result));
+            return toArray(result);
         } catch (NumberFormatException e) {
             return new RespError(CommandUtil.NOT_INTEGER);
         } catch (TypeSupport.WrongTypeException e) {
@@ -252,6 +262,12 @@ public final class SetFamilyCommand implements Command {
         }
         try {
             Set<ByteArrayKey> result = computeOp(args, storage, op);
+            ConnectionContext context =
+                    ConnectionContext.current();
+            if (context != null
+                    && context.version() == RespVersion.RESP3) {
+                return toSet(result);
+            }
             return toArray(result);
         } catch (TypeSupport.WrongTypeException e) {
             return TypeSupport.wrongType();
@@ -332,5 +348,22 @@ public final class SetFamilyCommand implements Command {
             values.add(new RespBulkString(member.data()));
         }
         return new RespArray(values);
+    }
+
+    /** 保留重复元素的数组输出（SRANDMEMBER 负值语义）。 */
+    private static RespArray toArray(List<ByteArrayKey> members) {
+        List<RespValue> values = new ArrayList<>();
+        for (ByteArrayKey member : members) {
+            values.add(new RespBulkString(member.data()));
+        }
+        return new RespArray(values);
+    }
+
+    private static RespSet toSet(Set<ByteArrayKey> members) {
+        List<RespValue> values = new ArrayList<>();
+        for (ByteArrayKey member : members) {
+            values.add(new RespBulkString(member.data()));
+        }
+        return new RespSet(values);
     }
 }

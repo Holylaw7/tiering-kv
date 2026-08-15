@@ -108,6 +108,10 @@ public final class RespEncoder extends MessageToByteEncoder<RespValue> {
             for (RespValue element : push.values()) {
                 writeV3(out, element);
             }
+        } else if (value instanceof RespNull) {
+            // RESP3 null 为 '_'（RESP2 仍为 $-1/*-1，走 write 回退）
+            out.writeCharSequence("_\r\n",
+                    StandardCharsets.US_ASCII);
         } else {
             write(out, value);
         }

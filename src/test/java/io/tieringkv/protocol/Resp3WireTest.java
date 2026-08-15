@@ -142,7 +142,10 @@ class Resp3WireTest {
         RespValue result = withContext(context,
                 () -> runner.exec("hello",
                         version == RespVersion.RESP3 ? "3" : "2"));
-        assertThat(result).isInstanceOf(RespArray.class);
+        // ADR-0341：HELLO 3 返回 Map，HELLO 2 返回平铺数组
+        assertThat(result).isInstanceOf(
+                version == RespVersion.RESP3
+                        ? RespMap.class : RespArray.class);
     }
 
     static Stream<Arguments> values() {
