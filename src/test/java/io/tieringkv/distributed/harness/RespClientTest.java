@@ -51,4 +51,11 @@ class RespClientTest {
         client.put("k", "中文值");
         assertThat(client.get("k")).isEqualTo("中文值");
     }
+
+    @Test
+    void setTimeoutBoundedIo() throws Exception {
+        client.setTimeout(5_000);
+        client.put("k", "v");
+        assertThat(client.get("k")).isEqualTo("v");
+    }
 }

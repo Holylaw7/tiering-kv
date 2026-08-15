@@ -22,6 +22,11 @@ public final class RespClient implements AutoCloseable {
         this.out = socket.getOutputStream();
     }
 
+    /** 设置 I/O 超时（门控混沌演练用，默认无限等待）。 */
+    public void setTimeout(int millis) throws IOException {
+        socket.setSoTimeout(millis);
+    }
+
     public void put(String key, String value) throws IOException {
         send("SET", key, value);
         String response = readResponse();

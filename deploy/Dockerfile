@@ -9,5 +9,9 @@ RUN mvn -q -DskipTests package
 
 FROM eclipse-temurin:17-jre
 WORKDIR /app
+# tc netem 混沌注入（ADR-0343）：真实网络故障演练需要 iproute2。
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends iproute2 \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=build /build/target/tiering-kv-*.jar /app/tiering-kv.jar
 ENTRYPOINT ["java", "-Xmx1g", "-jar", "/app/tiering-kv.jar"]
