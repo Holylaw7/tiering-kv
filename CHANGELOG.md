@@ -126,6 +126,8 @@
   与全部 region host（createUnresolved + Docker DNS），新增
   CoordinatorRuntimeAddressesTest（2 项）；网关连接错误输出到
   stderr 不再静默；冒烟有界重试吸收 Raft 就绪竞态。
+- P3 冒烟脚本修正：RESP 行尾 `\r\n` 使 bash `read` 保留 `\r`，
+  `+OK\r` 断言失败；改为 `IFS=$'\r\n' read` 剥离 CR。
 - WAL 恢复只读语义（ADR-0342 真实 Runner 演练发现）：
   RecoveryManager.truncateTail 干净尾部不再以 WRITE 打开，只读
   文件系统上崩溃恢复可完成；新增 RecoveryManagerReadonlyTest。

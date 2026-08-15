@@ -54,6 +54,9 @@ P3 第二项。基线：现有 partition 因镜像缺 tc + `|| true` 静默吞�
    只写不读从未触发真实事务路径）；地址表注册 metadata +
    全部 region host（createUnresolved），网关异常输出 stderr，
    冒烟改为有界重试吸收 Raft 就绪竞态。
+5. 冒烟 10 次全失败但网关无错误：RESP 行尾是 `\r\n`，bash
+   `read -r` 默认保留 `\r`，`+OK\r` ≠ `+OK`；读取改为
+   `IFS=$'\r\n' read` 剥离 CR（已验证 `FIXED=[abc] len=3`）。
 
 状态：修复链 4 轮（可执行位 → NET_ADMIN → RESP 合规 → RPC 地址表），
 待真实 Runner 门禁最终通过后归档。
