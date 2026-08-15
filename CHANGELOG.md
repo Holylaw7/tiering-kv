@@ -88,6 +88,10 @@
   WHOAMI/LIST/CAT/GETUSER、SCRIPT LOAD/EXISTS/FLUSH SHA1 注册表；
   EVAL/EVALSHA 显式 scripting engine not available（无 Lua，
   诚实登记）；默认注册表 127 → 132）。
+- P2 收官：RESP3 完整类型（ADR-0341：RESP3 null 编码 `_`、
+  HELLO 3/CONFIG GET/HGETALL → Map、SMEMBERS/SINTER/SUNION/SDIFF/
+  SPOP count → Set、字节级 wire 双口径测试；修复 SRANDMEMBER 正值
+  计数去重抽取与负值保留重复的 Redis 语义）。
 
 ### Fixed
 

@@ -50,6 +50,17 @@
 | SCRIPT LOAD/EXISTS/FLUSH | bulk/array/OK | SHA1 注册表 |
 | EVAL/EVALSHA | error | scripting engine not available（无 Lua） |
 
+## RESP3 完整类型（ADR-0341）
+
+| 场景 | RESP3 | RESP2 回退 |
+| --- | --- | --- |
+| null | `_` | `$-1` / `*-1` |
+| HELLO 3 | `%4` map | `*8` 平铺数组 |
+| CONFIG GET | `%N` map | `*2N` 平铺数组 |
+| HGETALL | `%N` map | `*2N` 平铺数组 |
+| SMEMBERS / SINTER / SUNION / SDIFF / SPOP count | `~N` set | `*N` 数组 |
+| SRANDMEMBER count | `*N`（允许重复） | `*N` |
+
 ## 错误文本
 
 - `ERR wrong number of arguments for '<cmd>' command`
@@ -72,4 +83,6 @@
 - 向量集合为内存索引（未做磁盘 LRU 卸载）；checkpoint 目录级全局
   配置；VECTOR.SEARCH 仍为暴力检索（HNSW 索引待接线）；
 - OBJECT ENCODING 与真实 Redis 内部编码存在差异（以项目类型系统
-  为准）；ACL 仅默认用户；EVAL 无 Lua 运行时（显式错误）。
+  为准）；ACL 仅默认用户；EVAL 无 Lua 运行时（显式错误）；
+- PubSub RESP3 push 消息尚未命令级接线（编码器已支持，文档登记）；
+  SRANDMEMBER 正值计数修复为去重抽取（Redis 语义）。
