@@ -3,6 +3,7 @@ package io.tieringkv.vector.sql;
 import io.tieringkv.sql.SqlIndexRegistry;
 import io.tieringkv.vector.Embedding;
 import io.tieringkv.vector.VectorStore;
+import io.tieringkv.vector.collection.VectorCollectionRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -88,5 +89,45 @@ class VectorSqlSearchTest {
         assertThat(search.search(store, "docs", "embedding",
                 new float[]{1, 0}, 5, id -> id.equals("nope")))
                 .isEmpty();
+    }
+
+    @Test
+    void collectionAwareSearchResolvesStore() {
+        VectorCollectionRegistry collections =
+                new VectorCollectionRegistry();
+        collections.put("docs", new Embedding("hot",
+                new float[]{1, 0}));
+        collections.put("docs", new Embedding("cold-1",
+                new float[]{0, 1}));
+        VectorSqlSearch search = new VectorSqlSearch(
+                registryWithVector());
+        search.bindCollection("docs", "embedding", "docs");
+        List<VectorStore.ScoredEmbedding> results = search.search(
+                collections, "docs", "embedding", new float[]{1, 0},
+                5, id -> id.startsWith("cold"));
+        assertThat(results).extracting(
+                VectorStore.ScoredEmbedding::id)
+                .containsExactly("cold-1");
+    }
+
+    @Test
+    void collectionAwareSearchRequiresBinding() {
+        VectorSqlSearch search = new VectorSqlSearch(
+                registryWithVector());
+        assertThatThrownBy(() -> search.search(
+                new VectorCollectionRegistry(), "docs", "embedding",
+                new float[]{1, 0}, 5, id -> true))
+                .hasMessageContaining("no vector collection bound");
+    }
+
+    @Test
+    void collectionAwareSearchMissingCollectionRejected() {
+        VectorSqlSearch search = new VectorSqlSearch(
+                registryWithVector());
+        search.bindCollection("docs", "embedding", "missing");
+        assertThatThrownBy(() -> search.search(
+                new VectorCollectionRegistry(), "docs", "embedding",
+                new float[]{1, 0}, 5, id -> true))
+                .hasMessageContaining("collection not found");
     }
 }
