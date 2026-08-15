@@ -57,6 +57,12 @@ P3 第二项。基线：现有 partition 因镜像缺 tc + `|| true` 静默吞�
 5. 冒烟 10 次全失败但网关无错误：RESP 行尾是 `\r\n`，bash
    `read -r` 默认保留 `\r`，`+OK\r` ≠ `+OK`；读取改为
    `IFS=$'\r\n' read` 剥离 CR（已验证 `FIXED=[abc] len=3`）。
+6. 改为 `IFS=$'\r\n'` 后 CI 仍静默失败且零输出：根因是
+   `$'\r\n'` 的单引号**提前终止了 workflow 内嵌 `bash -c '...'`
+   的外层单引号参数**（bash -x 追踪显示内容被破坏成 `$rn`）。
+   修复：冒烟逻辑独立为 `scripts/container-smoke.sh`（可执行，
+   WSL 真实 bash 验证通过），workflow 只调
+   `timeout 45 scripts/container-smoke.sh`。
 
 状态：修复链 4 轮（可执行位 → NET_ADMIN → RESP 合规 → RPC 地址表），
 待真实 Runner 门禁最终通过后归档。
