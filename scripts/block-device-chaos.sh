@@ -18,7 +18,8 @@ case "${1:-setup}" in
     mkfs.ext4 -q "$LOOP_DEV"
     mkdir -p "$MOUNT_DIR"
     mount "$LOOP_DEV" "$MOUNT_DIR"
-    chown "$(id -u):$(id -g)" "$MOUNT_DIR"
+    # sudo 下 chown 给调用者（runner），否则 Maven 非 root 无法写入
+    chown "${SUDO_UID:-$(id -u)}:${SUDO_GID:-$(id -g)}" "$MOUNT_DIR"
     echo "TIERINGKV_BLOCK_DEVICE_READY=true"
     ;;
   disk-full)
