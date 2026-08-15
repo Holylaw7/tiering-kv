@@ -110,6 +110,11 @@
 
 ### Fixed
 
+- P3 真实 Runner 门禁暴露：后端容器缺 NET_ADMIN 导致
+  `tc qdisc add` 返回 `Operation not permitted`；docker-compose
+  transaction 栈四后端服务（coordinator/participant-a/
+  participant-b/meta）`cap_add: [NET_ADMIN]`，netem 注入在
+  container-e2e 真实生效。
 - WAL 恢复只读语义（ADR-0342 真实 Runner 演练发现）：
   RecoveryManager.truncateTail 干净尾部不再以 WRITE 打开，只读
   文件系统上崩溃恢复可完成；新增 RecoveryManagerReadonlyTest。

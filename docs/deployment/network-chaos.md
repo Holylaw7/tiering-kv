@@ -10,6 +10,9 @@ RESP 网关验证 Raft/事务 RPC 语义：抖动下最终一致、分区下不�
 
 - Linux + Docker；事务栈镜像含 iproute2（deploy/Dockerfile，
   ADR-0343 修正：此前镜像无 tc，container-chaos partition 静默 no-op）；
+- 后端容器（txn-coordinator/participant-a/participant-b/txn-meta）需
+  `NET_ADMIN` 能力（docker-compose.transaction.yml `cap_add`），否则
+  `tc qdisc add` 返回 `Operation not permitted`（CI 已暴露并修复）；
 - CI：GitHub Actions `transaction-e2e.yml` container-e2e job；
 - 本地 Windows/macOS：演练测试自动跳过（OS/环境变量门控）。
 

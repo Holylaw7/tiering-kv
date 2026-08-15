@@ -20,6 +20,9 @@ P3 第二项：真实网络混沌。现状：container-chaos.sh 的 partition �
   `delay <ms>` / `loss <%>` / `partition`（loss 100%）/ `recover` /
   `show`；应用后强制校验 `tc qdisc show` 含 "netem"，未生效即失败
   （禁止静默降级）；gateway 不打 netem（保持宿主冒烟可达）；
+- **NET_ADMIN 能力**：上述后端容器在 compose 中 `cap_add: [NET_ADMIN]`，
+  否则容器内 `tc qdisc add` 报 `Operation not permitted`
+  （真实 Runner 首次门禁暴露，已修复）；
 - **RealNetworkChaosTest**（Linux + TIERINGKV_NETWORK_CHAOS 门控，
   本地跳过）：经 127.0.0.1:6379 走真实 RESP 链路：
   - `setGetRoundTripUnderNetem`（delay/loss/recovered 三阶段）：5 轮
@@ -46,6 +49,7 @@ P3 第二项：真实网络混沌。现状：container-chaos.sh 的 partition �
 
 ## Implementation
 
-`deploy/Dockerfile`（iproute2）、`scripts/network-chaos.sh`、
+`deploy/Dockerfile`（iproute2）、`docker-compose.transaction.yml`
+（cap_add NET_ADMIN）、`scripts/network-chaos.sh`、
 `runtime/RealNetworkChaosTest`、`RespClient.setTimeout`、
 `transaction-e2e.yml` container-e2e 接线、部署文档。
