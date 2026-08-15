@@ -94,8 +94,11 @@ public final class GatewayRuntime {
                 }
                 out.flush();
             }
-        } catch (Exception ignored) {
-            // 单连接错误不影响网关
+        } catch (Exception e) {
+            // 单连接错误不影响网关，但必须输出证据（ADR-0343 教训：
+            // 静默吞错导致 CI 无法定位根因）。
+            System.err.println("[gateway] connection error: " + e);
+            e.printStackTrace();
         }
     }
 
