@@ -3,6 +3,7 @@ package io.tieringkv.console.rest;
 import io.tieringkv.console.ConsoleApi;
 import io.tieringkv.monitor.AlertManager;
 import io.tieringkv.monitor.Phase28Metrics;
+import io.tieringkv.observability.ObservabilityRegistry;
 import io.tieringkv.saas.TenantRegistry;
 import io.tieringkv.security.CredentialManager;
 import io.tieringkv.security.Role;
@@ -47,6 +48,17 @@ class ConsoleRestTest {
         return server;
     }
 
+    private ConsoleRestServer startWithPrometheus() throws Exception {
+        credentials = new CredentialManager();
+        ConsoleApi api = new ConsoleApi(new TenantRegistry(),
+                new Phase28Metrics(), new AlertManager(List.of()),
+                credentials);
+        server = new ConsoleRestServer(0, api,
+                () -> "tiering_prometheus_probe 1\n");
+        server.start();
+        return server;
+    }
+
     private String adminToken() {
         return credentials.issue(Role.ADMIN, 60_000);
     }
@@ -73,6 +85,34 @@ class ConsoleRestTest {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create("http://127.0.0.1:"
                         + server.port() + "/tenants"))
+                .GET().build();
+        HttpResponse<String> response = client.send(request,
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(403);
+    }
+
+    @Test
+    void prometheusEndpointWithToken() throws Exception {
+        startWithPrometheus();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://127.0.0.1:"
+                        + server.port() + "/metrics/prometheus"))
+                .header("Authorization", "Bearer " + adminToken())
+                .GET().build();
+        HttpResponse<String> response = client.send(request,
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("tiering_prometheus_probe 1");
+    }
+
+    @Test
+    void prometheusEndpointWithoutTokenForbidden() throws Exception {
+        startWithPrometheus();
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://127.0.0.1:"
+                        + server.port() + "/metrics/prometheus"))
                 .GET().build();
         HttpResponse<String> response = client.send(request,
                 HttpResponse.BodyHandlers.ofString());

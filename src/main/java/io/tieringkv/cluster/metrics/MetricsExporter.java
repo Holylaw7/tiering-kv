@@ -5,6 +5,10 @@ import io.tieringkv.cluster.raft.RaftMetricsRegistry;
 import io.tieringkv.cluster.region.RegionMetricsRegistry;
 import io.tieringkv.mvcc.MvccMetricsRegistry;
 import io.tieringkv.mvcc.TransactionMetricsRegistry;
+import io.tieringkv.observability.BackupMetricsRegistry;
+import io.tieringkv.observability.MultiModelMetricsRegistry;
+import io.tieringkv.observability.ReplicationMetricsRegistry;
+import io.tieringkv.observability.VectorMetricsRegistry;
 
 import java.util.Locale;
 import java.util.Map;
@@ -31,6 +35,68 @@ public final class MetricsExporter {
                                 TransactionMetricsRegistry transactions,
                                 MvccMetricsRegistry mvcc) {
         StringBuilder sb = new StringBuilder();
+        exportClusterTxnMvcc(sb, regions, raft, migration, gateway,
+                transactions, mvcc);
+        return sb.toString();
+    }
+
+    /**
+     * 可观测性收口（ADR-0344）：在既有 Cluster/Txn/MVCC 基础上追加
+     * 向量/复制/多模型/备份指标。与 INFO sections 同一 snapshot 渲染。
+     */
+    public static String exportAll(VectorMetricsRegistry vector,
+                                   ReplicationMetricsRegistry replication,
+                                   MultiModelMetricsRegistry multimodel,
+                                   BackupMetricsRegistry backup) {
+        StringBuilder sb = new StringBuilder();
+        VectorMetricsRegistry.Snapshot v = vector.snapshot();
+        gauge(sb, "vector_count", "current vector count",
+                v.vectorCount());
+        gauge(sb, "vector_dim", "vector dimension", v.dim());
+        gauge(sb, "vector_max_level", "hnsw max level", v.maxLevel());
+        counter(sb, "vector_writes_total", "vector writes",
+                v.writes());
+        counter(sb, "vector_deletes_total", "vector deletes",
+                v.deletes());
+        ReplicationMetricsRegistry.Snapshot r = replication.snapshot(
+                System.currentTimeMillis());
+        gauge(sb, "replication_replicas", "replica count",
+                r.replicas());
+        gauge(sb, "replication_max_lag_ms", "max replica lag ms",
+                r.maxLagMillis());
+        counter(sb, "replication_replicated_total", "replicated events",
+                r.replicated());
+        counter(sb, "replication_suppressed_total",
+                "suppressed loopback events", r.suppressed());
+        counter(sb, "replication_conflicts_total",
+                "replication conflicts", r.conflicts());
+        MultiModelMetricsRegistry.Snapshot m = multimodel.snapshot();
+        counter(sb, "multimodel_json_writes_total", "json writes",
+                m.jsonWrites());
+        counter(sb, "multimodel_json_validation_errors_total",
+                "json validation errors", m.jsonValidationErrors());
+        counter(sb, "multimodel_ts_writes_total", "timeseries writes",
+                m.tsWrites());
+        counter(sb, "multimodel_bytes_total", "multimodel value bytes",
+                m.multimodelBytes());
+        BackupMetricsRegistry.Snapshot b = backup.snapshot();
+        counter(sb, "backup_total", "backups", b.backups());
+        counter(sb, "backup_bytes_total", "backup bytes",
+                b.backupBytes());
+        counter(sb, "restore_total", "restores", b.restores());
+        counter(sb, "restore_bytes_total", "restore bytes",
+                b.restoreBytes());
+        gauge(sb, "backup_pitr_watermark", "pitr watermark",
+                b.pitrWatermark());
+        return sb.toString();
+    }
+
+    private static void exportClusterTxnMvcc(
+            StringBuilder sb, RegionMetricsRegistry regions,
+            RaftMetricsRegistry raft, MigrationMetricsRegistry migration,
+            GatewayMetricsRegistry gateway,
+            TransactionMetricsRegistry transactions,
+            MvccMetricsRegistry mvcc) {
         RegionMetricsRegistry.Snapshot r = regions.snapshot();
         RaftMetricsRegistry.Snapshot f = raft.snapshot();
         MigrationMetricsRegistry.Snapshot m = migration.snapshot();
@@ -116,7 +182,6 @@ public final class MetricsExporter {
         gauge(sb, "mvcc_safe_point", "gc safe point", v.safePoint());
         gauge(sb, "redis_txn_latency_ms", "redis auto txn latency ms",
                 g.transactionLatencyMs());
-        return sb.toString();
     }
 
     private static void counter(StringBuilder sb, String name,

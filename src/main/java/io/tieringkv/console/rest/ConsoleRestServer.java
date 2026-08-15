@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.Executors;
+import java.util.function.Supplier;
 
 /** 控制台 REST 服务（ADR-0139）：JDK HttpServer + 令牌 RBAC。 */
 public final class ConsoleRestServer implements AutoCloseable {
@@ -17,11 +18,20 @@ public final class ConsoleRestServer implements AutoCloseable {
 
     public ConsoleRestServer(int port, ConsoleApi api)
             throws IOException {
+        this(port, api, null);
+    }
+
+    /** 可观测性收口（ADR-0344）：可选 Prometheus 文本提供者。 */
+    public ConsoleRestServer(int port, ConsoleApi api,
+                             Supplier<String> prometheusProvider)
+            throws IOException {
         this.server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/tenants", exchange ->
                 handleTenants(exchange, api));
         server.createContext("/metrics", exchange ->
                 handleMetrics(exchange, api));
+        server.createContext("/metrics/prometheus", exchange ->
+                handlePrometheus(exchange, api, prometheusProvider));
         server.createContext("/alerts", exchange ->
                 handleAlerts(exchange, api));
         server.setExecutor(Executors.newFixedThreadPool(4));
@@ -61,6 +71,20 @@ public final class ConsoleRestServer implements AutoCloseable {
         try {
             respond(exchange, 200, api.metrics(token(exchange))
                     .toString());
+        } catch (Exception e) {
+            respond(exchange, 403, "forbidden");
+        }
+    }
+
+    private static void handlePrometheus(HttpExchange exchange,
+                                         ConsoleApi api,
+                                         Supplier<String> provider) {
+        try {
+            api.metrics(token(exchange)); // 鉴权：无 token 抛异常 → 403
+            String text = provider == null ? "" : provider.get();
+            exchange.getResponseHeaders().set(
+                    "Content-Type", "text/plain; version=0.0.4");
+            respond(exchange, 200, text);
         } catch (Exception e) {
             respond(exchange, 403, "forbidden");
         }
