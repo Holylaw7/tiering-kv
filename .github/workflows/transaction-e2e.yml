@@ -26,6 +26,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
       - name: Build image
         # GitHub runner 的 BuildKit 偶发 gRPC EOF（瞬时基础设施故障）；
         # 构建幂等，重试 3 次吸收抖动，避免整条 e2e 因一次连接中断失败。
@@ -60,6 +65,30 @@ jobs:
           sleep 1
           printf '*2\r\n$3\r\nGET\r\n$2\r\nk1\r\n' \
             | timeout 5 bash -c 'cat > /dev/tcp/127.0.0.1/6379'
+      - name: Network chaos delay
+        run: |
+          scripts/network-chaos.sh delay 100ms
+          TIERINGKV_NETWORK_CHAOS=true TIERINGKV_NETEM_EXPECT=delay \
+            mvn -q -Dtest=RealNetworkChaosTest#setGetRoundTripUnderNetem \
+            -DfailIfNoTests=false test
+      - name: Network chaos loss
+        run: |
+          scripts/network-chaos.sh loss 10%
+          TIERINGKV_NETWORK_CHAOS=true TIERINGKV_NETEM_EXPECT=loss \
+            mvn -q -Dtest=RealNetworkChaosTest#setGetRoundTripUnderNetem \
+            -DfailIfNoTests=false test
+      - name: Network chaos partition
+        run: |
+          scripts/network-chaos.sh partition
+          TIERINGKV_NETWORK_CHAOS=true TIERINGKV_NETEM_EXPECT=partition \
+            mvn -q -Dtest=RealNetworkChaosTest#partitionBlocksRoundTrip \
+            -DfailIfNoTests=false test
+      - name: Network chaos recover
+        run: |
+          scripts/network-chaos.sh recover
+          TIERINGKV_NETWORK_CHAOS=true TIERINGKV_NETEM_EXPECT=recovered \
+            mvn -q -Dtest=RealNetworkChaosTest#setGetRoundTripUnderNetem \
+            -DfailIfNoTests=false test
       - name: Container fault injection
         run: |
           scripts/container-chaos.sh kill-coordinator
