@@ -285,6 +285,26 @@ Linux+Docker 执行（产物已交付）；pub/sub、Lua、RESP3 与正式性能
 CI 容器 E2E 的 Runner 执行仍待触发（TD-048/049，脚本/工作流/门控测试
 已交付）。
 
+### K8s Operator（v4 M4）
+
+Tiering-KV 提供 fabric8 驱动的 Kubernetes 控制器（ADR-0322）：
+
+```bash
+# 安装 CRD 与示例拓扑
+kubectl apply -f deploy/operator/tieringkvcluster-crd.yaml
+kubectl apply -f deploy/operator/sample.yaml
+kubectl apply -f deploy/operator/topology-sample.yaml
+
+# 运行 Operator（Watch + reconcile + 状态回写）
+mvn -q -DskipTests compile
+java -cp target/classes io.tieringkv.operator.k8s.TieringKVOperator
+
+# 查看集群阶段
+kubectl get tieringkvclusters -n tiering-kv
+```
+
+详细说明：docs/deployment/multi-cluster-deployment.md。
+
 ## 核心能力
 
 1. Redis RESP 协议兼容
