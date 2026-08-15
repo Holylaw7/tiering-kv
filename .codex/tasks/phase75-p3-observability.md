@@ -41,3 +41,17 @@ Cluster/Txn/MVCC；向量、复制、多模型、备份在 INFO 与 Prometheus
 - `INFO vector/replication/multimodel/backup` 返回聚合文本
 - `/metrics/prometheus` 输出 Prometheus 文本且经 token RBAC
 - 全量回归 0 failures；真实 Runner 门禁通过
+
+## 状态
+
+✅ 完成（2026-08-15）：ADR-0344 → TDD（12 项新测试）→ 全量回归
+14897 tests / 0 failures / 11 skipped（CiTransactionE2EParameterizedTest
+端口占用环境竞态单独重跑 41/41 通过）→ 真实 Runner 门禁 main
+build/test/transaction-e2e 3/3 全绿。
+
+交付：observability 包 4 注册表 + ObservabilityRegistry（INFO sections
+vector/replication/multimodel/backup）、MetricsExporter.exportAll、
+`/metrics/prometheus` 端点（token RBAC）、向量/备份生产喂数
+（additive 构造，不破坏既有调用）。
+
+Phase 增量（已记录）：复制管线喂数、多模型命令喂数、OTel span。

@@ -27,6 +27,12 @@
 - ADR-0344（P3 可观测性收口）：observability 注册表（向量/复制/
   多模型/备份）+ INFO sections + `/metrics/prometheus` 端点；
   复制/多模型喂数与 OTel 列为 Phase 增量。
+- P3 可观测性收口实现：io.tieringkv.observability 4 个注册表 +
+  ObservabilityRegistry（INFO vector/replication/multimodel/backup）、
+  MetricsExporter.exportAll、ConsoleRestServer `/metrics/prometheus`
+  （token RBAC）、VectorIndexSyncStorageEngine 与
+  BackupManager/RestoreManager additive 喂数；全量回归 14897 项
+  0 failures，真实 Runner 门禁 3/3 全绿。
 
 - v4.0 M1 向量存储接入（ADR-0319）：VectorIndexFile（magic/version/
   CRC + 原子写）、VectorIndexStore（checkpoint/load/rebuild）、
