@@ -68,7 +68,7 @@ public final class RecoveryManager {
         return new RecoveryStats(scanned, applied, segmentsReplayed, corruptedDiscarded, lastGoodPath);
     }
 
-    private static void apply(WALEntry entry, MemTable memTable) {
+    static void apply(WALEntry entry, MemTable memTable) {
         long now = System.currentTimeMillis();
         if (entry.operation() == WALEntry.Operation.PUT) {
             if (entry.ttlMillis() > 0) {
@@ -86,7 +86,7 @@ public final class RecoveryManager {
         }
     }
 
-    private static void truncateTail(Path path, long lastGoodOffset) throws IOException {
+    static void truncateTail(Path path, long lastGoodOffset) throws IOException {
         try (FileChannel channel = FileChannel.open(path, StandardOpenOption.WRITE)) {
             long size = channel.size();
             if (lastGoodOffset < size) {
@@ -95,7 +95,7 @@ public final class RecoveryManager {
         }
     }
 
-    private static List<Long> listSegments(Path directory) throws IOException {
+    static List<Long> listSegments(Path directory) throws IOException {
         List<Long> sequences = new ArrayList<>();
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(directory, "*.log")) {
             for (Path path : stream) {
