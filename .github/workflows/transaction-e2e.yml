@@ -60,18 +60,28 @@ jobs:
       - name: Container smoke SET/GET
         run: |
           # redis-cli 不可用时的最小 RESP 冒烟（读取并断言响应，
-          # 禁止“只写不读”的伪冒烟）
-          timeout 10 bash -c '
-            exec 3<>/dev/tcp/127.0.0.1/6379
-            printf "*3\r\n\$3\r\nSET\r\n\$2\r\nk1\r\n\$2\r\nv1\r\n" >&3
-            IFS= read -r line <&3 || exit 1
-            [ "$line" = "+OK" ] || { echo "SET smoke failed: $line" >&2; exit 1; }
-            printf "*2\r\n\$3\r\nGET\r\n\$2\r\nk1\r\n" >&3
-            IFS= read -r line <&3 || exit 1
-            [ "$line" = "\$2" ] || { echo "GET header failed: $line" >&2; exit 1; }
-            IFS= read -r line <&3 || exit 1
-            [ "$line" = "v1" ] || { echo "GET body failed: $line" >&2; exit 1; }
-            exec 3<&- 3>&-
+          # 禁止“只写不读”的伪冒烟；有界重试吸收 Raft 选举就绪竞态）
+          timeout 30 bash -c '
+            for i in $(seq 1 10); do
+              if exec 3<>/dev/tcp/127.0.0.1/6379 2>/dev/null; then
+                printf "*3\r\n\$3\r\nSET\r\n\$2\r\nk1\r\n\$2\r\nv1\r\n" >&3
+                IFS= read -r line <&3 || { exec 3<&- 3>&-; sleep 1; continue; }
+                if [ "$line" = "+OK" ]; then
+                  printf "*2\r\n\$3\r\nGET\r\n\$2\r\nk1\r\n" >&3
+                  IFS= read -r line <&3 || { exec 3<&- 3>&-; sleep 1; continue; }
+                  IFS= read -r body <&3 || { exec 3<&- 3>&-; sleep 1; continue; }
+                  exec 3<&- 3>&-
+                  if [ "$line" = "\$2" ] && [ "$body" = "v1" ]; then
+                    echo "smoke SET/GET ok (attempt $i)"
+                    exit 0
+                  fi
+                fi
+                exec 3<&- 3>&- 2>/dev/null
+              fi
+              sleep 1
+            done
+            echo "smoke SET/GET failed after 10 attempts" >&2
+            exit 1
           '
       - name: Network chaos delay
         run: |
