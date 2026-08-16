@@ -38,6 +38,8 @@
   有界超时 5s → 15s（与 ReplicatedStorageEngine 对齐），消除慢 Runner
   上 MetadataPersistenceTest 的 TimeoutException；kind-action `wait`
   参数修正为 `300s`（原 `300` 无单位导致 kind 创建失败）。
+- RaftNodeSnapshotIntegrationTest 稳定化：快照压缩断言改为有界等待
+  “任一节点日志已压缩”（循环结束瞬间快照可能尚未落盘，develop 偶发）。
 - 环境 flaky 根治（ADR-0353）：`MetadataRaftGroup.write` 在选举窗口
   有界等待 leader（1s）而非 fail-fast，慢 Runner 下不再瞬时报
   `no metadata leader`；块设备满盘断言改为 ≥32KB 多块 WAL 负载 +
