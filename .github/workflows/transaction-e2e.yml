@@ -130,6 +130,22 @@ jobs:
       - uses: helm/kind-action@v1
         with:
           cluster_name: tiering-kv
+          wait: 300
+      - name: Verify kind cluster
+        # 慢 Runner 上 kind 控制面可能未就绪（235c2b8 复现）；等待 150s
+        # 后仍未就绪则明确失败，避免后续步骤在空集群上误报。
+        run: |
+          for i in $(seq 1 30); do
+            if kubectl cluster-info --request-timeout=10s >/dev/null 2>&1; then
+              echo "kind cluster ready"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "kind cluster not ready after 150s" >&2
+          kind get clusters >&2 || true
+          kubectl cluster-info >&2 || true
+          exit 1
       - name: Build and load image
         run: |
           mvn -q -DskipTests package
@@ -149,7 +165,8 @@ jobs:
           TIERINGKV_KIND_CLUSTER=true mvn -q -Dtest=KubernetesInClusterValidationTest -DfailIfNoTests=false test
       - name: Collect cluster logs
         if: always()
-        run: kubectl -n tiering-kv get pods,svc,pdb
+        # 诊断步骤不得决定 job 结果（集群缺失时 kubectl 会失败）
+        run: kubectl -n tiering-kv get pods,svc,pdb || true
       - name: Cleanup
         if: always()
         run: TIERINGKV_KIND_CLUSTER=true scripts/kind-e2e.sh cleanup

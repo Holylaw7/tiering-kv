@@ -31,6 +31,9 @@
   校验后再解码，类型不匹配按对端失败处理；新增
   errorFrameFailsInsteadOfCorruptingTerm 回归测试，注销/关端点后
   多数派提交 + term 健全断言，本地 10/10 通过。
+- CI 加固（kind-e2e）：kind-action 等待 300s + 集群 API 就绪校验步骤，
+  诊断步骤 `|| true` 不决定 job 结果（吸收 235c2b8 慢 Runner 集群
+  未就绪的瞬时故障）。
 - 环境 flaky 根治（ADR-0353）：`MetadataRaftGroup.write` 在选举窗口
   有界等待 leader（1s）而非 fail-fast，慢 Runner 下不再瞬时报
   `no metadata leader`；块设备满盘断言改为 ≥32KB 多块 WAL 负载 +
