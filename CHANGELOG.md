@@ -178,6 +178,9 @@
   元数据故障下事务**静默成功**；新增
   `CoordinatorRuntime.decodeMetadataDecision` 校验 ERROR 帧并使
   提案失败传播（SET 正确失败，不静默提交）。
+- ADR-0350 容器级演练修正：ext4 默认 5% 保留块使 root 容器进程在
+  “磁盘满”时仍可写入；`mkfs.ext4 -m 0` 归零保留块，ENOSPC 对
+  容器内进程真实生效（block-device-chaos.sh setup）。
 
 - P3 真实 Runner 门禁暴露：后端容器缺 NET_ADMIN 导致
   `tc qdisc add` 返回 `Operation not permitted`；docker-compose

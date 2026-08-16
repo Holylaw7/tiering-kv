@@ -15,7 +15,10 @@ case "${1:-setup}" in
     LOOP_DEV=$(losetup -f)
     losetup "$LOOP_DEV" "$IMAGE"
     echo "$LOOP_DEV" > "$LOOP_STATE"
-    mkfs.ext4 -q "$LOOP_DEV"
+    # -m 0：保留块归零（ADR-0350 容器级演练修正）——ext4 默认保留
+    # 5% 供 root 使用，容器内进程以 root 运行会继续写保留块，
+    # 导致“磁盘满”对容器不生效；归零后 ENOSPC 对 root 同样真实。
+    mkfs.ext4 -q -m 0 "$LOOP_DEV"
     mkdir -p "$MOUNT_DIR"
     mount "$LOOP_DEV" "$MOUNT_DIR"
     # sudo 下 chown 给调用者（runner），否则 Maven 非 root 无法写入
