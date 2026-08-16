@@ -973,6 +973,34 @@
 - 后续：分布式正确性验证、Stream 消费组、跨段事务持久化、文档
   产品化（Phase 55+）。
 
+## Phase 55 — 分布式正确性、消费组与产品文档 ✅
+
+- 目标：分布式正确性验证、Stream 消费组、跨段事务持久化、文档
+  产品化（v3.7.0 RC）。
+- 交付：线性一致性验证（可复现历史 + 线性化点搜索 + 违例拒绝）、
+  Raft 边角矩阵（选举/故障转移/追平/少数派）、升级/备份演练脚本、
+  XGROUP/XREADGROUP/XACK/XPENDING 消费组 + 持久化组段、
+  PersistentExecJournal（CRC + 截断恢复）、
+  quickstart/runbook/白皮书。
+- 测试：全量回归 **≥14730 全绿**；命令注册表 109 → 113。
+
+## Phase 56 — GA 收尾与生产闭环 ✅
+
+- 目标：v3.7.0 GA 发布冻结、真实 Runner 门禁封板、运营收尾。
+- 交付：release 流水线与版本一致、门禁 v17 唯一终态（CLOSED /
+  SEALED_GA / REGISTERED_RELEASE）、Jepsen 式 harness 外部化、
+  XCLAIM/XAUTOCLAIM + 死信计数、双活 VersionVector 收敛矩阵、
+  审计导出与 SLO 归档；Product Completeness Baseline gaReady=true。
+- 测试：全量回归 **≥14880 全绿**；命令注册表 115 个。
+
+## Phase 57 — 维护模式与 v4 规划 ✅
+
+- 目标：建立 hotfix/backport/补丁流水线与 v4.0 规划框架。
+- 交付：hotfix.sh / runner-review.sh / 年度复核与维护门禁脚本、
+  v4 Roadmap + RFC 模板、semver/SBOM/签名与安全披露流程文档化。
+- 测试：全量回归 **≥14820 全绿**。
+- 后续：v3.7.1 维护补丁（ADR-0351/0352）与 v4.1.0 GA 归档见文末。
+
 ## 技术债登记
 
 | 编号 | 描述 | 来源 | 计划消除 |
