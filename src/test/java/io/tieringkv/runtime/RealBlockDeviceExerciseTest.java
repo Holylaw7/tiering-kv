@@ -14,6 +14,8 @@ import org.junit.jupiter.api.condition.OS;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -63,14 +65,16 @@ class RealBlockDeviceExerciseTest {
         // 实测 4096B）；断言放宽到 1 块容差，语义仍为“磁盘已满”。
         assertThat(usable).as("fill 后可用空间应≤1 块，实际=%d", usable)
                 .isLessThanOrEqualTo(4096);
+        // 探针必须强制落盘（force(true)）：Files.write 走延迟分配，
+        // 小写可能只进页缓存而不触发 ENOSPC（残余 flaky 根因）。
         Path probe = mount().resolve("probe-" + System.nanoTime());
-        assertThatThrownBy(() -> Files.write(probe,
+        assertThatThrownBy(() -> writeForced(probe,
                 new byte[4096])).isInstanceOf(IOException.class);
         Files.deleteIfExists(probe);
         // 与断言同尺度的多块探针：16KB（≥4 个新数据块）必须失败，
         // 杜绝 inline_data / 已分配元数据块 / 延迟分配吸收 ENOSPC。
         Path largeProbe = mount().resolve("probe-large-" + System.nanoTime());
-        assertThatThrownBy(() -> Files.write(largeProbe,
+        assertThatThrownBy(() -> writeForced(largeProbe,
                 new byte[16 * 1024])).isInstanceOf(IOException.class);
         Files.deleteIfExists(largeProbe);
         // 磁盘满：≥32KB 多块 WAL 写入必须失败（不允许静默丢失）。
@@ -130,6 +134,19 @@ class RealBlockDeviceExerciseTest {
             for (int i = 0; i < count; i++) {
                 storage.put(bytes("k" + i), value);
             }
+        }
+    }
+
+    /** 强制落盘写入：force(true) 触发真实块分配，杜绝延迟分配吸收 ENOSPC。 */
+    private static void writeForced(Path file, byte[] data)
+            throws IOException {
+        try (FileChannel channel = FileChannel.open(file,
+                StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+            ByteBuffer buffer = ByteBuffer.wrap(data);
+            while (buffer.hasRemaining()) {
+                channel.write(buffer);
+            }
+            channel.force(true);
         }
     }
 
