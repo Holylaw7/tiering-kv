@@ -26,9 +26,15 @@ case "${1:-setup}" in
     echo "TIERINGKV_BLOCK_DEVICE_READY=true"
     ;;
   disk-full)
-    # 真实填满空闲空间（dd 直到 ENOSPC，非象征性填充）
-    dd if=/dev/zero of="$MOUNT_DIR/fill.bin" bs=1M count=256 \
-      2>/dev/null || true
+    # 真实填满：无限 1K 小块填充直到 ENOSPC（单次大块会在
+    # ENOSPC 处留下文件系统余量，容器内小写入仍可成功）；
+    # 并强制校验可用空间为 0，避免“看似满实际没满”。
+    dd if=/dev/zero of="$MOUNT_DIR/fill.bin" bs=1K 2>/dev/null || true
+    AVAIL_BLOCKS=$(stat -f --format=%a "$MOUNT_DIR" 2>/dev/null || echo 1)
+    if [ "${AVAIL_BLOCKS:-1}" -gt 0 ]; then
+      echo "disk fill incomplete: ${AVAIL_BLOCKS} blocks free" >&2
+      exit 1
+    fi
     echo "TIERINGKV_BLOCK_DISK_FULL=true"
     ;;
   readonly)

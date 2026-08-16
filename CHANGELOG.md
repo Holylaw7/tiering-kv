@@ -181,6 +181,9 @@
 - ADR-0350 容器级演练修正：ext4 默认 5% 保留块使 root 容器进程在
   “磁盘满”时仍可写入；`mkfs.ext4 -m 0` 归零保留块，ENOSPC 对
   容器内进程真实生效（block-device-chaos.sh setup）。
+- ADR-0350 容器级演练修正：单次大块 dd 在 ENOSPC 处留下文件系统
+  余量（实测 636K，事务元数据小写入仍可成功）；disk-full 改为
+  无限 1K 小块填充 + `stat -f %a` 强制校验可用空间为 0。
 
 - P3 真实 Runner 门禁暴露：后端容器缺 NET_ADMIN 导致
   `tc qdisc add` 返回 `Operation not permitted`；docker-compose
