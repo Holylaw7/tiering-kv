@@ -31,10 +31,10 @@ v4.1.0 收尾期间，纯文档提交 f30e714 触发的真实 Runner 门禁偶�
 2. `RealBlockDeviceExerciseTest` 满盘断言要求 **≥3 个新数据块分配**：
    - 新增与断言同尺度的 16KB 多块探针（必须 IOException）；
    - WAL 负载改为 64 条 × 512B（≈32KB，≥8 个新块），必须失败；
-   - 探针必须使用 `FileChannel.force(true)` 强制落盘：`Files.write`
-     走延迟分配，小块写入可能只进页缓存而不触发 ENOSPC（第二轮
-     Runner 复现确认的残余 flaky 根因；WAL 负载本身 ALWAYS 策略
-     已 force，故只修探针）；
+   - 探针必须 **≥2 块（8KB）** 且使用 `FileChannel.force(true)` 强制
+     落盘：单块探针在“剩 1 块可用”时合法成功（第三轮 Runner 复现
+     确认的残余 flaky 根因），`Files.write` 延迟分配也会吸收小写；
+     WAL 负载本身 ALWAYS 策略已 force，故只修探针；
    - javadoc 明确“ENOSPC 断言必须要求多块分配，小负载不可靠”；
 3. `shard-tests.sh` 改为全量 3 分片轮转（NR % 3）：重型分布式包
    （cluster/transaction/mvcc/replication/runtime 等）不再集中于

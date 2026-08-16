@@ -61,15 +61,16 @@ class RealBlockDeviceExerciseTest {
                 .isInstanceOf(IOException.class);
         // 前置校验：文件系统确实已满（避免填充满度不足造成误判）
         long usable = Files.getFileStore(mount()).getUsableSpace();
-        // ext4 即使 -m 0 也会为非 root 调用者保留最后一小块（≤1 块，
-        // 实测 4096B）；断言放宽到 1 块容差，语义仍为“磁盘已满”。
+        // 磁盘满定义 = 可用空间 ≤1 块（ext4 可能为 root/保留块留 1 块）。
+        // 因此单块（4096B）探针可能恰好可用而成功，断言必须 ≥2 块。
         assertThat(usable).as("fill 后可用空间应≤1 块，实际=%d", usable)
                 .isLessThanOrEqualTo(4096);
-        // 探针必须强制落盘（force(true)）：Files.write 走延迟分配，
-        // 小写可能只进页缓存而不触发 ENOSPC（残余 flaky 根因）。
+        // 探针必须 ≥2 块（8KB）且强制落盘（force(true)）：单块探针在
+        // “剩 1 块可用”时合法成功（残余 flaky 根因）；Files.write 走
+        // 延迟分配，小写可能只进页缓存而不触发 ENOSPC。
         Path probe = mount().resolve("probe-" + System.nanoTime());
         assertThatThrownBy(() -> writeForced(probe,
-                new byte[4096])).isInstanceOf(IOException.class);
+                new byte[8 * 1024])).isInstanceOf(IOException.class);
         Files.deleteIfExists(probe);
         // 与断言同尺度的多块探针：16KB（≥4 个新数据块）必须失败，
         // 杜绝 inline_data / 已分配元数据块 / 延迟分配吸收 ENOSPC。
