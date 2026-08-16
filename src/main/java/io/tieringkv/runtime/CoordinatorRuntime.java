@@ -1,6 +1,7 @@
 package io.tieringkv.runtime;
 
 import io.tieringkv.cluster.rpc.MultiRaftEndpoint;
+import io.tieringkv.cluster.rpc.RpcFrame;
 import io.tieringkv.cluster.rpc.RpcMessageType;
 import io.tieringkv.mvcc.TimestampOracle;
 import io.tieringkv.mvcc.TransactionMetricsRegistry;
@@ -12,12 +13,15 @@ import io.tieringkv.transaction.router.RegionTxnClient;
 import io.tieringkv.transaction.router.RpcTxnTransport;
 import io.tieringkv.transaction.router.TxnParticipantClient;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 
 /** 协调器运行时（ADR-0093）：Router + 远程 participant + 远程 metadata。 */
@@ -85,7 +89,9 @@ public final class CoordinatorRuntime {
                             payload -> endpoint.callTxn(metadataNode,
                                     "meta", RpcMessageType.TXN_METADATA,
                                     payload)
-                                    .thenApply(frame -> 1L));
+                                    .thenApply(
+                                            CoordinatorRuntime
+                                                    ::decodeMetadataDecision));
             List<RegionTxnClient> regions = new ArrayList<>();
             for (String spec : regionsSpec.split(",")) {
                 String[] parts = spec.split("@");
@@ -166,5 +172,19 @@ public final class CoordinatorRuntime {
                     hostPort[0], Integer.parseInt(hostPort[1])));
         }
         return addresses;
+    }
+
+    /**
+     * 元数据提案响应校验（ADR-0350 容器级演练发现）：RPC ERROR 帧
+     * 必须失败而非视为成功，否则磁盘满/元数据故障下事务静默提交。
+     */
+    static long decodeMetadataDecision(RpcFrame frame) {
+        if (frame.type() == RpcMessageType.ERROR) {
+            String message = new String(frame.payload(),
+                    StandardCharsets.UTF_8);
+            throw new CompletionException(new IOException(
+                    "metadata proposal failed: " + message));
+        }
+        return 1L;
     }
 }
