@@ -1010,7 +1010,7 @@
 | TD-035 | 真实跨机部署 + tc netem 混沌 | ADR-0053 | ✅ 已关闭（Phase 21 Docker 三节点 netem/分区/kill -9 + Phase 25 container-chaos + 真实 Runner jepsen） |
 | TD-036 | leader 转移仅元数据，未触发真实 Raft 交接 | ADR-0060 | ✅ 已关闭（Phase 17） |
 | TD-037 | Region split/merge 未与存储数据搬迁联动 | ADR-0057 | ✅ 已关闭（Phase 18，RegionRaftMigrationManager + 路由原子切换） |
-| TD-038 | 网关 CLUSTER 命令子集 | ADR-0061 | 部分关闭（SLOTS/NODES 已交付；ASK 迁移语义待验证，P3） |
+| TD-038 | 网关 CLUSTER 命令子集 | ADR-0061 | ✅ 已关闭（SLOTS/NODES + ASKING single-shot 迁移语义闭环，GatewayIntegrationTest 33/33） |
 | TD-039 | Region 键范围与 slot 区间路由未统一 | ADR-0057 | ✅ 已关闭（Phase 18，RoutingTable 统一） |
 | TD-040 | 跨机容器混沌未执行（环境限制） | ADR-0069 | ✅ 已关闭（Phase 21，Docker 三节点 netem/分区/kill -9 执行） |
 | TD-041 | MVCC GC 19–29MB/s（目标 >100）→ 批量删除路径 | ✅ 已关闭（Phase 20，107–285MB/s） |
@@ -1023,7 +1023,7 @@
 | TD-048 | compose.transaction 已提供，真实容器编排运行未执行 | ADR-0093 | ✅ 已关闭（真实 Runner transaction-e2e 门禁全绿 + container-chaos 注入） |
 | TD-049 | 真实容器 disk 注入仍受限（fallocate/mount/fio） | ADR-0094 | 部分关闭（ADR-0342 block-device-chaos 真实 loop/dmsetup 闭环，真实 Runner 通过；容器级注入持续跟踪 P3） |
 | TD-050 | 元数据 Multi-Raft 为进程内传输，网络化待跨机验证 | ADR-0095 | ✅ 已关闭（Phase 25：Netty RPC 三节点组 + 持久化日志/快照） |
-| TD-051 | CI 测试分片 / JFR 采集未落地 | — | 开放（P3 决策：全量单 job ~6 分钟可接受；并行分片/多 fork 与 Raft 时序、端口竞态风险不成比例，暂缓；已落地 concurrency 取消重复、Maven cache、surefire/容器日志 artifact 上传） |
+| TD-051 | CI 测试分片 / JFR 采集未落地 | — | ✅ 已关闭（shard-tests.sh 类列表均分 2 shard + JFR 采集管线 + surefire tieringkv.argline；本地验证 633 类均分 / JFR 生成成功） |
 
 ## P4 — 工程现代化（2026-08-16）
 

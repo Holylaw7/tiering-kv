@@ -59,6 +59,14 @@
   （129 项，info/exec/command 动态注册，注册表冻结 132 不变），
   CommandRegistry 删除内联 130 行；CommandCatalogTest 3 项；
   JDK 21 全量 14917 项 0 failures。
+- TD-038 关闭：CLUSTER ASK 迁移语义闭环——ASKING 命令（Redis
+  single-shot）+ 迁移中 slot asking 直通读写；UnifiedClusterGateway
+  executeWithAsking + ClusterCommandHandler handleCommand；
+  GatewayIntegrationTest +2（askingAllowsMigratingRead/askingIsOneShot）。
+- TD-051 关闭：CI 测试分片（scripts/shard-tests.sh 类列表均分 2
+  shard，防假绿）+ JFR 采集管线（surefire tieringkv.argline 可选
+  JVM 参数 + jfr-smoke job + .jfr artifact）；本地验证分片 633 类
+  均分、JFR 557KB 生成成功。
 
 - v4.0 M1 向量存储接入（ADR-0319）：VectorIndexFile（magic/version/
   CRC + 原子写）、VectorIndexStore（checkpoint/load/rebuild）、
