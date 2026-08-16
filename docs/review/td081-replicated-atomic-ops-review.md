@@ -6,7 +6,7 @@
 
 ✅ 关闭。`ReplicatedStorageEngine` 已实现 `AtomicStringOps`，Redis
 Cluster 网关数据面的字符串原子命令与单机语义对齐；全量回归
-**约 6,736 个测试方法 / 14,950 次测试执行 / 0 failures / 0 errors**
+**约 6,738 个测试方法 / 14,957 次测试执行 / 0 failures / 0 errors**
 （Surefire 口径），真实 Runner 门禁
 build / test / transaction-e2e **3/3 全绿**。
 

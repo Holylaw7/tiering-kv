@@ -3,8 +3,8 @@
 > Redis 协议兼容的 LSM 冷热分层 KV 存储引擎（Mini Redis）——
 > 内存/磁盘分层 + 分布式事务 + 多模型值 + 向量检索 + SQL + 云原生运行时。
 
-**版本：v4.1.0 GA（2026-08-16）** · **约 6,736 个测试方法、累计
-14,950 次测试执行 / 0 failures**（Surefire Tests run，含参数化
+**版本：v4.1.0 GA（2026-08-16）** · **约 6,738 个测试方法、累计
+14,957 次测试执行 / 0 failures**（Surefire Tests run，含参数化
 invocation；口径见 [docs/testing/measurement-conventions.md](
 docs/testing/measurement-conventions.md)） ·
 技术债 **50/50 处置完成**（含 TD-081 集群复制原子操作，ADR-0352） ·
@@ -85,15 +85,15 @@ Kubernetes：`deploy/kubernetes/*.yaml` + Operator（fabric8 6.13.4）。
 | v3.7.1 | 2026-08-14 | 维护补丁（依赖漏洞/CI 稳定化） |
 | v4.0.0-rc1 | 2026-08-14 | 向量存储 M1 + 多模型 M2 + 跨集群复制 M3 |
 | v4.1.0 | 2026-08-16 | P4 工程现代化（JDK 21/命令目录）+ 可观测性收口 + 依赖升级 + 发布门禁加固 + 容器级磁盘混沌闭环（TD-046/049）；技术债 49/49 全部关闭 |
-| v4.1.0 维护补丁 | 2026-08-16 | 生产链 TTL 修复（ADR-0351）+ 集群复制原子操作（ADR-0352，TD-081）+ 选举窗口/CI 稳定性加固（ADR-0353）；技术债 50/50；约 6,736 个测试方法 / 14,950 次测试执行全绿 |
+| v4.1.0 维护补丁 | 2026-08-16 | 生产链 TTL 修复（ADR-0351）+ 集群复制原子操作（ADR-0352，TD-081）+ 选举窗口/CI 稳定性加固（ADR-0353）+ RPC ERROR 帧 term 污染修复（ADR-0354）；技术债 50/50；约 6,738 个测试方法 / 14,957 次测试执行全绿 |
 
 ## 目录与文档
 
 ```text
 src/main/java/io/tieringkv/   协议/存储/集群/事务/多模型/云原生实现
-src/test/java/io/tieringkv/   约 6,736 个测试方法 / 14,950 次测试执行（口径见
+src/test/java/io/tieringkv/   约 6,738 个测试方法 / 14,957 次测试执行（口径见
                               docs/testing/measurement-conventions.md）
-docs/adr/                     ADR-0001 ~ ADR-0353（架构决策记录）
+docs/adr/                     ADR-0001 ~ ADR-0354（架构决策记录）
 docs/requirements/             需求与验收
 docs/architecture/            总体/存储/网络/并发架构
 docs/design/                  详细设计

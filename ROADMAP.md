@@ -1080,7 +1080,7 @@ v4.1.0 GA ✅（2026-08-16）：发布门禁经历 4 轮真实 Runner 修复
 v4.1.0 维护补丁 ✅（2026-08-16）：实践运行验证修复生产链 TTL
 缺陷（ADR-0351，装饰器原子能力透传）并关闭集群复制原子操作缺口
 （ADR-0352 / TD-081，Raft ATOMIC 命令 + 结果回传）；全量
-约 6,736 个测试方法 / 14,950 次测试执行 0 failures（Surefire
+约 6,738 个测试方法 / 14,957 次测试执行 0 failures（Surefire
 口径，见 docs/testing/measurement-conventions.md），Runner 门禁
 build/test/transaction-e2e
 3/3 全绿；技术债 50/50 处置完成。
@@ -1089,8 +1089,14 @@ ADR-0353 稳定性加固 ✅（2026-08-16）：元数据写路径选举窗口有
 （根治慢 Runner `no metadata leader` flake）、块设备满盘断言改为
 多块负载（根治 ext4 ENOSPC 语义缝隙）、CI 测试 3 分片全量轮转
 （重型分布式测试 21/21/20 分散）；block-device-chaos 真实 Runner
-全绿，约 6,736 个测试方法 / 14,950 次测试执行 0 failures
+全绿，约 6,738 个测试方法 / 14,957 次测试执行 0 failures
 （Surefire 口径）。
+
+ADR-0354 RPC 真实缺陷修复 ✅（2026-08-16）：GitHub Actions 失败审计
+发现传输层对 ERROR 帧无条件解码，组注销时错误文本前 8 字节被解析为
+巨大 term（≈7.9e18）并污染全集群 Raft 状态，多数派无法形成；改为
+响应类型校验后再解码，注销/关端点后多数派提交 + term 健全回归，
+全量 14,957 次测试执行 0 failures。
 
 v4.1.0 收尾 ✅（2026-08-16）：README/ROADMAP/ADR/评审文档同步完毕；
 **v4.2.0 规划已保存为 RFC-0002（Proposed，待评审）**，包含

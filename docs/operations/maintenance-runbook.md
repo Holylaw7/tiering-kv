@@ -9,7 +9,7 @@
 
 - 稳定基线：**v4.1.0**（GitHub Release + GHCR
   `ghcr.io/holylaw7/tiering-kv:v4.1.0`）；
-- 质量基线：全量 **约 6,736 个测试方法 / 14,950 次测试执行 /
+- 质量基线：全量 **约 6,738 个测试方法 / 14,957 次测试执行 /
   0 failures**（Surefire 口径，JDK 21），
   Trivy 0 漏洞，真实 Runner 门禁全绿；
 - 兼容承诺：补丁（v4.1.x）不破坏 RESP 协议 / 存储格式 / RPC 信封 /
