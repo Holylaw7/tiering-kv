@@ -18,7 +18,7 @@ class VersionConsistencyTest {
     void pomHasRevisionProperty() throws Exception {
         String pom = Files.readString(Path.of("pom.xml"));
         assertThat(pom).contains("<revision>");
-        assertThat(pom).contains("3.7.0-SNAPSHOT");
+        assertThat(pom).contains("4.1.0");
     }
 
     @Test
@@ -112,7 +112,7 @@ class VersionConsistencyTest {
         return Stream.of(
                 Arguments.of("CHANGELOG.md", "3.2.0"),
                 Arguments.of("ROADMAP.md", "3.2.0"),
-                Arguments.of("README.md", "3.2.0"),
+                Arguments.of("docs/project-history.md", "3.2.0"),
                 Arguments.of("docs/release/v3.2.0-ga-release-notes.md",
                         "v3.2.0"),
                 Arguments.of("scripts/release-notes.sh",
@@ -128,7 +128,7 @@ class VersionConsistencyTest {
     static Stream<Arguments> priorVersions() {
         Stream.Builder<Arguments> builder = Stream.builder();
         for (String file : new String[]{"CHANGELOG.md",
-                "ROADMAP.md", "README.md"}) {
+                "ROADMAP.md", "docs/project-history.md"}) {
             for (String version : new String[]{"v2.9.0", "v3.0.0",
                     "v3.1.0"}) {
                 builder.add(Arguments.of(file, version));

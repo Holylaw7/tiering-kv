@@ -59,14 +59,14 @@ class ReleaseV32GATest {
 
     @Test
     void readmeDocumentsV32Ga() throws Exception {
-        assertThat(Files.readString(Path.of("README.md")))
+        assertThat(Files.readString(Path.of("docs", "project-history.md")))
                 .contains("3.2.0");
     }
 
     @Test
     void agentContextDocumentsPhase50() throws Exception {
         assertThat(Files.readString(Path.of(".codex",
-                "AGENT_CONTEXT.md"))).contains("Phase 50");
+                "AGENT_CONTEXT.md"))).contains("v4.1.0");
     }
 
     @Test

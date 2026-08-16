@@ -39,7 +39,7 @@ class DocumentationChecklistTest {
         assertThat(readme).contains("快速开始")
                 .contains("redis-cli")
                 .contains("能力矩阵")
-                .contains("文档导航");
+                .contains("目录与文档");
     }
 
     @Test
