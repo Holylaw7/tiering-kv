@@ -80,7 +80,8 @@
 | 70 | P2 功能深度：向量集合 + 跨集群 2PC | ✅ 完成（2026-08-15） |
 | 71 | P2 功能深度：OBJECT/ACL/SCRIPT | ✅ 完成（2026-08-15） |
 | 72 | P2 功能深度：RESP3 完整类型 | ✅ 完成（2026-08-15，P2 全部完成） |
-| 73 | P4 工程现代化（多模块评估/JDK 21/命令表驱动） | ✅ 完成（2026-08-16，ADR-0346/0347/0348；v4.1.0 发布收尾） |
+| 73 | P4 工程现代化（多模块评估/JDK 21/命令表驱动） | ✅ 完成（2026-08-16，ADR-0346/0347/0348 + TD-001/038/051 关闭） |
+| 74 | v4.1.0 GA 发布（P4 收尾 + 依赖漏洞升级） | ✅ 完成（2026-08-16，v4.1.0 Release + GHCR 镜像 + Trivy 0 漏洞；发布门禁三分片均衡修复） |
 
 ## Phase 0 — 工程初始化 ✅
 
@@ -1035,3 +1036,9 @@
 - P4c 命令表驱动重构 ✅（ADR-0348：CommandCatalog 129 项 +
   动态 info/exec/command，注册表冻结 132 不变；JDK 21 全量
   14917 项 0 failures）。
+
+v4.1.0 GA ✅（2026-08-16）：发布门禁经历 4 轮真实 Runner 修复
+（单 job 全量挂死 → test-shards 拆分 + 超时 → ReleaseWorkflowTest
+结构适配 → 依赖漏洞升级 jackson/fabric8/okhttp → 三分片均衡），
+最终 test-shards 0/1/2 + release（Benchmark/Trivy/镜像/Release）
+10/10 全绿；v4.1.0 Release 与 GHCR 镜像已发布，Trivy 0 漏洞。

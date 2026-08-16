@@ -38,3 +38,21 @@ v3.7.1 / v4.0.0-rc1 已发布，全量 14910 tests。
   JFR 采集管线（tieringkv.argline + jfr-smoke job）；
 - 全量回归 14919 项（1 个已知 ChaosCluster flaky 单独重跑 20/20
   通过）。
+
+## 发布收尾（v4.1.0 GA）
+
+✅ 2026-08-16：v4.1.0 Release + GHCR 镜像发布成功（run 31927648799，
+test-shards 0/1/2 全绿 + release job 10/10 全绿：Benchmark/Trivy
+0 漏洞/镜像/校验和/Release notes/action-gh-release）。
+
+发布门禁真实 Runner 修复链（4 轮）：
+1. release 单 job 全量 + ChaosValidationTest 失败重跑挂死 → 拆
+   test-shards matrix + job 超时兜底；
+2. ReleaseWorkflowTest 断言旧结构 → 适配 test-shards needs 门禁；
+3. Trivy 暴露 jackson/okhttp/okio CVE → 升级 jackson 2.18.9、
+   fabric8 6.13.4、okhttp/mockwebserver/logging-interceptor 4.12.0、
+   okio 3.6.0（operator 测试 7/7 兼容验证）；
+4. 字母取模分片不均（重型 Raft/事务集中 shard 0 超长）→ 三分片
+   均衡（重型包拆 0/1，轻量包进 2；84/85/466，并集=全量 635）。
+
+全部步骤完成，P4 与 v4.1.0 归档。
