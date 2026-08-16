@@ -1,6 +1,7 @@
 package io.tieringkv.cluster.multiraft;
 
 import io.tieringkv.cluster.RaftTestSupport;
+import io.tieringkv.cluster.raft.AppendEntriesRequest;
 import io.tieringkv.cluster.raft.RaftNode;
 import io.tieringkv.cluster.raft.log.Durability;
 import io.tieringkv.cluster.raft.log.FileRaftLog;
@@ -20,10 +21,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static io.tieringkv.cluster.RaftTestSupport.awaitLeader;
 import static io.tieringkv.cluster.RaftTestSupport.awaitTrue;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** 多 Raft TCP 传输（ADR-0058）：单端口多组 + 组隔离。 */
 class MultiRaftTransportTest {
@@ -74,8 +77,12 @@ class MultiRaftTransportTest {
             String follower = List.of("n1", "n2", "n3").stream()
                     .filter(id -> !id.equals(leaderNode)).findFirst().orElseThrow();
             fixture.endpoints().get(follower).unregister("gB");
-            putOnLeader(fixture, "gB", bytes("x"), bytes("v")); // n2+n3 多数派仍可提交
-            assertThat(gBLeader.commitIndex()).isZero();
+            // 注销一个节点的组路由后，leader + 另一 follower 仍构成多数派：
+            // 提交必须成功；等待“组内任一节点 commitIndex 前进”
+            // （put 可能在选举切换后于新 leader 提交，避免断言陈旧节点）。
+            putOnLeader(fixture, "gB", bytes("x"), bytes("v"));
+            awaitAnyCommit(fixture, "gB", "majority commit after unregister");
+            assertTermsSane(fixture, "gB");
             awaitTrue(follower + " gB does not receive", () ->
                     fixture.managers().get(follower).raftFor("gB").logSize() == 0, 2000);
         }
@@ -178,8 +185,59 @@ class MultiRaftTransportTest {
         fixture.endpoints().get(other1).close(); // 关闭一个节点端点
         fixture.endpoints().remove(other1);
         putOnLeader(fixture, "gA", bytes("survive"), bytes("v")); // 双节点多数派提交
-        assertThat(gALeader.commitIndex()).isZero();
+        awaitAnyCommit(fixture, "gA", "majority commit after endpoint close");
+        assertTermsSane(fixture, "gA");
         fixture.close();
+    }
+
+    @Test
+    void errorFrameFailsInsteadOfCorruptingTerm() throws Exception {
+        try (TcpFixture fixture = tcpFixture(1, false)) {
+            // 目标端点没有 “missing-group”：服务端返回 ERROR 帧（UTF-8
+            // 错误文本）。回归 ADR-0353：不得把错误帧按 RESPONSE 解码，
+            // 否则 “no raft group...” 前 8 字节会解析成巨大 term。
+            MultiRaftTransport transport = new MultiRaftTransport(
+                    "missing-group", fixture.endpoints().get("n1"));
+            AppendEntriesRequest request = new AppendEntriesRequest(
+                    1, "n1", -1, 0, List.of(), 0);
+            assertThatThrownBy(() -> transport
+                    .appendEntries("n2", request)
+                    .get(5, TimeUnit.SECONDS))
+                    .hasCauseInstanceOf(IllegalStateException.class);
+            RaftNode node = fixture.managers().get("n1").raftFor("gA");
+            assertThat(node.currentTerm()).as("term must not be corrupted")
+                    .isLessThan(1000);
+        }
+    }
+
+    /** 等待组内任一节点提交（首条日志索引为 0，commitIndex >= 0 即已提交）。 */
+    private static void awaitAnyCommit(TcpFixture fixture, String groupId,
+                                       String message) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + 10_000;
+        while (System.currentTimeMillis() < deadline) {
+            if (groupRafts(fixture, groupId).stream()
+                    .anyMatch(n -> n.commitIndex() >= 0)) {
+                return;
+            }
+            Thread.sleep(50);
+        }
+        String states = groupRafts(fixture, groupId).stream()
+                .map(n -> n.id() + "=" + n.state() + ":commit="
+                        + n.commitIndex() + ":log=" + n.logSize())
+                .reduce((a, b) -> a + " " + b).orElse("");
+        assertThat(groupRafts(fixture, groupId).stream()
+                .anyMatch(n -> n.commitIndex() >= 0))
+                .as(message + " [" + states + "]")
+                .isTrue();
+    }
+
+    /** 提交成功后所有节点 term 必须保持合理（防止 ERROR 帧污染 term）。 */
+    private static void assertTermsSane(TcpFixture fixture, String groupId) {
+        for (RaftNode node : groupRafts(fixture, groupId)) {
+            assertThat(node.currentTerm())
+                    .as(node.id() + " term after commit")
+                    .isLessThan(10_000);
+        }
     }
 
     // ---------- helpers ----------
@@ -283,10 +341,12 @@ class MultiRaftTransportTest {
         return rafts;
     }
 
-    private static void putOnLeader(TcpFixture fixture, String groupId,
-                                    byte[] key, byte[] value) throws InterruptedException {
+    private static RaftNode putOnLeader(TcpFixture fixture, String groupId,
+                                        byte[] key, byte[] value)
+            throws InterruptedException {
         RaftNode leader = leaderOf(fixture, groupId);
         fixture.managers().get(leader.id()).storageFor(groupId).put(key, value);
+        return leader;
     }
 
     private static int freePort() throws Exception {

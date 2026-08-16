@@ -24,6 +24,13 @@
 
 ### Fixed
 
+- RPC 真实缺陷修复（ADR-0354）：`MultiRaftTransport` /
+  `NettyRaftTransport` 此前对 ERROR 帧无条件按 RESPONSE 解码，组注销
+  时错误文本前 8 字节被解析成巨大 term 并污染全集群 Raft 状态
+  （term≈7.9e18，多数派无法形成，propose 悬挂）；现改为响应类型
+  校验后再解码，类型不匹配按对端失败处理；新增
+  errorFrameFailsInsteadOfCorruptingTerm 回归测试，注销/关端点后
+  多数派提交 + term 健全断言，本地 10/10 通过。
 - 环境 flaky 根治（ADR-0353）：`MetadataRaftGroup.write` 在选举窗口
   有界等待 leader（1s）而非 fail-fast，慢 Runner 下不再瞬时报
   `no metadata leader`；块设备满盘断言改为 ≥32KB 多块 WAL 负载 +

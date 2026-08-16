@@ -282,9 +282,21 @@ class MetadataNetworkRaftExtendedTest {
         fixture.nodes.get(leaderIndex).close();
         fixture.endpoints.get(leaderIndex).close();
         String newLeader = fixture.awaitNewLeader(firstLeader);
-        MetaRaftRpc.MetaRaftStatus status = fixture.clientEndpoint
-                .callMetaStatus(newLeader, MetadataNetworkFixture.GROUP)
-                .join();
+        // 慢 Runner 上 awaitNewLeader 与状态读取之间可能再发生选举：
+        // 轮询直到目标节点稳定报告 LEADER（ADR-0353 测试稳定化）。
+        MetaRaftRpc.MetaRaftStatus status = null;
+        long deadline = System.currentTimeMillis() + 5000;
+        while (System.currentTimeMillis() < deadline) {
+            status = fixture.clientEndpoint
+                    .callMetaStatus(newLeader, MetadataNetworkFixture.GROUP)
+                    .join();
+            if (newLeader.equals(status.leaderId())
+                    && "LEADER".equals(status.state())) {
+                break;
+            }
+            Thread.sleep(50);
+        }
+        assertThat(status).isNotNull();
         assertThat(status.leaderId()).isEqualTo(newLeader);
         assertThat(status.state()).isEqualTo("LEADER");
     }

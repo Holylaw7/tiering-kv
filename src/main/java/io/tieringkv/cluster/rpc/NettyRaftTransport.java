@@ -16,6 +16,7 @@ import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -74,8 +75,9 @@ public final class NettyRaftTransport implements RaftTransport, AutoCloseable {
         byte[] payload = RaftMessageCodec.encode(request);
         RpcRequest rpc = new RpcRequest(RequestId.next(),
                 RpcMessageType.REQUEST_VOTE, payload);
-        return call(target, rpc).thenApply(response ->
-                RaftMessageCodec.decodeVoteResponse(response.payload()));
+        return decodeExpected(call(target, rpc),
+                RpcMessageType.REQUEST_VOTE_RESPONSE,
+                RaftMessageCodec::decodeVoteResponse);
     }
 
     @Override
@@ -84,8 +86,9 @@ public final class NettyRaftTransport implements RaftTransport, AutoCloseable {
         byte[] payload = RaftMessageCodec.encode(request);
         RpcRequest rpc = new RpcRequest(RequestId.next(),
                 RpcMessageType.APPEND_ENTRIES, payload);
-        return call(target, rpc).thenApply(response ->
-                RaftMessageCodec.decodeAppendEntriesResponse(response.payload()));
+        return decodeExpected(call(target, rpc),
+                RpcMessageType.APPEND_ENTRIES_RESPONSE,
+                RaftMessageCodec::decodeAppendEntriesResponse);
     }
 
     @Override
@@ -94,8 +97,9 @@ public final class NettyRaftTransport implements RaftTransport, AutoCloseable {
         byte[] payload = RaftMessageCodec.encode(request);
         RpcRequest rpc = new RpcRequest(RequestId.next(),
                 RpcMessageType.INSTALL_SNAPSHOT, payload);
-        return call(target, rpc).thenApply(response ->
-                RaftMessageCodec.decodeInstallSnapshotResponse(response.payload()));
+        return decodeExpected(call(target, rpc),
+                RpcMessageType.INSTALL_SNAPSHOT_RESPONSE,
+                RaftMessageCodec::decodeInstallSnapshotResponse);
     }
 
     @Override
@@ -104,8 +108,33 @@ public final class NettyRaftTransport implements RaftTransport, AutoCloseable {
         byte[] payload = RaftMessageCodec.encode(request);
         RpcRequest rpc = new RpcRequest(RequestId.next(),
                 RpcMessageType.TIMEOUT_NOW, payload);
-        return call(target, rpc).thenApply(response ->
-                RaftMessageCodec.decodeTimeoutNowResponse(response.payload()));
+        return decodeExpected(call(target, rpc),
+                RpcMessageType.TIMEOUT_NOW_RESPONSE,
+                RaftMessageCodec::decodeTimeoutNowResponse);
+    }
+
+    /**
+     * 类型校验后再解码（ADR-0353 根因修复）：ERROR 帧 payload 为 UTF-8
+     * 错误文本，无条件解码会把它解析成巨大 term 并污染 Raft 状态；
+     * 类型不匹配一律按失败处理。
+     */
+    private static <T> CompletableFuture<T> decodeExpected(
+            CompletableFuture<RpcResponse> call, RpcMessageType expected,
+            Function<byte[], T> decoder) {
+        return call.thenCompose(response -> {
+            if (response.type() != expected) {
+                return CompletableFuture.failedFuture(
+                        new IllegalStateException(
+                                "unexpected RPC response type " + response.type()
+                                        + " for " + expected));
+            }
+            try {
+                return CompletableFuture.completedFuture(
+                        decoder.apply(response.payload()));
+            } catch (RuntimeException e) {
+                return CompletableFuture.failedFuture(e);
+            }
+        });
     }
 
     private CompletableFuture<RpcResponse> call(String target, RpcRequest request) {

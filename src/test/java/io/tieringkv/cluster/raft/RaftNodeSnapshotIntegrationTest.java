@@ -83,7 +83,8 @@ class RaftNodeSnapshotIntegrationTest {
             RaftNode leader = io.tieringkv.cluster.RaftTestSupport.awaitLeader(
                     List.of(n1, n2, n3), 5000);
             for (int i = 0; i < ENTRIES; i++) {
-                leader.propose(("e" + i).getBytes(StandardCharsets.UTF_8)).get();
+                proposeWithLeaderRetry(leader, n1, n2, n3,
+                        ("e" + i).getBytes(StandardCharsets.UTF_8));
             }
             assertThat(leader.logSize()).isLessThan(ENTRIES);
 
@@ -95,6 +96,30 @@ class RaftNodeSnapshotIntegrationTest {
             n1.close();
             n2.close();
             n3.close();
+        }
+    }
+
+    /** 慢 Runner 上 awaitLeader 返回后可能发生选举切换：
+     *  propose 遇 “not leader” 时重新等待 leader 并重试（有界）。 */
+    private static void proposeWithLeaderRetry(RaftNode leader,
+                                               RaftNode n1, RaftNode n2,
+                                               RaftNode n3, byte[] command)
+            throws Exception {
+        long deadline = System.currentTimeMillis() + 10_000;
+        RaftNode current = leader;
+        while (true) {
+            try {
+                current.propose(command).get(5, java.util.concurrent.TimeUnit.SECONDS);
+                return;
+            } catch (java.util.concurrent.ExecutionException e) {
+                if (e.getCause() instanceof IllegalStateException
+                        && System.currentTimeMillis() < deadline) {
+                    current = io.tieringkv.cluster.RaftTestSupport.awaitLeader(
+                            List.of(n1, n2, n3), 3000);
+                    continue;
+                }
+                throw e;
+            }
         }
     }
 
