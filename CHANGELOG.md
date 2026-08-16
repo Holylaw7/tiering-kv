@@ -33,6 +33,14 @@
   （token RBAC）、VectorIndexSyncStorageEngine 与
   BackupManager/RestoreManager additive 喂数；全量回归 14897 项
   0 failures，真实 Runner 门禁 3/3 全绿。
+- P3 可观测性增量（ADR-0345）：复制管线喂数（ReplicationPipeline/
+  BidirectionalPipeline 注入 ReplicationMetricsRegistry，attach
+  LagTracker + 复制/抑制/冲突计数）、多模型命令喂数
+  （JsonCommand/MultiModelCommand/TimeSeriesCommand + CommandRegistry
+  新重载：JSON 写/校验失败/TS 写/字节）、W3C traceparent 透传
+  （Tracer.startW3c/injectTraceparent/extractTraceparent，零依赖
+  OTel 兼容）+ TracingMetricsRegistry + INFO tracing section +
+  GatewayRuntime 命令 span（同步路径）；全量回归 14907 项 0 failures。
 
 - v4.0 M1 向量存储接入（ADR-0319）：VectorIndexFile（magic/version/
   CRC + 原子写）、VectorIndexStore（checkpoint/load/rebuild）、

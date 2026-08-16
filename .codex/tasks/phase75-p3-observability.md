@@ -67,3 +67,13 @@ Phase 增量（已记录）：复制管线喂数、多模型命令喂数、OTel 
    GatewayRuntime 命令 span（同步路径）。
 
 验收：全量回归 0 failures；真实 Runner 门禁通过。
+
+## 状态（增量）
+
+✅ Phase 增量完成（2026-08-16）：复制喂数（ReplicationPipeline/
+BidirectionalPipeline + ReplicationMetricsFeedingTest）、多模型命令喂数
+（Json/MultiModel/TimeSeriesCommand + CommandRegistry 新重载 +
+MultiModelCommandMetricsTest）、W3C traceparent（Tracer W3C +
+TracingMetricsRegistry + INFO tracing section + GatewayRuntime 命令
+span，TracerTest +3 / ObservabilityRegistryTest +2）。全量回归
+14907 tests / 0 failures / 11 skipped；真实 Runner 门禁待确认。

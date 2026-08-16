@@ -111,7 +111,9 @@
 - 向量/复制/多模型/备份 Metrics 收口（ADR-0344，2026-08-15：
   observability 注册表 + INFO sections + `/metrics/prometheus`
   端点 + 向量/备份喂数；真实 Runner 门禁 3/3 全绿；复制/多模型
-  喂数与 OTel 列为增量）；
+  喂数（ADR-0345：pipeline/命令注入 + W3C traceparent + INFO tracing
+  section + GatewayRuntime 命令 span）完成，全量回归 14907 项
+  0 failures）；
 - OpenTelemetry span 透传；
 - 备份恢复纳入向量索引与复制水位；
 - CI 卫生：JFR/日志 artifact、测试分片、缓存优化。
