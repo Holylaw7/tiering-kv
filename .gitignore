@@ -1,6 +1,7 @@
 # ---- Maven ----
 target/
 *.jfr
+deps*.txt
 .flattened-pom.xml
 pom.xml.tag
 pom.xml.releaseBackup
