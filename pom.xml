@@ -15,6 +15,8 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>21</maven.compiler.release>
+    <!-- JFR 采集等可选 JVM 参数（TD-051）；默认空 -->
+    <tieringkv.argline></tieringkv.argline>
         <junit.version>5.10.2</junit.version>
         <assertj.version>3.26.3</assertj.version>
         <netty.version>4.1.136.Final</netty.version>
@@ -125,7 +127,8 @@
                 <version>3.2.5</version>
                 <configuration>
                     <!-- 内存引擎基准（1M 数据集）需要较大堆 -->
-                    <argLine>@{argLine} -Xmx2g</argLine>
+                    <!-- tieringkv.argline：JFR 采集等可选 JVM 参数（TD-051） -->
+                    <argLine>@{argLine} -Xmx2g ${tieringkv.argline}</argLine>
                     <forkCount>1</forkCount>
                     <reuseForks>true</reuseForks>
                     <excludedGroups>${surefire.excludedGroups}</excludedGroups>

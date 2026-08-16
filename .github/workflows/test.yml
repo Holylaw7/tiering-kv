@@ -13,6 +13,10 @@ jobs:
   unit-and-integration:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -22,7 +26,17 @@ jobs:
           cache: maven
       # 性能断言（@Tag("benchmark")）从功能门禁排除，由 release Benchmark 步骤
       # 显式执行；失败用例重跑一次，重跑仍失败则门禁照常失败，不掩盖真实缺陷。
-      - run: mvn -B -Dsurefire.rerunFailingTestsCount=1 -Dsurefire.excludedGroups=benchmark test
+      - name: Compile tests
+        run: mvn -B -q test-compile
+      - name: Build shard test list
+        run: |
+          scripts/shard-tests.sh ${{ matrix.shard }} 2 > /tmp/shard-tests.txt
+          echo "shard ${{ matrix.shard }}: $(tr ',' '\n' < /tmp/shard-tests.txt | wc -l) classes"
+      - name: Run shard tests
+        run: |
+          mvn -B -Dsurefire.rerunFailingTestsCount=1 \
+            -Dsurefire.excludedGroups=benchmark \
+            -Dtest="$(cat /tmp/shard-tests.txt)" test
       - name: Upload surefire reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -31,4 +45,26 @@ jobs:
           path: target/surefire-reports
           if-no-files-found: ignore
           retention-days: 7
-      # TODO(phase1+): 追加 tests/integration、tests/stress、tests/chaos 执行入口
+  jfr-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: JFR recording smoke
+        run: |
+          mvn -B -Djacoco.skip=true \
+            -Dtieringkv.argline="-XX:StartFlightRecording=filename=jfr-smoke.jfr,settings=profile,maxsize=64m,dumponexit=true" \
+            -Dtest=PackageBoundaryTest,TracerTest,GatewayRuntimeRespTest test
+      - name: Upload JFR
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jfr-smoke
+          path: "*.jfr"
+          if-no-files-found: ignore
+          retention-days: 7
