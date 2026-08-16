@@ -27,6 +27,10 @@ public final class MetadataRaftGroup implements AutoCloseable {
     /** 选举窗口有界等待（ADR-0353）：leader 切换瞬间不立即失败，吸收调度抖动。 */
     private static final long LEADER_WAIT_MILLIS = 1000;
     private static final long LEADER_POLL_MILLIS = 10;
+    /** propose 有界超时（ADR-0353 加固）：慢 Runner 上 5s 过紧，
+     *  与 ReplicatedStorageEngine 15s 提案超时对齐，仍满足
+     *  Phase 20「禁止客户端永久悬挂」。 */
+    private static final long PROPOSE_TIMEOUT_MILLIS = 15_000;
 
     private final Map<String, RaftNode> nodes = new LinkedHashMap<>();
     private final Map<String, MetadataState> states = new LinkedHashMap<>();
@@ -113,12 +117,14 @@ public final class MetadataRaftGroup implements AutoCloseable {
             throw new IllegalStateException("no metadata leader");
         }
         try {
-            leader.propose(command).get(5, TimeUnit.SECONDS);
+            leader.propose(command).get(PROPOSE_TIMEOUT_MILLIS,
+                    TimeUnit.MILLISECONDS);
         } catch (Exception first) {
             RaftNode newLeader = leader();
             if (newLeader != null && newLeader != leader) {
                 try {
-                    newLeader.propose(command).get(5, TimeUnit.SECONDS);
+                    newLeader.propose(command).get(PROPOSE_TIMEOUT_MILLIS,
+                            TimeUnit.MILLISECONDS);
                     return;
                 } catch (Exception retry) {
                     throw new IllegalStateException("metadata write failed on retry", retry);

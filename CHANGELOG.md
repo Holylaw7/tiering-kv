@@ -34,6 +34,10 @@
 - CI 加固（kind-e2e）：kind-action 等待 300s + 集群 API 就绪校验步骤，
   诊断步骤 `|| true` 不决定 job 结果（吸收 235c2b8 慢 Runner 集群
   未就绪的瞬时故障）。
+- 元数据提案超时加固（ADR-0353）：MetadataRaftGroup.write 的 propose
+  有界超时 5s → 15s（与 ReplicatedStorageEngine 对齐），消除慢 Runner
+  上 MetadataPersistenceTest 的 TimeoutException；kind-action `wait`
+  参数修正为 `300s`（原 `300` 无单位导致 kind 创建失败）。
 - 环境 flaky 根治（ADR-0353）：`MetadataRaftGroup.write` 在选举窗口
   有界等待 leader（1s）而非 fail-fast，慢 Runner 下不再瞬时报
   `no metadata leader`；块设备满盘断言改为 ≥32KB 多块 WAL 负载 +

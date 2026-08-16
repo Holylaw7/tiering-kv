@@ -130,7 +130,7 @@ jobs:
       - uses: helm/kind-action@v1
         with:
           cluster_name: tiering-kv
-          wait: 300
+          wait: 300s
       - name: Verify kind cluster
         # 慢 Runner 上 kind 控制面可能未就绪（235c2b8 复现）；等待 150s
         # 后仍未就绪则明确失败，避免后续步骤在空集群上误报。

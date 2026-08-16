@@ -27,7 +27,10 @@ v4.1.0 收尾期间，纯文档提交 f30e714 触发的真实 Runner 门禁偶�
 1. `MetadataRaftGroup.write` 改为有界等待 leader（默认 1000ms，
    10ms 轮询），超时才抛 `no metadata leader`；中断恢复中断位；
    既有的“propose 失败后换新 leader 重试一次”逻辑保留。等待有界，
-   满足 Phase 20「禁止客户端永久悬挂」约束；
+   propose 有界超时从 5s 提升到 15s（与 ReplicatedStorageEngine 提案
+   超时对齐；慢 Runner 上 5s 过紧导致 MetadataPersistenceTest
+   TimeoutException）。等待与超时均有界，满足 Phase 20「禁止客户端
+   永久悬挂」约束；
 2. `RealBlockDeviceExerciseTest` 满盘断言要求 **≥3 个新数据块分配**：
    - 新增与断言同尺度的 16KB 多块探针（必须 IOException）；
    - WAL 负载改为 64 条 × 512B（≈32KB，≥8 个新块），必须失败；
