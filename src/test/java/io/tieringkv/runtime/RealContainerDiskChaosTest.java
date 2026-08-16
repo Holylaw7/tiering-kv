@@ -18,7 +18,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * <p>前置：block-device-chaos.sh 已把 loop 设备 bind 为 txn-meta
  * 容器 /data，事务栈已启动（gateway 127.0.0.1:6379）。
- * TIERINGKV_BLOCK_EXPECT=failure：故障期 SET 必须失败（不静默成功）；
+ * TIERINGKV_BLOCK_EXPECT=failure：只读故障期 SET 必须失败
+ * （EROFS 任何写失败，不静默成功；disk-full 对已有块内小追加
+ * 合法成功，由 CI probe 断言新分配失败）；
  * =recovered：恢复期 SET/GET 必须成功（有界重试吸收 Raft 恢复）。
  */
 @Tag("container")

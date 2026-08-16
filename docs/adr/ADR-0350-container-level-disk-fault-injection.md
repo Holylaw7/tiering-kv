@@ -33,6 +33,10 @@ TD-046/TD-049：真实容器 disk full / readonly / slow io 注入未完成
    setup → compose up（bind）→ 预检冒烟 → disk-full 注入 → failure
    断言 → 释放空间 → recovered 断言 → readonly 注入 → failure 断言
    → 恢复 rw → recovered 断言 → cleanup；
+   - disk-full 语义修正：ext4 已有块内小追加（元数据 ~300B）不触发
+     新块分配，ENOSPC 合法不生效；容器级断言“新块分配必须失败”
+     （probe 写入），释放空间后 SET/GET 恢复；
+   - readonly 语义：EROFS 使任何写入失败，SET 必须失败（强断言）；
 4. slow io：托管 Runner 无 device-mapper 时显式 SKIPPED（脚本已有
    分支），在特权/自托管 Runner 可按需启用，不作为门禁阻塞。
 

@@ -195,20 +195,17 @@ jobs:
             || true
           sudo df -h /mnt/tiering-kv-block
           docker exec txn-meta df -h /data || true
-          docker exec txn-meta sh -c \
+          # disk-full 语义：已有块内小追加（元数据 ~300B）可合法成功，
+          # 关键不变量是“新块分配必须失败”；严格断言 probe 失败。
+          if docker exec txn-meta sh -c \
             'dd if=/dev/zero of=/data/probe.bin bs=1k count=1' \
-            2>&1 || echo "CONTAINER_WRITE_FAILED_EXPECTED"
-          docker exec txn-meta sh -c 'rm -f /data/probe.bin' \
-            2>/dev/null || true
-          docker exec txn-meta sh -c 'rm -f /data/fill.bin' \
-            2>/dev/null || true
-          docker exec txn-meta sh -c 'stat -c "BEFORE size=%s" /data/txn-meta.log' \
-            || true
-          TIERINGKV_CONTAINER_CHAOS=true TIERINGKV_BLOCK_EXPECT=failure \
-            mvn -q -Dtest=RealContainerDiskChaosTest#setMustFailUnderDiskFault \
-            -DfailIfNoTests=false test
-          docker exec txn-meta sh -c 'stat -c "AFTER size=%s" /data/txn-meta.log' \
-            || true
+            2>/dev/null; then
+            echo "probe write should fail under disk-full" >&2
+            exit 1
+          fi
+          echo "CONTAINER_DISK_FULL_NEW_ALLOCATION_BLOCKED=true"
+          docker exec txn-meta sh -c \
+            'rm -f /data/probe.bin /data/fill.bin' 2>/dev/null || true
           sudo rm -f /mnt/tiering-kv-block/fill.bin
       - name: Container recovery after disk-full
         run: |

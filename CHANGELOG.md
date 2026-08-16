@@ -192,6 +192,10 @@
   事务仍报成功；`TransactionMetadataService.appendLog` 增加
   `FileDescriptor.sync()`（fsync），磁盘满时 append 真实失败并
   经 ERROR 帧传播，SET 正确失败（同时强化元数据日志持久化）。
+- ADR-0350 容器级演练语义修正：磁盘满时已有块内小追加（元数据
+  ~300B）不触发新块分配，ENOSPC 合法不生效；容器级 disk-full
+  断言改为“新块分配必须失败”（probe）+ 恢复后一致，readonly
+  保持“SET 必须失败”强断言。
 
 - P3 真实 Runner 门禁暴露：后端容器缺 NET_ADMIN 导致
   `tc qdisc add` 返回 `Operation not permitted`；docker-compose
