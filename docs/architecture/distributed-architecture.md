@@ -30,16 +30,23 @@ TieringStorageEngine（Phase 1–10 单机引擎）
 
 - **Gateway**：客户端连接、请求路由、拓扑缓存；
 - **Metadata**：维护 `shard → node group → leader`（ADR-0036）；
-- **Storage**：复用 TieringStorageEngine；写入经 Raft 复制（ADR-0037）。
+- **Storage**：复用 TieringStorageEngine；写入经 Raft 复制（ADR-0037）；
+  原子字符串命令（TTL/INCR/APPEND/GETSET/GETDEL/SETNX/EXPIRE/PERSIST）
+  经 Raft ATOMIC 命令在 apply 阶段确定性执行（ADR-0352，TD-081 关闭）。
 
 ## 3. 数据路径
 
 ```text
 写：Client → Router(slot) → Leader → Raft append → 多数派 ack
     → apply 本地存储 → 应答
+原子写：同上，ATOMIC 命令（op 码 + key/value + delta/expireAt）在
+    apply 阶段执行并回传结果；领域错误（如 INCR 非整数）回传而不悬挂
 读：Leader/Replica 本地读（原型语义，强一致读留后续）
 故障：Leader 崩溃 → 选举（<5s）→ 元数据更新 → 客户端重路由
 ```
+
+> ADR-0352 语义边界：`update(UnaryOperator)` 不可序列化，采用
+> Leader 本地 RMW + 复制最终值（保留 TTL）；TTL/版本查询本地读取。
 
 ## 4. 分片
 

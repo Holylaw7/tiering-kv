@@ -1043,3 +1043,9 @@ v4.1.0 GA ✅（2026-08-16）：发布门禁经历 4 轮真实 Runner 修复
 结构适配 → 依赖漏洞升级 jackson/fabric8/okhttp → 三分片均衡），
 最终 test-shards 0/1/2 + release（Benchmark/Trivy/镜像/Release）
 10/10 全绿；v4.1.0 Release 与 GHCR 镜像已发布，Trivy 0 漏洞。
+
+v4.1.0 维护补丁 ✅（2026-08-16）：实践运行验证修复生产链 TTL
+缺陷（ADR-0351，装饰器原子能力透传）并关闭集群复制原子操作缺口
+（ADR-0352 / TD-081，Raft ATOMIC 命令 + 结果回传）；全量
+14948 项 0 failures，Runner 门禁 build/test/transaction-e2e
+3/3 全绿；技术债 50/50 处置完成。
