@@ -57,8 +57,16 @@ public final class TransactionMetadataService implements AutoCloseable {
                     proposer) throws IOException {
         TransactionMetadataService service =
                 new TransactionMetadataService(proposer, logPath);
-        for (TxnMetaCommand command : readLog(logPath)) {
-            service.state.apply(command);
+        try {
+            for (TxnMetaCommand command : readLog(logPath)) {
+                service.state.apply(command);
+            }
+        } catch (IOException e) {
+            closeQuietly(service);
+            throw e;
+        } catch (RuntimeException e) {
+            closeQuietly(service);
+            throw e;
         }
         return service;
     }
@@ -126,11 +134,24 @@ public final class TransactionMetadataService implements AutoCloseable {
             Path logPath) throws IOException {
         TransactionMetadataService service =
                 new TransactionMetadataService(proposer, logPath);
-        for (int i = 0; i < raftCommands.size(); i++) {
-            service.state.apply(TxnMetaCodec.decode(raftCommands.get(i))
-                    .withDecisionIndex(i));
+        try {
+            for (int i = 0; i < raftCommands.size(); i++) {
+                service.state.apply(TxnMetaCodec.decode(raftCommands.get(i))
+                        .withDecisionIndex(i));
+            }
+        } catch (RuntimeException e) {
+            closeQuietly(service);
+            throw e;
         }
         return service;
+    }
+
+    private static void closeQuietly(TransactionMetadataService service) {
+        try {
+            service.close();
+        } catch (IOException ignored) {
+            // 恢复失败路径：关闭日志流失败不掩盖原始异常
+        }
     }
 
     private void appendLog(byte[] payload) {

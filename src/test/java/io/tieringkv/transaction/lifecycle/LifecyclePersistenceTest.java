@@ -165,8 +165,13 @@ class LifecyclePersistenceTest {
 
     private TransactionMetadataService metadataFrom(Path log)
             throws Exception {
-        return TransactionMetadataService.recover(log,
+        TransactionMetadataService service = TransactionMetadataService
+                .recover(log,
                 command -> CompletableFuture.completedFuture(1L));
+        // 恢复后只读查询状态：日志流立即关闭，避免 Windows 下
+        // TempDirectory 清理时文件句柄占用（真实资源管理修正）。
+        service.close();
+        return service;
     }
 
     private record ServiceFixture(TransactionMetadataService metadata,
