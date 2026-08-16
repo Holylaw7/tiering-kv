@@ -10,6 +10,7 @@ import io.tieringkv.command.RespRequestParser;
 import io.tieringkv.protocol.RespError;
 import io.tieringkv.protocol.RespEncoder;
 import io.tieringkv.protocol.RespProtocolException;
+import io.tieringkv.protocol.RespSimpleString;
 import io.tieringkv.protocol.RespValue;
 
 import java.util.ArrayList;
@@ -21,6 +22,7 @@ public final class ClusterCommandHandler extends ChannelInboundHandlerAdapter {
     private final UnifiedClusterGateway gateway;
     private final GatewayMetricsRegistry metrics;
     private final List<RespValue> pending = new ArrayList<>();
+    private boolean asking;
 
     public ClusterCommandHandler(UnifiedClusterGateway gateway,
                                  GatewayMetricsRegistry metrics) {
@@ -47,12 +49,27 @@ public final class ClusterCommandHandler extends ChannelInboundHandlerAdapter {
         try {
             RespCommand command = RespRequestParser.parse(value);
             long t0 = System.nanoTime();
-            RespValue response = gateway.execute(command.name(), command.args());
+            RespValue response = handleCommand(command);
             metrics.recordRequest(System.nanoTime() - t0);
             pending.add(response);
         } catch (RespProtocolException e) {
             pending.add(RespError.protocol(e.getMessage()));
         }
+    }
+
+    /**
+     * ASK 迁移语义（TD-038）：ASKING 命令置位，仅对下一条命令生效
+     * （Redis single-shot 语义）。
+     */
+    RespValue handleCommand(RespCommand command) {
+        if ("asking".equalsIgnoreCase(command.name())) {
+            asking = true;
+            return new RespSimpleString("OK");
+        }
+        RespValue response = gateway.executeWithAsking(
+                command.name(), command.args(), asking);
+        asking = false;
+        return response;
     }
 
     /** 单个读批次解码完成后：批量编码 + 单次 flush（吞吐关键，ADR-0068）。 */

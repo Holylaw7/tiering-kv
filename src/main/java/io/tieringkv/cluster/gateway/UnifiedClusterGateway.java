@@ -42,36 +42,48 @@ public final class UnifiedClusterGateway {
     }
 
     public RespValue execute(String name, List<byte[]> args) {
+        return executeWithAsking(name, args, false);
+    }
+
+    /**
+     * ASK 迁移语义（TD-038）：asking=true 时迁移中 slot 允许本节点
+     * 读写（Redis ASKING 单命令语义由 handler 消费）。
+     */
+    public RespValue executeWithAsking(String name, List<byte[]> args,
+                                       boolean asking) {
         switch (name.toLowerCase(Locale.ROOT)) {
+            case "asking" -> {
+                return new RespSimpleString("OK");
+            }
             case "get" -> {
                 if (args.size() != 1) {
                     return RespError.wrongArity(name);
                 }
-                return localGet(args.get(0));
+                return localGet(args.get(0), asking);
             }
             case "set" -> {
                 if (args.size() < 2) {
                     return RespError.wrongArity(name);
                 }
-                return localSet(args);
+                return localSet(args, asking);
             }
             case "del" -> {
                 if (args.size() != 1) {
                     return RespError.wrongArity(name);
                 }
-                return localDel(args.get(0));
+                return localDel(args.get(0), asking);
             }
             case "mget" -> {
                 if (args.isEmpty()) {
                     return RespError.wrongArity(name);
                 }
-                return localMget(args);
+                return localMget(args, asking);
             }
             case "mset" -> {
                 if (args.size() < 2 || args.size() % 2 != 0) {
                     return RespError.wrongArity(name);
                 }
-                return localMset(args);
+                return localMset(args, asking);
             }
             case "info" -> {
                 return new RespBulkString(
@@ -100,9 +112,16 @@ public final class UnifiedClusterGateway {
 
     /** key → 路由条目；迁移中 → ASK；leader 缺失 → TRYAGAIN；远端 → MOVED。 */
     public RouteResult route(byte[] key) {
+        return route(key, false);
+    }
+
+    public RouteResult route(byte[] key, boolean asking) {
         int slot = HashSlotRouter.slot(key);
         RoutingTableEntry entry = router.routeSlot(slot);
         if (entry.migrating()) {
+            if (asking) {
+                return RouteResult.local(entry);
+            }
             String target = entry.leader();
             if (target == null) {
                 return RouteResult.redirect("TRYAGAIN", slot, null);
@@ -118,8 +137,8 @@ public final class UnifiedClusterGateway {
         return RouteResult.local(entry);
     }
 
-    private RespValue localGet(byte[] key) {
-        RouteResult result = route(key);
+    private RespValue localGet(byte[] key, boolean asking) {
+        RouteResult result = route(key, asking);
         if (!result.local()) {
             return result.error();
         }
@@ -127,8 +146,8 @@ public final class UnifiedClusterGateway {
         return value == null ? RespNull.BULK_STRING : new RespBulkString(value);
     }
 
-    private RespValue localSet(List<byte[]> args) {
-        RouteResult result = route(args.get(0));
+    private RespValue localSet(List<byte[]> args, boolean asking) {
+        RouteResult result = route(args.get(0), asking);
         if (!result.local()) {
             return result.error();
         }
@@ -148,18 +167,18 @@ public final class UnifiedClusterGateway {
         return new RespSimpleString("OK");
     }
 
-    private RespValue localDel(byte[] key) {
-        RouteResult result = route(key);
+    private RespValue localDel(byte[] key, boolean asking) {
+        RouteResult result = route(key, asking);
         if (!result.local()) {
             return result.error();
         }
         return new RespInteger(storages.get(localNode).delete(key) ? 1 : 0);
     }
 
-    private RespValue localMget(List<byte[]> args) {
+    private RespValue localMget(List<byte[]> args, boolean asking) {
         List<RespValue> values = new ArrayList<>(args.size());
         for (byte[] key : args) {
-            RouteResult result = route(key);
+            RouteResult result = route(key, asking);
             if (!result.local()) {
                 return result.error();
             }
@@ -170,9 +189,9 @@ public final class UnifiedClusterGateway {
         return new RespArray(values);
     }
 
-    private RespValue localMset(List<byte[]> args) {
+    private RespValue localMset(List<byte[]> args, boolean asking) {
         for (int i = 0; i < args.size(); i += 2) {
-            RouteResult result = route(args.get(i));
+            RouteResult result = route(args.get(i), asking);
             if (!result.local()) {
                 return result.error();
             }

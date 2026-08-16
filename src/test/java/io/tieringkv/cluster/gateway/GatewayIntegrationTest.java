@@ -152,6 +152,41 @@ class GatewayIntegrationTest {
     }
 
     @Test
+    void askingAllowsMigratingRead() throws Exception {
+        table.update(entry(new RegionId(1), "a", "m", 0, 8191,
+                RegionEpoch.INITIAL, "n1", "g1", true));
+        try (TestRespClient client = client()) {
+            client.send(TestRespClient.command("ASKING"));
+            assertThat(client.readResponse()).isEqualTo("+OK");
+            client.send(TestRespClient.command("SET",
+                    str(localKey), "migrated"));
+            assertThat(client.readResponse()).isEqualTo("+OK");
+            // ASKING 为 single-shot：读取前需再次置位
+            client.send(TestRespClient.command("ASKING"));
+            assertThat(client.readResponse()).isEqualTo("+OK");
+            client.send(TestRespClient.command("GET", str(localKey)));
+            assertThat(client.readResponse())
+                    .startsWith("$8")
+                    .contains("migrated");
+        }
+    }
+
+    @Test
+    void askingIsOneShot() throws Exception {
+        table.update(entry(new RegionId(1), "a", "m", 0, 8191,
+                RegionEpoch.INITIAL, "n1", "g1", true));
+        try (TestRespClient client = client()) {
+            client.send(TestRespClient.command("ASKING"));
+            assertThat(client.readResponse()).isEqualTo("+OK");
+            client.send(TestRespClient.command("GET", str(localKey)));
+            assertThat(client.readResponse()).isEqualTo("$-1");
+            // ASKING 仅对下一条命令有效：再次访问迁移 slot 应回到 ASK
+            client.send(TestRespClient.command("GET", str(localKey)));
+            assertThat(client.readResponse()).startsWith("-ASK ");
+        }
+    }
+
+    @Test
     void tryAgainWhenLeaderMissing() throws Exception {
         table.update(entry(new RegionId(1), "a", "m", 0, 8191,
                 new RegionEpoch(2, 1), null, "g1", false));
