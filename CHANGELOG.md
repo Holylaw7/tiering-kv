@@ -7,6 +7,11 @@
 
 ### Added
 
+- 测试度量口径明确（docs/testing/measurement-conventions.md）：
+  “14950”定义为 Surefire Tests run **执行次数**（含参数化
+  invocation，XML `<testcase>` 总数实测 14950），源码测试方法
+  约 6,736 个（5104 `@Test` + 1632 `@ParameterizedTest`）；
+  文档/简历统一表述，禁止写作“14950 个独立测试场景”。
 - RFC-0002（v4.2.0 Production Hardening）：K8s Operator 生产化、
   真实对象存储/市场 ADAPTER 补证、SQL/向量/SaaS 转正与发布收尾
   方案已保存（Proposed，待评审）；获批前不开展实现。

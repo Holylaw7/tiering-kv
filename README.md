@@ -3,7 +3,10 @@
 > Redis 协议兼容的 LSM 冷热分层 KV 存储引擎（Mini Redis）——
 > 内存/磁盘分层 + 分布式事务 + 多模型值 + 向量检索 + SQL + 云原生运行时。
 
-**版本：v4.1.0 GA（2026-08-16）** · 全量测试 **14950 / 0 failures** ·
+**版本：v4.1.0 GA（2026-08-16）** · 测试执行 **14950 次 / 0 failures**
+（Surefire Tests run，含参数化 invocation；约 6,736 个测试方法，
+口径见 [docs/testing/measurement-conventions.md](
+docs/testing/measurement-conventions.md)） ·
 技术债 **50/50 处置完成**（含 TD-081 集群复制原子操作，ADR-0352） ·
 JDK 21 · 真实 GitHub Runner 门禁全绿
 （build / test（三分片）/ transaction-e2e /
@@ -82,13 +85,14 @@ Kubernetes：`deploy/kubernetes/*.yaml` + Operator（fabric8 6.13.4）。
 | v3.7.1 | 2026-08-14 | 维护补丁（依赖漏洞/CI 稳定化） |
 | v4.0.0-rc1 | 2026-08-14 | 向量存储 M1 + 多模型 M2 + 跨集群复制 M3 |
 | v4.1.0 | 2026-08-16 | P4 工程现代化（JDK 21/命令目录）+ 可观测性收口 + 依赖升级 + 发布门禁加固 + 容器级磁盘混沌闭环（TD-046/049）；技术债 49/49 全部关闭 |
-| v4.1.0 维护补丁 | 2026-08-16 | 生产链 TTL 修复（ADR-0351）+ 集群复制原子操作（ADR-0352，TD-081）+ 选举窗口/CI 稳定性加固（ADR-0353）；技术债 50/50；全量 14950 全绿 |
+| v4.1.0 维护补丁 | 2026-08-16 | 生产链 TTL 修复（ADR-0351）+ 集群复制原子操作（ADR-0352，TD-081）+ 选举窗口/CI 稳定性加固（ADR-0353）；技术债 50/50；测试执行 14950 次全绿 |
 
 ## 目录与文档
 
 ```text
 src/main/java/io/tieringkv/   协议/存储/集群/事务/多模型/云原生实现
-src/test/java/io/tieringkv/   14950 项测试（单元/集成/压力/混沌）
+src/test/java/io/tieringkv/   14950 次测试执行（约 6,736 个测试方法，口径见
+                              docs/testing/measurement-conventions.md）
 docs/adr/                     ADR-0001 ~ ADR-0353（架构决策记录）
 docs/requirements/             需求与验收
 docs/architecture/            总体/存储/网络/并发架构
@@ -107,7 +111,8 @@ docs/project-history.md       Phase 0–54 逐阶段演进历史（旧 README �
 路线图见 [ROADMAP.md](ROADMAP.md)，变更见 [CHANGELOG.md](CHANGELOG.md)，
 历史演进见 [docs/project-history.md](docs/project-history.md)，
 最终收尾报告见 [docs/review/final-project-closure.md](docs/review/final-project-closure.md)，
-维护期运行手册见 [docs/operations/maintenance-runbook.md](docs/operations/maintenance-runbook.md)。
+维护期运行手册见 [docs/operations/maintenance-runbook.md](docs/operations/maintenance-runbook.md)，
+测试度量口径见 [docs/testing/measurement-conventions.md](docs/testing/measurement-conventions.md)。
 
 ## 开发与贡献
 
