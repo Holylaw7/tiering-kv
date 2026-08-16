@@ -1,6 +1,7 @@
 package io.tieringkv.command;
 
 import io.tieringkv.pubsub.PubSubBroker;
+import io.tieringkv.observability.MultiModelMetricsRegistry;
 import io.tieringkv.session.ConnectionContext;
 import io.tieringkv.vector.collection.VectorCollectionRegistry;
 import io.tieringkv.vector.indexfile.VectorIndexStore;
@@ -53,6 +54,16 @@ public final class CommandRegistry {
             Supplier<String> infoProvider,
             Map<String, Supplier<String>> sections,
             VectorCollectionRegistry registry) {
+        return createDefaultWithVectorAndMetrics(
+                infoProvider, sections, registry, null);
+    }
+
+    /** 多模型喂数（ADR-0345）：可选指标注册表（additive）。 */
+    public static CommandRegistry createDefaultWithVectorAndMetrics(
+            Supplier<String> infoProvider,
+            Map<String, Supplier<String>> sections,
+            VectorCollectionRegistry registry,
+            MultiModelMetricsRegistry metrics) {
         return build(infoProvider, sections, List.of(
                 new VectorCommand("vector.add", registry),
                 new VectorCommand("vector.search", registry),
@@ -61,25 +72,25 @@ public final class CommandRegistry {
                 new VectorCommand("vector.list", registry),
                 new VectorCommand("vector.drop", registry),
                 new VectorCommand("vector.checkpoint", registry),
-                new JsonCommand("json.set"),
-                new JsonCommand("json.get"),
-                new JsonCommand("json.del"),
-                new JsonCommand("json.type"),
-                new JsonCommand("json.arrappend"),
-                new JsonCommand("json.arrlen"),
-                new JsonCommand("json.objkeys"),
-                new JsonCommand("json.objlen"),
-                new JsonCommand("json.strlen"),
-                new JsonCommand("json.numincrby"),
-                new MultiModelCommand("ts.add"),
-                new MultiModelCommand("ts.get"),
-                new MultiModelCommand("ts.len"),
-                new TimeSeriesCommand("ts.range"),
-                new TimeSeriesCommand("ts.mrange"),
-                new TimeSeriesCommand("ts.incrby"),
-                new TimeSeriesCommand("ts.reduce"),
-                new MultiModelCommand("vector.set"),
-                new MultiModelCommand("vector.get")));
+                new JsonCommand("json.set", metrics),
+                new JsonCommand("json.get", metrics),
+                new JsonCommand("json.del", metrics),
+                new JsonCommand("json.type", metrics),
+                new JsonCommand("json.arrappend", metrics),
+                new JsonCommand("json.arrlen", metrics),
+                new JsonCommand("json.objkeys", metrics),
+                new JsonCommand("json.objlen", metrics),
+                new JsonCommand("json.strlen", metrics),
+                new JsonCommand("json.numincrby", metrics),
+                new MultiModelCommand("ts.add", metrics),
+                new MultiModelCommand("ts.get", metrics),
+                new MultiModelCommand("ts.len", metrics),
+                new TimeSeriesCommand("ts.range", metrics),
+                new TimeSeriesCommand("ts.mrange", metrics),
+                new TimeSeriesCommand("ts.incrby", metrics),
+                new TimeSeriesCommand("ts.reduce", metrics),
+                new MultiModelCommand("vector.set", metrics),
+                new MultiModelCommand("vector.get", metrics)));
     }
 
     private static CommandRegistry build(

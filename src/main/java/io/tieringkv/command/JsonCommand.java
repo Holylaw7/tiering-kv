@@ -12,6 +12,7 @@ import io.tieringkv.protocol.RespInteger;
 import io.tieringkv.protocol.RespNull;
 import io.tieringkv.protocol.RespSimpleString;
 import io.tieringkv.protocol.RespValue;
+import io.tieringkv.observability.MultiModelMetricsRegistry;
 import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.storage.types.MultiModelCodec;
 import io.tieringkv.storage.types.TypedValueCodec;
@@ -35,9 +36,17 @@ public final class JsonCommand implements Command {
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final String name;
+    private final MultiModelMetricsRegistry metrics;
 
     public JsonCommand(String name) {
+        this(name, null);
+    }
+
+    /** 多模型喂数（ADR-0345）：可选指标注册表（additive）。 */
+    public JsonCommand(String name,
+                       MultiModelMetricsRegistry metrics) {
         this.name = name;
+        this.metrics = metrics;
     }
 
     @Override
@@ -99,6 +108,9 @@ public final class JsonCommand implements Command {
                 throw new IllegalArgumentException("empty json");
             }
         } catch (Exception e) {
+            if (metrics != null) {
+                metrics.recordJsonValidationError();
+            }
             return new RespError("ERR invalid JSON");
         }
         JsonPath.Parsed parsed;
@@ -140,7 +152,10 @@ public final class JsonCommand implements Command {
                     root = readTree(MultiModelCodec.decodeJson(current));
                 }
                 JsonNode updated = JsonPath.set(root, parsed, newValue);
-                return MultiModelCodec.encodeJson(serialize(updated));
+                byte[] encoded = MultiModelCodec.encodeJson(
+                        serialize(updated));
+                recordJsonWrite(encoded);
+                return encoded;
             });
         } catch (JsonPath.JsonPathException e) {
             return new RespError(e.getMessage());
@@ -148,6 +163,13 @@ public final class JsonCommand implements Command {
             return TypeSupport.wrongType();
         }
         return new RespSimpleString("OK");
+    }
+
+    private void recordJsonWrite(byte[] encoded) {
+        if (metrics != null) {
+            metrics.recordJsonWrite();
+            metrics.recordMultiModelBytes(encoded.length);
+        }
     }
 
     private RespValue jsonGet(List<byte[]> args,

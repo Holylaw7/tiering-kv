@@ -5,6 +5,7 @@ import io.tieringkv.protocol.RespInteger;
 import io.tieringkv.protocol.RespNull;
 import io.tieringkv.protocol.RespSimpleString;
 import io.tieringkv.protocol.RespValue;
+import io.tieringkv.observability.MultiModelMetricsRegistry;
 import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.storage.types.MultiModelCodec;
 import io.tieringkv.storage.types.TypedValueCodec;
@@ -24,9 +25,17 @@ import java.util.List;
 public final class MultiModelCommand implements Command {
 
     private final String name;
+    private final MultiModelMetricsRegistry metrics;
 
     public MultiModelCommand(String name) {
+        this(name, null);
+    }
+
+    /** 多模型喂数（ADR-0345）：可选指标注册表（additive）。 */
+    public MultiModelCommand(String name,
+                             MultiModelMetricsRegistry metrics) {
         this.name = name;
+        this.metrics = metrics;
     }
 
     @Override
@@ -54,8 +63,10 @@ public final class MultiModelCommand implements Command {
         if (args.size() != 2) {
             return RespError.wrongArity(name());
         }
-        storage.put(args.get(0), MultiModelCodec.encodeJson(
-                text(args.get(1))));
+        byte[] encoded = MultiModelCodec.encodeJson(
+                text(args.get(1)));
+        storage.put(args.get(0), encoded);
+        recordJsonWrite(encoded);
         return new RespSimpleString("OK");
     }
 
@@ -100,8 +111,9 @@ public final class MultiModelCommand implements Command {
                     MultiModelCodec.decodeTimeSeries(existing));
         }
         points.add(new MultiModelCodec.TimePoint(timestamp, sample));
-        storage.put(args.get(0),
-                MultiModelCodec.encodeTimeSeries(points));
+        byte[] encoded = MultiModelCodec.encodeTimeSeries(points);
+        storage.put(args.get(0), encoded);
+        recordTsWrite(encoded);
         return new RespSimpleString("OK");
     }
 
@@ -161,9 +173,30 @@ public final class MultiModelCommand implements Command {
                         "ERR invalid vector value at index " + i);
             }
         }
-        storage.put(args.get(0),
-                MultiModelCodec.encodeVector(values));
+        byte[] encoded = MultiModelCodec.encodeVector(values);
+        storage.put(args.get(0), encoded);
+        recordMultiModelBytes(encoded);
         return new RespSimpleString("OK");
+    }
+
+    private void recordJsonWrite(byte[] encoded) {
+        if (metrics != null) {
+            metrics.recordJsonWrite();
+            metrics.recordMultiModelBytes(encoded.length);
+        }
+    }
+
+    private void recordTsWrite(byte[] encoded) {
+        if (metrics != null) {
+            metrics.recordTsWrite();
+            metrics.recordMultiModelBytes(encoded.length);
+        }
+    }
+
+    private void recordMultiModelBytes(byte[] encoded) {
+        if (metrics != null) {
+            metrics.recordMultiModelBytes(encoded.length);
+        }
     }
 
     private RespValue vectorGet(List<byte[]> args,

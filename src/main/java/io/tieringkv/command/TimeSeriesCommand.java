@@ -7,6 +7,7 @@ import io.tieringkv.protocol.RespError;
 import io.tieringkv.protocol.RespInteger;
 import io.tieringkv.protocol.RespNull;
 import io.tieringkv.protocol.RespValue;
+import io.tieringkv.observability.MultiModelMetricsRegistry;
 import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.storage.StorageIterator;
 import io.tieringkv.storage.memory.KeyValueEntry;
@@ -32,9 +33,17 @@ import java.util.TreeMap;
 public final class TimeSeriesCommand implements Command {
 
     private final String name;
+    private final MultiModelMetricsRegistry metrics;
 
     public TimeSeriesCommand(String name) {
+        this(name, null);
+    }
+
+    /** 多模型喂数（ADR-0345）：可选指标注册表（additive）。 */
+    public TimeSeriesCommand(String name,
+                             MultiModelMetricsRegistry metrics) {
         this.name = name;
+        this.metrics = metrics;
     }
 
     @Override
@@ -225,7 +234,12 @@ public final class TimeSeriesCommand implements Command {
                     points.add(new MultiModelCodec.TimePoint(
                             targetTs, increment));
                 }
-                return MultiModelCodec.encodeTimeSeries(points);
+                byte[] encoded = MultiModelCodec.encodeTimeSeries(points);
+                if (metrics != null) {
+                    metrics.recordTsWrite();
+                    metrics.recordMultiModelBytes(encoded.length);
+                }
+                return encoded;
             });
         } catch (TypeSupport.WrongTypeException e) {
             return TypeSupport.wrongType();
