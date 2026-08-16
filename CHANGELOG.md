@@ -14,8 +14,12 @@
   HotKey / Tiering / Tracking / Vector 装饰器继承，原子写同步
   注入缓存失效、背压、热度统计与 VECTOR 索引维护；新增生产链
   回归测试（SETEX/EXPIRE/PERSIST/INCR/APPEND/GETSET + 热缓存失效）。
-- 集群复制原子操作缺口登记 TD-081（ReplicatedStorageEngine 未实现
-  AtomicStringOps，Raft ATOMIC 命令修复排入后续阶段）。
+- 集群复制原子操作闭环（ADR-0352，TD-081 关闭）：ReplicatedStorageEngine
+  实现 AtomicStringOps，Raft 日志新增 ATOMIC 命令（INCREMENT/APPEND/
+  GETSET/GETDEL/SETNX/EXPIRE/PERSIST），apply 阶段确定性执行并回传
+  结果；领域错误（如 INCR 非整数）回传而不悬挂；Leader 切换/日志
+  重放后副本一致；Redis Cluster 网关 TTL/INCR/APPEND/GETSET/SETNX/
+  GETDEL 恢复原子语义；新增 ReplicatedAtomicOpsTest 14 项。
 
 ## [3.7.1] - 2026-08-14
 

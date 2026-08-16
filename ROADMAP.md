@@ -1026,7 +1026,7 @@
 | TD-049 | 真实容器 disk 注入仍受限（fallocate/mount/fio） | ADR-0094 | ✅ 已关闭（ADR-0342 宿主级 + ADR-0350 容器级 disk-full/readonly 真实闭环；fio slow 注入在特权 Runner 按需启用，门禁不阻塞） |
 | TD-050 | 元数据 Multi-Raft 为进程内传输，网络化待跨机验证 | ADR-0095 | ✅ 已关闭（Phase 25：Netty RPC 三节点组 + 持久化日志/快照） |
 | TD-051 | CI 测试分片 / JFR 采集未落地 | — | ✅ 已关闭（三分片均衡：重型分布式包 0/1、轻量 2；JFR 采集管线 + tieringkv.argline；并集=全量 635 无重叠） |
-| TD-081 | ReplicatedStorageEngine 未实现 AtomicStringOps：集群网关 TTL 查询退化为 -1，INCR/APPEND/GETSET 退化为非原子 get+put（单机生产链已由 ADR-0351 修复；集群路径需 Raft 新增 ATOMIC 命令 + apply 结果回传） | ADR-0351 | 跟踪中（下一阶段：Raft CommandType.ATOMIC + ReplicatedStorageEngine 原子委托 + 集群网关回归） |
+| TD-081 | ReplicatedStorageEngine 未实现 AtomicStringOps：集群网关 TTL 查询退化为 -1，INCR/APPEND/GETSET 退化为非原子 get+put | ADR-0351 | ✅ 已关闭（ADR-0352：Raft ATOMIC 命令 + apply 结果回传 + 领域错误不悬挂 + Leader 切换/日志重放/网关回归；ReplicatedAtomicOpsTest 14 项全绿） |
 
 ## P4 — 工程现代化（2026-08-16）
 

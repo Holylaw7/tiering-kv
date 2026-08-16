@@ -4,7 +4,7 @@
 > 内存/磁盘分层 + 分布式事务 + 多模型值 + 向量检索 + SQL + 云原生运行时。
 
 **版本：v4.1.0 GA（2026-08-16）** · 全量测试 **14922 / 0 failures** ·
-技术债 **49/49 处置完成**（+TD-081 集群原子操作跟踪，ADR-0351） ·
+技术债 **50/50 处置完成**（含 TD-081 集群复制原子操作，ADR-0352） ·
 JDK 21 · 真实 GitHub Runner 门禁 7/7
 （build / test（三分片）/ transaction-e2e /
 release：Benchmark + Trivy 0 漏洞 + GHCR 镜像）
