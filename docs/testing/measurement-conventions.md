@@ -32,7 +32,10 @@
 
 ## 推荐表述
 
+- ✅ **双指标表述（对外首选）**：“**约 6,736 个测试方法，累计
+  **14,950 次测试执行**（Surefire Tests run，含参数化 invocation），
+  0 failures”；
 - ✅ “全量测试执行 **14,950 次**（Surefire Tests run，含参数化
-  invocation；约 6,736 个测试方法），0 failures”
+  invocation），0 failures”；
 - ❌ “14,950 个独立测试场景”
 - ❌ “14,950 个测试用例（用例=方法）”

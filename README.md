@@ -3,9 +3,9 @@
 > Redis 协议兼容的 LSM 冷热分层 KV 存储引擎（Mini Redis）——
 > 内存/磁盘分层 + 分布式事务 + 多模型值 + 向量检索 + SQL + 云原生运行时。
 
-**版本：v4.1.0 GA（2026-08-16）** · 测试执行 **14950 次 / 0 failures**
-（Surefire Tests run，含参数化 invocation；约 6,736 个测试方法，
-口径见 [docs/testing/measurement-conventions.md](
+**版本：v4.1.0 GA（2026-08-16）** · **约 6,736 个测试方法、累计
+14,950 次测试执行 / 0 failures**（Surefire Tests run，含参数化
+invocation；口径见 [docs/testing/measurement-conventions.md](
 docs/testing/measurement-conventions.md)） ·
 技术债 **50/50 处置完成**（含 TD-081 集群复制原子操作，ADR-0352） ·
 JDK 21 · 真实 GitHub Runner 门禁全绿
