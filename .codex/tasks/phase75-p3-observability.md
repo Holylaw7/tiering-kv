@@ -55,3 +55,15 @@ vector/replication/multimodel/backup）、MetricsExporter.exportAll、
 （additive 构造，不破坏既有调用）。
 
 Phase 增量（已记录）：复制管线喂数、多模型命令喂数、OTel span。
+
+## Phase 增量（ADR-0345，本阶段）
+
+1. 复制喂数：ReplicationPipeline/BidirectionalPipeline additive
+   构造注入 ReplicationMetricsRegistry（attach LagTracker + 计数）；
+2. 多模型命令喂数：JsonCommand/MultiModelCommand/TimeSeriesCommand
+   additive 构造 + CommandRegistry 新重载（JSON/TS/字节计数）；
+3. W3C traceparent：Tracer.startW3c/injectTraceparent/extractTraceparent
+   （零依赖 OTel 兼容）+ TracingMetricsRegistry + INFO tracing section +
+   GatewayRuntime 命令 span（同步路径）。
+
+验收：全量回归 0 failures；真实 Runner 门禁通过。
