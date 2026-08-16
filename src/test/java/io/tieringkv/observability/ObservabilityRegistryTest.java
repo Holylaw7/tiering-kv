@@ -1,6 +1,8 @@
 package io.tieringkv.observability;
 
 import io.tieringkv.replication.LagTracker;
+import io.tieringkv.observability.tracing.TraceExporter;
+import io.tieringkv.observability.tracing.Tracer;
 import io.tieringkv.vector.Embedding;
 import io.tieringkv.vector.indexfile.VectorIndexStore;
 import org.junit.jupiter.api.Test;
@@ -103,7 +105,8 @@ class ObservabilityRegistryTest {
         ObservabilityRegistry registry = registryWithFeeds();
         assertThat(registry.infoSections().keySet())
                 .containsExactlyInAnyOrder(
-                        "vector", "replication", "multimodel", "backup");
+                        "vector", "replication", "multimodel", "backup",
+                        "tracing");
         assertThat(registry.infoSections().get("vector").get())
                 .startsWith("# Vector\r\n")
                 .contains("vector_count:2");
@@ -116,6 +119,9 @@ class ObservabilityRegistryTest {
         assertThat(registry.infoSections().get("backup").get())
                 .startsWith("# Backup\r\n")
                 .contains("backup_pitr_watermark:99");
+        assertThat(registry.infoSections().get("tracing").get())
+                .startsWith("# Tracing\r\n")
+                .contains("tracing_spans:0");
     }
 
     @Test
@@ -130,6 +136,45 @@ class ObservabilityRegistryTest {
                 .contains("multimodel_json_writes_total 2")
                 .contains("# HELP backup_pitr_watermark")
                 .contains("backup_pitr_watermark 99.000");
+    }
+
+    @Test
+    void tracingMetricsExposeExporterStats() {
+        TraceExporter exporter = new TraceExporter();
+        exporter.export(new Tracer.Span("t1", "s1", "", "op", 0, 100));
+        exporter.export(new Tracer.Span("t2", "s2", "", "op", 0, 300));
+        TracingMetricsRegistry tracing =
+                new TracingMetricsRegistry(exporter);
+
+        TracingMetricsRegistry.Snapshot s = tracing.snapshot();
+        assertThat(s.spans()).isEqualTo(2);
+        assertThat(s.avgDurationNanos()).isEqualTo(200);
+        assertThat(s.maxDurationNanos()).isEqualTo(300);
+        assertThat(tracing.metricLines()).contains("tracing_spans:2")
+                .contains("tracing_avg_duration_nanos:200")
+                .contains("tracing_max_duration_nanos:300");
+    }
+
+    @Test
+    void tracingSectionAndPrometheusExposeSpans() {
+        TraceExporter exporter = new TraceExporter();
+        exporter.export(new Tracer.Span("t1", "s1", "",
+                "gateway:set", 0, 150));
+        ObservabilityRegistry registry = new ObservabilityRegistry(
+                new VectorMetricsRegistry(),
+                new ReplicationMetricsRegistry(),
+                new MultiModelMetricsRegistry(),
+                new BackupMetricsRegistry(),
+                new TracingMetricsRegistry(exporter));
+
+        assertThat(registry.infoSections().keySet())
+                .contains("tracing");
+        assertThat(registry.infoSections().get("tracing").get())
+                .startsWith("# Tracing\r\n")
+                .contains("tracing_spans:1");
+        assertThat(registry.prometheusText())
+                .contains("# HELP tracing_spans")
+                .contains("tracing_spans 1.000");
     }
 
     private static ObservabilityRegistry registryWithFeeds() {

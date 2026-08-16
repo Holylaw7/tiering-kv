@@ -68,6 +68,43 @@ class TracerTest {
     }
 
     @Test
+    void w3cInjectExtractRoundTrip() {
+        Tracer tracer = tracer(new TraceExporter(), 0.0);
+        Tracer.Context context = tracer.startW3c("w3c-op", null);
+        String header = tracer.injectTraceparent(context);
+        Tracer.Context extracted = tracer.extractTraceparent(header);
+        assertThat(header).startsWith("00-")
+                .endsWith("-01");
+        assertThat(extracted.traceId()).isEqualTo(context.traceId());
+        assertThat(extracted.spanId()).isEqualTo(context.spanId());
+    }
+
+    @Test
+    void w3cStartInheritsParentTraceId() {
+        Tracer tracer = tracer(new TraceExporter(), 0.0);
+        Tracer.Context parent = tracer.startW3c("parent", null);
+        Tracer.Context child = tracer.startW3c("child", parent);
+        assertThat(child.traceId()).isEqualTo(parent.traceId());
+        assertThat(child.spanId()).isNotEqualTo(parent.spanId());
+        tracer.end(child);
+        tracer.end(parent);
+    }
+
+    @Test
+    void extractTraceparentRejectsMalformed() {
+        Tracer tracer = tracer(new TraceExporter(), 0.0);
+        assertThatThrownBy(() -> tracer.extractTraceparent(null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> tracer.extractTraceparent(
+                "01-00000000000000000000000000000000"
+                        + "-0000000000000000-01"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> tracer.extractTraceparent(
+                "00-0000-0000-01"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void blankOperationRejected() {
         Tracer tracer = tracer(new TraceExporter(), 1.0);
         assertThatThrownBy(() -> tracer.start(""))

@@ -3,6 +3,7 @@ package io.tieringkv.observability.tracing;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.ThreadLocalRandom;
 
 /** 分布式追踪（ADR-0154）：Span/Trace 上下文 + 跨 RPC 传播。 */
 public final class Tracer {
@@ -98,5 +99,59 @@ public final class Tracer {
         }
         String[] parts = header.split(":", 2);
         return new Context(parts[0], parts[1]);
+    }
+
+    /**
+     * W3C traceparent（ADR-0345，OTel 兼容，零依赖）：32hex traceId
+     * + 16hex spanId。父上下文为空时生成新 trace。
+     */
+    public Context startW3c(String operation, Context parent) {
+        if (operation == null || operation.isBlank()) {
+            throw new IllegalArgumentException(
+                    "operation required");
+        }
+        String traceId = parent == null ? randomHex(16) : parent.traceId();
+        Context context = new Context(traceId, randomHex(8));
+        stack.get().push(new Active(operation,
+                System.nanoTime(), context, parent));
+        return context;
+    }
+
+    /** 注入 W3C traceparent：{@code 00-<trace32>-<span16>-01}。 */
+    public String injectTraceparent(Context context) {
+        if (context == null) {
+            throw new IllegalArgumentException(
+                    "context required");
+        }
+        return "00-" + context.traceId() + "-"
+                + context.spanId() + "-01";
+    }
+
+    /** 提取 W3C traceparent：校验 version 与 id 长度，非法抛异常。 */
+    public Context extractTraceparent(String header) {
+        if (header == null || header.isBlank()) {
+            throw new IllegalArgumentException(
+                    "invalid traceparent");
+        }
+        String[] parts = header.split("-");
+        if (parts.length != 4 || !"00".equals(parts[0])
+                || parts[1].length() != 32
+                || parts[2].length() != 16) {
+            throw new IllegalArgumentException(
+                    "invalid traceparent");
+        }
+        return new Context(parts[1], parts[2]);
+    }
+
+    private static String randomHex(int bytes) {
+        byte[] buffer = new byte[bytes];
+        ThreadLocalRandom.current().nextBytes(buffer);
+        StringBuilder sb = new StringBuilder(bytes * 2);
+        for (byte b : buffer) {
+            sb.append(Character.forDigit(
+                    (b >> 4) & 0xF, 16));
+            sb.append(Character.forDigit(b & 0xF, 16));
+        }
+        return sb.toString();
     }
 }

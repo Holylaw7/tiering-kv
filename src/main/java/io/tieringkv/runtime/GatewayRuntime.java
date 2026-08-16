@@ -2,6 +2,7 @@ package io.tieringkv.runtime;
 
 import io.tieringkv.mvcc.SnapshotReader;
 import io.tieringkv.mvcc.Transaction;
+import io.tieringkv.observability.tracing.Tracer;
 import io.tieringkv.runtime.CoordinatorRuntime.RuntimeCoordinator;
 
 import java.io.BufferedReader;
@@ -29,6 +30,12 @@ public final class GatewayRuntime {
     }
 
     public static void start(Map<String, String> options) throws Exception {
+        start(options, null);
+    }
+
+    /** 命令 span 记录（ADR-0345）：可选 Tracer（additive）。 */
+    public static void start(Map<String, String> options,
+                             Tracer tracer) throws Exception {
         RuntimeCoordinator coordinator = RuntimeCoordinator.start(options);
         int port = TxnRuntimeMain.port(options, "gateway-port", 6379);
         boolean virtualThreads = "true".equals(options.get(
@@ -39,7 +46,7 @@ public final class GatewayRuntime {
                     coordinator.nodeId(), port);
             while (true) {
                 Socket socket = server.accept();
-                workers.submit(() -> serve(coordinator, socket));
+                workers.submit(() -> serve(coordinator, socket, tracer));
             }
         }
     }
@@ -61,7 +68,8 @@ public final class GatewayRuntime {
         }
     }
 
-    private static void serve(RuntimeCoordinator coordinator, Socket socket) {
+    private static void serve(RuntimeCoordinator coordinator, Socket socket,
+                              Tracer tracer) {
         try (socket; BufferedReader in = new BufferedReader(
                 new InputStreamReader(socket.getInputStream(),
                         StandardCharsets.UTF_8));
@@ -69,30 +77,41 @@ public final class GatewayRuntime {
             String[] parts;
             while ((parts = parseCommand(in)) != null) {
                 String command = parts[0].toLowerCase(Locale.ROOT);
-                if ("set".equals(command) && parts.length >= 3) {
-                    Transaction txn = coordinator.router().begin();
-                    txn.put(parts[1].getBytes(StandardCharsets.UTF_8),
-                            parts[2].getBytes(StandardCharsets.UTF_8));
-                    coordinator.router().commit(txn);
-                    writeSimple(out, "OK");
-                } else if ("get".equals(command) && parts.length == 2) {
-                    io.tieringkv.transaction.rpc.TxnMessages.Response response =
-                            coordinator.regions().get(0).get(
-                                    parts[1].getBytes(
-                                            StandardCharsets.UTF_8)).join();
-                    if (response.succeeded() && response.message() != null
-                            && !response.message().isEmpty()) {
-                        writeBulk(out, response.message().getBytes(
-                                StandardCharsets.UTF_8));
+                Tracer.Context trace = tracer == null ? null
+                        : tracer.startW3c("gateway:" + command, null);
+                try {
+                    if ("set".equals(command) && parts.length >= 3) {
+                        Transaction txn = coordinator.router().begin();
+                        txn.put(parts[1].getBytes(StandardCharsets.UTF_8),
+                                parts[2].getBytes(
+                                        StandardCharsets.UTF_8));
+                        coordinator.router().commit(txn);
+                        writeSimple(out, "OK");
+                    } else if ("get".equals(command) && parts.length == 2) {
+                        io.tieringkv.transaction.rpc.TxnMessages.Response
+                                response = coordinator.regions().get(0).get(
+                                parts[1].getBytes(
+                                        StandardCharsets.UTF_8)).join();
+                        if (response.succeeded()
+                                && response.message() != null
+                                && !response.message().isEmpty()) {
+                            writeBulk(out, response.message().getBytes(
+                                    StandardCharsets.UTF_8));
+                        } else {
+                            writeNullBulk(out);
+                        }
+                    } else if ("ping".equals(command)
+                            && parts.length == 1) {
+                        writeSimple(out, "PONG");
                     } else {
-                        writeNullBulk(out);
+                        writeError(out, "ERR unknown command");
                     }
-                } else if ("ping".equals(command) && parts.length == 1) {
-                    writeSimple(out, "PONG");
-                } else {
-                    writeError(out, "ERR unknown command");
+                    out.flush();
+                } finally {
+                    if (trace != null) {
+                        tracer.end(trace);
+                    }
                 }
-                out.flush();
             }
         } catch (Exception e) {
             // 单连接错误不影响网关，但必须输出证据（ADR-0343 教训：

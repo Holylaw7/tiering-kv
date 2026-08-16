@@ -8,6 +8,7 @@ import io.tieringkv.mvcc.TransactionMetricsRegistry;
 import io.tieringkv.observability.BackupMetricsRegistry;
 import io.tieringkv.observability.MultiModelMetricsRegistry;
 import io.tieringkv.observability.ReplicationMetricsRegistry;
+import io.tieringkv.observability.TracingMetricsRegistry;
 import io.tieringkv.observability.VectorMetricsRegistry;
 
 import java.util.Locale;
@@ -48,6 +49,15 @@ public final class MetricsExporter {
                                    ReplicationMetricsRegistry replication,
                                    MultiModelMetricsRegistry multimodel,
                                    BackupMetricsRegistry backup) {
+        return exportAll(vector, replication, multimodel, backup, null);
+    }
+
+    /** 可观测性收口（ADR-0345）：追加追踪指标（tracing 为 null 跳过）。 */
+    public static String exportAll(VectorMetricsRegistry vector,
+                                   ReplicationMetricsRegistry replication,
+                                   MultiModelMetricsRegistry multimodel,
+                                   BackupMetricsRegistry backup,
+                                   TracingMetricsRegistry tracing) {
         StringBuilder sb = new StringBuilder();
         VectorMetricsRegistry.Snapshot v = vector.snapshot();
         gauge(sb, "vector_count", "current vector count",
@@ -88,6 +98,17 @@ public final class MetricsExporter {
                 b.restoreBytes());
         gauge(sb, "backup_pitr_watermark", "pitr watermark",
                 b.pitrWatermark());
+        if (tracing != null) {
+            TracingMetricsRegistry.Snapshot t = tracing.snapshot();
+            gauge(sb, "tracing_spans", "sampled span count",
+                    t.spans());
+            gauge(sb, "tracing_avg_duration_nanos",
+                    "average span duration nanos",
+                    t.avgDurationNanos());
+            gauge(sb, "tracing_max_duration_nanos",
+                    "max span duration nanos",
+                    t.maxDurationNanos());
+        }
         return sb.toString();
     }
 
