@@ -173,6 +173,12 @@
 
 ### Fixed
 
+- ADR-0350 容器级演练发现：TXN_METADATA RPC 返回 ERROR 帧时，
+  coordinator 的 `thenApply(frame -> 1L)` 未检查帧类型，磁盘满等
+  元数据故障下事务**静默成功**；新增
+  `CoordinatorRuntime.decodeMetadataDecision` 校验 ERROR 帧并使
+  提案失败传播（SET 正确失败，不静默提交）。
+
 - P3 真实 Runner 门禁暴露：后端容器缺 NET_ADMIN 导致
   `tc qdisc add` 返回 `Operation not permitted`；docker-compose
   transaction 栈四后端服务（coordinator/participant-a/
