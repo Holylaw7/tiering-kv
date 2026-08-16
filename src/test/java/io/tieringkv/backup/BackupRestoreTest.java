@@ -3,6 +3,7 @@ package io.tieringkv.backup;
 import io.tieringkv.mvcc.MvccStorageEngine;
 import io.tieringkv.mvcc.WriteType;
 import io.tieringkv.observability.BackupMetricsRegistry;
+import io.tieringkv.vector.indexfile.VectorIndexStore;
 import io.tieringkv.storage.memory.MemTable;
 import io.tieringkv.transaction.metadata.TransactionMetadataState;
 import io.tieringkv.transaction.metadata.TxnMetaCommand;
@@ -85,6 +86,26 @@ class BackupRestoreTest {
         RestoreManager.restoreMvcc(backup, MemTable.create(), metrics);
         assertThat(metrics.snapshot().restores()).isEqualTo(2);
         assertThat(metrics.snapshot().restoreBytes()).isPositive();
+        ((MemTable) engine.underlying()).close();
+    }
+
+    @Test
+    void backupRestoreVectorIndexWithMetrics() throws Exception {
+        MvccStorageEngine engine = new MvccStorageEngine(MemTable.create());
+        VectorIndexStore vectorStore = new VectorIndexStore(4);
+        vectorStore.put(new io.tieringkv.vector.Embedding(
+                "v1", new float[]{1, 0}));
+        BackupMetricsRegistry metrics = new BackupMetricsRegistry();
+        Path backup = dir.resolve("vector-backup");
+        BackupManager.backup(backup, new TransactionMetadataState(),
+                engine, metrics, vectorStore);
+
+        assertThat(metrics.snapshot().backups()).isEqualTo(1);
+        assertThat(metrics.snapshot().backupBytes()).isPositive();
+
+        VectorIndexStore restored = RestoreManager.restoreVectorIndex(backup);
+        assertThat(restored.size()).isEqualTo(1);
+        assertThat(restored.dim()).isEqualTo(2);
         ((MemTable) engine.underlying()).close();
     }
 

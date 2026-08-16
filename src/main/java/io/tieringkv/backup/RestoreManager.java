@@ -3,6 +3,7 @@ package io.tieringkv.backup;
 import io.tieringkv.mvcc.MvccStorageEngine;
 import io.tieringkv.mvcc.index.PersistentMvccIndex;
 import io.tieringkv.observability.BackupMetricsRegistry;
+import io.tieringkv.vector.indexfile.VectorIndexStore;
 import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.txn.meta.MetadataSnapshotManager;
 import io.tieringkv.transaction.metadata.TransactionMetadataState;
@@ -48,5 +49,11 @@ public final class RestoreManager {
             metrics.recordRestore(Files.size(file));
         }
         return engine;
+    }
+
+    /** 恢复向量索引（ADR-0344 收口）：vector.idx → VectorIndexStore。 */
+    public static VectorIndexStore restoreVectorIndex(Path backupDir)
+            throws IOException {
+        return VectorIndexStore.load(backupDir.resolve("vector.idx"));
     }
 }

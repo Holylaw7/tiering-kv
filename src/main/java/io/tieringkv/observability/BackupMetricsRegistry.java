@@ -1,5 +1,7 @@
 package io.tieringkv.observability;
 
+import io.tieringkv.replication.LagTracker;
+
 import java.util.Locale;
 import java.util.concurrent.atomic.LongAdder;
 
@@ -14,6 +16,20 @@ public final class BackupMetricsRegistry {
     private final LongAdder restores = new LongAdder();
     private final LongAdder restoreBytes = new LongAdder();
     private volatile long pitrWatermark;
+    private LagTracker lagTracker;
+
+    public BackupMetricsRegistry() {
+        this(null);
+    }
+
+    /** 复制水位联动（ADR-0344 收口）：备份时可见复制滞后。 */
+    public BackupMetricsRegistry(LagTracker lagTracker) {
+        this.lagTracker = lagTracker;
+    }
+
+    public void attachLagTracker(LagTracker lagTracker) {
+        this.lagTracker = lagTracker;
+    }
 
     public void recordBackup(long bytes) {
         backups.increment();
@@ -30,8 +46,17 @@ public final class BackupMetricsRegistry {
     }
 
     public Snapshot snapshot() {
+        long maxLag = 0;
+        if (lagTracker != null) {
+            long now = System.currentTimeMillis();
+            for (String replicaId : lagTracker.snapshot().keySet()) {
+                maxLag = Math.max(maxLag,
+                        lagTracker.lagMillis(replicaId, now));
+            }
+        }
         return new Snapshot(backups.sum(), backupBytes.sum(),
-                restores.sum(), restoreBytes.sum(), pitrWatermark);
+                restores.sum(), restoreBytes.sum(), pitrWatermark,
+                maxLag);
     }
 
     public String metricLines() {
@@ -41,13 +66,16 @@ public final class BackupMetricsRegistry {
                         + "backup_bytes:%d\r\n"
                         + "restore_total:%d\r\n"
                         + "restore_bytes:%d\r\n"
-                        + "backup_pitr_watermark:%d\r\n",
+                        + "backup_pitr_watermark:%d\r\n"
+                        + "backup_replication_max_lag_ms:%d\r\n",
                 s.backups(), s.backupBytes(), s.restores(),
-                s.restoreBytes(), s.pitrWatermark());
+                s.restoreBytes(), s.pitrWatermark(),
+                s.replicationMaxLagMillis());
     }
 
     public record Snapshot(long backups, long backupBytes,
                            long restores, long restoreBytes,
-                           long pitrWatermark) {
+                           long pitrWatermark,
+                           long replicationMaxLagMillis) {
     }
 }

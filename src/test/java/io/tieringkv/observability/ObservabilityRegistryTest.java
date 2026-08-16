@@ -35,6 +35,20 @@ class ObservabilityRegistryTest {
     }
 
     @Test
+    void vectorCheckpointMetricsExposeWatermark() {
+        VectorMetricsRegistry metrics = new VectorMetricsRegistry();
+        metrics.recordVectorCheckpoint(3);
+        metrics.recordVectorCheckpoint(5);
+
+        VectorMetricsRegistry.Snapshot s = metrics.snapshot();
+        assertThat(s.checkpoints()).isEqualTo(2);
+        assertThat(s.checkpointWatermark()).isEqualTo(5);
+        assertThat(metrics.metricLines())
+                .contains("vector_checkpoints:2")
+                .contains("vector_checkpoint_watermark:5");
+    }
+
+    @Test
     void replicationMetricsExposeLagAndCounters() {
         LagTracker lagTracker = new LagTracker();
         ReplicationMetricsRegistry metrics =
@@ -86,6 +100,9 @@ class ObservabilityRegistryTest {
         metrics.recordBackup(2048);
         metrics.recordRestore(1024);
         metrics.setPitrWatermark(99);
+        LagTracker lagTracker = new LagTracker();
+        metrics.attachLagTracker(lagTracker);
+        lagTracker.applied("r2", 7);
 
         BackupMetricsRegistry.Snapshot s = metrics.snapshot();
         assertThat(s.backups()).isEqualTo(1);
@@ -93,11 +110,13 @@ class ObservabilityRegistryTest {
         assertThat(s.restores()).isEqualTo(1);
         assertThat(s.restoreBytes()).isEqualTo(1024);
         assertThat(s.pitrWatermark()).isEqualTo(99);
+        assertThat(s.replicationMaxLagMillis()).isZero();
         assertThat(metrics.metricLines()).contains("backup_total:1")
                 .contains("backup_bytes:2048")
                 .contains("restore_total:1")
                 .contains("restore_bytes:1024")
-                .contains("backup_pitr_watermark:99");
+                .contains("backup_pitr_watermark:99")
+                .contains("backup_replication_max_lag_ms:0");
     }
 
     @Test

@@ -68,6 +68,11 @@ public final class MetricsExporter {
                 v.writes());
         counter(sb, "vector_deletes_total", "vector deletes",
                 v.deletes());
+        counter(sb, "vector_checkpoints_total", "vector checkpoints",
+                v.checkpoints());
+        gauge(sb, "vector_checkpoint_watermark",
+                "latest checkpoint vector count",
+                v.checkpointWatermark());
         ReplicationMetricsRegistry.Snapshot r = replication.snapshot(
                 System.currentTimeMillis());
         gauge(sb, "replication_replicas", "replica count",
@@ -98,6 +103,8 @@ public final class MetricsExporter {
                 b.restoreBytes());
         gauge(sb, "backup_pitr_watermark", "pitr watermark",
                 b.pitrWatermark());
+        gauge(sb, "backup_replication_max_lag_ms",
+                "max replica lag at backup", b.replicationMaxLagMillis());
         if (tracing != null) {
             TracingMetricsRegistry.Snapshot t = tracing.snapshot();
             gauge(sb, "tracing_spans", "sampled span count",
