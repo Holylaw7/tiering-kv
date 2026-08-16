@@ -91,6 +91,15 @@ public final class VectorCollectionRegistry implements AutoCloseable {
         return store == null ? 0 : store.size();
     }
 
+    /** 全部集合向量总数（checkpoint 水位用，ADR-0344 收口）。 */
+    public long totalVectors() {
+        long total = 0;
+        for (VectorIndexStore store : collections.values()) {
+            total += store.size();
+        }
+        return total;
+    }
+
     public Set<String> dirtyNames() {
         return Set.copyOf(dirty);
     }

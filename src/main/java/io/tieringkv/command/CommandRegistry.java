@@ -2,6 +2,7 @@ package io.tieringkv.command;
 
 import io.tieringkv.pubsub.PubSubBroker;
 import io.tieringkv.observability.MultiModelMetricsRegistry;
+import io.tieringkv.observability.VectorMetricsRegistry;
 import io.tieringkv.session.ConnectionContext;
 import io.tieringkv.vector.collection.VectorCollectionRegistry;
 import io.tieringkv.vector.indexfile.VectorIndexStore;
@@ -64,14 +65,26 @@ public final class CommandRegistry {
             Map<String, Supplier<String>> sections,
             VectorCollectionRegistry registry,
             MultiModelMetricsRegistry metrics) {
+        return createDefaultWithVectorAndMetrics(
+                infoProvider, sections, registry, metrics, null);
+    }
+
+    /** 向量 checkpoint 喂数（ADR-0344 收口）：可选向量指标（additive）。 */
+    public static CommandRegistry createDefaultWithVectorAndMetrics(
+            Supplier<String> infoProvider,
+            Map<String, Supplier<String>> sections,
+            VectorCollectionRegistry registry,
+            MultiModelMetricsRegistry metrics,
+            VectorMetricsRegistry vectorMetrics) {
         return build(infoProvider, sections, List.of(
-                new VectorCommand("vector.add", registry),
-                new VectorCommand("vector.search", registry),
-                new VectorCommand("vector.del", registry),
-                new VectorCommand("vector.len", registry),
-                new VectorCommand("vector.list", registry),
-                new VectorCommand("vector.drop", registry),
-                new VectorCommand("vector.checkpoint", registry),
+                new VectorCommand("vector.add", registry, vectorMetrics),
+                new VectorCommand("vector.search", registry, vectorMetrics),
+                new VectorCommand("vector.del", registry, vectorMetrics),
+                new VectorCommand("vector.len", registry, vectorMetrics),
+                new VectorCommand("vector.list", registry, vectorMetrics),
+                new VectorCommand("vector.drop", registry, vectorMetrics),
+                new VectorCommand("vector.checkpoint", registry,
+                        vectorMetrics),
                 new JsonCommand("json.set", metrics),
                 new JsonCommand("json.get", metrics),
                 new JsonCommand("json.del", metrics),

@@ -7,6 +7,7 @@ import io.tieringkv.protocol.RespError;
 import io.tieringkv.protocol.RespInteger;
 import io.tieringkv.protocol.RespSimpleString;
 import io.tieringkv.protocol.RespValue;
+import io.tieringkv.observability.VectorMetricsRegistry;
 import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.vector.Embedding;
 import io.tieringkv.vector.VectorStore;
@@ -40,18 +41,27 @@ public final class VectorCommand implements Command {
 
     private final String name;
     private final VectorCollectionRegistry registry;
+    private final VectorMetricsRegistry metrics;
 
     public VectorCommand(String name, VectorIndexStore store) {
-        this(name, VectorCollectionRegistry.ofDefault(store));
+        this(name, VectorCollectionRegistry.ofDefault(store), null);
     }
 
     public VectorCommand(String name,
                          VectorCollectionRegistry registry) {
+        this(name, registry, null);
+    }
+
+    /** checkpoint 喂数（ADR-0344 收口）：可选向量指标（additive）。 */
+    public VectorCommand(String name,
+                         VectorCollectionRegistry registry,
+                         VectorMetricsRegistry metrics) {
         if (registry == null) {
             throw new IllegalArgumentException("registry required");
         }
         this.name = name;
         this.registry = registry;
+        this.metrics = metrics;
     }
 
     @Override
@@ -192,12 +202,24 @@ public final class VectorCommand implements Command {
         try {
             if (parsed.offset() == 2) {
                 registry.checkpoint(parsed.collection(), null);
+                recordCheckpoint(parsed.collection());
             } else {
                 registry.checkpointAll(null);
+                if (metrics != null) {
+                    metrics.recordVectorCheckpoint(
+                            registry.totalVectors());
+                }
             }
             return new RespSimpleString("OK");
         } catch (IOException e) {
             return new RespError("ERR " + e.getMessage());
+        }
+    }
+
+    private void recordCheckpoint(String collection) {
+        if (metrics != null) {
+            metrics.recordVectorCheckpoint(
+                    registry.size(collection));
         }
     }
 

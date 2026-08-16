@@ -14,6 +14,8 @@ public final class VectorMetricsRegistry {
     private final VectorIndexStore store;
     private final LongAdder writes = new LongAdder();
     private final LongAdder deletes = new LongAdder();
+    private final LongAdder checkpoints = new LongAdder();
+    private volatile long checkpointWatermark;
 
     public VectorMetricsRegistry() {
         this(null);
@@ -31,13 +33,21 @@ public final class VectorMetricsRegistry {
         deletes.increment();
     }
 
+    /** 记录 checkpoint（ADR-0344 收口）：watermark 为最近向量数。 */
+    public void recordVectorCheckpoint(long vectors) {
+        checkpoints.increment();
+        checkpointWatermark = vectors;
+    }
+
     public Snapshot snapshot() {
         return new Snapshot(
                 store == null ? 0 : store.size(),
                 store == null ? 0 : store.dim(),
                 store == null ? 0 : store.maxLevel(),
                 writes.sum(),
-                deletes.sum());
+                deletes.sum(),
+                checkpoints.sum(),
+                checkpointWatermark);
     }
 
     public String metricLines() {
@@ -47,12 +57,16 @@ public final class VectorMetricsRegistry {
                         + "vector_dim:%d\r\n"
                         + "vector_max_level:%d\r\n"
                         + "vector_writes:%d\r\n"
-                        + "vector_deletes:%d\r\n",
+                        + "vector_deletes:%d\r\n"
+                        + "vector_checkpoints:%d\r\n"
+                        + "vector_checkpoint_watermark:%d\r\n",
                 s.vectorCount(), s.dim(), s.maxLevel(),
-                s.writes(), s.deletes());
+                s.writes(), s.deletes(),
+                s.checkpoints(), s.checkpointWatermark());
     }
 
     public record Snapshot(long vectorCount, int dim, int maxLevel,
-                           long writes, long deletes) {
+                           long writes, long deletes,
+                           long checkpoints, long checkpointWatermark) {
     }
 }
