@@ -67,6 +67,12 @@
   shard，防假绿）+ JFR 采集管线（surefire tieringkv.argline 可选
   JVM 参数 + jfr-smoke job + .jfr artifact）；本地验证分片 633 类
   均分、JFR 557KB 生成成功。
+- 依赖漏洞升级（v4.1.0 发布门禁 Trivy 暴露）：jackson-databind
+  2.18.2→2.18.9（CVE-2026-54512/13/14/15/59888/59889）、fabric8
+  6.9.2→6.13.4 + okhttp/logging-interceptor/mockwebserver
+  3.12.12→4.12.0 + okio 1.15.0→3.6.0（CVE-2021-0341/CVE-2023-3635）；
+  operator 测试 7/7 兼容验证，全量 14918 项（1 个已知 ChaosValidation
+  flaky 单独重跑 17/17 通过）。
 
 - v4.0 M1 向量存储接入（ADR-0319）：VectorIndexFile（magic/version/
   CRC + 原子写）、VectorIndexStore（checkpoint/load/rebuild）、
