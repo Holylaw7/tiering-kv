@@ -24,6 +24,10 @@ import java.util.concurrent.TimeUnit;
  */
 public final class MetadataRaftGroup implements AutoCloseable {
 
+    /** 选举窗口有界等待（ADR-0353）：leader 切换瞬间不立即失败，吸收调度抖动。 */
+    private static final long LEADER_WAIT_MILLIS = 1000;
+    private static final long LEADER_POLL_MILLIS = 10;
+
     private final Map<String, RaftNode> nodes = new LinkedHashMap<>();
     private final Map<String, MetadataState> states = new LinkedHashMap<>();
     private final List<RaftNode> nodeList = new ArrayList<>();
@@ -97,9 +101,14 @@ public final class MetadataRaftGroup implements AutoCloseable {
         return nodes.get(id);
     }
 
-    /** 写命令：propose 到 leader；leader 失效时重试一次新 leader。 */
+    /**
+     * 写命令：propose 到 leader；leader 失效时重试一次新 leader。
+     * leader 暂缺（选举窗口）时先有界等待（ADR-0353），避免
+     * fail-fast 造成慢 Runner / 故障切换期间的瞬时客户端失败；
+     * 等待有界，满足 Phase 20「禁止客户端永久悬挂」约束。
+     */
     public void write(byte[] command) {
-        RaftNode leader = leader();
+        RaftNode leader = awaitLeader(LEADER_WAIT_MILLIS);
         if (leader == null) {
             throw new IllegalStateException("no metadata leader");
         }
@@ -116,6 +125,26 @@ public final class MetadataRaftGroup implements AutoCloseable {
                 }
             }
             throw new IllegalStateException("metadata write failed", first);
+        }
+    }
+
+    /** 有界轮询等待 leader 出现；超时返回 null，中断时恢复中断位。 */
+    private RaftNode awaitLeader(long timeoutMillis) {
+        long deadline = System.currentTimeMillis() + timeoutMillis;
+        while (true) {
+            RaftNode current = leader();
+            if (current != null) {
+                return current;
+            }
+            if (System.currentTimeMillis() >= deadline) {
+                return null;
+            }
+            try {
+                Thread.sleep(LEADER_POLL_MILLIS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return null;
+            }
         }
     }
 

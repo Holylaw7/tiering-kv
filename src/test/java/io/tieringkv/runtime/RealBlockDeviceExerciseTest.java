@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
 import java.util.Comparator;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -66,9 +67,17 @@ class RealBlockDeviceExerciseTest {
         assertThatThrownBy(() -> Files.write(probe,
                 new byte[4096])).isInstanceOf(IOException.class);
         Files.deleteIfExists(probe);
-        // 磁盘满：新 WAL 打开/追加必须失败（不允许静默丢失）
+        // 与断言同尺度的多块探针：16KB（≥4 个新数据块）必须失败，
+        // 杜绝 inline_data / 已分配元数据块 / 延迟分配吸收 ENOSPC。
+        Path largeProbe = mount().resolve("probe-large-" + System.nanoTime());
+        assertThatThrownBy(() -> Files.write(largeProbe,
+                new byte[16 * 1024])).isInstanceOf(IOException.class);
+        Files.deleteIfExists(largeProbe);
+        // 磁盘满：≥32KB 多块 WAL 写入必须失败（不允许静默丢失）。
+        // 满盘 ENOSPC 断言必须要求 ≥3 个新数据块分配：小负载（<1 块）
+        // 可能被 inline_data / 已分配元数据块吸收而不触发 ENOSPC。
         assertThatThrownBy(() -> writeBatch(
-                exerciseDir("diskfull-failed"), 5))
+                exerciseDir("diskfull-failed"), 64, 512))
                 .isInstanceOfAny(IOException.class,
                         WalWriteException.class);
         Files.deleteIfExists(fill[0]);
@@ -104,14 +113,22 @@ class RealBlockDeviceExerciseTest {
 
     private static void writeBatch(Path dir, int count)
             throws Exception {
+        writeBatch(dir, count, 2);
+    }
+
+    /** 写入 count 条 valueBytes 字节负载：满盘断言用多块负载（ADR-0353）。 */
+    private static void writeBatch(Path dir, int count, int valueBytes)
+            throws Exception {
         WALConfig config = new WALConfig(dir, 1 << 20,
                 WALConfig.FsyncPolicy.ALWAYS);
         MemTable memTable = MemTable.create();
         try (WALManager wal = new WALManager(config)) {
             WALStorageEngine storage =
                     new WALStorageEngine(wal, memTable);
+            byte[] value = new byte[valueBytes];
+            Arrays.fill(value, (byte) 'x');
             for (int i = 0; i < count; i++) {
-                storage.put(bytes("k" + i), bytes("v" + i));
+                storage.put(bytes("k" + i), value);
             }
         }
     }

@@ -13,6 +13,12 @@
 
 ### Fixed
 
+- 环境 flaky 根治（ADR-0353）：`MetadataRaftGroup.write` 在选举窗口
+  有界等待 leader（1s）而非 fail-fast，慢 Runner 下不再瞬时报
+  `no metadata leader`；块设备满盘断言改为 ≥32KB 多块 WAL 负载 +
+  16KB 同粒度探针，消除 inline/元数据块吸收 ENOSPC 的语义缝隙；
+  `shard-tests.sh` 改为 3 分片全量轮转，重型分布式测试不再集中于
+  shard 0/1。新增 MetadataRaftGroupWriteTest 2 项。
 - 生产链原子字符串操作透传（ADR-0351）：实践运行验证发现
   `SETEX→TTL` 恒为 -1，根因是 Main.java 四个存储装饰器只实现
   StorageEngine，命令层 `instanceof AtomicStringOps` 失败后静默
