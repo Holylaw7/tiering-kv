@@ -96,3 +96,7 @@ build / test / transaction-e2e 3/3 全绿）。P3 可观测性收口及其增量
   与 Raft/端口时序风险不成比例）。
 
 全量回归 14910 tests / 0 failures / 11 skipped；P3 全部完成，归档。
+
+✅ 真实 Runner 门禁通过（2026-08-16，main run 31920595287/279/226：
+build / test / transaction-e2e 3/3 全绿，含新 concurrency/cache/artifact
+配置）。P3 收口正式完成，归档。
