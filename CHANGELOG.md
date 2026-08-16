@@ -7,6 +7,12 @@
 
 ### Added
 
+- 可复现基准体系（docs/benchmark/reproducible-benchmark-guide.md +
+  scripts/reproducible-benchmark.sh）：把四组简历核心数字固化为固定
+  workload/轮次/环境快照协议；新增 NetworkEndToEndLatencyBenchmarkTest
+  （1 连接 × pipeline 1 × 10K 数据集 × 5 轮）补齐网络端到端 0.19ms
+  的连接数/pipeline 口径；首次复现已记录（内存 1M P99≈1.5μs、网络
+  P99≈0.36–0.42ms、mmap 1M 随机≈1.8x）。
 - 测试度量口径明确（docs/testing/measurement-conventions.md）：
   “14950”定义为 Surefire Tests run **执行次数**（含参数化
   invocation，XML `<testcase>` 总数实测 14950），源码测试方法

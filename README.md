@@ -112,7 +112,8 @@ docs/project-history.md       Phase 0–54 逐阶段演进历史（旧 README �
 历史演进见 [docs/project-history.md](docs/project-history.md)，
 最终收尾报告见 [docs/review/final-project-closure.md](docs/review/final-project-closure.md)，
 维护期运行手册见 [docs/operations/maintenance-runbook.md](docs/operations/maintenance-runbook.md)，
-测试度量口径见 [docs/testing/measurement-conventions.md](docs/testing/measurement-conventions.md)。
+测试度量口径见 [docs/testing/measurement-conventions.md](docs/testing/measurement-conventions.md)，
+可复现基准见 [docs/benchmark/reproducible-benchmark-guide.md](docs/benchmark/reproducible-benchmark-guide.md)。
 
 ## 开发与贡献
 
