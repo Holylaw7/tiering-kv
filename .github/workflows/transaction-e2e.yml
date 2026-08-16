@@ -188,12 +188,18 @@ jobs:
       - name: Container disk-full injection
         run: |
           sudo scripts/block-device-chaos.sh disk-full
+          # 容器内以 root 视角补一轮填充，确保 /data 真正 0 可用
+          docker exec txn-meta sh -c \
+            'dd if=/dev/zero of=/data/fill.bin bs=1K 2>/dev/null || true' \
+            || true
           sudo df -h /mnt/tiering-kv-block
           docker exec txn-meta df -h /data || true
           docker exec txn-meta sh -c \
             'dd if=/dev/zero of=/data/probe.bin bs=1k count=1' \
             2>&1 || echo "CONTAINER_WRITE_FAILED_EXPECTED"
           docker exec txn-meta sh -c 'rm -f /data/probe.bin' \
+            2>/dev/null || true
+          docker exec txn-meta sh -c 'rm -f /data/fill.bin' \
             2>/dev/null || true
           TIERINGKV_CONTAINER_CHAOS=true TIERINGKV_BLOCK_EXPECT=failure \
             mvn -q -Dtest=RealContainerDiskChaosTest#setMustFailUnderDiskFault \

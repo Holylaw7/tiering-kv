@@ -58,8 +58,10 @@ class RealBlockDeviceExerciseTest {
                 .isInstanceOf(IOException.class);
         // 前置校验：文件系统确实已满（避免填充满度不足造成误判）
         long usable = Files.getFileStore(mount()).getUsableSpace();
-        assertThat(usable).as("fill 后可用空间应为 0，实际=%d", usable)
-                .isZero();
+        // ext4 即使 -m 0 也会为非 root 调用者保留最后一小块（≤1 块，
+        // 实测 4096B）；断言放宽到 1 块容差，语义仍为“磁盘已满”。
+        assertThat(usable).as("fill 后可用空间应≤1 块，实际=%d", usable)
+                .isLessThanOrEqualTo(4096);
         Path probe = mount().resolve("probe-" + System.nanoTime());
         assertThatThrownBy(() -> Files.write(probe,
                 new byte[4096])).isInstanceOf(IOException.class);

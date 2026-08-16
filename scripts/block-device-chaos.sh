@@ -31,7 +31,8 @@ case "${1:-setup}" in
     # 并强制校验可用空间为 0，避免“看似满实际没满”。
     dd if=/dev/zero of="$MOUNT_DIR/fill.bin" bs=1K 2>/dev/null || true
     AVAIL_BLOCKS=$(stat -f --format=%a "$MOUNT_DIR" 2>/dev/null || echo 1)
-    if [ "${AVAIL_BLOCKS:-1}" -gt 0 ]; then
+    # ext4 对非 root 调用者保留最后 ≤1 块（4096B），允许 1 块容差
+    if [ "${AVAIL_BLOCKS:-1}" -gt 1 ]; then
       echo "disk fill incomplete: ${AVAIL_BLOCKS} blocks free" >&2
       exit 1
     fi
