@@ -48,6 +48,10 @@
   transaction-e2e 加 concurrency 取消重复、Maven cache、超时与
   surefire/容器日志证据 artifact 上传；测试分片/JFR 登记 TD-051 缓行）；
   全量回归 14910 项 0 failures。
+- P4a 多模块拆分评估（ADR-0346，TD-001 关闭）：源码级依赖矩阵
+  结论保持单模块（protocol 零依赖、protocol→storage→command→network
+  主链单向无环；cluster/observability 横向耦合登记为结构债务），
+  新增 PackageBoundaryTest（4 项）固化边界，未来拆分路径已记录。
 
 - v4.0 M1 向量存储接入（ADR-0319）：VectorIndexFile（magic/version/
   CRC + 原子写）、VectorIndexStore（checkpoint/load/rebuild）、

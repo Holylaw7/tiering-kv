@@ -975,7 +975,7 @@
 
 | 编号 | 描述 | 来源 | 计划消除 |
 | --- | --- | --- | --- |
-| TD-001 | 单 Maven 模块；若模块耦合升高需评估拆分多模块 | ADR-0001 | Phase 7 前评估 |
+| TD-001 | 单 Maven 模块；若模块耦合升高需评估拆分多模块 | ADR-0001 | ✅ 已关闭（ADR-0346 依赖矩阵评估：保持单模块，协议零依赖/主链单向，PackageBoundaryTest 固化边界；未来拆分路径已记录） |
 | TD-002 | JDK 17 目标下暂不采用虚拟线程 | ADR-0003 | ✅ 已关闭（P1c，ADR-0331，JDK 21 虚拟线程 POC 941K ops/s） |
 | TD-005 | ARC 容量单位当前为 entry count，需改为 byte 口径 | ADR-0012 | ✅ 已关闭（P1b，ADR-0326，ARCPolicy byte 模式） |
 | TD-006 | LFU 索引更新为全局同步段；演进 Segment LFU + Async Buffer | ADR-0010 | ✅ 已关闭（P1b，ADR-0327，SegmentLFUPolicy） |

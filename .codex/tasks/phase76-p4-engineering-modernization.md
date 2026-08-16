@@ -1,0 +1,21 @@
+# Phase 76 — P4：工程现代化（多模块评估 / JDK 21 / 命令表驱动）
+
+## Context
+
+optimization-roadmap P4 三项 + 发布收尾。基线：P0-P3 全部完成，
+v3.7.1 / v4.0.0-rc1 已发布，全量 14910 tests。
+
+## Goal
+
+1. P4a：多模块拆分评估（TD-001）→ ADR-0346 + PackageBoundaryTest
+2. P4b：JDK 21 正式升级（pom + CI + 全量回归）
+3. P4c：命令表驱动重构（CommandRegistry，冻结计数不变）
+4. 发布收尾：Phase 58 状态归档 + v4.1.0 GA tag/release
+5. 非阻塞项：TD-038（CLUSTER ASK）、TD-051（JFR/分片）
+
+## 验收
+
+- ADR-0346/0347 批准；PackageBoundaryTest 全绿
+- JDK 21 全量回归 0 failures + 真实 Runner 门禁 7/7
+- 命令冻结计数不变（ReleaseV37Test 等回归通过）
+- v4.1.0 tag + release；ROADMAP 阶段全绿；TD-001/038/051 处置归档
