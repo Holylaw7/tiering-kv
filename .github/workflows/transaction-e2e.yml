@@ -215,14 +215,21 @@ jobs:
           timeout 45 scripts/container-smoke.sh
       - name: Container readonly injection
         run: |
+          # 容器占用挂载点时 remount 报 busy；先 stop 再 remount ro，
+          # 再 start（只读挂载上 txn-meta 不可用，SET 必须失败）。
+          docker compose -f deploy/docker-compose.transaction.yml stop txn-meta
           sudo scripts/block-device-chaos.sh readonly
+          docker compose -f deploy/docker-compose.transaction.yml start txn-meta \
+            || true
           TIERINGKV_CONTAINER_CHAOS=true TIERINGKV_BLOCK_EXPECT=failure \
             mvn -q -Dtest=RealContainerDiskChaosTest#setMustFailUnderDiskFault \
             -DfailIfNoTests=false test
-          sudo mount -o remount,rw /mnt/tiering-kv-block
       - name: Container recovery after readonly
         run: |
-          docker compose -f deploy/docker-compose.transaction.yml restart txn-meta
+          docker compose -f deploy/docker-compose.transaction.yml stop txn-meta \
+            || true
+          sudo mount -o remount,rw /mnt/tiering-kv-block
+          docker compose -f deploy/docker-compose.transaction.yml start txn-meta
           TIERINGKV_CONTAINER_CHAOS=true TIERINGKV_BLOCK_EXPECT=recovered \
             mvn -q -Dtest=RealContainerDiskChaosTest#setGetSucceedsAfterRecovery \
             -DfailIfNoTests=false test
