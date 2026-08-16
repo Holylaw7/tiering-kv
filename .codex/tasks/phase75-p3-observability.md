@@ -77,3 +77,7 @@ MultiModelCommandMetricsTest）、W3C traceparent（Tracer W3C +
 TracingMetricsRegistry + INFO tracing section + GatewayRuntime 命令
 span，TracerTest +3 / ObservabilityRegistryTest +2）。全量回归
 14907 tests / 0 failures / 11 skipped；真实 Runner 门禁待确认。
+
+✅ 真实 Runner 门禁通过（2026-08-16，main run 31919944866/44889/44878：
+build / test / transaction-e2e 3/3 全绿）。P3 可观测性收口及其增量
+（复制喂数、多模型喂数、W3C traceparent 透传）全部完成，归档。
