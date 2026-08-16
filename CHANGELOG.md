@@ -73,6 +73,11 @@
   3.12.12→4.12.0 + okio 1.15.0→3.6.0（CVE-2021-0341/CVE-2023-3635）；
   operator 测试 7/7 兼容验证，全量 14918 项（1 个已知 ChaosValidation
   flaky 单独重跑 17/17 通过）。
+- CI 分片均衡修复（v4.1.0 发布门禁）：字母取模把全部重型 Raft/
+  事务测试集中到单一 shard 导致慢 Runner 超长；改为三分片——
+  重型分布式包（cluster/transaction/txn/mvcc/replication/runtime/
+  distributed/sharding）拆到 shard 0/1，轻量包进 shard 2
+  （84/85/466，并集=全量 635 无重叠）。
 
 - v4.0 M1 向量存储接入（ADR-0319）：VectorIndexFile（magic/version/
   CRC + 原子写）、VectorIndexStore（checkpoint/load/rebuild）、

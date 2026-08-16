@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1]
+        shard: [0, 1, 2]
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -45,7 +45,7 @@ jobs:
         run: mvn -B -q test-compile
       - name: Build shard test list
         run: |
-          scripts/shard-tests.sh ${{ matrix.shard }} 2 > /tmp/shard-tests.txt
+          scripts/shard-tests.sh ${{ matrix.shard }} 3 > /tmp/shard-tests.txt
           echo "shard ${{ matrix.shard }}: $(tr ',' '\n' < /tmp/shard-tests.txt | wc -l) classes"
       - name: Run shard tests
         run: |
