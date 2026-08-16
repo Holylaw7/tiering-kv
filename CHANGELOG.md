@@ -41,6 +41,13 @@
   （Tracer.startW3c/injectTraceparent/extractTraceparent，零依赖
   OTel 兼容）+ TracingMetricsRegistry + INFO tracing section +
   GatewayRuntime 命令 span（同步路径）；全量回归 14907 项 0 failures。
+- P3 收口：向量 checkpoint 水位（VECTOR.CHECKPOINT → 计数/watermark
+  + Prometheus）、备份纳入向量索引与复制水位（BackupManager 可选
+  VectorIndexStore + RestoreManager.restoreVectorIndex +
+  BackupMetricsRegistry attach LagTracker）、CI 卫生（build/test/
+  transaction-e2e 加 concurrency 取消重复、Maven cache、超时与
+  surefire/容器日志证据 artifact 上传；测试分片/JFR 登记 TD-051 缓行）；
+  全量回归 14910 项 0 failures。
 
 - v4.0 M1 向量存储接入（ADR-0319）：VectorIndexFile（magic/version/
   CRC + 原子写）、VectorIndexStore（checkpoint/load/rebuild）、

@@ -1023,3 +1023,4 @@
 | TD-048 | compose.transaction 已提供，真实容器编排运行未执行 | ADR-0093 | ✅ 已关闭（真实 Runner transaction-e2e 门禁全绿 + container-chaos 注入） |
 | TD-049 | 真实容器 disk 注入仍受限（fallocate/mount/fio） | ADR-0094 | 部分关闭（ADR-0342 block-device-chaos 真实 loop/dmsetup 闭环，真实 Runner 通过；容器级注入持续跟踪 P3） |
 | TD-050 | 元数据 Multi-Raft 为进程内传输，网络化待跨机验证 | ADR-0095 | ✅ 已关闭（Phase 25：Netty RPC 三节点组 + 持久化日志/快照） |
+| TD-051 | CI 测试分片 / JFR 采集未落地 | — | 开放（P3 决策：全量单 job ~6 分钟可接受；并行分片/多 fork 与 Raft 时序、端口竞态风险不成比例，暂缓；已落地 concurrency 取消重复、Maven cache、surefire/容器日志 artifact 上传） |

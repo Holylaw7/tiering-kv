@@ -81,3 +81,18 @@ span，TracerTest +3 / ObservabilityRegistryTest +2）。全量回归
 ✅ 真实 Runner 门禁通过（2026-08-16，main run 31919944866/44889/44878：
 build / test / transaction-e2e 3/3 全绿）。P3 可观测性收口及其增量
 （复制喂数、多模型喂数、W3C traceparent 透传）全部完成，归档。
+
+## P3 收口（2026-08-16）
+
+- 向量 checkpoint 水位：VECTOR.CHECKPOINT 成功 → VectorMetricsRegistry
+  recordVectorCheckpoint（计数 + 最近向量数 watermark），Prometheus
+  vector_checkpoints_total / vector_checkpoint_watermark；
+- 备份纳入向量索引与复制水位：BackupManager 可选 VectorIndexStore
+  （vector.idx 入备份集 + 字节统计）、RestoreManager.restoreVectorIndex、
+  BackupMetricsRegistry attach LagTracker（backup_replication_max_lag_ms）；
+- CI 卫生：build/test/transaction-e2e 加 concurrency（同分支取消重复）、
+  Maven cache、timeout、surefire/容器日志证据 artifact 上传；
+- 测试分片/JFR 登记 TD-051 缓行（全量单 job ~6 分钟可接受，并行分片
+  与 Raft/端口时序风险不成比例）。
+
+全量回归 14910 tests / 0 failures / 11 skipped；P3 全部完成，归档。

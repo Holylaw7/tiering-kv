@@ -118,6 +118,14 @@
 - 备份恢复纳入向量索引与复制水位；
 - CI 卫生：JFR/日志 artifact、测试分片、缓存优化。
 
+P3 收口完成（2026-08-16）：向量 checkpoint 水位（VECTOR.CHECKPOINT →
+VectorMetricsRegistry 计数/watermark + Prometheus）、备份纳入向量索引
+（BackupManager 可选 VectorIndexStore + RestoreManager.restoreVectorIndex）
+与复制水位（BackupMetricsRegistry attach LagTracker）、CI 卫生
+（concurrency 取消重复 + Maven cache + 超时 + surefire/容器日志
+artifact 上传）；测试分片/JFR 登记 TD-051 缓行（全量单 job ~6 分钟、
+并行分片与 Raft/端口时序风险不成比例）。
+
 ## P4 — 工程现代化
 
 - 多模块拆分评估（TD-001）；
