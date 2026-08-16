@@ -17,7 +17,11 @@ RFC（docs/planning/rfc-template.md）→ 评审 → ADR → 分支开发。
   （2026-08-14）→ ADR-0318 Accepted；
 - `feature/v4-multi-model` 分支已创建；
 - 阶段一（SQL 索引接线）已交付：`SqlIndexRegistry` +
-  `IndexAwarePlanner`（含索引选择/拒绝路径）。
+  `IndexAwarePlanner`（含索引选择/拒绝路径）；
+- RFC-0002（docs/planning/rfc-0002-v4dot2-production-hardening.md）：
+  **Proposed（2026-08-16）**——v4.2.0 生产加固与 EXPERIMENTAL→PRODUCT
+  转正方案已保存，待评审批准后开展；当前版本 v4.1.0 已收尾，新开发
+  暂不启动。
 
 ## v3.7.1（维护补丁，v4.0 前置）
 

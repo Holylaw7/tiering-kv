@@ -1077,3 +1077,9 @@ v4.1.0 维护补丁 ✅（2026-08-16）：实践运行验证修复生产链 TTL
 （ADR-0352 / TD-081，Raft ATOMIC 命令 + 结果回传）；全量
 14948 项 0 failures，Runner 门禁 build/test/transaction-e2e
 3/3 全绿；技术债 50/50 处置完成。
+
+v4.1.0 收尾 ✅（2026-08-16）：README/ROADMAP/ADR/评审文档同步完毕；
+**v4.2.0 规划已保存为 RFC-0002（Proposed，待评审）**，包含
+K8s Operator 生产化、真实对象存储/市场 ADAPTER 补证、
+SQL/向量/SaaS 转正与发布收尾；**获批前不开展任何新开发**，
+当前进入维护模式（hotfix/依赖升级/Runner 回归）。

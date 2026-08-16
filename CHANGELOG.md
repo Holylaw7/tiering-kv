@@ -5,6 +5,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- RFC-0002（v4.2.0 Production Hardening）：K8s Operator 生产化、
+  真实对象存储/市场 ADAPTER 补证、SQL/向量/SaaS 转正与发布收尾
+  方案已保存（Proposed，待评审）；获批前不开展实现。
+
 ### Fixed
 
 - 生产链原子字符串操作透传（ADR-0351）：实践运行验证发现

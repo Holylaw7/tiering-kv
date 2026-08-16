@@ -88,14 +88,14 @@ Kubernetes：`deploy/kubernetes/*.yaml` + Operator（fabric8 6.13.4）。
 
 ```text
 src/main/java/io/tieringkv/   协议/存储/集群/事务/多模型/云原生实现
-src/test/java/io/tieringkv/   14922 项测试（单元/集成/压力/混沌）
+src/test/java/io/tieringkv/   14948 项测试（单元/集成/压力/混沌）
 docs/adr/                     ADR-0001 ~ ADR-0352（架构决策记录）
 docs/requirements/             需求与验收
 docs/architecture/            总体/存储/网络/并发架构
 docs/design/                  详细设计
 docs/benchmark/               性能报告
 docs/review/                  阶段评审与最终收尾
-docs/planning/                P0–P4 优化路线图
+docs/planning/                P0–P4 优化路线图 + RFC-0001/0002 规划
 .codex/tasks/                 各 Phase 任务与状态
 deploy/                       Docker/K8s/Operator 产物
 scripts/                      build/benchmark/stress/混沌/发布脚本
