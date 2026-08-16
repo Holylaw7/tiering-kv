@@ -9,6 +9,7 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -29,6 +30,7 @@ public final class TransactionMetadataService implements AutoCloseable {
     private final TransactionMetadataState state = new TransactionMetadataState();
     private final Path logPath;
     private final DataOutputStream log;
+    private final FileOutputStream fileOut;
 
     public TransactionMetadataService(
             java.util.function.Function<byte[], CompletableFuture<Long>>
@@ -42,10 +44,10 @@ public final class TransactionMetadataService implements AutoCloseable {
             Path logPath) throws IOException {
         this.proposer = proposer;
         this.logPath = logPath;
-        this.log = logPath == null ? null : new DataOutputStream(
-                new BufferedOutputStream(Files.newOutputStream(logPath,
-                        StandardOpenOption.CREATE,
-                        StandardOpenOption.APPEND)));
+        this.fileOut = logPath == null ? null : new FileOutputStream(
+                logPath.toFile(), true);
+        this.log = fileOut == null ? null : new DataOutputStream(
+                new BufferedOutputStream(fileOut));
     }
 
     /** 崩溃恢复：从本地日志重建状态（不重新提案）。 */
@@ -140,6 +142,11 @@ public final class TransactionMetadataService implements AutoCloseable {
                 log.writeInt(payload.length);
                 log.write(payload);
                 log.flush();
+                // ADR-0350 容器级演练发现：ext4 delayed allocation 下
+                // write() 可能只进 page cache，ENOSPC 延迟到落盘；
+                // 强制 fsync 使磁盘满时 append 真实失败（不静默成功），
+                // 同时保证元数据日志持久化语义。
+                fileOut.getFD().sync();
             }
         } catch (IOException e) {
             throw new IllegalStateException("metadata log append failed", e);

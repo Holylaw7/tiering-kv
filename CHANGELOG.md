@@ -186,6 +186,12 @@
   无限 1K 小块填充 + `stat -f %a` 校验 ≤1 块；容器级再以 root
   视角在 /data 内补一轮填充；JVM 层可用空间断言放宽到 ≤4096B
   （ext4 对非 root 调用者保留最后一小块）。
+- ADR-0350 容器级演练发现真实一致性缺陷：ext4 delayed allocation
+  下 txn-meta 元数据日志 append 的 `write()` 只进 page cache，
+  ENOSPC 延迟到落盘，Java `flush()` 感知不到——磁盘 100% 满时
+  事务仍报成功；`TransactionMetadataService.appendLog` 增加
+  `FileDescriptor.sync()`（fsync），磁盘满时 append 真实失败并
+  经 ERROR 帧传播，SET 正确失败（同时强化元数据日志持久化）。
 
 - P3 真实 Runner 门禁暴露：后端容器缺 NET_ADMIN 导致
   `tc qdisc add` 返回 `Operation not permitted`；docker-compose
