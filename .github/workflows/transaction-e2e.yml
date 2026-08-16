@@ -181,6 +181,7 @@ jobs:
           sudo mount -o remount,rw /mnt/tiering-kv-block
       - name: Container stack up (bind block device)
         run: |
+          docker compose -f deploy/docker-compose.transaction.yml build
           TIERINGKV_BLOCK_MOUNT=/mnt/tiering-kv-block \
             docker compose -f deploy/docker-compose.transaction.yml up -d --wait
       - name: Container smoke precheck
@@ -201,9 +202,13 @@ jobs:
             2>/dev/null || true
           docker exec txn-meta sh -c 'rm -f /data/fill.bin' \
             2>/dev/null || true
+          docker exec txn-meta sh -c 'stat -c "BEFORE size=%s" /data/txn-meta.log' \
+            || true
           TIERINGKV_CONTAINER_CHAOS=true TIERINGKV_BLOCK_EXPECT=failure \
             mvn -q -Dtest=RealContainerDiskChaosTest#setMustFailUnderDiskFault \
             -DfailIfNoTests=false test
+          docker exec txn-meta sh -c 'stat -c "AFTER size=%s" /data/txn-meta.log' \
+            || true
           sudo rm -f /mnt/tiering-kv-block/fill.bin
       - name: Container recovery after disk-full
         run: |
