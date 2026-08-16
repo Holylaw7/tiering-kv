@@ -3,8 +3,9 @@
 > Redis 协议兼容的 LSM 冷热分层 KV 存储引擎（Mini Redis）——
 > 内存/磁盘分层 + 分布式事务 + 多模型值 + 向量检索 + SQL + 云原生运行时。
 
-**版本：v4.1.0 GA（2026-08-16）** · 全量测试 **14919 / 0 failures** ·
-JDK 21 · 真实 GitHub Runner 门禁 7/7（build / test（三分片）/ transaction-e2e /
+**版本：v4.1.0 GA（2026-08-16）** · 全量测试 **14922 / 0 failures** ·
+技术债 **49/49 处置完成** · JDK 21 · 真实 GitHub Runner 门禁 7/7
+（build / test（三分片）/ transaction-e2e /
 release：Benchmark + Trivy 0 漏洞 + GHCR 镜像）
 
 ## 项目定位
@@ -79,14 +80,14 @@ Kubernetes：`deploy/kubernetes/*.yaml` + Operator（fabric8 6.13.4）。
 | v3.7.0 | 2026-08-14 | GA 收口（真实 Runner 门禁 7/7） |
 | v3.7.1 | 2026-08-14 | 维护补丁（依赖漏洞/CI 稳定化） |
 | v4.0.0-rc1 | 2026-08-14 | 向量存储 M1 + 多模型 M2 + 跨集群复制 M3 |
-| v4.1.0 | 2026-08-16 | P4 工程现代化（JDK 21/命令目录）+ 可观测性收口 + 依赖升级 + 发布门禁加固 |
+| v4.1.0 | 2026-08-16 | P4 工程现代化（JDK 21/命令目录）+ 可观测性收口 + 依赖升级 + 发布门禁加固 + 容器级磁盘混沌闭环（TD-046/049）；技术债 49/49 全部关闭 |
 
 ## 目录与文档
 
 ```text
 src/main/java/io/tieringkv/   协议/存储/集群/事务/多模型/云原生实现
-src/test/java/io/tieringkv/   14919 项测试（单元/集成/压力/混沌）
-docs/adr/                     ADR-0001 ~ ADR-0348（架构决策记录）
+src/test/java/io/tieringkv/   14922 项测试（单元/集成/压力/混沌）
+docs/adr/                     ADR-0001 ~ ADR-0350（架构决策记录）
 docs/requirements/             需求与验收
 docs/architecture/            总体/存储/网络/并发架构
 docs/design/                  详细设计
