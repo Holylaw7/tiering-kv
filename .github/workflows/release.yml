@@ -36,7 +36,7 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
           cache: maven
       - name: Test
         # 功能测试门禁：排除 benchmark 组（由下方 Benchmark 步骤显式执行）；

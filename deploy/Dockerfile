@@ -1,4 +1,4 @@
-FROM maven:3.9-eclipse-temurin-17 AS build
+FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /build
 COPY pom.xml .
 COPY src ./src
@@ -7,7 +7,7 @@ COPY src ./src
 # Phase 21 真实容器验证发现）。直接 package 走正常生命周期即可解析。
 RUN mvn -q -DskipTests package
 
-FROM eclipse-temurin:17-jre
+FROM eclipse-temurin:21-jre
 WORKDIR /app
 # tc netem 混沌注入（ADR-0343）：真实网络故障演练需要 iproute2。
 RUN apt-get update \

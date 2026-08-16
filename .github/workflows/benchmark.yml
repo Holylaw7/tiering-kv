@@ -13,6 +13,6 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
       - run: bash scripts/benchmark.sh
       # TODO(phase9): 上传报告 artifact 并执行性能回归门禁

@@ -14,7 +14,7 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
           cache: maven
       - name: JVM container-equivalent E2E
         # 慢 runner 上 Raft 选举窗口内并发写入偶发 "no metadata leader"；
@@ -29,7 +29,7 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
           cache: maven
       - name: Build image
         # GitHub runner 的 BuildKit 偶发 gRPC EOF（瞬时基础设施故障）；
@@ -125,7 +125,7 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
           cache: maven
       - uses: helm/kind-action@v1
         with:
@@ -162,7 +162,7 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
           cache: maven
       - name: Block device setup
         run: |
@@ -191,7 +191,7 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
           cache: maven
       - name: Jepsen externalized validation
         run: scripts/jepsen-run.sh run

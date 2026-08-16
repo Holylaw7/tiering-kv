@@ -18,7 +18,7 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "21"
           cache: maven
       # 性能断言（@Tag("benchmark")）从功能门禁排除，由 release Benchmark 步骤
       # 显式执行；失败用例重跑一次，重跑仍失败则门禁照常失败，不掩盖真实缺陷。
