@@ -112,7 +112,8 @@
   observability 注册表 + INFO sections + `/metrics/prometheus`
   端点 + 向量/备份喂数；真实 Runner 门禁 3/3 全绿；复制/多模型
   喂数（ADR-0345：pipeline/命令注入 + W3C traceparent + INFO tracing
-  section + GatewayRuntime 命令 span）完成，全量回归 14907 项
+  section + GatewayRuntime 命令 span）完成，全量回归
+  14907 次测试执行（Surefire 口径）
   0 failures）；
 - OpenTelemetry span 透传；
 - 备份恢复纳入向量索引与复制水位；

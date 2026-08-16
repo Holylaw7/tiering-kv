@@ -28,7 +28,11 @@
    `@ParameterizedTest` 参数组合展开）；
 5. 校验方法：`mvn -Dsurefire.excludedGroups=benchmark test` 后统计
    `target/surefire-reports/*.xml` 的 `<testcase>` 总数，应与
-   “Tests run” 汇总一致。
+   “Tests run” 汇总一致；
+6. 历史记录处理：历史阶段/发布记录中的全量回归数字（如 ≥13700、
+   14907、14917 等）均为**当时的 Surefire 执行次数口径**，保留原值
+   并标注“次测试执行（Surefire 口径）”；只有**当前基线**使用双指标
+   （约 6,736 个测试方法 / 14,950 次测试执行）。
 
 ## 推荐表述
 

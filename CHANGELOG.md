@@ -66,7 +66,8 @@
   ObservabilityRegistry（INFO vector/replication/multimodel/backup）、
   MetricsExporter.exportAll、ConsoleRestServer `/metrics/prometheus`
   （token RBAC）、VectorIndexSyncStorageEngine 与
-  BackupManager/RestoreManager additive 喂数；全量回归 14897 项
+  BackupManager/RestoreManager additive 喂数；全量回归
+  14897 次测试执行（Surefire 口径）
   0 failures，真实 Runner 门禁 3/3 全绿。
 - P3 可观测性增量（ADR-0345）：复制管线喂数（ReplicationPipeline/
   BidirectionalPipeline 注入 ReplicationMetricsRegistry，attach
@@ -75,25 +76,27 @@
   新重载：JSON 写/校验失败/TS 写/字节）、W3C traceparent 透传
   （Tracer.startW3c/injectTraceparent/extractTraceparent，零依赖
   OTel 兼容）+ TracingMetricsRegistry + INFO tracing section +
-  GatewayRuntime 命令 span（同步路径）；全量回归 14907 项 0 failures。
+  GatewayRuntime 命令 span（同步路径）；全量回归
+  14907 次测试执行（Surefire 口径）0 failures。
 - P3 收口：向量 checkpoint 水位（VECTOR.CHECKPOINT → 计数/watermark
   + Prometheus）、备份纳入向量索引与复制水位（BackupManager 可选
   VectorIndexStore + RestoreManager.restoreVectorIndex +
   BackupMetricsRegistry attach LagTracker）、CI 卫生（build/test/
   transaction-e2e 加 concurrency 取消重复、Maven cache、超时与
   surefire/容器日志证据 artifact 上传；测试分片/JFR 登记 TD-051 缓行）；
-  全量回归 14910 项 0 failures。
+  全量回归 14910 次测试执行（Surefire 口径）0 failures。
 - P4a 多模块拆分评估（ADR-0346，TD-001 关闭）：源码级依赖矩阵
   结论保持单模块（protocol 零依赖、protocol→storage→command→network
   主链单向无环；cluster/observability 横向耦合登记为结构债务），
   新增 PackageBoundaryTest（4 项）固化边界，未来拆分路径已记录。
 - P4b JDK 21 正式升级（ADR-0347）：maven.compiler.release 21、
   CI 全部 workflow temurin 21、容器镜像 maven/eclipse-temurin 21；
-  JDK 21 本地全量 14914 项（3 个时序 flaky 单独重跑 47/47 通过）。
+  JDK 21 本地全量 14914 次测试执行（Surefire 口径；3 个时序 flaky
+  单独重跑 47/47 通过）。
 - P4c 命令表驱动重构（ADR-0348）：CommandCatalog 默认命令表
   （129 项，info/exec/command 动态注册，注册表冻结 132 不变），
   CommandRegistry 删除内联 130 行；CommandCatalogTest 3 项；
-  JDK 21 全量 14917 项 0 failures。
+  JDK 21 全量 14917 次测试执行（Surefire 口径）0 failures。
 - TD-038 关闭：CLUSTER ASK 迁移语义闭环——ASKING 命令（Redis
   single-shot）+ 迁移中 slot asking 直通读写；UnifiedClusterGateway
   executeWithAsking + ClusterCommandHandler handleCommand；
@@ -106,8 +109,8 @@
   2.18.2→2.18.9（CVE-2026-54512/13/14/15/59888/59889）、fabric8
   6.9.2→6.13.4 + okhttp/logging-interceptor/mockwebserver
   3.12.12→4.12.0 + okio 1.15.0→3.6.0（CVE-2021-0341/CVE-2023-3635）；
-  operator 测试 7/7 兼容验证，全量 14918 项（1 个已知 ChaosValidation
-  flaky 单独重跑 17/17 通过）。
+  operator 测试 7/7 兼容验证，全量 14918 次测试执行（Surefire 口径；
+  1 个已知 ChaosValidation flaky 单独重跑 17/17 通过）。
 - CI 分片均衡修复（v4.1.0 发布门禁）：字母取模把全部重型 Raft/
   事务测试集中到单一 shard 导致慢 Runner 超长；改为三分片——
   重型分布式包（cluster/transaction/txn/mvcc/replication/runtime/
@@ -655,7 +658,8 @@
   - Pub/Sub（ADR-0282）：PubSubBroker 本地至少一次 + 模式订阅 +
     PubSubForwarder SPI + 5 命令；
   - v3.4 冻结：release.yml v3.4.0 + Phase52 基准；
-  - 测试：新增 ≥560 项；全量回归 **≥13700 全绿**（+6 门控跳过）。
+  - 测试：新增 ≥560 项；全量回归 **≥13700 次测试执行全绿**
+    （Surefire 口径，+6 门控跳过）。
 - Phase 53 RESP3 接线、Pub/Sub 网络与事务（v3.5.0 RC）：
   - RESP3 连接级接线（ADR-0283）：ConnectionContext + 版本感知编码器，
     HELLO 3 按连接切换；HGETALL/SMEMBERS 按版本返回 Map/Set；
@@ -669,7 +673,8 @@
     WATCH（无版本守卫登记）；
   - 连接生命周期（ADR-0288）：断线退订 + 清队列 + 版本重置；
   - v3.5 冻结：release.yml v3.5.0 + Phase53 基准；
-  - 测试：新增 ≥560 项；全量回归 **≥14140 全绿**（+6 门控跳过）。
+  - 测试：新增 ≥560 项；全量回归 **≥14140 次测试执行全绿**
+    （Surefire 口径，+6 门控跳过）。
 - Phase 54 事务加固、Stream 与生产验证（v3.6.0 RC）：
   - WATCH 版本守卫（ADR-0290）：versionOf + EXEC abort + UNWATCH；
   - EXEC 原子性与回滚（ADR-0291）：快照回滚 + ExecJournal；
@@ -679,7 +684,8 @@
   - 过期通知（ADR-0294）：keyspace 事件 + 开关；
   - SQL/向量（ADR-0295）：统一错误码 + EXPLAIN + HNSW 持久化；
   - v3.6 冻结：release.yml v3.6.0 + Phase54 基准；
-  - 测试：新增 ≥600 项；全量回归 **≥14470 全绿**（+6 门控跳过）。
+  - 测试：新增 ≥600 项；全量回归 **≥14470 次测试执行全绿**
+    （Surefire 口径，+6 门控跳过）。
 - Phase 55 分布式正确性、消费组与文档产品化（v3.7.0 RC）：
   - 线性一致性验证（ADR-0297）：历史 + 线性化点 + 违例拒绝；
   - Raft 边角矩阵（ADR-0298）：选举/故障转移/追平/少数派；
@@ -688,7 +694,8 @@
   - 事务日志持久化（ADR-0301）：PersistentExecJournal + CRC；
   - 文档产品化（ADR-0302）：quickstart/runbook/白皮书；
   - v3.7 冻结：release.yml v3.7.0 + Phase55 基准；
-  - 测试：新增 ≥600 项；全量回归 **≥14730 全绿**（+6 门控跳过）。
+  - 测试：新增 ≥600 项；全量回归 **≥14730 次测试执行全绿**
+    （Surefire 口径，+6 门控跳过）。
 - Phase 56 GA 最终化与生产收口（v3.7.0 GA）：
   - GA 冻结与发布执行（ADR-0304）；
   - 真实 Runner 门禁最终复审与封板（ADR-0305，SEALED_GA）；
@@ -697,14 +704,16 @@
   - 多集群联邦一致性（ADR-0308）；
   - 运营收尾与 GA 基线（ADR-0309）；
   - 最终质量门禁（ADR-0310）；
-  - 测试：新增 ≥500 项；全量回归 **≥14880 全绿**（+6 门控跳过）。
+  - 测试：新增 ≥500 项；全量回归 **≥14880 次测试执行全绿**
+    （Surefire 口径，+6 门控跳过）。
 - Phase 57 维护模式与 v4 规划：
   - 维护模式框架（ADR-0311）：hotfix/backport/补丁流水线；
   - 复审执行包（ADR-0312）：runner-review.sh + 证据模板；
   - v4 规划框架（ADR-0313）：路线图 + RFC 模板；
   - 年度复核（ADR-0314）；维护门禁（ADR-0315）；
   - 发布卫生（ADR-0316）；社区就绪（ADR-0317）；
-  - 测试：新增 ≥300 项；全量回归 **≥14820 全绿**（+6 门控跳过）。
+  - 测试：新增 ≥300 项；全量回归 **≥14820 次测试执行全绿**
+    （Surefire 口径，+6 门控跳过）。
 - v3.7.1-rc 维护补丁：
   - fix(test)：WatchVersionGuardTest.versionBumpsOnWrite 改为真实
     versionOf 断言（原为空断言，维护期质量修复）；
@@ -801,7 +810,8 @@
   崩溃 → 半数存活继续服务；无多数派不提交；旧 leader 回归安全降级。
 - Phase 11 测试：ShardingTest（10）/ MetadataTest（10）/ RaftTest（21）/
   FailoverTest（9）/ ClusterIntegrationTest（1，3 节点 SET → 复制 →
-  杀 leader → 选举 → GET 正确），共 51 项新测试；全量回归 288 项全绿。
+  杀 leader → 选举 → GET 正确），共 51 项新测试；全量回归
+  288 次测试执行全绿（Surefire 口径）。
 - Phase 11 基准（docs/benchmark/cluster-report.md）：单分片复制写
   154K ops/s（P99=0.027ms）、读 750K ops/s（P99=4μs）、路由开销
   ~23–36ns/op、复制滞后 ≤35ms、选举 124–310ms（目标 <5s ✅）。
@@ -898,7 +908,8 @@
     ClusterInfo + `INFO CLUSTER`（node/role/term/leader/slot）；
   - INFO 命令扩展支持 `INFO [section]`（未知 section 返回错误）；
   - 测试：新增 98 项（迁移 19 / 异步 Raft 21 / 证书 15 / 混沌 16+1 /
-    可观测性 15 / 基准 11）；全量回归 650 项全绿（Phase 1–15）；
+    可观测性 15 / 基准 11）；全量回归 650 次测试执行全绿
+    （Surefire 口径，Phase 1–15）；
   - 基准（docs/benchmark/phase15-production-validation-report.md）：
     迁移 100B 59.8 / 1KB 173.3 / 10KB 589.8 MB/s；Raft 1/64/256 写者
     129/259/331K ops/s（目标 100K/200K ✅），P99 0.009/3.071/9.824ms；

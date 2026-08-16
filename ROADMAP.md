@@ -236,7 +236,7 @@
   [0037](docs/adr/ADR-0037-replication-model.md)（Raft 复制）、
   [0038](docs/adr/ADR-0038-failure-detection-strategy.md)（心跳/选举）。
 - 测试：新增 51 项（Sharding 10 / Metadata 10 / Raft 21 / Failover 9 /
-  集成 1），全量回归 288 项全绿。
+  集成 1），全量回归 288 次测试执行全绿（Surefire 口径）。
 - 基准：单分片复制写 154K ops/s（P99=0.027ms）、读 750K ops/s
   （P99=4μs）；路由开销 23–36ns/op；复制滞后 ≤35ms（心跳周期约束）；
   选举 124–310ms（目标 <5s ✅）；详见
@@ -266,7 +266,7 @@
   [0043](docs/adr/ADR-0043-slot-migration-strategy.md)（迁移）。
 - 测试：新增 77 项（RaftLog 21 / Snapshot 12 / RPC 19 / 迁移 11 /
   复制优化 5 / 快照集成 2 / TCP 集群集成 3 / 基准 4），全量回归
-  369 项全绿（Phase 1–12）。
+  369 次测试执行全绿（Surefire 口径，Phase 1–12）。
 - 基准（[distributed-production-report.md](docs/benchmark/distributed-production-report.md)）：
   TCP 提交 1,359 ops/s（P50=0.65ms / P99=2.16ms）、复制滞后 <1ms、
   RPC 9.3K ops/s（P50=100μs，单连接）、迁移 16.1MB/s + 恢复 549ms。
@@ -327,8 +327,8 @@
   [0055](docs/adr/ADR-0055-certificate-lifecycle.md)（证书生命周期）、
   [0056](docs/adr/ADR-0056-cluster-observability.md)（集群可观测性）。
 - 测试：新增 98 项（迁移 19 / 异步 Raft 21 / 证书 15 / 混沌 16+1 /
-  可观测性 15 / 基准 11）；全量回归 650 项全绿；发现并修复 Raft 缺陷
-  （截断提案虚假完成）。
+  可观测性 15 / 基准 11）；全量回归 650 次测试执行全绿
+  （Surefire 口径）；发现并修复 Raft 缺陷（截断提案虚假完成）。
 - 基准（[phase15-production-validation-report.md](docs/benchmark/phase15-production-validation-report.md)）：
   迁移 100B 59.8 / 1KB 173.3 / 10KB 589.8 MB/s；Raft 1/64/256 写者
   129/259/331K ops/s（目标 100K/200K ✅），P99 0.009/3.071/9.824ms
@@ -929,7 +929,8 @@
   update）、Hash/List/Set/ZSet 命令族（ADR-0277~0280，46 命令）、
   RESP3（ADR-0281，Map/Set/Double/Push + HELLO 3）、Pub/Sub
   （ADR-0282，本地 broker + 模式订阅 + 集群广播 SPI）。
-- 测试：新增 ≥560 项（surefire 口径）；全量回归 **≥13700 全绿**
+- 测试：新增 ≥560 项（surefire 口径）；全量回归
+  **≥13700 次测试执行全绿（Surefire 口径）**
   （目标 ≥13700 ✅，+6 门控跳过）。
 - 基准（[phase52-production-report.md](
   docs/benchmark/phase52-production-report.md)）：HSET 67–114K、
@@ -947,7 +948,8 @@
   HSCAN/LINSERT/LMOVE/ZRANGEBYLEX 等）、MULTI/EXEC（ADR-0287，
   QUEUED + 结果数组 + DISCARD + WATCH 登记）、连接生命周期
   （ADR-0288，断线清理）。
-- 测试：新增 ≥560 项（surefire 口径）；全量回归 **≥14140 全绿**
+- 测试：新增 ≥560 项（surefire 口径）；全量回归
+  **≥14140 次测试执行全绿（Surefire 口径）**
   （目标 ≥14140 ✅，+6 门控跳过）。
 - 基准（[phase53-production-report.md](
   docs/benchmark/phase53-production-report.md)）：MULTI/EXEC
@@ -965,7 +967,8 @@
   阻塞命令（ADR-0293，BLPOP/BRPOP）、过期通知（ADR-0294，
   keyspace 事件）、SQL/向量生产化（ADR-0295，错误码 + EXPLAIN +
   HNSW 持久化）。
-- 测试：新增 ≥600 项（surefire 口径）；全量回归 **≥14470 全绿**
+- 测试：新增 ≥600 项（surefire 口径）；全量回归
+  **≥14470 次测试执行全绿（Surefire 口径）**
   （目标 ≥14470 ✅，+6 门控跳过）。
 - 基准（[phase54-production-report.md](
   docs/benchmark/phase54-production-report.md)）：WATCH/EXEC
@@ -982,7 +985,8 @@
   XGROUP/XREADGROUP/XACK/XPENDING 消费组 + 持久化组段、
   PersistentExecJournal（CRC + 截断恢复）、
   quickstart/runbook/白皮书。
-- 测试：全量回归 **≥14730 全绿**；命令注册表 109 → 113。
+- 测试：全量回归 **≥14730 次测试执行全绿（Surefire 口径）**；
+  命令注册表 109 → 113。
 
 ## Phase 56 — GA 收尾与生产闭环 ✅
 
@@ -991,14 +995,15 @@
   SEALED_GA / REGISTERED_RELEASE）、Jepsen 式 harness 外部化、
   XCLAIM/XAUTOCLAIM + 死信计数、双活 VersionVector 收敛矩阵、
   审计导出与 SLO 归档；Product Completeness Baseline gaReady=true。
-- 测试：全量回归 **≥14880 全绿**；命令注册表 115 个。
+- 测试：全量回归 **≥14880 次测试执行全绿（Surefire 口径）**；
+  命令注册表 115 个。
 
 ## Phase 57 — 维护模式与 v4 规划 ✅
 
 - 目标：建立 hotfix/backport/补丁流水线与 v4.0 规划框架。
 - 交付：hotfix.sh / runner-review.sh / 年度复核与维护门禁脚本、
   v4 Roadmap + RFC 模板、semver/SBOM/签名与安全披露流程文档化。
-- 测试：全量回归 **≥14820 全绿**。
+- 测试：全量回归 **≥14820 次测试执行全绿（Surefire 口径）**。
 - 后续：v3.7.1 维护补丁（ADR-0351/0352）与 v4.1.0 GA 归档见文末。
 
 ## 技术债登记
@@ -1064,7 +1069,7 @@
   容器镜像 21；JDK 21 本地全量回归通过）；
 - P4c 命令表驱动重构 ✅（ADR-0348：CommandCatalog 129 项 +
   动态 info/exec/command，注册表冻结 132 不变；JDK 21 全量
-  14917 项 0 failures）。
+  14917 次测试执行（Surefire 口径）0 failures）。
 
 v4.1.0 GA ✅（2026-08-16）：发布门禁经历 4 轮真实 Runner 修复
 （单 job 全量挂死 → test-shards 拆分 + 超时 → ReleaseWorkflowTest
@@ -1075,16 +1080,17 @@ v4.1.0 GA ✅（2026-08-16）：发布门禁经历 4 轮真实 Runner 修复
 v4.1.0 维护补丁 ✅（2026-08-16）：实践运行验证修复生产链 TTL
 缺陷（ADR-0351，装饰器原子能力透传）并关闭集群复制原子操作缺口
 （ADR-0352 / TD-081，Raft ATOMIC 命令 + 结果回传）；全量
-14950 次测试执行 0 failures（Surefire 口径，含参数化 invocation；
-约 6,736 个测试方法，见 docs/testing/measurement-conventions.md），
-Runner 门禁 build/test/transaction-e2e
+约 6,736 个测试方法 / 14,950 次测试执行 0 failures（Surefire
+口径，见 docs/testing/measurement-conventions.md），Runner 门禁
+build/test/transaction-e2e
 3/3 全绿；技术债 50/50 处置完成。
 
 ADR-0353 稳定性加固 ✅（2026-08-16）：元数据写路径选举窗口有界等待
 （根治慢 Runner `no metadata leader` flake）、块设备满盘断言改为
 多块负载（根治 ext4 ENOSPC 语义缝隙）、CI 测试 3 分片全量轮转
 （重型分布式测试 21/21/20 分散）；block-device-chaos 真实 Runner
-全绿，测试执行 14950 次 0 failures（Surefire 口径）。
+全绿，约 6,736 个测试方法 / 14,950 次测试执行 0 failures
+（Surefire 口径）。
 
 v4.1.0 收尾 ✅（2026-08-16）：README/ROADMAP/ADR/评审文档同步完毕；
 **v4.2.0 规划已保存为 RFC-0002（Proposed，待评审）**，包含

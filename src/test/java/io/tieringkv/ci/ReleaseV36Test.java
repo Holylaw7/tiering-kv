@@ -66,7 +66,8 @@ class ReleaseV36Test {
     void agentContextDocumentsFinalState() throws Exception {
         assertThat(Files.readString(Path.of(".codex",
                 "AGENT_CONTEXT.md"))).contains("v4.1.0")
-                .contains("14919");
+                .contains("6,736")
+                .contains("14,950");
     }
 
     @Test

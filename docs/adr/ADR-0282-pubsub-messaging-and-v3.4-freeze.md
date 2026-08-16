@@ -17,7 +17,7 @@ Accepted
 - 命令：SUBSCRIBE/UNSUBSCRIBE/PSUBSCRIBE/PUNSUBSCRIBE/PUBLISH；
 - 连接级投递接线 Phase 53（本阶段 broker + 命令确认语义）；
 - 同时冻结 v3.4：pom 3.4.0-SNAPSHOT、release.yml v3.4.0、
-  Phase52 基准、全量回归 ≥13700。
+  Phase52 基准、全量回归 ≥13700 次测试执行（Surefire 口径）。
 
 ## Alternatives
 

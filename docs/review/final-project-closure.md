@@ -4,8 +4,9 @@
 
 - 版本：**v4.1.0 GA**（2026-08-16，GitHub Release + GHCR
   `ghcr.io/holylaw7/tiering-kv:v4.1.0` 已发布）；
-- 全量回归：**14919 tests / 0 failures / 11 skipped**（JDK 21，
-  benchmark 组由 release 门禁显式执行）；
+- 全量回归：**约 6,736 个测试方法 / 14,950 次测试执行 /
+  0 failures / 13 skipped**（Surefire 口径，JDK 21，benchmark 组
+  由 release 门禁显式执行）；
 - 真实 Runner 门禁：build / test（三分片）/ transaction-e2e /
   release（Benchmark + Trivy 0 漏洞 + 镜像 + Release）全绿；
 - ROADMAP Phase 0–74 全部完成；P0–P4 优化路线图全部完成。
@@ -51,7 +52,8 @@ JFR 管线、向量/备份/复制水位。
 
 ## 4. 质量与工程数据
 
-- 测试：14919（单元/集成/压力/混沌），Phase 19 起逐阶段真实 Runner 门禁；
+- 测试：约 6,736 个测试方法 / 14,950 次测试执行（单元/集成/压力/
+  混沌），Phase 19 起逐阶段真实 Runner 门禁；
 - ADR：0001–0348（存储/网络/锁/IO/淘汰/序列化/一致性/性能全覆盖）；
 - 工程：JDK 21、命令表驱动、包边界固化、三分片 CI + JFR、
   Conventional Commits、main/develop 双分支；
