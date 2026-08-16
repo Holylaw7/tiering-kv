@@ -1,25 +1,19 @@
 package io.tieringkv.storage.tiering;
 
+import io.tieringkv.storage.AbstractStorageDecorator;
 import io.tieringkv.storage.StorageEngine;
-import io.tieringkv.storage.StorageIterator;
 
 /**
  * 分层写路径装饰器（ADR-0020）：写前背压检查，写后水位检查（触发异步 Flush）。
- * 命令层无感知。
+ * 命令层无感知。原子写（INCR/APPEND/EXPIRE 等）同样走背压（ADR-0351）。
  */
-public final class TieringStorageEngine implements StorageEngine {
+public final class TieringStorageEngine extends AbstractStorageDecorator {
 
-    private final StorageEngine delegate;
     private final TieringController controller;
 
     public TieringStorageEngine(StorageEngine delegate, TieringController controller) {
-        this.delegate = delegate;
+        super(delegate);
         this.controller = controller;
-    }
-
-    @Override
-    public void put(byte[] key, byte[] value) {
-        put(key, value, NO_TTL);
     }
 
     @Override
@@ -32,11 +26,6 @@ public final class TieringStorageEngine implements StorageEngine {
     }
 
     @Override
-    public byte[] get(byte[] key) {
-        return delegate.get(key);
-    }
-
-    @Override
     public boolean delete(byte[] key) {
         boolean removed = delegate.delete(key);
         controller.onWriteCompleted();
@@ -44,17 +33,92 @@ public final class TieringStorageEngine implements StorageEngine {
     }
 
     @Override
-    public boolean exists(byte[] key) {
-        return delegate.exists(key);
+    public long increment(byte[] key, long delta) {
+        if (!controller.awaitWritable()) {
+            throw new BackpressureException("memory critical: writes limited");
+        }
+        long result = atomic().increment(key, delta);
+        controller.onWriteCompleted();
+        return result;
     }
 
     @Override
-    public StorageIterator iterator() {
-        return delegate.iterator();
+    public int append(byte[] key, byte[] value) {
+        if (!controller.awaitWritable()) {
+            throw new BackpressureException("memory critical: writes limited");
+        }
+        int result = atomic().append(key, value);
+        controller.onWriteCompleted();
+        return result;
     }
 
     @Override
-    public long size() {
-        return delegate.size();
+    public byte[] getSet(byte[] key, byte[] value) {
+        if (!controller.awaitWritable()) {
+            throw new BackpressureException("memory critical: writes limited");
+        }
+        byte[] old = atomic().getSet(key, value);
+        controller.onWriteCompleted();
+        return old;
+    }
+
+    @Override
+    public byte[] getAndSetPreservingTtl(byte[] key, byte[] value) {
+        if (!controller.awaitWritable()) {
+            throw new BackpressureException("memory critical: writes limited");
+        }
+        byte[] old = atomic().getAndSetPreservingTtl(key, value);
+        controller.onWriteCompleted();
+        return old;
+    }
+
+    @Override
+    public byte[] getDelete(byte[] key) {
+        if (!controller.awaitWritable()) {
+            throw new BackpressureException("memory critical: writes limited");
+        }
+        byte[] old = atomic().getDelete(key);
+        controller.onWriteCompleted();
+        return old;
+    }
+
+    @Override
+    public boolean putIfAbsent(byte[] key, byte[] value) {
+        if (!controller.awaitWritable()) {
+            throw new BackpressureException("memory critical: writes limited");
+        }
+        boolean wrote = atomic().putIfAbsent(key, value);
+        controller.onWriteCompleted();
+        return wrote;
+    }
+
+    @Override
+    public boolean persist(byte[] key) {
+        if (!controller.awaitWritable()) {
+            throw new BackpressureException("memory critical: writes limited");
+        }
+        boolean ok = atomic().persist(key);
+        controller.onWriteCompleted();
+        return ok;
+    }
+
+    @Override
+    public boolean expireAt(byte[] key, long expireAtMillis) {
+        if (!controller.awaitWritable()) {
+            throw new BackpressureException("memory critical: writes limited");
+        }
+        boolean ok = atomic().expireAt(key, expireAtMillis);
+        controller.onWriteCompleted();
+        return ok;
+    }
+
+    @Override
+    public byte[] update(byte[] key, java.util.function.UnaryOperator<byte[]> transform) {
+        if (!controller.awaitWritable()) {
+            throw new BackpressureException("memory critical: writes limited");
+        }
+        byte[] updated = atomic().update(key, transform);
+        controller.onWriteCompleted();
+        return updated;
     }
 }

@@ -3,6 +3,20 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Fixed
+
+- 生产链原子字符串操作透传（ADR-0351）：实践运行验证发现
+  `SETEX→TTL` 恒为 -1，根因是 Main.java 四个存储装饰器只实现
+  StorageEngine，命令层 `instanceof AtomicStringOps` 失败后静默
+  回退 get+put。引入 `AbstractStorageDecorator` 基类并让
+  HotKey / Tiering / Tracking / Vector 装饰器继承，原子写同步
+  注入缓存失效、背压、热度统计与 VECTOR 索引维护；新增生产链
+  回归测试（SETEX/EXPIRE/PERSIST/INCR/APPEND/GETSET + 热缓存失效）。
+- 集群复制原子操作缺口登记 TD-081（ReplicatedStorageEngine 未实现
+  AtomicStringOps，Raft ATOMIC 命令修复排入后续阶段）。
+
 ## [3.7.1] - 2026-08-14
 
 ### Fixed

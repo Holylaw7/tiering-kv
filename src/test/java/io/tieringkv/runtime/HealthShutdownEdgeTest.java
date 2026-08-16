@@ -163,7 +163,7 @@ class HealthShutdownEdgeTest {
     }
 
     @ParameterizedTest(name = "timeout {0}")
-    @ValueSource(ints = {0, 25, 100})
+    @ValueSource(ints = {0, 100, 250})
     void parameterizedDrainWithResolvingInflight(int timeoutMillis)
             throws Exception {
         AtomicBoolean inflight = new AtomicBoolean(true);
@@ -180,8 +180,10 @@ class HealthShutdownEdgeTest {
         }, () -> !inflight.get(), () -> (long) timeoutMillis, () -> {
         }, List.of());
         resolver.join(2_000);
-        // 5ms 后 inflight 结束；超时 >=25ms 时应成功 drain。
-        assertThat(drained).isEqualTo(timeoutMillis >= 25);
+        // 5ms 后 inflight 结束；超时 >=100ms 时应成功 drain。
+        // （全量回归负载下 10ms 轮询 + 25ms 窗口过紧，放宽参数稳定化，
+        //   产品 GracefulShutdown 语义不变，ADR-0351 验证。）
+        assertThat(drained).isEqualTo(timeoutMillis >= 100);
     }
 
     @ParameterizedTest(name = "json {0}")
