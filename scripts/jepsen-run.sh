@@ -8,12 +8,32 @@ cd "$(dirname "$0")/.."
 # 用法：scripts/jepsen-run.sh [run|cleanup]
 COMPOSE="docker compose -f deploy/docker-compose.transaction.yml"
 
+retry_n() {
+  local n="$1"
+  shift
+  for i in $(seq 1 "$n"); do
+    if "$@" >> "$REPORT" 2>&1; then
+      return 0
+    fi
+    echo "attempt ${i}/${n} failed, retrying in 10s... ($*)" \
+      | tee -a "$REPORT"
+    sleep 10
+  done
+  echo "failed after ${n} attempts: $*" | tee -a "$REPORT"
+  return 1
+}
+
 case "${1:-run}" in
   run)
     mkdir -p target
     REPORT=target/jepsen-report.txt
     : > "$REPORT"
-    mvn -q -DskipTests compile
+    # GitHub runner 偶发 Maven Central 下载 / BuildKit 瞬时故障
+    # （如 jacoco 插件解析失败）；编译与镜像构建幂等，重试 3 次吸收。
+    retry_n 3 mvn -q -DskipTests compile
+
+    echo "== compose build ==" | tee -a "$REPORT"
+    retry_n 3 $COMPOSE build
 
     echo "== compose up ==" | tee -a "$REPORT"
     $COMPOSE up -d --wait >> "$REPORT" 2>&1

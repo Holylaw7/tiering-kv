@@ -40,6 +40,10 @@ v4.1.0 收尾期间，纯文档提交 f30e714 触发的真实 Runner 门禁偶�
    （cluster/transaction/mvcc/replication/runtime 等）不再集中于
    shard 0/1，降低单一 shard 时序敏感测试密度；surefire
    `rerunFailingTestsCount=1` 保留为兜底，不作为通过依据。
+4. jepsen-e2e 编译与镜像构建增加 3 次重试：历史失败分类
+   （0a55d1c）为 Docker 构建内 Maven Central 解析 jacoco 插件瞬时
+   失败（PluginResolutionException），与 container-e2e 的 BuildKit
+   重试同属瞬时基础设施故障，脚本层幂等重试吸收。
 
 ## Alternatives
 

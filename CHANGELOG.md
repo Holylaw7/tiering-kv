@@ -31,7 +31,9 @@
   （FileChannel.force(true)），消除“剩 1 块可用时单块探针合法成功”、
   延迟分配与 inline/元数据块吸收 ENOSPC 的语义缝隙；
   `shard-tests.sh` 改为 3 分片全量轮转，重型分布式测试不再集中于
-  shard 0/1。新增 MetadataRaftGroupWriteTest 2 项。
+  shard 0/1；jepsen-e2e 编译与镜像构建增加 3 次重试（吸收
+  Maven Central / BuildKit 瞬时故障）。新增
+  MetadataRaftGroupWriteTest 2 项。
 - 生产链原子字符串操作透传（ADR-0351）：实践运行验证发现
   `SETEX→TTL` 恒为 -1，根因是 Main.java 四个存储装饰器只实现
   StorageEngine，命令层 `instanceof AtomicStringOps` 失败后静默
