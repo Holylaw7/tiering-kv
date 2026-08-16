@@ -78,6 +78,9 @@
   重型分布式包（cluster/transaction/txn/mvcc/replication/runtime/
   distributed/sharding）拆到 shard 0/1，轻量包进 shard 2
   （84/85/466，并集=全量 635 无重叠）。
+- 收尾技术债处置：TD-015 关闭（ADR-0349 评估：维持分段 RWLock +
+  Hot Cache，替代路径为段细粒度化/复制读扩展）；TD-046/049 标记
+  维护期跟踪项（环境受限）。
 
 - v4.0 M1 向量存储接入（ADR-0319）：VectorIndexFile（magic/version/
   CRC + 原子写）、VectorIndexStore（checkpoint/load/rebuild）、

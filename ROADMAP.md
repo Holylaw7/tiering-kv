@@ -989,7 +989,7 @@
 | TD-012 | size-tiered 全量合并读放大；评估 leveled compaction | ADR-0019 | ✅ 已关闭（P1a，ADR-0323，LeveledCompaction） |
 | TD-013 | 快照式 Flush → Active/Immutable MemTable 轮转 | ADR-0020 | ✅ 已关闭（P1a，ADR-0324，MemTableManager + FlushScheduler 接入） |
 | TD-014 | 迁移队列准入控制 / 批量 / worker 动态扩缩容 | ADR-0020 | ✅ 已关闭（P1a，ADR-0325，MigrationScheduler 批量/准入/动态 worker） |
-| TD-015 | 全量无锁读（ABA/回收/可见性）→ 暂缓 | ADR-0024 | 验证后新 ADR |
+| TD-015 | 全量无锁读（ABA/回收/可见性）→ 暂缓 | ADR-0024 | ✅ 已关闭（ADR-0349 评估：维持分段 RWLock + Hot Cache，无实测瓶颈；替代路径为段细粒度化/复制读扩展） |
 | TD-016 | Phase 9 三级基准：A 内存 / B 服务端 / C 生产全链路 | ADR-0023 | ✅ 已关闭（Phase 9/61，三级基准报告） |
 | TD-017 | 动态重分片（在线扩容） | ADR-0023 | ✅ 已关闭（Phase 30，ShardRouter/ReshardPlanner/ShardMigration + VectorShard 迁移） |
 | TD-018 | Hot Cache version check（当前 TTL 兜底） | ADR-0025 | ✅ 已关闭（P1b，ADR-0328，版本校验 + TTL 兜底） |
@@ -1020,12 +1020,12 @@
 | TD-043 | 事务/MVCC 未接入 Multi-Raft Region 网络路径，跨机事务验证受限 | ADR-0082 | ✅ 已关闭（Phase 21 TCP 事务协议 + Phase 23 运行时 + Phase 24 CI 容器 E2E 交付） |
 | TD-044 | 跨机 disk slow / disk full 混沌未执行 | ADR-0086 | ✅ 已关闭（Phase 22 in-JVM 语义 + ADR-0342 真实块设备 disk-full/readonly 闭环，真实 Runner 通过） |
 | TD-045 | Phase 22 新增测试数低于 220 目标 | Phase 22 | ✅ 已关闭（Phase 23 补齐，全量 2007） |
-| TD-046 | 真实容器 disk full / readonly / slow io 注入未完成（Docker Desktop 权限） | ADR-0090 | 部分关闭（ADR-0342 真实块设备闭环证据；容器级注入持续跟踪 P3） |
+| TD-046 | 真实容器 disk full / readonly / slow io 注入未完成（Docker Desktop 权限） | ADR-0090 | 部分关闭（ADR-0342 真实块设备闭环证据；容器级注入为维护期跟踪项，需 Docker Desktop/特权 Runner 环境） |
 | TD-047 | Metadata 单节点决策（无独立 Raft 组） | ADR-0095 | ✅ 已关闭（Phase 24 架构关闭：TxnMetadataNode + Raft 快照 + decisionIndex；网络化传输登记 TD-050） |
 | TD-048 | compose.transaction 已提供，真实容器编排运行未执行 | ADR-0093 | ✅ 已关闭（真实 Runner transaction-e2e 门禁全绿 + container-chaos 注入） |
-| TD-049 | 真实容器 disk 注入仍受限（fallocate/mount/fio） | ADR-0094 | 部分关闭（ADR-0342 block-device-chaos 真实 loop/dmsetup 闭环，真实 Runner 通过；容器级注入持续跟踪 P3） |
+| TD-049 | 真实容器 disk 注入仍受限（fallocate/mount/fio） | ADR-0094 | 部分关闭（ADR-0342 block-device-chaos 真实 loop/dmsetup 闭环，真实 Runner 通过；容器级注入为维护期跟踪项） |
 | TD-050 | 元数据 Multi-Raft 为进程内传输，网络化待跨机验证 | ADR-0095 | ✅ 已关闭（Phase 25：Netty RPC 三节点组 + 持久化日志/快照） |
-| TD-051 | CI 测试分片 / JFR 采集未落地 | — | ✅ 已关闭（shard-tests.sh 类列表均分 2 shard + JFR 采集管线 + surefire tieringkv.argline；本地验证 633 类均分 / JFR 生成成功） |
+| TD-051 | CI 测试分片 / JFR 采集未落地 | — | ✅ 已关闭（三分片均衡：重型分布式包 0/1、轻量 2；JFR 采集管线 + tieringkv.argline；并集=全量 635 无重叠） |
 
 ## P4 — 工程现代化（2026-08-16）
 
