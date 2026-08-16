@@ -1,6 +1,7 @@
 package io.tieringkv.replication;
 
 import io.tieringkv.cdc.ChangeEvent;
+import io.tieringkv.observability.ReplicationMetricsRegistry;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -21,6 +22,7 @@ public final class BidirectionalPipeline {
     private final AtomicLong localVersion = new AtomicLong();
     private final AtomicLong suppressed = new AtomicLong();
     private final AtomicLong conflicts = new AtomicLong();
+    private final ReplicationMetricsRegistry metrics;
     private final java.util.Map<String, LwwState> lww =
             new ConcurrentHashMap<>();
 
@@ -29,9 +31,17 @@ public final class BidirectionalPipeline {
 
     public BidirectionalPipeline(List<ReplicaSink> peers, String nodeId,
                                  long syncTimeoutMillis) {
+        this(peers, nodeId, syncTimeoutMillis, null);
+    }
+
+    /** 可观测性喂数（ADR-0345）：可选复制指标注册表（additive）。 */
+    public BidirectionalPipeline(List<ReplicaSink> peers, String nodeId,
+                                 long syncTimeoutMillis,
+                                 ReplicationMetricsRegistry metrics) {
         this.peers = List.copyOf(peers);
         this.nodeId = nodeId;
         this.syncTimeoutMillis = syncTimeoutMillis;
+        this.metrics = metrics;
     }
 
     /** 本地写入：推进版本并向全部 peer 广播。 */
@@ -42,7 +52,12 @@ public final class BidirectionalPipeline {
         ChangeEvent event = new ChangeEvent(version,
                 ChangeEvent.EventType.PUT, key, value, false,
                 "crdt-" + nodeId, nodeId, System.currentTimeMillis());
-        return broadcast(event, nodeId, version);
+        return broadcast(event, nodeId, version)
+                .whenComplete((ok, error) -> {
+                    if (metrics != null && ok != null && ok) {
+                        metrics.recordReplicated();
+                    }
+                });
     }
 
     /** 远端事件到达：环回抑制 + 冲突合并。 */
@@ -50,6 +65,9 @@ public final class BidirectionalPipeline {
                         long version) {
         if (vector.seen(origin, version)) {
             suppressed.incrementAndGet();
+            if (metrics != null) {
+                metrics.recordSuppressed();
+            }
             return;
         }
         vector.observe(origin, version);
@@ -57,6 +75,9 @@ public final class BidirectionalPipeline {
         if (previous != null && previous.node().equals(origin)
                 && previous.timestamp() >= version) {
             suppressed.incrementAndGet();
+            if (metrics != null) {
+                metrics.recordSuppressed();
+            }
             return;
         }
         apply(key, value, origin, version);
@@ -85,6 +106,9 @@ public final class BidirectionalPipeline {
         LwwState previous = lww.get(stringKey);
         if (previous != null && !previous.node().equals(node)) {
             conflicts.incrementAndGet();
+            if (metrics != null) {
+                metrics.recordConflict();
+            }
         }
         if (previous == null || wins(version, node, previous)) {
             lww.put(stringKey, new LwwState(version, node,

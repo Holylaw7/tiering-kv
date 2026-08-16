@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.LongAdder;
  */
 public final class ReplicationMetricsRegistry {
 
-    private final LagTracker lagTracker;
+    private LagTracker lagTracker;
     private final LongAdder replicated = new LongAdder();
     private final LongAdder suppressed = new LongAdder();
     private final LongAdder conflicts = new LongAdder();
@@ -21,6 +21,11 @@ public final class ReplicationMetricsRegistry {
     }
 
     public ReplicationMetricsRegistry(LagTracker lagTracker) {
+        this.lagTracker = lagTracker;
+    }
+
+    /** 绑定管线内部 LagTracker（ADR-0345）：复制成功后水位可见。 */
+    public void attachLagTracker(LagTracker lagTracker) {
         this.lagTracker = lagTracker;
     }
 

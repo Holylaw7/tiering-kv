@@ -1,6 +1,7 @@
 package io.tieringkv.replication;
 
 import io.tieringkv.cdc.ChangeEvent;
+import io.tieringkv.observability.ReplicationMetricsRegistry;
 
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -22,23 +23,40 @@ public final class ReplicationPipeline {
     private final String originRegion;
     private final AtomicLong replicated = new AtomicLong();
     private final AtomicLong conflicts = new AtomicLong();
+    private final ReplicationMetricsRegistry metrics;
 
     public ReplicationPipeline(List<ReplicaSink> replicas,
                                ReplicationMode mode,
                                long syncTimeoutMillis,
                                String originRegion) {
+        this(replicas, mode, syncTimeoutMillis, originRegion, null);
+    }
+
+    /** 可观测性喂数（ADR-0345）：可选复制指标注册表（additive）。 */
+    public ReplicationPipeline(List<ReplicaSink> replicas,
+                               ReplicationMode mode,
+                               long syncTimeoutMillis,
+                               String originRegion,
+                               ReplicationMetricsRegistry metrics) {
         this.replicas = List.copyOf(replicas);
         this.mode = mode;
         this.syncTimeoutMillis = syncTimeoutMillis;
         this.lagTracker = new LagTracker();
         this.conflictDetector = new ConflictDetector();
         this.originRegion = originRegion;
+        this.metrics = metrics;
+        if (metrics != null) {
+            metrics.attachLagTracker(lagTracker);
+        }
     }
 
     public CompletableFuture<Boolean> replicate(ChangeEvent event) {
         boolean conflicted = conflictDetector.observe(event, originRegion);
         if (conflicted) {
             conflicts.incrementAndGet();
+            if (metrics != null) {
+                metrics.recordConflict();
+            }
         }
         if (mode == ReplicationMode.ASYNC) {
             for (ReplicaSink replica : replicas) {
@@ -50,6 +68,9 @@ public final class ReplicationPipeline {
                 });
             }
             replicated.incrementAndGet();
+            if (metrics != null) {
+                metrics.recordReplicated();
+            }
             return CompletableFuture.completedFuture(true);
         }
         CompletableFuture<Void>[] futures = replicas.stream()
@@ -69,6 +90,9 @@ public final class ReplicationPipeline {
                                 "sync replication timeout/failure", error);
                     }
                     replicated.incrementAndGet();
+                    if (metrics != null) {
+                        metrics.recordReplicated();
+                    }
                     return true;
                 });
     }
