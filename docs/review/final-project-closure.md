@@ -63,9 +63,9 @@ JFR 管线、向量/备份/复制水位。
 已关闭：TD-001/002/005…051（含 TD-015 经 ADR-0349 处置关闭，
 P3 收口新增 TD-038/051）。
 
-部分关闭（维护期跟踪项，不阻塞）：TD-046/TD-049（真实容器级 disk
-注入需 Docker Desktop/特权 Runner 环境；真实块设备闭环证据已由
-ADR-0342 在真实 Runner 完成）。
+已关闭补充：TD-046/TD-049（ADR-0350 容器级 disk-full/readonly 注入，
+loop 设备 bind 为 txn-meta /data + 真实网关失败/恢复断言；slow io
+在无 device-mapper 的托管 Runner 显式 SKIPPED，特权 Runner 按需启用）。
 
 ## 6. 维护指南
 

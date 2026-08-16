@@ -1020,10 +1020,10 @@
 | TD-043 | 事务/MVCC 未接入 Multi-Raft Region 网络路径，跨机事务验证受限 | ADR-0082 | ✅ 已关闭（Phase 21 TCP 事务协议 + Phase 23 运行时 + Phase 24 CI 容器 E2E 交付） |
 | TD-044 | 跨机 disk slow / disk full 混沌未执行 | ADR-0086 | ✅ 已关闭（Phase 22 in-JVM 语义 + ADR-0342 真实块设备 disk-full/readonly 闭环，真实 Runner 通过） |
 | TD-045 | Phase 22 新增测试数低于 220 目标 | Phase 22 | ✅ 已关闭（Phase 23 补齐，全量 2007） |
-| TD-046 | 真实容器 disk full / readonly / slow io 注入未完成（Docker Desktop 权限） | ADR-0090 | 部分关闭（ADR-0342 真实块设备闭环证据；容器级注入为维护期跟踪项，需 Docker Desktop/特权 Runner 环境） |
+| TD-046 | 真实容器 disk full / readonly / slow io 注入未完成（Docker Desktop 权限） | ADR-0090 | ✅ 已关闭（ADR-0350：loop 设备 bind 为 txn-meta /data，容器级 disk-full/readonly 注入 + 失败/恢复断言，真实 Runner 执行；slow io 在无 device-mapper 环境显式 SKIPPED） |
 | TD-047 | Metadata 单节点决策（无独立 Raft 组） | ADR-0095 | ✅ 已关闭（Phase 24 架构关闭：TxnMetadataNode + Raft 快照 + decisionIndex；网络化传输登记 TD-050） |
 | TD-048 | compose.transaction 已提供，真实容器编排运行未执行 | ADR-0093 | ✅ 已关闭（真实 Runner transaction-e2e 门禁全绿 + container-chaos 注入） |
-| TD-049 | 真实容器 disk 注入仍受限（fallocate/mount/fio） | ADR-0094 | 部分关闭（ADR-0342 block-device-chaos 真实 loop/dmsetup 闭环，真实 Runner 通过；容器级注入为维护期跟踪项） |
+| TD-049 | 真实容器 disk 注入仍受限（fallocate/mount/fio） | ADR-0094 | ✅ 已关闭（ADR-0342 宿主级 + ADR-0350 容器级 disk-full/readonly 真实闭环；fio slow 注入在特权 Runner 按需启用，门禁不阻塞） |
 | TD-050 | 元数据 Multi-Raft 为进程内传输，网络化待跨机验证 | ADR-0095 | ✅ 已关闭（Phase 25：Netty RPC 三节点组 + 持久化日志/快照） |
 | TD-051 | CI 测试分片 / JFR 采集未落地 | — | ✅ 已关闭（三分片均衡：重型分布式包 0/1、轻量 2；JFR 采集管线 + tieringkv.argline；并集=全量 635 无重叠） |
 

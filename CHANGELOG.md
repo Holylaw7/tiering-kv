@@ -81,6 +81,11 @@
 - 收尾技术债处置：TD-015 关闭（ADR-0349 评估：维持分段 RWLock +
   Hot Cache，替代路径为段细粒度化/复制读扩展）；TD-046/049 标记
   维护期跟踪项（环境受限）。
+- 容器级磁盘故障闭环（ADR-0350，TD-046/049 关闭）：事务 compose
+  txn-meta `/data` 支持 `${TIERINGKV_BLOCK_MOUNT}` bind 真实 loop
+  设备；新增 RealContainerDiskChaosTest（故障期 SET 必须失败、
+  恢复期必须成功）；CI block-device-chaos job 执行 disk-full /
+  readonly 注入与恢复闭环（真实 Runner 验证）。
 
 - v4.0 M1 向量存储接入（ADR-0319）：VectorIndexFile（magic/version/
   CRC + 原子写）、VectorIndexStore（checkpoint/load/rebuild）、

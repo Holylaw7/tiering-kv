@@ -179,9 +179,44 @@ jobs:
             mvn -q -Dtest=RealBlockDeviceExerciseTest#readonlyAppendFailsWithoutLoss \
             -DfailIfNoTests=false test
           sudo mount -o remount,rw /mnt/tiering-kv-block
+      - name: Container stack up (bind block device)
+        run: |
+          TIERINGKV_BLOCK_MOUNT=/mnt/tiering-kv-block \
+            docker compose -f deploy/docker-compose.transaction.yml up -d --wait
+      - name: Container smoke precheck
+        run: timeout 45 scripts/container-smoke.sh
+      - name: Container disk-full injection
+        run: |
+          sudo scripts/block-device-chaos.sh disk-full
+          TIERINGKV_CONTAINER_CHAOS=true TIERINGKV_BLOCK_EXPECT=failure \
+            mvn -q -Dtest=RealContainerDiskChaosTest#setMustFailUnderDiskFault \
+            -DfailIfNoTests=false test
+          sudo rm -f /mnt/tiering-kv-block/fill.bin
+      - name: Container recovery after disk-full
+        run: |
+          TIERINGKV_CONTAINER_CHAOS=true TIERINGKV_BLOCK_EXPECT=recovered \
+            mvn -q -Dtest=RealContainerDiskChaosTest#setGetSucceedsAfterRecovery \
+            -DfailIfNoTests=false test
+          timeout 45 scripts/container-smoke.sh
+      - name: Container readonly injection
+        run: |
+          sudo scripts/block-device-chaos.sh readonly
+          TIERINGKV_CONTAINER_CHAOS=true TIERINGKV_BLOCK_EXPECT=failure \
+            mvn -q -Dtest=RealContainerDiskChaosTest#setMustFailUnderDiskFault \
+            -DfailIfNoTests=false test
+          sudo mount -o remount,rw /mnt/tiering-kv-block
+      - name: Container recovery after readonly
+        run: |
+          docker compose -f deploy/docker-compose.transaction.yml restart txn-meta
+          TIERINGKV_CONTAINER_CHAOS=true TIERINGKV_BLOCK_EXPECT=recovered \
+            mvn -q -Dtest=RealContainerDiskChaosTest#setGetSucceedsAfterRecovery \
+            -DfailIfNoTests=false test
+          timeout 45 scripts/container-smoke.sh
       - name: Cleanup
         if: always()
-        run: sudo scripts/block-device-chaos.sh cleanup
+        run: |
+          docker compose -f deploy/docker-compose.transaction.yml down -v || true
+          sudo scripts/block-device-chaos.sh cleanup
 
   jepsen-e2e:
     runs-on: ubuntu-latest

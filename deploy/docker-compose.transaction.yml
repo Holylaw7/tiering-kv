@@ -21,7 +21,9 @@ services:
       - --data-dir
       - /data
     volumes:
-      - txn-meta:/data
+      # ADR-0350：设置 TIERINGKV_BLOCK_MOUNT 时 bind 真实块设备为 /data
+      # （容器级磁盘故障注入）；未设置时保持命名卷。
+      - ${TIERINGKV_BLOCK_MOUNT:-txn-meta}:/data
     networks:
       - txn-cluster
 
