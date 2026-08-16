@@ -104,7 +104,8 @@ docs/project-history.md       Phase 0–54 逐阶段演进历史（旧 README �
 架构见 [docs/architecture/overview.md](docs/architecture/overview.md)，
 路线图见 [ROADMAP.md](ROADMAP.md)，变更见 [CHANGELOG.md](CHANGELOG.md)，
 历史演进见 [docs/project-history.md](docs/project-history.md)，
-最终收尾报告见 [docs/review/final-project-closure.md](docs/review/final-project-closure.md)。
+最终收尾报告见 [docs/review/final-project-closure.md](docs/review/final-project-closure.md)，
+维护期运行手册见 [docs/operations/maintenance-runbook.md](docs/operations/maintenance-runbook.md)。
 
 ## 开发与贡献
 
