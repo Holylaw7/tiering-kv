@@ -29,3 +29,6 @@ v3.7.1 / v4.0.0-rc1 已发布，全量 14910 tests。
   flaky（FlushSchedulerManager/MetadataNetworkRaftExtended/
   ChaosCluster）单独重跑 47/47 通过；
 - P4c 命令表驱动重构（进行中）。
+- P4c ✅（2026-08-16）：ADR-0348，CommandCatalog 默认表 129 项 +
+  动态 info/exec/command（注册表冻结 132 不变，ReleaseV36/V37 回归
+  通过），CommandCatalogTest 3 项；JDK 21 全量 14917 项 0 failures。

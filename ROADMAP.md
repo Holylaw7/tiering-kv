@@ -1031,4 +1031,6 @@
   PackageBoundaryTest）；
 - P4b JDK 21 正式升级 ✅（ADR-0347：pom release 21 + CI temurin 21 +
   容器镜像 21；JDK 21 本地全量回归通过）；
-- P4c 命令表驱动重构（进行中）。
+- P4c 命令表驱动重构 ✅（ADR-0348：CommandCatalog 129 项 +
+  动态 info/exec/command，注册表冻结 132 不变；JDK 21 全量
+  14917 项 0 failures）。

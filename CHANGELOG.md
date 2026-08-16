@@ -55,6 +55,10 @@
 - P4b JDK 21 正式升级（ADR-0347）：maven.compiler.release 21、
   CI 全部 workflow temurin 21、容器镜像 maven/eclipse-temurin 21；
   JDK 21 本地全量 14914 项（3 个时序 flaky 单独重跑 47/47 通过）。
+- P4c 命令表驱动重构（ADR-0348）：CommandCatalog 默认命令表
+  （129 项，info/exec/command 动态注册，注册表冻结 132 不变），
+  CommandRegistry 删除内联 130 行；CommandCatalogTest 3 项；
+  JDK 21 全量 14917 项 0 failures。
 
 - v4.0 M1 向量存储接入（ADR-0319）：VectorIndexFile（magic/version/
   CRC + 原子写）、VectorIndexStore（checkpoint/load/rebuild）、
