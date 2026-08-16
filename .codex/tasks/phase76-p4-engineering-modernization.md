@@ -19,3 +19,13 @@ v3.7.1 / v4.0.0-rc1 已发布，全量 14910 tests。
 - JDK 21 全量回归 0 failures + 真实 Runner 门禁 7/7
 - 命令冻结计数不变（ReleaseV37Test 等回归通过）
 - v4.1.0 tag + release；ROADMAP 阶段全绿；TD-001/038/051 处置归档
+
+## 状态
+
+- P4a ✅（2026-08-16）：ADR-0346 + PackageBoundaryTest（4 项），
+  TD-001 关闭；
+- P4b ✅（2026-08-16）：ADR-0347，pom release 21 + 5 个 workflow
+  temurin 21 + 容器镜像 21；JDK 21 本地全量 14914 项，3 个时序
+  flaky（FlushSchedulerManager/MetadataNetworkRaftExtended/
+  ChaosCluster）单独重跑 47/47 通过；
+- P4c 命令表驱动重构（进行中）。

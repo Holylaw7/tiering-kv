@@ -52,6 +52,9 @@
   结论保持单模块（protocol 零依赖、protocol→storage→command→network
   主链单向无环；cluster/observability 横向耦合登记为结构债务），
   新增 PackageBoundaryTest（4 项）固化边界，未来拆分路径已记录。
+- P4b JDK 21 正式升级（ADR-0347）：maven.compiler.release 21、
+  CI 全部 workflow temurin 21、容器镜像 maven/eclipse-temurin 21；
+  JDK 21 本地全量 14914 项（3 个时序 flaky 单独重跑 47/47 通过）。
 
 - v4.0 M1 向量存储接入（ADR-0319）：VectorIndexFile（magic/version/
   CRC + 原子写）、VectorIndexStore（checkpoint/load/rebuild）、

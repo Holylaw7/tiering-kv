@@ -1024,3 +1024,11 @@
 | TD-049 | 真实容器 disk 注入仍受限（fallocate/mount/fio） | ADR-0094 | 部分关闭（ADR-0342 block-device-chaos 真实 loop/dmsetup 闭环，真实 Runner 通过；容器级注入持续跟踪 P3） |
 | TD-050 | 元数据 Multi-Raft 为进程内传输，网络化待跨机验证 | ADR-0095 | ✅ 已关闭（Phase 25：Netty RPC 三节点组 + 持久化日志/快照） |
 | TD-051 | CI 测试分片 / JFR 采集未落地 | — | 开放（P3 决策：全量单 job ~6 分钟可接受；并行分片/多 fork 与 Raft 时序、端口竞态风险不成比例，暂缓；已落地 concurrency 取消重复、Maven cache、surefire/容器日志 artifact 上传） |
+
+## P4 — 工程现代化（2026-08-16）
+
+- P4a 多模块拆分评估 ✅（ADR-0346，TD-001 关闭：保持单模块 +
+  PackageBoundaryTest）；
+- P4b JDK 21 正式升级 ✅（ADR-0347：pom release 21 + CI temurin 21 +
+  容器镜像 21；JDK 21 本地全量回归通过）；
+- P4c 命令表驱动重构（进行中）。
