@@ -45,13 +45,13 @@ class ReleaseV37Test {
     @Test
     void docsSync() throws Exception {
         assertThat(Files.readString(Path.of("CHANGELOG.md")))
-                .contains("3.7.0");
+                .contains("4.1.0");
         assertThat(Files.readString(Path.of("ROADMAP.md")))
-                .contains("3.7.0");
+                .contains("v4.1.0 GA");
         assertThat(Files.readString(Path.of("README.md")))
-                .contains("3.7.0");
+                .contains("v4.1.0");
         assertThat(Files.readString(Path.of(".codex",
-                "AGENT_CONTEXT.md"))).contains("Phase 55");
+                "AGENT_CONTEXT.md"))).contains("v4.1.0");
     }
 
     @Test

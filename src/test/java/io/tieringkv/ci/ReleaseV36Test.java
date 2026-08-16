@@ -57,15 +57,16 @@ class ReleaseV36Test {
     }
 
     @Test
-    void readmeDocumentsV36() throws Exception {
+    void readmeDocumentsV410() throws Exception {
         assertThat(Files.readString(Path.of("README.md")))
-                .contains("3.6.0");
+                .contains("v4.1.0");
     }
 
     @Test
-    void agentContextDocumentsPhase54() throws Exception {
+    void agentContextDocumentsFinalState() throws Exception {
         assertThat(Files.readString(Path.of(".codex",
-                "AGENT_CONTEXT.md"))).contains("Phase 54");
+                "AGENT_CONTEXT.md"))).contains("v4.1.0")
+                .contains("14919");
     }
 
     @Test
