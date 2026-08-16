@@ -48,7 +48,7 @@ class ReleaseWorkflowTest {
     }
 
     @ParameterizedTest(name = "step {0}")
-    @ValueSource(strings = {"Test", "Benchmark", "Security scan",
+    @ValueSource(strings = {"Benchmark", "Security scan",
             "Build image", "Publish image", "Generate release notes"})
     void requiredStepsPresent(String stepName) throws Exception {
         List<Map<String, Object>> steps = releaseSteps();
@@ -57,12 +57,17 @@ class ReleaseWorkflowTest {
     }
 
     @Test
-    void pipelineOrderTestBeforeBenchmarkBeforePublish() throws Exception {
+    void testShardsGateReleaseBeforeBenchmarkBeforePublish()
+            throws Exception {
+        Map<String, Object> doc = yaml();
+        Map<String, Object> jobs = map(doc.get("jobs"));
+        assertThat(jobs).containsKey("test-shards");
+        Map<String, Object> release = map(jobs.get("release"));
+        assertThat(release.get("needs").toString())
+                .contains("test-shards");
         List<Map<String, Object>> steps = releaseSteps();
-        int testIndex = indexOf(steps, "Test");
         int benchIndex = indexOf(steps, "Benchmark");
         int publishIndex = indexOf(steps, "Publish image");
-        assertThat(testIndex).isLessThan(benchIndex);
         assertThat(benchIndex).isLessThan(publishIndex);
     }
 
