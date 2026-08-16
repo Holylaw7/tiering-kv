@@ -5,15 +5,21 @@ on:
     branches: [main, develop]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
+          cache: maven
       # 测试职责由 test.yml 全量承担；build 只验证编译与打包，
       # 避免 push 一次并发跑 4 个完整测试套件导致 runner 资源抖动/OOM。
       - run: mvn -B -DskipTests clean verify
