@@ -43,3 +43,8 @@
   invocation），0 failures”；
 - ❌ “14,957 个独立测试场景”
 - ❌ “14,957 个测试用例（用例=方法）”
+
+## 相关测试文档
+
+- [测试环境、门控条件与 GitHub CI](test-environment-and-ci.md)
+- [可复现 Benchmark 说明](../benchmark/reproducible-benchmark-guide.md)
