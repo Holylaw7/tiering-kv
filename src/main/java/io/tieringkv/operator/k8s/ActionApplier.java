@@ -2,8 +2,18 @@ package io.tieringkv.operator.k8s;
 
 import io.tieringkv.operator.OperatorAction;
 
-/** Operator 动作执行器（ADR-0322 M4 增强）：reconcile 输出 → 集群动作。 */
+/** Operator action executor: reconcile output to Kubernetes resources. */
 public interface ActionApplier {
 
-    void apply(OperatorAction action);
+    /** Apply one action against the CR that produced it. */
+    void apply(K8sTieringKVCluster resource, OperatorAction action);
+
+    /**
+     * Read the current workload status before reconcile. Implementations that
+     * do not own Kubernetes resources may return {@code null}.
+     */
+    default K8sTieringKVClusterStatus observe(
+            K8sTieringKVCluster resource) {
+        return null;
+    }
 }

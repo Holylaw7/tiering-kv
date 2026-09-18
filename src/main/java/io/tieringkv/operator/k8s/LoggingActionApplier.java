@@ -2,12 +2,15 @@ package io.tieringkv.operator.k8s;
 
 import io.tieringkv.operator.OperatorAction;
 
-/** 默认动作执行器：记录（生产可替换为 StatefulSet/Deployment 应用）。 */
+/** Diagnostic action executor for dry-run and unit tests. */
 public final class LoggingActionApplier implements ActionApplier {
 
     @Override
-    public void apply(OperatorAction action) {
+    public void apply(K8sTieringKVCluster resource, OperatorAction action) {
+        String name = resource == null || resource.getMetadata() == null
+                ? "<unknown>" : resource.getMetadata().getName();
         System.out.println("[operator] apply " + action.type()
+                + " cluster=" + name
                 + " target=" + action.target()
                 + " detail=" + action.detail());
     }
