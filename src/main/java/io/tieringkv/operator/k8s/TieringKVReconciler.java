@@ -44,6 +44,21 @@ public final class TieringKVReconciler {
                 || resource.getMetadata().getName() == null
                 ? "default" : resource.getMetadata().getName();
 
+        if (resource.getMetadata() != null
+                && resource.getMetadata().getDeletionTimestamp() != null) {
+            K8sTieringKVClusterStatus deleting =
+                    new K8sTieringKVClusterStatus();
+            deleting.setReadyMetadata(k8sStatus.getReadyMetadata());
+            deleting.setReadyStorage(k8sStatus.getReadyStorage());
+            deleting.setReadyGateway(k8sStatus.getReadyGateway());
+            deleting.setObservedGeneration(k8sStatus.getObservedGeneration());
+            deleting.setLastAction("DELETE:cluster");
+            deleting.setPhase("DELETING");
+            return new ReconcileResult(List.of(new OperatorAction(
+                    OperatorAction.ActionType.DELETE, "cluster",
+                    "delete owned workloads and services")), deleting);
+        }
+
         TieringKVClusterSpec spec = new TieringKVClusterSpec(
                 k8sSpec.getMetadataReplicas(),
                 k8sSpec.getStorageReplicas(),

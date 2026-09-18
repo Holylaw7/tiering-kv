@@ -57,7 +57,7 @@ class TieringKVOperatorTest {
         List<OperatorAction> actions = new ArrayList<>();
         TieringKVOperator operator =
                 new TieringKVOperator(kubernetesClient, client,
-                        actions::add);
+                        (resource, action) -> actions.add(action));
 
         K8sTieringKVCluster cluster = sampleCluster();
         K8sTieringKVCluster updated = operator.reconcileNow(cluster);
@@ -77,7 +77,7 @@ class TieringKVOperatorTest {
         FakeClient client = new FakeClient();
         TieringKVOperator operator =
                 new TieringKVOperator(kubernetesClient, client,
-                        action -> {
+                        (resource, action) -> {
                 });
         K8sTieringKVCluster cluster = sampleCluster();
         operator.reconcileNow(cluster);
@@ -92,6 +92,6 @@ class TieringKVOperatorTest {
         K8sTieringKVCluster updated = operator.reconcileNow(cluster);
         assertThat(updated.getStatus().getPhase())
                 .isEqualTo("READY");
-        assertThat(client.upserts).isEmpty(); // 状态推进不触发 upsert
+        assertThat(client.upserts).hasSize(1); // 仅首次 reconcile 写 finalizer
     }
 }
