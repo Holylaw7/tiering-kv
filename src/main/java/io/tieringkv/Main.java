@@ -17,6 +17,7 @@ import io.tieringkv.monitor.MetricsRegistry;
 import io.tieringkv.observability.BackupMetricsRegistry;
 import io.tieringkv.observability.MultiModelMetricsRegistry;
 import io.tieringkv.observability.ObservabilityRegistry;
+import io.tieringkv.observability.ServerInfoProvider;
 import io.tieringkv.observability.ReplicationMetricsRegistry;
 import io.tieringkv.observability.VectorMetricsRegistry;
 import io.tieringkv.network.tcp.TieringKvServer;
@@ -39,6 +40,9 @@ import io.tieringkv.storage.wal.WALStorageEngine;
 import io.tieringkv.vector.indexfile.VectorIndexStore;
 
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Supplier;
 import io.tieringkv.storage.memory.MemoryManager;
 import io.tieringkv.storage.memory.MemTable;
 
@@ -112,9 +116,17 @@ public final class Main {
         // M2 增强（ADR-0320）：VECTOR 值 put/delete 经存储层同步索引
         StorageEngine syncStorage = new VectorIndexSyncStorageEngine(
                 storage, vectorStore, observability.vector());
+        // 可观测性收敛（ADR-0355）：INFO 输出 Redis 兼容标准 section，
+        // 供 Web 控制台解析真实运行态
+        ServerInfoProvider serverInfo = new ServerInfoProvider(
+                metrics, memoryManager, syncStorage::size,
+                config.server().port(), ServerVersion.current());
+        Map<String, Supplier<String>> infoSections =
+                new HashMap<>(observability.infoSections());
+        infoSections.putAll(serverInfo.sections());
         CommandEngine commandEngine = new CommandEngine(
                 CommandRegistry.createDefaultWithVector(
-                        metrics::infoText, observability.infoSections(),
+                        serverInfo::render, Map.copyOf(infoSections),
                         vectorStore),
                 syncStorage, executor);
         TieringKvServer server = new TieringKvServer(
