@@ -6,6 +6,12 @@ COPY src ./src
 # ${os.detected.classifier}（os-maven-plugin 扩展在 go-offline 阶段不生效，
 # Phase 21 真实容器验证发现）。直接 package 走正常生命周期即可解析。
 RUN mvn -q -DskipTests package
+# 产物同时存在 tiering-kv-<ver>.jar 与 tiering-kv-<ver>-shaded.jar，
+# glob 会匹配多个文件，因此在构建阶段先挑出主构件并固定路径
+RUN set -e; \
+    jar=$(ls target/tiering-kv-*.jar | grep -v shaded | head -n1); \
+    test -n "$jar"; \
+    cp "$jar" /tmp/tiering-kv.jar
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
@@ -13,5 +19,5 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install -y --no-install-recommends iproute2 \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=build /build/target/tiering-kv-*.jar /app/tiering-kv.jar
+COPY --from=build /tmp/tiering-kv.jar /app/tiering-kv.jar
 ENTRYPOINT ["java", "-Xmx1g", "-jar", "/app/tiering-kv.jar"]

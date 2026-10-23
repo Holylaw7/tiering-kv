@@ -1,7 +1,8 @@
 # Tiering-KV
 
 > Redis 协议兼容的 LSM 冷热分层 KV 存储引擎（Mini Redis）——
-> 内存/磁盘分层 + 分布式事务 + 多模型值 + 向量检索 + SQL + 云原生运行时。
+> 内存/磁盘分层 + 分布式事务 + 多模型值 + 向量检索 + SQL + 云原生运行时，
+> 配套 **Vue 3 + Spring Boot 的 Web 运维管理平台**（前后端分离）。
 
 **版本：v4.1.0 GA（2026-08-16）** · **约 6,738 个测试方法、累计
 14,957 次测试执行 / 0 failures**（Surefire Tests run，含参数化
@@ -40,6 +41,57 @@ redis-cli -p 6379 GET k
 redis-cli -p 6379 INFO
 redis-cli -p 6379 INFO vector        # 可观测性 sections：vector/replication/multimodel/backup/tracing
 ```
+
+## Web 运维管理平台（前后端）
+
+`console-web`（Vue 3 + Vite + Element Plus + ECharts）与
+`console-server`（Spring Boot 3.3 + JPA + MySQL 8）构成独立的**控制面**：
+通过 RESP 协议纳管内核实例，提供认证授权、指标看板、键空间浏览、在线终端、
+告警、备份恢复与审计，不与数据面共享进程。
+
+![运行总览](console-web/screenshots/02-dashboard.png)
+
+| 模块 | 能力 |
+| --- | --- |
+| 认证 | JWT + BCrypt，ADMIN / OPS / VIEWER 三级角色，登录与写操作全审计 |
+| 总览 | 5s 采集 INFO，QPS/延迟/连接数/键数/内存水位趋势图，多实例切换 |
+| 实例 | 纳管、探测连通性与版本、连接池复用、口令不回显 |
+| 键空间 | SCAN 游标分页、类型识别（string/hash/list/set/zset/json/stream）、值查看与改写、TTL |
+| 终端 | 任意命令直连执行、危险命令拦截、历史回放 |
+| 告警 | 阈值 + 持续时长规则、触发/恢复闭环、事件人工处置 |
+| 备份 | 逻辑备份（SCAN → JSONL）、下载、按类型回放恢复 |
+| 审计 | 操作留痕（动作/对象/来源 IP/成败），按动作检索 |
+
+本地一键启动（Windows，PowerShell）：
+
+```powershell
+. .\scripts\env.ps1          # 固定 JDK 21
+. .\scripts\dev-up.ps1       # MySQL(3307) + 内核(6379) + 控制面(8080) + 前端(5173)
+```
+
+容器化部署（内核 + 控制面 + 前端 + MySQL）：
+
+```bash
+cd deploy/console && docker compose up -d --build
+# 控制台 http://localhost:8081
+```
+
+设计与接口文档：
+[架构](docs/design/console-platform-architecture.md) ·
+[数据模型](docs/design/console-data-model.md) ·
+[REST API](docs/api/console-rest-api.md) ·
+[ADR-0356](docs/adr/ADR-0356-web-console-control-plane.md) /
+[ADR-0357](docs/adr/ADR-0357-console-resp-client-and-metrics.md) /
+[ADR-0358](docs/adr/ADR-0358-logical-backup-format.md)
+
+### 验证证据
+
+| 层级 | 命令 | 结果 |
+| --- | --- | --- |
+| 控制面单元/接口测试 | `cd console-server && mvn test` | 40 用例通过（H2 + MockMvc） |
+| 接口端到端 | `node scripts/api-smoke.mjs` | 25 项断言通过 |
+| 前端构建与冒烟 | `cd console-web && npm run build && node scripts/smoke.mjs` | 构建通过 + 6 页截图 |
+| 负载演示 | `node scripts/demo-load.mjs --seconds 60 --conns 6` | 约 6.7 万 ops/s（本机） |
 
 分布式事务栈（coordinator/participant/metadata/gateway 五容器）：
 

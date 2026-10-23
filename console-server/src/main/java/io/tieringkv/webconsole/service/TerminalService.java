@@ -32,14 +32,16 @@ public class TerminalService {
     private final RespGateway gateway;
     private final TerminalHistoryRepository historyRepository;
     private final ConsoleProperties properties;
+    private final AuditService auditService;
 
     public TerminalService(InstanceService instanceService, RespGateway gateway,
                            TerminalHistoryRepository historyRepository,
-                           ConsoleProperties properties) {
+                           ConsoleProperties properties, AuditService auditService) {
         this.instanceService = instanceService;
         this.gateway = gateway;
         this.historyRepository = historyRepository;
         this.properties = properties;
+        this.auditService = auditService;
     }
 
     @Transactional
@@ -53,6 +55,8 @@ public class TerminalService {
         List<String> blocked = properties.getTerminal().getBlockedCommands().stream()
                 .map(cmd -> cmd.trim().toUpperCase(Locale.ROOT)).toList();
         if (blocked.contains(head)) {
+            auditService.record("TERMINAL_BLOCKED", instance.getName() + "/" + head,
+                    "命令被策略拦截", false);
             throw BusinessException.badRequest("该命令已被平台策略禁用：" + head);
         }
         long started = System.nanoTime();

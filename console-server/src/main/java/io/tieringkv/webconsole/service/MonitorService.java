@@ -28,6 +28,8 @@ public class MonitorService {
     private final MetricPointRepository metricRepository;
     private final DbInstanceRepository instanceRepository;
     private final AlertService alertService;
+    private static final long STATUS_PERSIST_INTERVAL_MS = 60_000L;
+    private final Map<Long, Long> lastPersistedAt = new java.util.concurrent.ConcurrentHashMap<>();
 
     public MonitorService(InstanceService instanceService, RespGateway gateway,
                           MetricPointRepository metricRepository,
@@ -102,19 +104,26 @@ public class MonitorService {
         markStatus(instance, status, null);
     }
 
+    /**
+     * 状态回写：状态/版本变化立即落库；否则最多每 60 秒刷新一次
+     * last_probe_at，避免 5 秒采集周期变成 5 秒一次写库。
+     */
     private void markStatus(DbInstance instance, InstanceStatus status, String version) {
-        if (instance.getStatus() == status
-                && (version == null || version.equals(instance.getVersion()))) {
-            instance.setLastProbeAt(LocalDateTime.now());
-            instanceRepository.save(instance);
+        LocalDateTime now = LocalDateTime.now();
+        instance.setLastProbeAt(now);
+        boolean changed = instance.getStatus() != status
+                || (version != null && !version.equals(instance.getVersion()));
+        long last = lastPersistedAt.getOrDefault(instance.getId(), 0L);
+        boolean due = System.currentTimeMillis() - last >= STATUS_PERSIST_INTERVAL_MS;
+        if (!changed && !due) {
             return;
         }
         instance.setStatus(status);
         if (version != null) {
             instance.setVersion(version);
         }
-        instance.setLastProbeAt(LocalDateTime.now());
         instanceRepository.save(instance);
+        lastPersistedAt.put(instance.getId(), System.currentTimeMillis());
     }
 
     private static long parseLong(String raw) {

@@ -253,7 +253,7 @@ const instances = computed(() => overview.value?.instances ?? instanceStore.list
           </template>
         </el-table-column>
         <el-table-column prop="lastProbeAt" label="最近探测" width="180" />
-        <el-table-column label="操作" width="110" fixed="right">
+        <el-table-column label="操作" width="110">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="probe(row.id)">探测</el-button>
           </template>

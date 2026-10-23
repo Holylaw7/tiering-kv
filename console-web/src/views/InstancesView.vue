@@ -120,8 +120,8 @@ onMounted(load)
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="140" show-overflow-tooltip />
-        <el-table-column prop="lastProbeAt" label="最近探测" width="180" />
-        <el-table-column label="操作" width="190" fixed="right">
+        <el-table-column prop="lastProbeAt" label="最近探测" width="200" />
+        <el-table-column label="操作" width="190">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="probe(row)">探测</el-button>
             <el-button v-if="auth.canOperate" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>

@@ -126,7 +126,7 @@ onMounted(async () => {
             </el-select>
             <el-button size="small" @click="loadEvents">刷新</el-button>
           </div>
-          <el-table :data="events" size="small">
+          <el-table :data="events" size="small" style="width: 100%">
             <el-table-column prop="ruleName" label="规则" min-width="140" />
             <el-table-column label="级别" width="90">
               <template #default="{ row }">
@@ -145,7 +145,7 @@ onMounted(async () => {
               </template>
             </el-table-column>
             <el-table-column prop="message" label="描述" min-width="240" show-overflow-tooltip />
-            <el-table-column prop="firedAt" label="触发时间" width="170" />
+            <el-table-column prop="firedAt" label="触发时间" width="185" />
             <el-table-column label="状态" width="100">
               <template #default="{ row }">
                 <el-tag :type="row.status === 'FIRING' ? 'danger' : 'success'" size="small">
@@ -153,7 +153,7 @@ onMounted(async () => {
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="100" fixed="right">
+            <el-table-column label="操作" width="110">
               <template #default="{ row }">
                 <el-button
                   v-if="row.status === 'FIRING' && auth.canOperate"
@@ -175,7 +175,7 @@ onMounted(async () => {
         </el-tab-pane>
 
         <el-tab-pane label="告警规则" name="rules">
-          <el-table :data="rules" size="small">
+          <el-table :data="rules" size="small" style="width: 100%">
             <el-table-column prop="name" label="规则名称" min-width="150" />
             <el-table-column label="作用范围" width="150">
               <template #default="{ row }">
@@ -201,7 +201,7 @@ onMounted(async () => {
                 <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '是' : '否' }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="140" fixed="right">
+            <el-table-column label="操作" width="140">
               <template #default="{ row }">
                 <el-button v-if="auth.canOperate" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
                 <el-button v-if="auth.canOperate" link type="danger" size="small" @click="removeRule(row)">删除</el-button>

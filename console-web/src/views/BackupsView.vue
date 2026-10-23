@@ -111,7 +111,7 @@ onMounted(load)
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="180" />
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" width="230">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="download(row)">下载</el-button>
             <el-button v-if="auth.isAdmin" link type="warning" size="small" :disabled="row.status !== 'SUCCESS'" @click="restore(row)">

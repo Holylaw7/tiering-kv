@@ -67,8 +67,20 @@ public class InstanceService {
     @Transactional
     public InstanceView update(Long id, InstanceRequest request) {
         DbInstance instance = require(id);
-        instance.setName(request.name().trim());
-        instance.setHost(request.host().trim());
+        String name = request.name().trim();
+        String host = request.host().trim();
+        repository.findByName(name)
+                .filter(other -> !other.getId().equals(id))
+                .ifPresent(other -> {
+                    throw BusinessException.conflict("实例名称已存在：" + name);
+                });
+        if (!host.equals(instance.getHost()) || request.port() != instance.getPort()) {
+            if (repository.existsByHostAndPort(host, request.port())) {
+                throw BusinessException.conflict("该地址已纳管：" + host + ":" + request.port());
+            }
+        }
+        instance.setName(name);
+        instance.setHost(host);
         instance.setPort(request.port());
         if (request.password() != null && !request.password().isBlank()) {
             instance.setPassword(request.password());

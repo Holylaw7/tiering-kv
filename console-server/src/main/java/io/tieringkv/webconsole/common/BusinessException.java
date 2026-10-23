@@ -32,6 +32,10 @@ public class BusinessException extends RuntimeException {
         return new BusinessException(502, 50200, message);
     }
 
+    public static BusinessException tooManyRequests(String message) {
+        return new BusinessException(429, 42900, message);
+    }
+
     public int getStatus() {
         return status;
     }

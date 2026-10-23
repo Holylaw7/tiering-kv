@@ -118,8 +118,8 @@ public class KeyspaceService {
             case "set" -> toList(execute(instance, "SMEMBERS", key));
             case "zset" -> toScoredList(execute(instance, "ZRANGE", key, "0", "-1", "WITHSCORES"));
             case "json" -> text(execute(instance, "JSON.GET", key));
-            case "stream" -> toRaw(execute(instance, "XRANGE", key, "-", "+", "COUNT", "50"));
-            case "timeseries" -> toRaw(execute(instance, "TS.RANGE", key, "-", "+"));
+            case "stream" -> safeDump(instance, "XRANGE", key, "-", "+", "COUNT", "50");
+            case "timeseries" -> safeDump(instance, "TS.RANGE", key, "-", "+");
             default -> null;
         };
     }
@@ -154,8 +154,17 @@ public class KeyspaceService {
         return result;
     }
 
-    private Object toRaw(RespReply reply) {
-        return reply;
+    /** 多模型类型的只读转储：命令不支持时降级为说明对象，不向前端抛 500。 */
+    private Object safeDump(DbInstance instance, String... args) {
+        try {
+            RespReply reply = gateway.execute(instance, args);
+            if (reply instanceof RespReply.Error error) {
+                return Map.of("unsupported", error.message());
+            }
+            return reply;
+        } catch (IOException ex) {
+            return Map.of("unsupported", "读取失败：" + ex.getMessage());
+        }
     }
 
     private RespReply execute(DbInstance instance, String... args) {
