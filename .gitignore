@@ -40,3 +40,12 @@ config/local/
 # ---- 临时文件 ----
 *.tmp
 *.swp
+
+# ---- Web 控制台平台 ----
+console-server/target/
+console-server/logs/
+console-web/node_modules/
+console-web/dist/
+console-web/.vite/
+console-web/coverage/
+.playwright/
