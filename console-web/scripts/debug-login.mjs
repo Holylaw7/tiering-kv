@@ -1,0 +1,15 @@
+import { chromium } from 'playwright'
+const BASE = process.env.SMOKE_BASE || 'http://127.0.0.1:4173'
+const browser = await chromium.launch()
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
+page.on('console', m => console.log('[console]', m.type(), m.text().slice(0, 200)))
+page.on('pageerror', e => console.log('[pageerror]', e.message))
+page.on('response', async r => { if (r.url().includes('/api/')) console.log('[api]', r.status(), r.url().slice(0, 80)) })
+await page.goto(BASE + '/#/login', { waitUntil: 'networkidle' })
+await page.fill('input[autocomplete="username"]', 'admin')
+await page.fill('input[autocomplete="current-password"]', 'admin123')
+await page.click('button:has-text("登 录")')
+await page.waitForTimeout(4000)
+console.log('url after:', page.url())
+console.log('toast:', await page.textContent('body').then(t => t.slice(0, 200)))
+await browser.close()

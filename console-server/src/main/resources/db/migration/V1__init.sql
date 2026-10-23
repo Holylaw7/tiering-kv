@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS alert_event (
     instance_id  BIGINT       NOT NULL,
     rule_name    VARCHAR(64)  NOT NULL,
     metric       VARCHAR(32)  NOT NULL,
-    value        DOUBLE       NOT NULL,
+    metric_value DOUBLE       NOT NULL COMMENT '观测值（列名避开保留字 value）',
     threshold    DOUBLE       NOT NULL,
     level        VARCHAR(8)   NOT NULL,
     message      VARCHAR(255) NOT NULL,

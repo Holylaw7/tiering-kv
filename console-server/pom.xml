@@ -104,7 +104,8 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
-                    <argLine>@{argLine} -Dfile.encoding=UTF-8</argLine>
+                    <!-- 不引用 @{argLine}：本模块未接入 JaCoCo，字面量会导致 fork 启动失败 -->
+                    <argLine>-Dfile.encoding=UTF-8</argLine>
                 </configuration>
             </plugin>
         </plugins>

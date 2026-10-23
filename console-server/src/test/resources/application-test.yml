@@ -1,0 +1,32 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:console;MODE=MySQL;DB_CLOSE_DELAY=-1;DATABASE_TO_LOWER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: Asia/Shanghai
+  flyway:
+    enabled: false
+
+console:
+  jwt:
+    secret: test-secret-key-for-unit-tests-0123456789abcdef
+    ttl-minutes: 60
+  metrics:
+    interval-ms: 3600000
+    initial-delay-ms: 3600000
+    connect-timeout-ms: 300
+    read-timeout-ms: 300
+  backup:
+    dir: ./target/test-backups
+
+logging:
+  level:
+    root: WARN
+    io.tieringkv.webconsole: WARN

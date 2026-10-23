@@ -32,7 +32,8 @@ public class AlertEvent {
     @Column(nullable = false, length = 32)
     private String metric;
 
-    @Column(nullable = false)
+    /** 列名避开 SQL 保留字 value（H2 兼容）。 */
+    @Column(name = "metric_value", nullable = false)
     private double value;
 
     @Column(nullable = false)

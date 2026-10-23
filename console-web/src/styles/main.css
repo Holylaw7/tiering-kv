@@ -1,0 +1,145 @@
+:root {
+  --console-bg: #0f1419;
+  --console-panel: #161c24;
+  --console-border: #232c37;
+  --console-accent: #35c98b;
+}
+
+html.dark {
+  --el-bg-color: #161c24;
+  --el-bg-color-page: #0f1419;
+  --el-bg-color-overlay: #1b232d;
+  --el-border-color: #2a3441;
+  --el-border-color-light: #232c37;
+  --el-fill-color-blank: #161c24;
+  --el-text-color-primary: #e6edf3;
+  --el-text-color-regular: #b8c4d0;
+  --el-color-primary: #35c98b;
+  --el-color-primary-light-3: #2fa878;
+  --el-color-primary-light-5: #24815c;
+  --el-color-primary-light-7: #1b5e44;
+  --el-color-primary-light-9: #123a2b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--console-bg);
+  color: var(--el-text-color-primary);
+  font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono {
+  font-family: 'JetBrains Mono', 'Cascadia Code', Consolas, monospace;
+}
+
+.page {
+  padding: 20px 24px 28px;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.page-title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  margin: 0;
+}
+
+.page-subtitle {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+}
+
+.panel {
+  background: var(--console-panel);
+  border: 1px solid var(--console-border);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+
+.panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.stat-card {
+  background: linear-gradient(160deg, #182029 0%, #141a21 100%);
+  border: 1px solid var(--console-border);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.stat-value {
+  font-size: 26px;
+  font-weight: 650;
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin-top: 6px;
+}
+
+.el-table {
+  --el-table-border-color: var(--console-border);
+  --el-table-header-bg-color: #131a21;
+  --el-table-tr-bg-color: var(--console-panel);
+  --el-table-row-hover-bg-color: #1d2732;
+}
+
+.el-card,
+.el-dialog {
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a3441;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}

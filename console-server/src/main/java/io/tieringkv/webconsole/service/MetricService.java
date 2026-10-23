@@ -1,6 +1,5 @@
 package io.tieringkv.webconsole.service;
 
-import io.tieringkv.webconsole.domain.DbInstance;
 import io.tieringkv.webconsole.domain.MetricPoint;
 import io.tieringkv.webconsole.repository.MetricPointRepository;
 import io.tieringkv.webconsole.support.InfoParser;
@@ -52,10 +51,6 @@ public class MetricService {
                     longValue(point.getMaxMemory())));
         }
         return result;
-    }
-
-    public Optional<DbInstance> noop() {
-        return Optional.empty();
     }
 
     private static double value(Double raw) {

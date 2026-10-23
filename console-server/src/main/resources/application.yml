@@ -49,7 +49,8 @@ console:
     secret: ${CONSOLE_JWT_SECRET:tiering-kv-console-dev-secret-key-change-me-please-0123456789}
     ttl-minutes: ${CONSOLE_JWT_TTL:720}
   cors:
-    allowed-origins: ${CONSOLE_CORS:http://localhost:5173,http://127.0.0.1:5173}
+    # 开发期 Vite（5173）与预览（4173）；生产由 Nginx 同源反代，无需跨域
+    allowed-origins: ${CONSOLE_CORS:http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173,http://127.0.0.1:4173}
   metrics:
     # 采集周期
     interval-ms: ${CONSOLE_METRICS_INTERVAL:5000}
