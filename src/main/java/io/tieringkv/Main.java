@@ -129,9 +129,12 @@ public final class Main {
                         serverInfo::render, Map.copyOf(infoSections),
                         vectorStore),
                 syncStorage, executor);
+        // 必须复用同一个 MetricsRegistry：否则 INFO 读取的实例与服务端
+        // 实际埋点的实例不是同一个，qps/连接数会恒为 0（TD-082）
         TieringKvServer server = new TieringKvServer(
                 serverConfig,
-                commandEngine);
+                commandEngine,
+                metrics);
         ShutdownManager shutdownManager = new ShutdownManager(
                 server, metrics, walManager, memTable, config.tiering().drainTimeoutMillis());
         server.start();
