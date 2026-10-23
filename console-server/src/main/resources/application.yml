@@ -1,0 +1,81 @@
+# Tiering-KV Web 控制台（控制面）配置
+server:
+  port: ${CONSOLE_PORT:8080}
+  shutdown: graceful
+  compression:
+    enabled: true
+
+spring:
+  application:
+    name: tiering-kv-console
+  datasource:
+    url: ${CONSOLE_DB_URL:jdbc:mysql://127.0.0.1:3307/tiering_console?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false&rewriteBatchedStatements=true}
+    username: ${CONSOLE_DB_USER:root}
+    password: ${CONSOLE_DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 5000
+  jpa:
+    hibernate:
+      # 库表由 Flyway 独占管理（单一事实来源），Hibernate 不做 DDL 与类型校验
+      ddl-auto: none
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: Asia/Shanghai
+          batch_size: 50
+        format_sql: false
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+  jackson:
+    default-property-inclusion: non_null
+    time-zone: Asia/Shanghai
+    date-format: yyyy-MM-dd HH:mm:ss
+  mvc:
+    problemdetails:
+      enabled: false
+  autoconfigure:
+    # 关闭默认内存用户，认证完全由 JWT 过滤器承担
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+
+console:
+  jwt:
+    # 生产环境必须通过环境变量覆盖
+    secret: ${CONSOLE_JWT_SECRET:tiering-kv-console-dev-secret-key-change-me-please-0123456789}
+    ttl-minutes: ${CONSOLE_JWT_TTL:720}
+  cors:
+    allowed-origins: ${CONSOLE_CORS:http://localhost:5173,http://127.0.0.1:5173}
+  metrics:
+    # 采集周期
+    interval-ms: ${CONSOLE_METRICS_INTERVAL:5000}
+    # 指标保留时长（小时），过期由清理任务删除
+    retention-hours: ${CONSOLE_METRICS_RETENTION:72}
+    # 单实例连接超时
+    connect-timeout-ms: 2000
+    read-timeout-ms: 3000
+  backup:
+    # 逻辑备份落盘目录（相对工作目录）
+    dir: ${CONSOLE_BACKUP_DIR:./backups}
+  terminal:
+    # 危险命令黑名单（逗号分隔，命中直接拒绝）
+    blocked-commands: ${CONSOLE_BLOCKED_COMMANDS:FLUSHALL,FLUSHDB,SHUTDOWN,DEBUG}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+
+logging:
+  level:
+    root: INFO
+    io.tieringkv.webconsole: INFO
+    org.hibernate.SQL: WARN
