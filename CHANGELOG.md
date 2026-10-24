@@ -3,6 +3,50 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [5.0.0] - 2026-10-24
+
+### Added
+
+- **Web 运维管理平台（前后端分离）**：新增 `console-server`
+  （Spring Boot 3.3 / JDK 21 / MySQL 8 / Flyway）与 `console-web`
+  （Vue 3 + TypeScript + Element Plus + ECharts）两个模块，提供
+  JWT + RBAC 认证、实例纳管与探测、5 秒指标采集与趋势看板、SCAN
+  键空间浏览（按类型展开值、TTL 编辑）、在线终端（危险命令拦截）、
+  告警规则与事件闭环、逻辑备份/下载/回放恢复、操作审计与保留策略、
+  登录失败限流。
+- INFO 补齐 Redis 兼容标准 section（server/clients/memory/stats/
+  keyspace，ADR-0355），控制台按标准口径解析运行态，不再自行估算。
+- 容器化交付：`deploy/console/docker-compose.yml`（内核 + 控制面 +
+  前端 + MySQL + Nginx 同源反代），构建期使用阿里云 Maven 镜像与
+  BuildKit 依赖缓存。
+- 交付脚本：`scripts/env.ps1`（JDK 21 固化）、`dev-up.ps1` /
+  `dev-down.ps1`、`quality-gates.ps1`、`api-smoke.mjs`、
+  `api-bench.mjs`、`demo-load.mjs`。
+- 文档：ADR-0356/0357/0358、`docs/design/console-platform-architecture.md`、
+  `docs/design/console-data-model.md`、`docs/api/console-rest-api.md`、
+  `docs/testing/console-test-report.md`。
+
+### Fixed
+
+- 服务端未复用调用方传入的 `MetricsRegistry`，INFO 读取的指标实例与
+  实际埋点实例不同，导致 qps / 连接数恒为 0（TD-082）。
+
+### Changed
+
+- 控制面库表由 Flyway 独占管理（`ddl-auto: none`），Hibernate 不再做
+  DDL 与类型校验；首次启动自动创建 admin 账号。
+- 采集状态回写节流（最多 60 秒一次），避免 5 秒采集周期变成写库风暴。
+
+### Verification
+
+- 内核全量回归：`Tests run: 14958, Failures: 0, Errors: 0, Skipped: 13`
+  （7 分 35 秒，JDK 21）。
+- 控制面 `45` 个用例（H2 + MockMvc）全绿；接口端到端 `25` 项断言，
+  本地栈与容器化部署各验证一遍。
+- 接口延迟（并发 8）：overview P95 25.49 ms、trends P95 10.13 ms、
+  instances P95 8.85 ms，目标 P95 < 200 ms。
+- 内核吞吐：`demo-load.mjs` 6 连接 70 秒 471.8 万次请求，约 6.7 万 ops/s。
+
 ## [Unreleased]
 
 ### Added
