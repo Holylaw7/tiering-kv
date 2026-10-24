@@ -43,8 +43,12 @@ if (Test-Port 6379) {
         mvn -o -B -q -DskipTests package
         Pop-Location
     }
-    $jar = Join-Path $repo 'target\tiering-kv-4.1.0-shaded.jar'
-    if (-not (Test-Path $jar)) { throw "未找到内核构件：$jar（先执行 mvn package）" }
+    # 不写死版本号：排除 original-* 后取最大的 jar（即 shade 后的可执行包）
+    $jar = Get-ChildItem (Join-Path $repo 'target') -Filter 'tiering-kv-*.jar' |
+        Where-Object { $_.Name -notlike 'original-*' } |
+        Sort-Object Length -Descending | Select-Object -First 1
+    if (-not $jar) { throw '未找到内核构件（先执行 mvn package）' }
+    $jar = $jar.FullName
     Start-Process -FilePath $java -WorkingDirectory $repo -WindowStyle Hidden `
         -ArgumentList @('-cp', $jar, 'io.tieringkv.Main') `
         -RedirectStandardOutput (Join-Path $logDir 'core.out.log') `
@@ -58,8 +62,10 @@ if (Test-Port 8080) {
     Write-Host '[dev-up] 控制面已在 8080 运行' -ForegroundColor Green
 } else {
     $consoleDir = Join-Path $repo 'console-server'
-    $consoleJar = Join-Path $consoleDir 'target\tiering-kv-console-1.0.0.jar'
-    if (-not $SkipBuild -or -not (Test-Path $consoleJar)) {
+    $consoleJar = Get-ChildItem (Join-Path $consoleDir 'target') -Filter 'tiering-kv-console-*.jar' -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -notlike '*.original' } |
+        Sort-Object Length -Descending | Select-Object -First 1
+    if (-not $SkipBuild -or -not $consoleJar) {
         Push-Location $consoleDir
         # 优先离线构建（依赖已在本地仓库）；失败再走镜像源联网构建
         mvn -o -B -q -DskipTests package
@@ -68,9 +74,12 @@ if (Test-Port 8080) {
             mvn -s maven-settings.xml -B -q -DskipTests package
         }
         Pop-Location
+        $consoleJar = Get-ChildItem (Join-Path $consoleDir 'target') -Filter 'tiering-kv-console-*.jar' |
+            Where-Object { $_.Name -notlike '*.original' } |
+            Sort-Object Length -Descending | Select-Object -First 1
     }
     Start-Process -FilePath $java -WorkingDirectory $consoleDir -WindowStyle Hidden `
-        -ArgumentList @('-jar', $consoleJar) `
+        -ArgumentList @('-jar', $consoleJar.FullName) `
         -RedirectStandardOutput (Join-Path $logDir 'console.out.log') `
         -RedirectStandardError (Join-Path $logDir 'console.err.log')
     if (-not (Wait-Port 8080 90)) { throw '控制面启动失败，见 logs/console.err.log' }

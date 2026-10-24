@@ -18,7 +18,7 @@ class VersionConsistencyTest {
     void pomHasRevisionProperty() throws Exception {
         String pom = Files.readString(Path.of("pom.xml"));
         assertThat(pom).contains("<revision>");
-        assertThat(pom).contains("4.1.0");
+        assertThat(pom).contains("5.0.2");
     }
 
     @Test

@@ -3,6 +3,19 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [5.0.2] - 2026-10-24
+
+### Changed
+
+- **版本号对齐**：`pom.xml` 的 `revision` 与 `console-server/pom.xml` 统一为
+  `5.0.2`，`ServerVersion.SOURCE_VERSION` 同步；此前 tag 已到 v5.x 而
+  pom 仍停留在 `4.1.0`，导致发布物名与版本号不一致。
+- 构建脚本不再写死构件名：`scripts/dev-up.ps1` 从 `target` 中按修改时间
+  挑选 `tiering-kv-*-shaded.jar` 与 `tiering-kv-console-*.jar`，后续
+  版本升级无需再改脚本。
+- `scripts/version-check.sh` 改为按当前版本动态定位发布说明
+  （`docs/release/v<version>-release-notes.md`），不再硬编码历史文件。
+
 ## [5.0.1] - 2026-10-24
 
 ### Fixed
