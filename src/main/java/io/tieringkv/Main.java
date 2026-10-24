@@ -128,7 +128,7 @@ public final class Main {
                 CommandRegistry.createDefaultWithVector(
                         serverInfo::render, Map.copyOf(infoSections),
                         vectorStore),
-                syncStorage, executor);
+                syncStorage, executor, memoryManager::isOverLimit);
         // 必须复用同一个 MetricsRegistry：否则 INFO 读取的实例与服务端
         // 实际埋点的实例不是同一个，qps/连接数会恒为 0（TD-082）
         TieringKvServer server = new TieringKvServer(

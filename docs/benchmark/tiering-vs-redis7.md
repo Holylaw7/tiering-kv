@@ -127,6 +127,23 @@ Error: Connection reset by peer
 3. 为 Netty 事件循环增加 `OutOfMemoryError` 兜底（关闭连接 + 记录 +
    触发主备切换/自愈），避免"进程活着但服务已死"的静默故障。
 
+### 4.2 修复与复测（v5.0.1 / ADR-0359）
+
+按 ADR-0359 实施三层防护后，在同一容器配置（`-Xmx512m` + 引擎 256 MB）
+下重跑原场景：
+
+| 步骤 | 修复前 | 修复后 |
+| --- | --- | --- |
+| 持续写入到超限 | 连接被重置 | 返回 `OOM command not allowed when used memory > 'maxmemory'.` |
+| 超限后 `PING` | 无响应 | `PONG` |
+| 超限后 `SET` | 连接重置 | 稳定返回 OOM 错误 |
+| `FLUSHALL` | 不可能（连接已死） | `OK` |
+| flush 后 `SET` | — | `OK` |
+| 服务端日志 | `OutOfMemoryError` + `Connection reset by peer` | 无 OOM / 无重置 |
+
+写入吞吐在进入压力前保持约 56–60k rps，超限后以错误码快速失败，
+不再拖垮进程。
+
 ## 5. 结论
 
 | 维度 | 结论 |
@@ -136,7 +153,7 @@ Error: Connection reset by peer
 | 键值内存 | 与 Redis 持平（+7%） |
 | 进程内存 | 约为 Redis 的 13×（JVM 开销），是最大短板 |
 | 冷热分层 | 迁移链路可用（SSTable 落盘），但内存上限未真正约束进程 |
-| 稳定性 | 受约束堆下会 OOM 并导致连接重置（新发现缺陷） |
+| 稳定性 | ~~受约束堆下会 OOM 并导致连接重置~~ → v5.0.1 起改为 OOM 拒绝（ADR-0359） |
 
 **答辩口径建议**：不要声称"比 Redis 快"或"比 Redis 省内存"，而应表述为
 "在协议兼容的前提下给出了一个可验证的 Java 实现，并量化了与 Redis

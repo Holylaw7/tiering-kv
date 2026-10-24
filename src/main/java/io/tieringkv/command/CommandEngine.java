@@ -25,18 +25,33 @@ public final class CommandEngine {
     private static final Map<String, byte[]> COMMAND_KEYS =
             new ConcurrentHashMap<>();
 
+    /** OOM 语义与 Redis 对齐：内存超限时拒绝写命令，读命令继续服务。 */
+    public static final String OOM_ERROR =
+            "OOM command not allowed when used memory > 'maxmemory'.";
+
     private final CommandRegistry registry;
     private final StorageEngine storage;
     private final KeyShardExecutor executor;
+    private final java.util.function.BooleanSupplier memoryPressure;
 
     public CommandEngine(CommandRegistry registry, StorageEngine storage) {
-        this(registry, storage, null);
+        this(registry, storage, null, null);
     }
 
     public CommandEngine(CommandRegistry registry, StorageEngine storage, KeyShardExecutor executor) {
+        this(registry, storage, executor, null);
+    }
+
+    /**
+     * @param memoryPressure 内存压力探针；返回 true 时拒绝写命令（可为 null）
+     */
+    public CommandEngine(CommandRegistry registry, StorageEngine storage,
+                         KeyShardExecutor executor,
+                         java.util.function.BooleanSupplier memoryPressure) {
         this.registry = registry;
         this.storage = storage;
         this.executor = executor;
+        this.memoryPressure = memoryPressure;
     }
 
     public RespValue execute(RespCommand command) {
@@ -51,6 +66,10 @@ public final class CommandEngine {
         Command handler = registry.find(name);
         if (handler == null) {
             return RespError.unknownCommand(name);
+        }
+        if (memoryPressure != null && WriteCommands.isRejectedUnderPressure(name)
+                && memoryPressure.getAsBoolean()) {
+            return new RespError(OOM_ERROR);
         }
         return handler.execute(command.args(), storage);
     }

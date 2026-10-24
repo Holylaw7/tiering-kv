@@ -3,6 +3,28 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [5.0.1] - 2026-10-24
+
+### Fixed
+
+- **内存超限导致进程假活（TD-083，ADR-0359）**：对比实测发现，JVM 堆
+  先于引擎计量触顶时会 `OutOfMemoryError`，事件循环线程死亡、连接被重置，
+  但进程仍显示存活。修复包含三层防护：
+  - `MemoryManager` 超限判定纳入真实堆占用（`-Xmx` × 0.9，可配），
+    判定前做限频 GC 以避免"删完数据仍拒绝写入"的自锁；
+  - `CommandEngine` 在压力下拒绝分配型写命令并返回
+    `OOM command not allowed when used memory > 'maxmemory'.`，
+    释放型命令（DEL/FLUSHALL/EXPIRE…）放行，读命令不受影响；
+  - `CommandHandler` 捕获 `OutOfMemoryError` 并关闭连接，避免事件
+    循环线程静默死亡。
+- 复测：原 OOM 场景下改为稳定返回错误码，`PING` 正常、`FLUSHALL` 后可
+  继续写入，日志无 OOM/重置（见 docs/benchmark/tiering-vs-redis7.md §4.2）。
+
+### Verification
+
+- 新增测试：`CommandEngineMemoryGuardTest`(5)、`WriteCommandsTest`(6)、
+  `MemoryManagerHeapLimitTest`(5)。
+
 ## [5.0.0] - 2026-10-24
 
 ### Added

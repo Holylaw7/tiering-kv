@@ -30,6 +30,9 @@ import java.util.concurrent.CompletionException;
 /** 命令入站处理器：解析请求 → 执行 → 写回；协议错误写入后关闭连接。 */
 public final class CommandHandler extends ChannelInboundHandlerAdapter {
 
+    private static final org.slf4j.Logger LOG =
+            org.slf4j.LoggerFactory.getLogger(CommandHandler.class);
+
     private final CommandEngine engine;
     private final MetricsRegistry metrics;
     private final ResponseSequencer sequencer = new ResponseSequencer();
@@ -90,6 +93,10 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
                 writeError(ctx, "ERR " + e.getMessage());
             } catch (BackpressureException e) {
                 writeError(ctx, "ERR " + e.getMessage());
+            } catch (OutOfMemoryError oom) {
+                // TD-083：堆耗尽时不能让事件循环线程静默死亡（进程还在、
+                // 连接全被重置）。此处关闭连接并记录，交由上层观测/重启。
+                handleOutOfMemory(ctx, oom);
             }
         } else {
             ctx.fireChannelRead(msg);
@@ -159,12 +166,22 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        if (cause instanceof OutOfMemoryError oom) {
+            handleOutOfMemory(ctx, oom);
+            return;
+        }
         Throwable root = unwrapProtocolError(cause);
         if (root instanceof RespProtocolException e) {
             writeProtocolErrorAndClose(ctx, e.getMessage());
         } else {
             ctx.close();
         }
+    }
+
+    /** OOM 兜底：记录后关闭连接，避免异常逃逸导致事件循环线程终止。 */
+    private static void handleOutOfMemory(ChannelHandlerContext ctx, OutOfMemoryError oom) {
+        LOG.error("命令执行期间堆内存耗尽，关闭连接 {}（TD-083）", ctx.channel(), oom);
+        ctx.close();
     }
 
     /** ByteToMessageDecoder 会把解码异常包装为 DecoderException，此处解包。 */
