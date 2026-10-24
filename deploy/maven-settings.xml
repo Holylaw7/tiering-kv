@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  构建期 Maven 镜像配置（内核镜像）。
+
+  背景：本机网络访问 repo.maven.apache.org 会返回 403（CDN 限流/封锁），
+  导致镜像内 mvn package 直接失败；改用阿里云公共镜像可稳定下载。
+  仅用于容器构建，不影响开发机 ~/.m2/settings.xml。
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+    <mirrors>
+        <mirror>
+            <id>aliyun-public</id>
+            <name>Aliyun Public</name>
+            <url>https://maven.aliyun.com/repository/public</url>
+            <mirrorOf>central</mirrorOf>
+        </mirror>
+    </mirrors>
+</settings>

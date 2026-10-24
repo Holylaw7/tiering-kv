@@ -1,10 +1,13 @@
 # 控制面后端（Spring Boot 3.3 / JDK 21）
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /build
+# 构建期走阿里云镜像：本机网络直连 Maven Central 返回 403
+COPY maven-settings.xml /tmp/maven-settings.xml
 COPY pom.xml .
-RUN mvn -B -q dependency:go-offline || true
 COPY src ./src
-RUN mvn -B -q -DskipTests package
+# BuildKit 缓存挂载：重复构建不再重新下载依赖
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn -s /tmp/maven-settings.xml -B -q -DskipTests package
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app

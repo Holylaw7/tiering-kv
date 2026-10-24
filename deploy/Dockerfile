@@ -1,11 +1,14 @@
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /build
+# 构建期走阿里云镜像：本机网络直连 Maven Central 返回 403（CDN 限流）
+COPY deploy/maven-settings.xml /tmp/maven-settings.xml
 COPY pom.xml .
 COPY src ./src
 # 注意：不能用 dependency:go-offline —— 它无法解析 netty-tcnative 的
 # ${os.detected.classifier}（os-maven-plugin 扩展在 go-offline 阶段不生效，
 # Phase 21 真实容器验证发现）。直接 package 走正常生命周期即可解析。
-RUN mvn -q -DskipTests package
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn -s /tmp/maven-settings.xml -q -DskipTests package
 # 产物同时存在 tiering-kv-<ver>.jar 与 tiering-kv-<ver>-shaded.jar，
 # glob 会匹配多个文件，因此在构建阶段先挑出主构件并固定路径
 RUN set -e; \

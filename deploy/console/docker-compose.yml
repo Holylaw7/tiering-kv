@@ -50,6 +50,10 @@ services:
       CONSOLE_DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-tk_root_pwd}
       CONSOLE_JWT_SECRET: ${CONSOLE_JWT_SECRET:-change-me-in-production-0123456789abcdef}
       CONSOLE_BACKUP_DIR: /app/backups
+      # 直接访问 :8080 时的允许来源（经 Nginx 同源访问不需要）
+      CONSOLE_CORS: http://localhost:8081,http://127.0.0.1:8081
+      # 数据面在另一个容器：修正默认实例地址（本机开发时留空即可）
+      CONSOLE_BOOTSTRAP_INSTANCE: local-6379@tiering-kv:6379
     depends_on:
       mysql:
         condition: service_healthy

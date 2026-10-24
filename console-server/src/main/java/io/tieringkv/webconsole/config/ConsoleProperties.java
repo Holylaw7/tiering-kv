@@ -14,6 +14,7 @@ public class ConsoleProperties {
     private final Metrics metrics = new Metrics();
     private final Backup backup = new Backup();
     private final Terminal terminal = new Terminal();
+    private final Bootstrap bootstrap = new Bootstrap();
 
     public Jwt getJwt() {
         return jwt;
@@ -33,6 +34,23 @@ public class ConsoleProperties {
 
     public Terminal getTerminal() {
         return terminal;
+    }
+
+    public Bootstrap getBootstrap() {
+        return bootstrap;
+    }
+
+    /** 启动引导：{@code name@host:port}，为空则沿用数据库中的实例。 */
+    public static class Bootstrap {
+        private String instance;
+
+        public String getInstance() {
+            return instance;
+        }
+
+        public void setInstance(String instance) {
+            this.instance = instance;
+        }
     }
 
     public static class Jwt {
