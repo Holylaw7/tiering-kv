@@ -61,7 +61,12 @@ if (Test-Port 8080) {
     $consoleJar = Join-Path $consoleDir 'target\tiering-kv-console-1.0.0.jar'
     if (-not $SkipBuild -or -not (Test-Path $consoleJar)) {
         Push-Location $consoleDir
-        mvn -B -q -DskipTests package
+        # 优先离线构建（依赖已在本地仓库）；失败再走镜像源联网构建
+        mvn -o -B -q -DskipTests package
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host '[dev-up] 离线构建失败，改用阿里云镜像联网构建' -ForegroundColor Yellow
+            mvn -s maven-settings.xml -B -q -DskipTests package
+        }
         Pop-Location
     }
     Start-Process -FilePath $java -WorkingDirectory $consoleDir -WindowStyle Hidden `

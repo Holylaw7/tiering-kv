@@ -11,6 +11,8 @@ export default defineConfig({
     }
   },
   server: {
+    // 显式绑定 IPv4，避免 Windows 上 localhost 只解析到 ::1 导致 127.0.0.1 拒绝连接
+    host: '127.0.0.1',
     port: 5173,
     // 避免 watcher 监视截图/脚本目录导致 Windows 下 EBUSY 崩溃
     watch: {
