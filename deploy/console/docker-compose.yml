@@ -1,0 +1,85 @@
+# Tiering-KV 全栈一键部署：内核 + 控制面 + 前端 + MySQL
+# 用法：cd deploy/console && docker compose up -d --build
+# 访问：http://localhost:8081 （控制台） / 127.0.0.1:6379 （RESP）
+name: tiering-kv-console
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: tk-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-tk_root_pwd}
+      MYSQL_DATABASE: tiering_console
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-tk_root_pwd}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - tk-net
+
+  tiering-kv:
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile
+    container_name: tk-core
+    # 单机数据面：直接跑 io.tieringkv.Main（镜像默认 ENTRYPOINT 是集群版 ClusterMain）
+    entrypoint: ["java", "-Xmx1g", "-cp", "/app/tiering-kv.jar", "io.tieringkv.Main"]
+    working_dir: /app
+    ports:
+      - "6379:6379"
+    volumes:
+      - ../../config:/app/config:ro
+      - core-data:/app/data
+    networks:
+      - tk-net
+
+  console-server:
+    build:
+      context: ../../console-server
+    container_name: tk-console
+    environment:
+      CONSOLE_DB_URL: jdbc:mysql://mysql:3306/tiering_console?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+      CONSOLE_DB_USER: root
+      CONSOLE_DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-tk_root_pwd}
+      CONSOLE_JWT_SECRET: ${CONSOLE_JWT_SECRET:-change-me-in-production-0123456789abcdef}
+      CONSOLE_BACKUP_DIR: /app/backups
+      # 直接访问 :8080 时的允许来源（经 Nginx 同源访问不需要）
+      CONSOLE_CORS: http://localhost:8081,http://127.0.0.1:8081
+      # 数据面在另一个容器：修正默认实例地址（本机开发时留空即可）
+      CONSOLE_BOOTSTRAP_INSTANCE: local-6379@tiering-kv:6379
+    depends_on:
+      mysql:
+        condition: service_healthy
+      tiering-kv:
+        condition: service_started
+    volumes:
+      - console-backups:/app/backups
+    networks:
+      - tk-net
+
+  console-web:
+    build:
+      context: ../../console-web
+    container_name: tk-web
+    ports:
+      - "8081:80"
+    depends_on:
+      - console-server
+    networks:
+      - tk-net
+
+volumes:
+  mysql-data:
+  core-data:
+  console-backups:
+
+networks:
+  tk-net:
+    driver: bridge
