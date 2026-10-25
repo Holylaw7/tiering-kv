@@ -5,6 +5,37 @@ set -euo pipefail
 # 注意：不得在开头无条件输出模板（曾导致每个版本都拼接 v1.0 内容）。
 VERSION=${1:-v1.0.0-rc1}
 
+# v5 起：发布说明统一放在 docs/release/v<version>-release-notes.md，
+# 缺失时从 CHANGELOG 对应版本段落抽取，再退化到最小占位。
+# 这样新增版本无需再往本脚本里追加分支。
+if [[ "${VERSION}" == v5* || "${VERSION}" == v6* ]]; then
+  NOTES_FILE="docs/release/${VERSION}-release-notes.md"
+  if [[ -f "${NOTES_FILE}" ]]; then
+    cat "${NOTES_FILE}"
+    exit 0
+  fi
+  VER_NO_V="${VERSION#v}"
+  EXTRACTED=$(awk -v ver="${VER_NO_V}" '
+    $0 ~ "^## \\[" ver "\\]" { flag=1; print; next }
+    flag && /^## \[/ { exit }
+    flag { print }
+  ' CHANGELOG.md)
+  if [[ -n "${EXTRACTED}" ]]; then
+    echo "# Tiering-KV ${VERSION} Release Notes"
+    echo
+    echo "${EXTRACTED}"
+    exit 0
+  fi
+  cat <<EOF
+# Tiering-KV ${VERSION} Release Notes
+
+## 说明
+
+本版本未提供独立发布说明，详见 CHANGELOG.md 与 docs/release/。
+EOF
+  exit 0
+fi
+
 if [[ "${VERSION}" == v1.0.0* ]]; then
   # 支持 v1.0.0-rc* / v1.0.0 发布标签
   cat <<EOF

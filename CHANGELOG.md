@@ -3,6 +3,19 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [5.0.3] - 2026-10-24
+
+### Changed
+
+- **发布链路自动化（ADR-0360）**：`release.yml` 标签触发从逐版本硬编码改为
+  `tags: ["v*"]`，任意 v* 标签都会自动执行 三分片测试 → Benchmark →
+  Trivy → GHCR 镜像 → Release（checkpoint-*/phase-* 不匹配）。
+- 发布门禁新增 **console 作业**：控制面 `mvn test` + 前端
+  `npm ci && npm run build`，避免"内核绿、前后端破"的发布。
+- `scripts/release-notes.sh` 支持 v5/v6：优先读
+  `docs/release/v<version>-release-notes.md`，缺失时从 CHANGELOG 抽取，
+  新增版本不再需要往脚本追加分支。
+
 ## [5.0.2] - 2026-10-24
 
 ### Changed

@@ -4,7 +4,7 @@
 > 内存/磁盘分层 + 分布式事务 + 多模型值 + 向量检索 + SQL + 云原生运行时，
 > 配套 **Vue 3 + Spring Boot 的 Web 运维管理平台**（前后端分离）。
 
-**版本：v5.0.2（2026-10-24）** · **约 6,738 个测试方法、累计
+**版本：v5.0.3（2026-10-24）** · **约 6,738 个测试方法、累计
 14,957 次测试执行 / 0 failures**（Surefire Tests run，含参数化
 invocation；口径见 [docs/testing/measurement-conventions.md](
 docs/testing/measurement-conventions.md)） ·
@@ -139,6 +139,7 @@ Kubernetes：`deploy/kubernetes/*.yaml` + Operator（fabric8 6.13.4）。
 | v4.1.0 | 2026-08-16 | P4 工程现代化（JDK 21/命令目录）+ 可观测性收口 + 依赖升级 + 发布门禁加固 + 容器级磁盘混沌闭环（TD-046/049）；技术债 49/49 全部关闭 |
 | v5.0.0 | 2026-10-24 | Web 运维管理平台（Vue 3 + Spring Boot）+ INFO 标准 section（ADR-0355）+ MetricsRegistry 接线修复（TD-082） |
 | v5.0.1 | 2026-10-24 | 内存超限改为 OOM 拒绝，修复进程假活（TD-083，ADR-0359） |
+| v5.0.3 | 2026-10-24 | 发布链路自动化：任意 v* 标签自动发版，门禁加控制面与前端作业（ADR-0360） |
 | v5.0.2 | 2026-10-24 | 版本号对齐：pom / 脚本 / 文档统一到 5.0.2，构建脚本不再写死构件名 |
 | v4.1.0 维护补丁 | 2026-08-16 | 生产链 TTL 修复（ADR-0351）+ 集群复制原子操作（ADR-0352，TD-081）+ 选举窗口/CI 稳定性加固（ADR-0353）+ RPC ERROR 帧 term 污染修复（ADR-0354）；技术债 50/50；约 6,738 个测试方法 / 14,957 次测试执行全绿 |
 
