@@ -7,8 +7,9 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <!-- 3.5.x：3.3.5 的传递依赖在 2026 版漏洞库下有 67 项（含 9 CRITICAL），
-             升级到当前 3.5 线以收敛 Trivy 发布门禁告警。 -->
+        <!-- 3.5.x：3.3.5 的传递依赖在 2026 版漏洞库下有 67 项告警（含 9 CRITICAL）。
+             注：Boot 4 走 Jackson 3（tools.jackson 包名），迁移面较大，
+             见 ADR-0360 与 TD-085。 -->
         <version>3.5.16</version>
         <relativePath/>
     </parent>
@@ -24,12 +25,10 @@
         <jjwt.version>0.12.6</jjwt.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- Trivy 发布门禁要求的修复版本（2026-10 版漏洞库）：
-             tomcat 10.1.58 修 CVE-2026-65182（CRITICAL），
-             jackson 2.21.4 修 CVE-2026-89407，logback 1.5.34 修 CVE-2026-9828。 -->
-        <!-- 10.1.58 未同步到镜像源，取同一条修复线上的 10.1.61（CVE-2026-65182
-             修复自 10.1.58 起，10.1.59+ 均包含） -->
+             tomcat 10.1.58 修 CVE-2026-65182（镜像源缺 10.1.58，取 10.1.61）、
+             jackson 2.21.7 修 CVE-2026-89407、logback 1.5.34 修 CVE-2026-9828。 -->
         <tomcat.version>10.1.61</tomcat.version>
-        <jackson-bom.version>2.21.4</jackson-bom.version>
+        <jackson-bom.version>2.21.7</jackson-bom.version>
         <logback.version>1.5.34</logback.version>
     </properties>
 
