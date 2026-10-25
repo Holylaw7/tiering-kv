@@ -28,23 +28,28 @@ function Step([string]$Name, [scriptblock]$Action) {
 
 . (Join-Path $PSScriptRoot 'env.ps1') | Out-Null
 
+# 本机网络访问 Maven Central 会 403：若仓库内带镜像配置则优先使用
+$settings = @()
+$mirror = Join-Path $repo 'console-server\maven-settings.xml'
+if (Test-Path $mirror) { $settings = @('-s', $mirror) }
+
 Step '内核编译' {
     Push-Location $repo
-    mvn -o -B -q -DskipTests compile
+    mvn $settings -o -B -q -DskipTests compile
     Pop-Location
 }
 
 if ($Full) {
     Step '内核全量测试' {
         Push-Location $repo
-        mvn -o -B '-Dsurefire.excludedGroups=benchmark' test
+        mvn $settings -o -B '-Dsurefire.excludedGroups=benchmark' test
         Pop-Location
     }
 }
 
 Step '控制面测试' {
     Push-Location (Join-Path $repo 'console-server')
-    mvn -B -o test
+    mvn $settings -B -o test
     Pop-Location
 }
 

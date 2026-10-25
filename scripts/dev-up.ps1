@@ -40,7 +40,11 @@ if (Test-Port 6379) {
 } else {
     if (-not $SkipBuild) {
         Push-Location $repo
-        mvn -o -B -q -DskipTests package
+        # 本机 Central 403：有镜像配置时优先使用（见 console-server/maven-settings.xml）
+        $mirror = Join-Path $repo 'console-server\maven-settings.xml'
+        $settings = @()
+        if (Test-Path $mirror) { $settings = @('-s', $mirror) }
+        mvn $settings -o -B -q -DskipTests package
         Pop-Location
     }
     # 不写死版本号：排除 original-* 后取最大的 jar（即 shade 后的可执行包）

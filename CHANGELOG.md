@@ -5,6 +5,14 @@
 
 ## [5.0.3] - 2026-10-24
 
+### Fixed
+
+- **依赖安全升级**：`netty` 4.1.136.Final → **4.1.137.Final**（修复 CRITICAL
+  CVE-2026-75595 SNI 路由绕过）、`jackson` 2.18.9 → **2.18.11**（修复
+  jackson-databind 多个 HIGH/MEDIUM）。由发布门禁的 Trivy 扫描发现。
+- `quality-gates.ps1` / `dev-up.ps1` 在本机直连 Maven Central 返回 403 时
+  自动使用仓库内镜像配置（`console-server/maven-settings.xml`）。
+
 ### Changed
 
 - **发布链路自动化（ADR-0360）**：`release.yml` 标签触发从逐版本硬编码改为
