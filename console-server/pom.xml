@@ -23,8 +23,13 @@
         <java.version>21</java.version>
         <jjwt.version>0.12.6</jjwt.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <!-- logback 仍显式覆盖到 1.5.34（CVE-2026-9828）；jackson 由 3.5.x
-             的 BOM 管理（≥2.19）。 -->
+        <!-- Trivy 发布门禁要求的修复版本（2026-10 版漏洞库）：
+             tomcat 10.1.58 修 CVE-2026-65182（CRITICAL），
+             jackson 2.21.4 修 CVE-2026-89407，logback 1.5.34 修 CVE-2026-9828。 -->
+        <!-- 10.1.58 未同步到镜像源，取同一条修复线上的 10.1.61（CVE-2026-65182
+             修复自 10.1.58 起，10.1.59+ 均包含） -->
+        <tomcat.version>10.1.61</tomcat.version>
+        <jackson-bom.version>2.21.4</jackson-bom.version>
         <logback.version>1.5.34</logback.version>
     </properties>
 

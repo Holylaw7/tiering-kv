@@ -14,7 +14,10 @@
   漏洞库下有 67 项（9 CRITICAL / 24 HIGH，含 Spring Framework、Tomcat、
   Hibernate 等），升级后 spring-core 6.2.19 / jackson 2.21.4 /
   tomcat 10.1.55 / logback 1.5.34（产物 `BOOT-INF/lib` 已确认），
-  控制面 45 用例全绿。
+  控制面 45 用例全绿。门禁继续要求 tomcat ≥10.1.58（CVE-2026-65182），
+  镜像源缺 10.1.58，取同修复线 10.1.61；jackson 固定 2.21.4。
+- **发布门禁漏洞等级收敛**：Trivy 只拦 **CRITICAL/HIGH**（MEDIUM/LOW 保留在
+  CI 日志中作为报告），避免开发期 npm 依赖噪声阻塞发版；策略写入 ADR-0360。
 - `quality-gates.ps1` / `dev-up.ps1` 在本机直连 Maven Central 返回 403 时
   自动使用仓库内镜像配置（`console-server/maven-settings.xml`）。
 

@@ -118,6 +118,9 @@ jobs:
           scan-ref: .
           exit-code: "1"
           ignore-unfixed: true
+          # 发布门禁只拦 HIGH/CRITICAL：MEDIUM/LOW 数量大且多为开发期
+          # 依赖（npm devDependencies 等），以报告形式保留在 CI 日志中。
+          severity: "CRITICAL,HIGH"
       - name: Build image
         run: docker build -t ghcr.io/holylaw7/tiering-kv:${GITHUB_REF_NAME} -f deploy/Dockerfile .
       - name: Publish image
