@@ -10,6 +10,9 @@
 - **依赖安全升级**：`netty` 4.1.136.Final → **4.1.137.Final**（修复 CRITICAL
   CVE-2026-75595 SNI 路由绕过）、`jackson` 2.18.9 → **2.18.11**（修复
   jackson-databind 多个 HIGH/MEDIUM）。由发布门禁的 Trivy 扫描发现。
+- **控制面传递依赖覆盖**：Spring Boot 3.3.5 默认带入 jackson 2.17.2 /
+  logback 1.5.33，Trivy 报告 HIGH/CVE；在 `console-server/pom.xml` 覆盖
+  `jackson-bom.version=2.18.11`、`logback.version=1.5.34`（构建产物内已确认）。
 - `quality-gates.ps1` / `dev-up.ps1` 在本机直连 Maven Central 返回 403 时
   自动使用仓库内镜像配置（`console-server/maven-settings.xml`）。
 
