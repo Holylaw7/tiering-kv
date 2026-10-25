@@ -7,7 +7,9 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.3.5</version>
+        <!-- 3.5.x：3.3.5 的传递依赖在 2026 版漏洞库下有 67 项（含 9 CRITICAL），
+             升级到当前 3.5 线以收敛 Trivy 发布门禁告警。 -->
+        <version>3.5.16</version>
         <relativePath/>
     </parent>
 
@@ -21,9 +23,8 @@
         <java.version>21</java.version>
         <jjwt.version>0.12.6</jjwt.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <!-- 覆盖 Spring Boot 3.3.5 管理的传递依赖版本：Trivy 发布门禁要求
-             jackson ≥2.18.11、logback ≥1.5.34（CVE-2026-89407/89425/9828）。 -->
-        <jackson-bom.version>2.18.11</jackson-bom.version>
+        <!-- logback 仍显式覆盖到 1.5.34（CVE-2026-9828）；jackson 由 3.5.x
+             的 BOM 管理（≥2.19）。 -->
         <logback.version>1.5.34</logback.version>
     </properties>
 
