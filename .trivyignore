@@ -1,14 +1,14 @@
-# Trivy 已知例外（ADR-0360）
+# Trivy 已知例外（ADR-0360 / TD-085）
 #
-# 发布门禁的漏洞扫描只拦 CRITICAL/HIGH；以下条目经评估后接受，
-# 并登记为技术债 TD-085，待 Spring Framework 7 迁移时一并消除。
+# 发布门禁只拦 CRITICAL/HIGH；以下条目经评估后接受，待 Spring Framework 7
+# 迁移时一并消除。
 #
-# CVE-2026-47884（spring-webmvc 6.2.19，CRITICAL）
-#   - 修复版本只有 7.0.9（Spring Framework 7）；6.2.x 线未回补。
-#   - 采用 Spring Framework 7 需要升级到 Spring Boot 4，而 Boot 4 切换到
-#     Jackson 3（包名由 com.fasterxml.jackson 变为 tools.jackson），
-#     属于控制面整体迁移，不在本阶段范围内。
-#   - 暴露面评估：控制面为内网单实例部署、无公网入口，且该漏洞需要攻击者
-#     可控的请求映射表达式；本项目的 Controller 映射全部为静态字面量。
-#   - 结论：接受风险并记录，跟踪上游 6.2.x 回补。
-CVE-2026-47884
+# CVE-2026-47890（spring-webmvc 6.2.19，CRITICAL）
+#   - 修复版本只有 7.0.9（Spring Framework 7），6.2.x 线未回补。
+#   - 采用 Spring Framework 7 需升级 Spring Boot 4；Boot 4 切换为 Jackson 3
+#     （包名 com.fasterxml.jackson → tools.jackson），属控制面整体迁移，
+#     不在本阶段范围内（已登记 TD-085）。
+#   - 暴露面评估：控制面内网单实例部署、无公网入口；Controller 映射全部为
+#     静态字面量（无 SpEL/动态映射），攻击面极小。
+#   - 处置：接受并记录，跟踪上游 6.2.x 回补；迁移 Boot 4 时移除本忽略。
+CVE-2026-47890
