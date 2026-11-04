@@ -6,6 +6,9 @@ import io.tieringkv.webconsole.repository.UserRepository;
 import io.tieringkv.webconsole.security.JwtService;
 import io.tieringkv.webconsole.security.LoginAttemptGuard;
 import io.tieringkv.webconsole.security.SecurityUtils;
+import io.tieringkv.webconsole.security.SecurityUtils;
+import io.tieringkv.webconsole.security.UserPrincipal;
+import io.tieringkv.webconsole.web.dto.ChangePasswordRequest;
 import io.tieringkv.webconsole.web.dto.LoginRequest;
 import io.tieringkv.webconsole.web.dto.LoginResponse;
 import io.tieringkv.webconsole.web.dto.UserView;
@@ -63,6 +66,30 @@ public class AuthService {
         String token = jwtService.issue(user);
         auditService.record("LOGIN", user.getUsername(), "登录成功", true);
         return new LoginResponse(token, jwtService.ttl().toSeconds(), UserView.of(user));
+    }
+
+    /**
+     * 自助修改口令（TD-087）：校验原口令 → 更新散列 → 审计留痕。
+     *
+     * <p>注意：JWT 无状态，已签发的令牌在过期前仍然有效（限制已记录在
+     * 发布说明中）；如需即时失效需引入令牌版本号。
+     */
+    @Transactional
+    public void changePassword(ChangePasswordRequest request) {
+        UserPrincipal principal = SecurityUtils.currentUser();
+        User user = userRepository.findById(principal.id())
+                .orElseThrow(() -> BusinessException.unauthorized("用户不存在"));
+        if (!passwordEncoder.matches(request.oldPassword(), user.getPassword())) {
+            auditService.record("PASSWORD_CHANGE", user.getUsername(), "原口令错误", false);
+            throw BusinessException.badRequest("原口令不正确");
+        }
+        if (passwordEncoder.matches(request.newPassword(), user.getPassword())) {
+            throw BusinessException.badRequest("新口令不能与原口令相同");
+        }
+        user.setPassword(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
+        attemptGuard.recordSuccess(user.getUsername());
+        auditService.record("PASSWORD_CHANGE", user.getUsername(), "自助修改", true);
     }
 
     public UserView currentUser() {

@@ -8,7 +8,9 @@ import type {
 export const authApi = {
   login: (username: string, password: string) =>
     http.post<unknown, LoginResponse>('/auth/login', { username, password }),
-  me: () => http.get<unknown, UserView>('/auth/me')
+  me: () => http.get<unknown, UserView>('/auth/me'),
+  changePassword: (oldPassword: string, newPassword: string) =>
+    http.post<unknown, void>('/auth/password', { oldPassword, newPassword })
 }
 
 export const userApi = {

@@ -137,6 +137,11 @@
 
 ### Added
 
+- **自助修改口令（TD-087）**：`POST /api/v1/auth/password`（校验原口令、
+  禁止与旧口令相同、审计留痕），前端顶栏下拉新增"修改口令"对话框。
+  任意角色均可使用，不再依赖管理员重置。新增 5 个接口用例；控制面共 50 例。
+  JWT 无状态，改密后已签发令牌在过期前仍有效（已知限制，待引入令牌版本号）。
+
 - 可复现基准体系（docs/benchmark/reproducible-benchmark-guide.md +
   scripts/reproducible-benchmark.sh）：把四组简历核心数字固化为固定
   workload/轮次/环境快照协议；新增 NetworkEndToEndLatencyBenchmarkTest

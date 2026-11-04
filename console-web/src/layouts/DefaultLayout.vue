@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { useInstanceStore } from '@/stores/instance'
+import { authApi } from '@/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -25,11 +26,50 @@ const menus = computed(() => {
 
 const currentTitle = computed(() => String(route.meta?.title ?? ''))
 
+// 自助修改口令
+const passwordVisible = ref(false)
+const passwordLoading = ref(false)
+const passwordForm = reactive({ oldPassword: '', newPassword: '', confirm: '' })
+
+function openPassword() {
+  passwordForm.oldPassword = ''
+  passwordForm.newPassword = ''
+  passwordForm.confirm = ''
+  passwordVisible.value = true
+}
+
+async function submitPassword() {
+  if (!passwordForm.oldPassword || !passwordForm.newPassword) {
+    ElMessage.warning('请填写原口令与新口令')
+    return
+  }
+  if (passwordForm.newPassword.length < 6) {
+    ElMessage.warning('新口令至少 6 位')
+    return
+  }
+  if (passwordForm.newPassword !== passwordForm.confirm) {
+    ElMessage.warning('两次输入的新口令不一致')
+    return
+  }
+  passwordLoading.value = true
+  try {
+    await authApi.changePassword(passwordForm.oldPassword, passwordForm.newPassword)
+    ElMessage.success('口令已更新')
+    passwordVisible.value = false
+  } finally {
+    passwordLoading.value = false
+  }
+}
+
 onMounted(() => {
   instanceStore.load().catch(() => undefined)
 })
 
 async function handleCommand(command: string) {
+  if (command === 'password') {
+    openPassword()
+    return
+  }
   if (command === 'logout') {
     await ElMessageBox.confirm('确认退出登录？', '提示', { type: 'warning' })
     auth.logout()
@@ -108,7 +148,8 @@ function onInstanceChange(value: number) {
             </span>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="logout">退出登录</el-dropdown-item>
+                <el-dropdown-item command="password">修改口令</el-dropdown-item>
+                <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -123,6 +164,24 @@ function onInstanceChange(value: number) {
         </router-view>
       </el-main>
     </el-container>
+
+    <el-dialog v-model="passwordVisible" title="修改口令" width="420px">
+      <el-form label-width="90px" @submit.prevent>
+        <el-form-item label="原口令">
+          <el-input v-model="passwordForm.oldPassword" type="password" show-password autocomplete="current-password" />
+        </el-form-item>
+        <el-form-item label="新口令">
+          <el-input v-model="passwordForm.newPassword" type="password" show-password autocomplete="new-password" placeholder="至少 6 位" />
+        </el-form-item>
+        <el-form-item label="确认新口令">
+          <el-input v-model="passwordForm.confirm" type="password" show-password autocomplete="new-password" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="passwordVisible = false">取消</el-button>
+        <el-button type="primary" :loading="passwordLoading" @click="submitPassword">保存</el-button>
+      </template>
+    </el-dialog>
   </el-container>
 </template>
 

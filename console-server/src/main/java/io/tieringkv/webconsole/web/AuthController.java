@@ -2,6 +2,7 @@ package io.tieringkv.webconsole.web;
 
 import io.tieringkv.webconsole.common.ApiResponse;
 import io.tieringkv.webconsole.service.AuthService;
+import io.tieringkv.webconsole.web.dto.ChangePasswordRequest;
 import io.tieringkv.webconsole.web.dto.LoginRequest;
 import io.tieringkv.webconsole.web.dto.LoginResponse;
 import io.tieringkv.webconsole.web.dto.UserView;
@@ -31,5 +32,13 @@ public class AuthController {
     @GetMapping("/me")
     public ApiResponse<UserView> me() {
         return ApiResponse.ok(authService.currentUser());
+    }
+
+    /** 自助修改口令（任意已登录用户）。 */
+    @PostMapping("/password")
+    public ApiResponse<Void> changePassword(
+            @Valid @RequestBody ChangePasswordRequest request) {
+        authService.changePassword(request);
+        return ApiResponse.ok();
     }
 }
