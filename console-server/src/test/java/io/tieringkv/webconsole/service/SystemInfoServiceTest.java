@@ -17,7 +17,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-/** TD-092：系统信息快照解析（INFO + CONFIG GET）。 */
+/** TD-092：系统信息快照解析（对齐 Tiering-KV 自己的 INFO 字段）。 */
 class SystemInfoServiceTest {
 
     private InstanceService instanceService;
@@ -26,27 +26,34 @@ class SystemInfoServiceTest {
     private DbInstance instance;
 
     private static final String INFO_TEXT = """
-            # Server
-            redis_version:5.1.0
-            uptime_in_seconds:3600
-            tcp_port:6379
-            os:Linux
-            arch_bits:64
-            process_id:1234
-            # Clients
-            connected_clients:3
-            blocked_clients:0
-            # Memory
-            used_memory:1048576
-            used_memory_peak:2097152
-            maxmemory:134217728
-            # Stats
-            total_connections_received:10
-            total_commands_processed:500
-            keyspace_hits:80
-            keyspace_misses:20
             # Keyspace
             db0:keys=42,expires=2,avg_ttl=0
+            # Stats
+            connections:10
+            active_requests:1
+            qps:12.5
+            avg_latency_ms:0.85
+            errors:3
+            instantaneous_ops_per_sec:12.5
+            total_keys:42
+            # Memory
+            used_memory:1048576
+            maxmemory:134217728
+            used_memory_jvm:228056600
+            max_jvm_heap:8493465600
+            # Clients
+            connected_clients:3
+            active_requests:1
+            # Server
+            redis_version:5.0.3
+            tieringkv_version:5.1.0
+            redis_mode:standalone
+            os:Windows 11
+            arch_bits:amd64
+            process_id:30392
+            tcp_port:6379
+            uptime_in_seconds:3600
+            jdk_version:21.0.12
             """;
 
     private static RespReply bulk(String text) {
@@ -77,12 +84,18 @@ class SystemInfoServiceTest {
 
         assertThat(view.instance().name()).isEqualTo("local");
         assertThat(view.server().version()).isEqualTo("5.1.0");
+        assertThat(view.server().mode()).isEqualTo("standalone");
         assertThat(view.server().uptimeSeconds()).isEqualTo(3600);
+        assertThat(view.server().jdk()).isEqualTo("21.0.12");
         assertThat(view.clients().connected()).isEqualTo(3);
+        assertThat(view.clients().totalConnections()).isEqualTo(10);
+        assertThat(view.clients().errors()).isEqualTo(3);
         assertThat(view.memory().usedBytes()).isEqualTo(1048576);
         assertThat(view.memory().maxBytes()).isEqualTo(134217728);
-        assertThat(view.stats().totalCommands()).isEqualTo(500);
-        assertThat(view.stats().hitRate()).isEqualTo(0.8);
+        assertThat(view.memory().jvmUsedBytes()).isEqualTo(228056600);
+        assertThat(view.stats().qps()).isEqualTo(12.5);
+        assertThat(view.stats().avgLatencyMs()).isEqualTo(0.85);
+        assertThat(view.stats().totalKeys()).isEqualTo(42);
         assertThat(view.keyspace()).singleElement()
                 .satisfies(db -> {
                     assertThat(db.db()).isEqualTo("db0");
@@ -91,6 +104,16 @@ class SystemInfoServiceTest {
                 });
         assertThat(view.config()).containsEntry("appendfsync", "everysec");
         assertThat(view.warnings()).isEmpty();
+    }
+
+    @Test
+    void fallsBackToRedisVersionWhenTieringVersionMissing() throws IOException {
+        when(gateway.execute(instance, "INFO")).thenReturn(bulk("""
+                # Server
+                redis_version:4.9.0
+                """));
+
+        assertThat(service.snapshot(1L).server().version()).isEqualTo("4.9.0");
     }
 
     @Test

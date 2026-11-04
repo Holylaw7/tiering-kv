@@ -160,10 +160,10 @@ export interface OpLog {
 
 export interface SystemInfo {
   instance: InstanceView
-  server: { version: string; uptimeSeconds: number; tcpPort: number; os: string; arch: string; processId: string }
-  clients: { connected: number; blocked: number }
-  memory: { usedBytes: number; maxBytes: number; peakBytes: number }
-  stats: { totalConnections: number; totalCommands: number; keyspaceHits: number; keyspaceMisses: number; hitRate: number }
+  server: { version: string; mode: string; uptimeSeconds: number; tcpPort: number; os: string; arch: string; jdk: string; processId: string }
+  clients: { connected: number; activeRequests: number; totalConnections: number; errors: number }
+  memory: { usedBytes: number; maxBytes: number; jvmUsedBytes: number; maxJvmHeapBytes: number }
+  stats: { qps: number; instantaneousOpsPerSec: number; avgLatencyMs: number; totalKeys: number }
   keyspace: Array<{ db: string; keys: number; expires: number; avgTtl: number }>
   config: Record<string, string>
   warnings: string[]

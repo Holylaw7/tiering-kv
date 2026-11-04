@@ -128,7 +128,7 @@ GET /dashboard/trends?instanceId=1&minutes=30
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/system/info?instanceId=` | `INFO` 全段落 + `CONFIG GET *` 的只读快照：版本/运行时长/端口/连接数/内存/命中率/键空间/白名单配置 |
+| GET | `/system/info?instanceId=` | `INFO` 全段落 + `CONFIG GET *` 的只读快照：版本/模式/运行时长/端口/JDK、连接与错误计数、引擎与 JVM 内存、QPS/延迟/键总数、键空间、白名单配置 |
 
 > 取不到的段落（例如内核禁用 CONFIG）不会让整个接口失败，而是放进 `warnings` 数组，
 > 页面上以黄色提示条展示（TD-092）。

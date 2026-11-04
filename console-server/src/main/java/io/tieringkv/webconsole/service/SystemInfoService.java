@@ -17,7 +17,8 @@ import java.util.Map;
 /**
  * 系统信息只读快照（TD-092）：`INFO` 全部段落 + `CONFIG GET *`。
  *
- * <p>只读：CONFIG 不支持 SET（内核白名单里也只有 GET/SET 的读语义在控制台侧禁用）。
+ * <p>字段名以 Tiering-KV 的 INFO 为准（见 `ServerInfoProvider`），
+ * Redis 同名段落有差异的字段保留回退取值。
  */
 @Service
 public class SystemInfoService {
@@ -42,30 +43,35 @@ public class SystemInfoService {
         Map<String, String> memory = info.getOrDefault("Memory", Map.of());
         Map<String, String> stats = info.getOrDefault("Stats", Map.of());
 
-        long hits = number(stats.get("keyspace_hits"));
-        long misses = number(stats.get("keyspace_misses"));
-        double hitRate = hits + misses == 0 ? 0 : (double) hits / (hits + misses);
+        String version = firstNonBlank(server.get("tieringkv_version"), server.get("redis_version"));
 
         return new SystemInfoView(
                 InstanceView.of(instance),
                 new SystemInfoView.Server(
-                        server.getOrDefault("redis_version", ""),
+                        nullToEmpty(version),
+                        nullToEmpty(server.get("redis_mode")),
                         number(server.get("uptime_in_seconds")),
                         (int) number(server.getOrDefault("tcp_port", "0")),
-                        server.getOrDefault("os", ""),
-                        server.getOrDefault("arch_bits", ""),
-                        server.getOrDefault("process_id", "")),
+                        nullToEmpty(server.get("os")),
+                        nullToEmpty(server.get("arch_bits")),
+                        nullToEmpty(server.get("jdk_version")),
+                        nullToEmpty(server.get("process_id"))),
                 new SystemInfoView.Clients(
                         (int) number(clients.get("connected_clients")),
-                        (int) number(clients.get("blocked_clients"))),
+                        (int) number(clients.get("active_requests")),
+                        number(stats.get("connections")),
+                        number(stats.get("errors"))),
                 new SystemInfoView.Memory(
                         number(memory.get("used_memory")),
-                        number(memory.getOrDefault("maxmemory", config.getOrDefault("maxmemory", "0"))),
-                        number(memory.get("used_memory_peak"))),
+                        number(memory.getOrDefault("maxmemory",
+                                config.getOrDefault("maxmemory", "0"))),
+                        number(memory.get("used_memory_jvm")),
+                        number(memory.get("max_jvm_heap"))),
                 new SystemInfoView.Stats(
-                        number(stats.get("total_connections_received")),
-                        number(stats.get("total_commands_processed")),
-                        hits, misses, Math.round(hitRate * 10000) / 10000.0),
+                        decimal(stats.get("qps")),
+                        decimal(stats.get("instantaneous_ops_per_sec")),
+                        decimal(stats.get("avg_latency_ms")),
+                        number(stats.get("total_keys"))),
                 keyspace(info.getOrDefault("Keyspace", Map.of())),
                 config,
                 warnings);
@@ -136,12 +142,24 @@ public class SystemInfoService {
         return reply instanceof RespReply.Bulk bulk ? bulk.utf8() : null;
     }
 
+    private static String firstNonBlank(String first, String second) {
+        return first != null && !first.isBlank() ? first : second;
+    }
+
+    private static String nullToEmpty(String value) {
+        return value == null ? "" : value;
+    }
+
     private static long number(String value) {
+        return (long) decimal(value);
+    }
+
+    private static double decimal(String value) {
         if (value == null || value.isBlank()) {
             return 0;
         }
         try {
-            return (long) Double.parseDouble(value.trim());
+            return Double.parseDouble(value.trim());
         } catch (NumberFormatException ex) {
             return 0;
         }

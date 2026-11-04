@@ -506,12 +506,20 @@
       },
       "Clients" : {
         "properties" : {
-          "blocked" : {
+          "activeRequests" : {
             "format" : "int32",
             "type" : "integer"
           },
           "connected" : {
             "format" : "int32",
+            "type" : "integer"
+          },
+          "errors" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalConnections" : {
+            "format" : "int64",
             "type" : "integer"
           }
         },
@@ -796,11 +804,15 @@
       },
       "Memory" : {
         "properties" : {
+          "jvmUsedBytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
           "maxBytes" : {
             "format" : "int64",
             "type" : "integer"
           },
-          "peakBytes" : {
+          "maxJvmHeapBytes" : {
             "format" : "int64",
             "type" : "integer"
           },
@@ -987,6 +999,12 @@
           "arch" : {
             "type" : "string"
           },
+          "jdk" : {
+            "type" : "string"
+          },
+          "mode" : {
+            "type" : "string"
+          },
           "os" : {
             "type" : "string"
           },
@@ -1009,23 +1027,19 @@
       },
       "Stats" : {
         "properties" : {
-          "hitRate" : {
+          "avgLatencyMs" : {
             "format" : "double",
             "type" : "number"
           },
-          "keyspaceHits" : {
-            "format" : "int64",
-            "type" : "integer"
+          "instantaneousOpsPerSec" : {
+            "format" : "double",
+            "type" : "number"
           },
-          "keyspaceMisses" : {
-            "format" : "int64",
-            "type" : "integer"
+          "qps" : {
+            "format" : "double",
+            "type" : "number"
           },
-          "totalCommands" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "totalConnections" : {
+          "totalKeys" : {
             "format" : "int64",
             "type" : "integer"
           }

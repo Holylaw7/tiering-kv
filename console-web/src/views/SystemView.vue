@@ -41,7 +41,9 @@ onMounted(load)
     <div class="page-header">
       <div>
         <h2 class="page-title">系统信息</h2>
-        <p class="page-subtitle">直接读取内核 <span class="mono">INFO</span> 与 <span class="mono">CONFIG GET</span>（只读，不落库）</p>
+        <p class="page-subtitle">
+          直接读取内核 <span class="mono">INFO</span> 与 <span class="mono">CONFIG GET</span>（只读，不落库）
+        </p>
       </div>
       <el-button @click="load">刷新</el-button>
     </div>
@@ -60,12 +62,14 @@ onMounted(load)
         <div class="card-title">服务端</div>
         <el-descriptions :column="1" size="small" border>
           <el-descriptions-item label="版本">{{ info?.server.version || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="运行模式">{{ info?.server.mode || '-' }}</el-descriptions-item>
           <el-descriptions-item label="运行时长">{{ uptime(info?.server.uptimeSeconds ?? 0) }}</el-descriptions-item>
           <el-descriptions-item label="监听端口">{{ info?.server.tcpPort || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="进程 ID">{{ info?.server.processId || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="JDK">{{ info?.server.jdk || '-' }}</el-descriptions-item>
           <el-descriptions-item label="系统 / 架构">
             {{ info?.server.os || '-' }} / {{ info?.server.arch || '-' }} 位
           </el-descriptions-item>
+          <el-descriptions-item label="进程 ID">{{ info?.server.processId || '-' }}</el-descriptions-item>
         </el-descriptions>
       </div>
 
@@ -73,19 +77,20 @@ onMounted(load)
         <div class="card-title">连接</div>
         <el-descriptions :column="1" size="small" border>
           <el-descriptions-item label="当前连接">{{ info?.clients.connected ?? 0 }}</el-descriptions-item>
-          <el-descriptions-item label="阻塞连接">{{ info?.clients.blocked ?? 0 }}</el-descriptions-item>
-          <el-descriptions-item label="累计连接">{{ info?.stats.totalConnections ?? 0 }}</el-descriptions-item>
-          <el-descriptions-item label="累计命令">{{ info?.stats.totalCommands ?? 0 }}</el-descriptions-item>
+          <el-descriptions-item label="处理中请求">{{ info?.clients.activeRequests ?? 0 }}</el-descriptions-item>
+          <el-descriptions-item label="累计连接">{{ info?.clients.totalConnections ?? 0 }}</el-descriptions-item>
+          <el-descriptions-item label="错误计数">{{ info?.clients.errors ?? 0 }}</el-descriptions-item>
         </el-descriptions>
       </div>
 
       <div class="panel card">
         <div class="card-title">内存</div>
         <el-descriptions :column="1" size="small" border>
-          <el-descriptions-item label="已用">{{ formatBytes(info?.memory.usedBytes) }}</el-descriptions-item>
-          <el-descriptions-item label="上限">{{ formatBytes(info?.memory.maxBytes) }}</el-descriptions-item>
-          <el-descriptions-item label="峰值">{{ formatBytes(info?.memory.peakBytes) }}</el-descriptions-item>
-          <el-descriptions-item label="使用率">
+          <el-descriptions-item label="引擎已用">{{ formatBytes(info?.memory.usedBytes) }}</el-descriptions-item>
+          <el-descriptions-item label="引擎上限">{{ formatBytes(info?.memory.maxBytes) }}</el-descriptions-item>
+          <el-descriptions-item label="JVM 已用">{{ formatBytes(info?.memory.jvmUsedBytes) }}</el-descriptions-item>
+          <el-descriptions-item label="JVM 堆上限">{{ formatBytes(info?.memory.maxJvmHeapBytes) }}</el-descriptions-item>
+          <el-descriptions-item label="引擎使用率">
             <el-progress
               :percentage="usage(info?.memory.usedBytes ?? 0, info?.memory.maxBytes ?? 0)"
               :stroke-width="10"
@@ -96,13 +101,14 @@ onMounted(load)
       </div>
 
       <div class="panel card">
-        <div class="card-title">命中率</div>
+        <div class="card-title">吞吐</div>
         <el-descriptions :column="1" size="small" border>
-          <el-descriptions-item label="键空间命中">{{ info?.stats.keyspaceHits ?? 0 }}</el-descriptions-item>
-          <el-descriptions-item label="未命中">{{ info?.stats.keyspaceMisses ?? 0 }}</el-descriptions-item>
-          <el-descriptions-item label="命中率">
-            {{ ((info?.stats.hitRate ?? 0) * 100).toFixed(2) }}%
+          <el-descriptions-item label="QPS">{{ (info?.stats.qps ?? 0).toFixed(2) }}</el-descriptions-item>
+          <el-descriptions-item label="瞬时 OPS">
+            {{ (info?.stats.instantaneousOpsPerSec ?? 0).toFixed(2) }}
           </el-descriptions-item>
+          <el-descriptions-item label="平均延迟">{{ (info?.stats.avgLatencyMs ?? 0).toFixed(3) }} ms</el-descriptions-item>
+          <el-descriptions-item label="键总数">{{ info?.stats.totalKeys ?? 0 }}</el-descriptions-item>
         </el-descriptions>
       </div>
     </div>
@@ -119,7 +125,11 @@ onMounted(load)
 
     <div class="panel">
       <div class="card-title">配置（只读）</div>
-      <el-table :data="Object.entries(info?.config ?? {}).map(([key, value]) => ({ key, value }))" size="small" empty-text="内核未返回配置">
+      <el-table
+        :data="Object.entries(info?.config ?? {}).map(([key, value]) => ({ key, value }))"
+        size="small"
+        empty-text="内核未返回配置"
+      >
         <el-table-column prop="key" label="配置项" width="220" />
         <el-table-column prop="value" label="值">
           <template #default="{ row }"><span class="mono">{{ row.value }}</span></template>

@@ -674,9 +674,13 @@ export interface components {
         };
         Clients: {
             /** Format: int32 */
-            blocked?: number;
+            activeRequests?: number;
             /** Format: int32 */
             connected?: number;
+            /** Format: int64 */
+            errors?: number;
+            /** Format: int64 */
+            totalConnections?: number;
         };
         HashFieldRequest: {
             field: string;
@@ -783,9 +787,11 @@ export interface components {
         };
         Memory: {
             /** Format: int64 */
+            jvmUsedBytes?: number;
+            /** Format: int64 */
             maxBytes?: number;
             /** Format: int64 */
-            peakBytes?: number;
+            maxJvmHeapBytes?: number;
             /** Format: int64 */
             usedBytes?: number;
         };
@@ -857,6 +863,8 @@ export interface components {
         };
         Server: {
             arch?: string;
+            jdk?: string;
+            mode?: string;
             os?: string;
             processId?: string;
             /** Format: int32 */
@@ -867,15 +875,13 @@ export interface components {
         };
         Stats: {
             /** Format: double */
-            hitRate?: number;
+            avgLatencyMs?: number;
+            /** Format: double */
+            instantaneousOpsPerSec?: number;
+            /** Format: double */
+            qps?: number;
             /** Format: int64 */
-            keyspaceHits?: number;
-            /** Format: int64 */
-            keyspaceMisses?: number;
-            /** Format: int64 */
-            totalCommands?: number;
-            /** Format: int64 */
-            totalConnections?: number;
+            totalKeys?: number;
         };
         SystemInfoView: {
             clients?: components["schemas"]["Clients"];
