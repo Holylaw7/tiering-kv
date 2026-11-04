@@ -1,5 +1,15 @@
 # 控制台 REST API
 
+> **契约以代码为准**：`docs/api/openapi.json` 由 `/v3/api-docs` 生成，
+> 由 `OpenApiSnapshotTest` 在 CI 中比对防漂移；前端类型
+> `console-web/src/api/schema.d.ts` 由 `npm run gen:api` 生成。
+> 接口改动后执行：
+> ```bash
+> cd console-server && mvn test -Dopenapi.update=true   # 重新生成快照
+> cd ../console-web && npm run gen:api                  # 同步前端类型
+> ```
+> 在线文档：`/swagger-ui/index.html`（只读，无需登录）。
+
 Base：`/api/v1` · 认证：`Authorization: Bearer <JWT>` · 响应：
 
 ```json

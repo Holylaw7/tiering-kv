@@ -137,6 +137,11 @@
 
 ### Added
 
+- **OpenAPI 契约与前端类型生成（TD-088）**：控制面接入 `springdoc`
+  （`/v3/api-docs`、`/swagger-ui`），`OpenApiSnapshotTest` 与入库的
+  `docs/api/openapi.json` 比对防契约漂移；前端 `npm run gen:api`
+  由该文件生成 `src/api/schema.d.ts`；发布门禁新增"契约漂移检查"
+  （`gen:api` 后 `git diff --exit-code`）。
 - **自助修改口令（TD-087）**：`POST /api/v1/auth/password`（校验原口令、
   禁止与旧口令相同、审计留痕），前端顶栏下拉新增"修改口令"对话框。
   任意角色均可使用，不再依赖管理员重置。新增 5 个接口用例；控制面共 50 例。

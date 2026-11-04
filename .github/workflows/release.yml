@@ -92,6 +92,12 @@ jobs:
         run: |
           npm ci
           npm run build
+      # 契约漂移：openapi.json 由后端测试保证，schema.d.ts 必须与之一致
+      - name: API contract drift check
+        working-directory: console-web
+        run: |
+          npm run gen:api
+          git diff --exit-code -- src/api/schema.d.ts ../docs/api/openapi.json
 
   release:
     runs-on: ubuntu-latest
