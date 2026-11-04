@@ -68,4 +68,5 @@
 ## 5. 验证
 
 - 截图脚本：`console-web/scripts/ui-screenshot.mjs`（Playwright，登录后逐页截图到 `docs/screenshots/`）
-- 当前截图：login / dashboard / keyspace / system / backups / audit / users
+- 当前截图（`docs/screenshots/`）：login / dashboard / instances / keyspace / terminal /
+  alerts / backups / audit / system / users

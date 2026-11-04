@@ -131,7 +131,9 @@ onMounted(async () => {
         <template #empty>
           <EmptyState title="暂无告警事件" description="规则命中阈值后会在这里产生事件。" />
         </template>
-            <el-table-column prop="ruleName" label="规则" min-width="140" />
+            <el-table-column prop="ruleName" label="规则" min-width="180" show-overflow-tooltip>
+          <template #default="{ row }"><span class="mono">{{ row.ruleName }}</span></template>
+        </el-table-column>
             <el-table-column label="级别" width="90">
               <template #default="{ row }">
                 <el-tag :type="levelType(row.level)" size="small" effect="dark">{{ row.level }}</el-tag>

@@ -21,10 +21,13 @@ const PASS = arg('pass', 'admin123')
 
 const PAGES = [
   ['dashboard', '/#/dashboard'],
+  ['instances', '/#/instances'],
   ['keyspace', '/#/keyspace'],
-  ['system', '/#/system'],
+  ['terminal', '/#/terminal'],
+  ['alerts', '/#/alerts'],
   ['backups', '/#/backups'],
   ['audit', '/#/audit'],
+  ['system', '/#/system'],
   ['users', '/#/users']
 ]
 
