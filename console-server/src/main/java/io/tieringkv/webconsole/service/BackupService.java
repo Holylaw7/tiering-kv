@@ -11,7 +11,10 @@ import io.tieringkv.webconsole.resp.RespReply;
 import io.tieringkv.webconsole.support.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+
+import java.util.concurrent.Executor;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -40,16 +43,19 @@ public class BackupService {
     private final RespGateway gateway;
     private final ObjectMapper objectMapper;
     private final Path directory;
+    private final Executor executor;
 
     public BackupService(BackupRecordRepository repository, InstanceService instanceService,
                          KeyspaceService keyspaceService, RespGateway gateway,
-                         ObjectMapper objectMapper, ConsoleProperties properties) {
+                         ObjectMapper objectMapper, ConsoleProperties properties,
+                         @Qualifier("backupExecutor") Executor executor) {
         this.repository = repository;
         this.instanceService = instanceService;
         this.keyspaceService = keyspaceService;
         this.gateway = gateway;
         this.objectMapper = objectMapper;
         this.directory = Paths.get(properties.getBackup().getDir()).toAbsolutePath().normalize();
+        this.executor = executor;
     }
 
     /** 备份条目（JSONL 一行）。 */
@@ -66,15 +72,52 @@ public class BackupService {
                 : repository.findByInstanceIdOrderByCreatedAtDesc(instanceId);
     }
 
-    /** 执行一次逻辑导出；异常时记录 FAILED 并抛出业务异常。 */
+    /** 并发备份冲突时返回 409（TD-091）。 */
+    private static final long STALE_RUNNING_MINUTES = 30;
+
+    /**
+     * 提交一次逻辑导出（TD-091）：
+     * <ul>
+     *   <li>同一实例已有 RUNNING 记录 → {@code 409}；超过 30 分钟的僵尸任务视为失效；</li>
+     *   <li>立即返回 RUNNING 记录，实际导出在 {@code backupExecutor} 中异步执行；</li>
+     *   <li>前端轮询 {@code GET /backups} 观察状态变化。</li>
+     * </ul>
+     */
     public BackupRecord export(Long instanceId) {
-        DbInstance instance = instanceService.require(instanceId);
+        instanceService.require(instanceId);
+        repository.findFirstByInstanceIdAndStatusOrderByCreatedAtDesc(instanceId, BackupStatus.RUNNING)
+                .ifPresent(running -> {
+                    if (running.getCreatedAt() != null
+                            && running.getCreatedAt().isAfter(
+                                    LocalDateTime.now().minusMinutes(STALE_RUNNING_MINUTES))) {
+                        throw BusinessException.conflict(
+                                "该实例已有备份任务在执行（id=" + running.getId() + "），请稍后再试");
+                    }
+                    running.setStatus(BackupStatus.FAILED);
+                    running.setMessage("任务超时未完成，已标记为失败");
+                    running.setFinishedAt(LocalDateTime.now());
+                    repository.save(running);
+                });
+
         BackupRecord record = new BackupRecord();
         record.setInstanceId(instanceId);
         record.setFileName("backup-" + instanceId + "-" + LocalDateTime.now().format(STAMP) + ".jsonl");
         record.setStatus(BackupStatus.RUNNING);
         record.setCreatedAt(LocalDateTime.now());
         repository.save(record);
+
+        Long recordId = record.getId();
+        executor.execute(() -> runExport(recordId));
+        return record;
+    }
+
+    /** 异步执行体：可单独调用以便测试与重试。 */
+    public void runExport(Long recordId) {
+        BackupRecord record = repository.findById(recordId).orElse(null);
+        if (record == null) {
+            return;
+        }
+        DbInstance instance = instanceService.require(record.getInstanceId());
         try {
             Files.createDirectories(directory);
             Path file = directory.resolve(record.getFileName());
@@ -90,10 +133,6 @@ public class BackupService {
         }
         record.setFinishedAt(LocalDateTime.now());
         repository.save(record);
-        if (record.getStatus() == BackupStatus.FAILED) {
-            throw BusinessException.upstream("备份失败：" + record.getMessage());
-        }
-        return record;
     }
 
     private long writeSnapshot(DbInstance instance, Path file) throws IOException {

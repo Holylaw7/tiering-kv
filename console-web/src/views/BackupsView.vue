@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { backupApi } from '@/api'
 import type { BackupRecord } from '@/api/types'
@@ -22,6 +22,37 @@ async function load() {
   }
 }
 
+let pollTimer: number | undefined
+
+/** 轮询备份状态（TD-091）：异步任务提交后最多观察 60 秒。 */
+function startPolling(recordId: number) {
+  stopPolling()
+  let ticks = 0
+  pollTimer = window.setInterval(async () => {
+    ticks += 1
+    await load()
+    const current = rows.value.find((row) => row.id === recordId)
+    if (!current || current.status !== 'RUNNING') {
+      stopPolling()
+      if (current?.status === 'SUCCESS') {
+        ElMessage.success(`备份完成，共 ${current.keyCount} 个键`)
+      } else if (current?.status === 'FAILED') {
+        ElMessage.error(`备份失败：${current.message ?? '未知原因'}`)
+      }
+    } else if (ticks >= 30) {
+      stopPolling()
+      ElMessage.warning('备份仍在执行，请稍后刷新查看结果')
+    }
+  }, 2000)
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    window.clearInterval(pollTimer)
+    pollTimer = undefined
+  }
+}
+
 async function create() {
   if (!store.selectedId) {
     ElMessage.warning('请先选择实例')
@@ -30,8 +61,13 @@ async function create() {
   creating.value = true
   try {
     const record = await backupApi.create(store.selectedId)
-    ElMessage.success(`备份完成，共 ${record.keyCount} 个键`)
     await load()
+    if (record.status === 'RUNNING') {
+      ElMessage.info('备份任务已提交，页面会自动刷新结果')
+      startPolling(record.id)
+    } else {
+      ElMessage.success(`备份完成，共 ${record.keyCount} 个键`)
+    }
   } finally {
     creating.value = false
   }
@@ -70,6 +106,7 @@ function download(row: BackupRecord) {
 }
 
 onMounted(load)
+onUnmounted(stopPolling)
 </script>
 
 <template>
@@ -77,7 +114,7 @@ onMounted(load)
     <div class="page-header">
       <div>
         <h2 class="page-title">备份与恢复</h2>
-        <p class="page-subtitle">逻辑备份：SCAN 全量导出为 JSONL，按类型回放恢复，过程可审计</p>
+        <p class="page-subtitle">逻辑备份：SCAN 全量导出为 JSONL，后台异步执行（同实例并发提交返回 409），按类型回放恢复</p>
       </div>
       <el-button v-if="auth.canOperate" type="primary" :loading="creating" @click="create">
         <el-icon><FolderAdd /></el-icon> 立即备份

@@ -109,10 +109,13 @@ GET /dashboard/trends?instanceId=1&minutes=30
 | 方法 | 路径 | 说明 | 权限 |
 | --- | --- | --- | --- |
 | GET | `/backups?instanceId=` | 备份记录 | 登录 |
-| POST | `/backups?instanceId=` | 立即备份（同步执行） | OPS/ADMIN |
+| POST | `/backups?instanceId=` | 提交备份任务（**异步**，返回 RUNNING 记录；同实例并发提交返回 `40900`） | OPS/ADMIN |
 | GET | `/backups/{id}/download` | 下载 JSONL | 登录 |
 | POST | `/backups/{id}/restore` | 回放恢复 | ADMIN |
 | DELETE | `/backups/{id}` | 删除记录与文件 | OPS/ADMIN |
+
+> 异步语义（TD-091）：提交后用 `GET /backups` 轮询状态（RUNNING → SUCCESS/FAILED）；
+> 前端每 2 秒刷新一次，最多观察 60 秒。超过 30 分钟仍为 RUNNING 的僵尸任务会在下次提交时被标记失败。
 
 ## 9. 审计（ADMIN）
 
