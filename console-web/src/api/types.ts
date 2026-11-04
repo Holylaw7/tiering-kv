@@ -158,6 +158,17 @@ export interface OpLog {
   createdAt: string
 }
 
+export interface SystemInfo {
+  instance: InstanceView
+  server: { version: string; uptimeSeconds: number; tcpPort: number; os: string; arch: string; processId: string }
+  clients: { connected: number; blocked: number }
+  memory: { usedBytes: number; maxBytes: number; peakBytes: number }
+  stats: { totalConnections: number; totalCommands: number; keyspaceHits: number; keyspaceMisses: number; hitRate: number }
+  keyspace: Array<{ db: string; keys: number; expires: number; avgTtl: number }>
+  config: Record<string, string>
+  warnings: string[]
+}
+
 export interface PageResult<T> {
   items: T[]
   total: number

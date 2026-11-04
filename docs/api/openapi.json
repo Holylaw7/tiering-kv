@@ -391,6 +391,21 @@
         },
         "type" : "object"
       },
+      "ApiResponseSystemInfoView" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/SystemInfoView"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseTerminalResult" : {
         "properties" : {
           "code" : {
@@ -487,6 +502,19 @@
           }
         },
         "required" : [ "newPassword", "oldPassword" ],
+        "type" : "object"
+      },
+      "Clients" : {
+        "properties" : {
+          "blocked" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "connected" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
         "type" : "object"
       },
       "HashFieldRequest" : {
@@ -659,6 +687,26 @@
         "required" : [ "key", "value" ],
         "type" : "object"
       },
+      "Keyspace" : {
+        "properties" : {
+          "avgTtl" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "db" : {
+            "type" : "string"
+          },
+          "expires" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "keys" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "LiveMetrics" : {
         "properties" : {
           "activeRequests" : {
@@ -742,6 +790,23 @@
           },
           "user" : {
             "$ref" : "#/components/schemas/UserView"
+          }
+        },
+        "type" : "object"
+      },
+      "Memory" : {
+        "properties" : {
+          "maxBytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "peakBytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "usedBytes" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -915,6 +980,94 @@
           }
         },
         "required" : [ "password" ],
+        "type" : "object"
+      },
+      "Server" : {
+        "properties" : {
+          "arch" : {
+            "type" : "string"
+          },
+          "os" : {
+            "type" : "string"
+          },
+          "processId" : {
+            "type" : "string"
+          },
+          "tcpPort" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "uptimeSeconds" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "version" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "Stats" : {
+        "properties" : {
+          "hitRate" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "keyspaceHits" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "keyspaceMisses" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalCommands" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalConnections" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "SystemInfoView" : {
+        "properties" : {
+          "clients" : {
+            "$ref" : "#/components/schemas/Clients"
+          },
+          "config" : {
+            "additionalProperties" : {
+              "type" : "string"
+            },
+            "type" : "object"
+          },
+          "instance" : {
+            "$ref" : "#/components/schemas/InstanceView"
+          },
+          "keyspace" : {
+            "items" : {
+              "$ref" : "#/components/schemas/Keyspace"
+            },
+            "type" : "array"
+          },
+          "memory" : {
+            "$ref" : "#/components/schemas/Memory"
+          },
+          "server" : {
+            "$ref" : "#/components/schemas/Server"
+          },
+          "stats" : {
+            "$ref" : "#/components/schemas/Stats"
+          },
+          "warnings" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          }
+        },
         "type" : "object"
       },
       "TerminalHistory" : {
@@ -2098,6 +2251,33 @@
           }
         },
         "tags" : [ "keyspace-controller" ]
+      }
+    },
+    "/api/v1/system/info" : {
+      "get" : {
+        "operationId" : "info",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "instanceId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseSystemInfoView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "system-controller" ]
       }
     },
     "/api/v1/terminal/execute" : {

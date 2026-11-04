@@ -123,3 +123,12 @@ GET /dashboard/trends?instanceId=1&minutes=30
 | --- | --- | --- |
 | GET | `/audit?action=&username=&success=&from=&to=&page=1&size=20` | 操作日志分页（动作/用户模糊匹配，结果布尔，时间 ISO-8601） |
 | GET | `/audit/export?<同上筛选>` | 导出 CSV（UTF-8 BOM，最多 10000 条，带 `Content-Disposition`） |
+
+## 10. 系统信息（只读）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/system/info?instanceId=` | `INFO` 全段落 + `CONFIG GET *` 的只读快照：版本/运行时长/端口/连接数/内存/命中率/键空间/白名单配置 |
+
+> 取不到的段落（例如内核禁用 CONFIG）不会让整个接口失败，而是放进 `warnings` 数组，
+> 页面上以黄色提示条展示（TD-092）。

@@ -372,6 +372,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["info"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/terminal/execute": {
         parameters: {
             query?: never;
@@ -610,6 +626,12 @@ export interface components {
             data?: components["schemas"]["PageResultUserView"];
             message?: string;
         };
+        ApiResponseSystemInfoView: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["SystemInfoView"];
+            message?: string;
+        };
         ApiResponseTerminalResult: {
             /** Format: int32 */
             code?: number;
@@ -649,6 +671,12 @@ export interface components {
         ChangePasswordRequest: {
             newPassword: string;
             oldPassword: string;
+        };
+        Clients: {
+            /** Format: int32 */
+            blocked?: number;
+            /** Format: int32 */
+            connected?: number;
         };
         HashFieldRequest: {
             field: string;
@@ -707,6 +735,15 @@ export interface components {
             key: string;
             value: string;
         };
+        Keyspace: {
+            /** Format: int64 */
+            avgTtl?: number;
+            db?: string;
+            /** Format: int64 */
+            expires?: number;
+            /** Format: int64 */
+            keys?: number;
+        };
         LiveMetrics: {
             /** Format: int32 */
             activeRequests?: number;
@@ -743,6 +780,14 @@ export interface components {
             expiresInSeconds?: number;
             token?: string;
             user?: components["schemas"]["UserView"];
+        };
+        Memory: {
+            /** Format: int64 */
+            maxBytes?: number;
+            /** Format: int64 */
+            peakBytes?: number;
+            /** Format: int64 */
+            usedBytes?: number;
         };
         OpLog: {
             action?: string;
@@ -809,6 +854,40 @@ export interface components {
         };
         PasswordResetRequest: {
             password: string;
+        };
+        Server: {
+            arch?: string;
+            os?: string;
+            processId?: string;
+            /** Format: int32 */
+            tcpPort?: number;
+            /** Format: int64 */
+            uptimeSeconds?: number;
+            version?: string;
+        };
+        Stats: {
+            /** Format: double */
+            hitRate?: number;
+            /** Format: int64 */
+            keyspaceHits?: number;
+            /** Format: int64 */
+            keyspaceMisses?: number;
+            /** Format: int64 */
+            totalCommands?: number;
+            /** Format: int64 */
+            totalConnections?: number;
+        };
+        SystemInfoView: {
+            clients?: components["schemas"]["Clients"];
+            config?: {
+                [key: string]: string;
+            };
+            instance?: components["schemas"]["InstanceView"];
+            keyspace?: components["schemas"]["Keyspace"][];
+            memory?: components["schemas"]["Memory"];
+            server?: components["schemas"]["Server"];
+            stats?: components["schemas"]["Stats"];
+            warnings?: string[];
         };
         TerminalHistory: {
             command?: string;
@@ -1595,6 +1674,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    info: {
+        parameters: {
+            query: {
+                instanceId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSystemInfoView"];
                 };
             };
         };

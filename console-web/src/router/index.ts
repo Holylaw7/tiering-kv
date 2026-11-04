@@ -22,6 +22,7 @@ const router = createRouter({
         { path: 'alerts', name: 'alerts', component: () => import('@/views/AlertsView.vue'), meta: { title: '告警中心', icon: 'Bell' } },
         { path: 'backups', name: 'backups', component: () => import('@/views/BackupsView.vue'), meta: { title: '备份恢复', icon: 'Files' } },
         { path: 'audit', name: 'audit', component: () => import('@/views/AuditView.vue'), meta: { title: '审计日志', icon: 'Document' } },
+        { path: 'system', name: 'system', component: () => import('@/views/SystemView.vue'), meta: { title: '系统信息', icon: 'Setting' } },
         { path: 'users', name: 'users', component: () => import('@/views/UsersView.vue'), meta: { title: '用户管理', icon: 'User', adminOnly: true } }
       ]
     },

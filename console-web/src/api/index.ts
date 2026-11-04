@@ -1,7 +1,7 @@
 import http from './http'
 import type {
   AlertEvent, AlertRule, BackupRecord, InstanceView, KeyDetail, KeyScanPage,
-  LoginResponse, OpLog, OverviewView, PageResult, TerminalHistory,
+  LoginResponse, OpLog, OverviewView, PageResult, SystemInfo, TerminalHistory,
   TerminalResult, TrendPoint, UserView
 } from './types'
 
@@ -95,6 +95,11 @@ export interface AuditQuery {
   to?: string
   page?: number
   size?: number
+}
+
+export const systemApi = {
+  info: (instanceId: number) =>
+    http.get<unknown, SystemInfo>('/system/info', { params: { instanceId } })
 }
 
 export const auditApi = {
