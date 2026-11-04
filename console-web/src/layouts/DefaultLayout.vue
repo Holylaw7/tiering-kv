@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { useInstanceStore } from '@/stores/instance'
 import { authApi } from '@/api'
@@ -10,18 +10,36 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const instanceStore = useInstanceStore()
+
 const collapsed = ref(false)
 
-const menus = computed(() => {
+const GROUP_ORDER = ['概览', '数据', '运维', '系统'] as const
+const GROUP_OF: Record<string, string> = {
+  '/dashboard': '概览',
+  '/keyspace': '数据',
+  '/terminal': '数据',
+  '/instances': '运维',
+  '/alerts': '运维',
+  '/backups': '运维',
+  '/audit': '运维',
+  '/system': '系统',
+  '/users': '系统'
+}
+
+const navGroups = computed(() => {
   const root = router.getRoutes().find((item) => item.path === '/')
-  const children = root?.children ?? []
-  return children
-    .filter((item) => !item.meta?.adminOnly || auth.isAdmin)
-    .map((item) => ({
-      path: '/' + item.path,
-      title: String(item.meta?.title ?? ''),
-      icon: String(item.meta?.icon ?? 'Menu')
-    }))
+  const children = (root?.children ?? []).filter(
+    (item) => !item.meta?.adminOnly || auth.isAdmin
+  )
+  const groups = new Map<string, Array<{ path: string; title: string; icon: string }>>()
+  for (const item of children) {
+    const path = '/' + item.path
+    const group = GROUP_OF[path] ?? '其他'
+    const bucket = groups.get(group) ?? []
+    bucket.push({ path, title: String(item.meta?.title ?? ''), icon: String(item.meta?.icon ?? 'Menu') })
+    groups.set(group, bucket)
+  }
+  return GROUP_ORDER.filter((g) => groups.has(g)).map((g) => ({ name: g, items: groups.get(g)! }))
 })
 
 const currentTitle = computed(() => String(route.meta?.title ?? ''))
@@ -61,8 +79,8 @@ async function submitPassword() {
   }
 }
 
-onMounted(() => {
-  instanceStore.load().catch(() => undefined)
+onMounted(async () => {
+  await instanceStore.load()
 })
 
 async function handleCommand(command: string) {
@@ -71,7 +89,6 @@ async function handleCommand(command: string) {
     return
   }
   if (command === 'logout') {
-    await ElMessageBox.confirm('确认退出登录？', '提示', { type: 'warning' })
     auth.logout()
     router.push('/login')
   }
@@ -84,68 +101,79 @@ function onInstanceChange(value: number) {
 </script>
 
 <template>
-  <el-container class="layout">
-    <el-aside :width="collapsed ? '64px' : '218px'" class="aside">
+  <div class="shell" :class="{ collapsed }">
+    <aside class="sidebar">
       <div class="brand">
-        <span class="brand-mark">⚡</span>
-        <span v-if="!collapsed" class="brand-text">
-          Tiering-KV
-          <small>运维管理平台</small>
-        </span>
+        <svg class="mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z" stroke="currentColor" stroke-width="1.5" />
+          <path d="M4 7.5 12 12l8-4.5M12 12v9" stroke="currentColor" stroke-width="1.5" />
+        </svg>
+        <div v-if="!collapsed" class="brand-text">
+          <span class="word">Tiering-KV</span>
+          <span class="sub">Console</span>
+        </div>
       </div>
-      <el-menu
-        :default-active="route.path"
-        :collapse="collapsed"
-        router
-        class="menu"
-        background-color="transparent"
-      >
-        <el-menu-item v-for="menu in menus" :key="menu.path" :index="menu.path">
-          <el-icon><component :is="menu.icon" /></el-icon>
-          <template #title>{{ menu.title }}</template>
-        </el-menu-item>
-      </el-menu>
-      <div class="aside-footer">
-        <el-button text size="small" @click="collapsed = !collapsed">
-          <el-icon><component :is="collapsed ? 'Expand' : 'Fold'" /></el-icon>
-        </el-button>
-      </div>
-    </el-aside>
 
-    <el-container>
-      <el-header class="header">
-        <div class="header-left">
-          <span class="page-title">{{ currentTitle }}</span>
-          <el-divider direction="vertical" />
+      <nav class="nav">
+        <div v-for="group in navGroups" :key="group.name" class="nav-group">
+          <p v-if="!collapsed" class="nav-label">{{ group.name }}</p>
+          <el-menu :default-active="route.path" :collapse="collapsed" router class="menu">
+            <el-menu-item v-for="item in group.items" :key="item.path" :index="item.path">
+              <el-icon><component :is="item.icon" /></el-icon>
+              <template #title>{{ item.title }}</template>
+            </el-menu-item>
+          </el-menu>
+        </div>
+      </nav>
+
+      <div class="sidebar-foot">
+        <button class="collapse" type="button" :aria-label="collapsed ? '展开侧栏' : '收起侧栏'" @click="collapsed = !collapsed">
+          <el-icon><component :is="collapsed ? 'Expand' : 'Fold'" /></el-icon>
+        </button>
+        <span v-if="!collapsed" class="version mono">v5.1.0</span>
+      </div>
+    </aside>
+
+    <div class="content">
+      <header class="topbar">
+        <div class="topbar-left">
+          <span class="context-label">实例</span>
           <el-select
             :model-value="instanceStore.selectedId"
-            size="small"
+            class="instance-select"
             placeholder="选择实例"
-            style="width: 220px"
             @change="onInstanceChange"
           >
             <el-option
               v-for="item in instanceStore.list"
               :key="item.id"
-              :label="`${item.name}  (${item.host}:${item.port})`"
+              :label="item.name"
               :value="item.id"
             >
-              <span class="dot" :class="item.status.toLowerCase()"></span>
-              {{ item.name }}
-              <span class="muted mono">{{ item.host }}:{{ item.port }}</span>
+              <span class="option">
+                <span class="dot" :class="item.status.toLowerCase()"></span>
+                <span>{{ item.name }}</span>
+                <span class="dim mono">{{ item.host }}:{{ item.port }}</span>
+              </span>
             </el-option>
           </el-select>
         </div>
-        <div class="header-right">
-          <el-tag type="success" effect="dark" round>
-            在线实例 {{ instanceStore.upCount }} / {{ instanceStore.list.length }}
-          </el-tag>
-          <el-dropdown @command="handleCommand">
-            <span class="user">
-              <el-avatar :size="28">{{ auth.displayName.slice(0, 1) }}</el-avatar>
-              <span class="user-name">{{ auth.displayName }}</span>
-              <el-tag size="small" :type="auth.isAdmin ? 'danger' : 'info'">{{ auth.user?.role }}</el-tag>
-            </span>
+
+        <div class="topbar-right">
+          <span class="health">
+            <span class="dot up"></span>
+            {{ instanceStore.upCount }} / {{ instanceStore.list.length }} 在线
+          </span>
+          <span class="sep"></span>
+          <el-dropdown trigger="click" @command="handleCommand">
+            <button class="account" type="button">
+              <span class="avatar">{{ auth.displayName.slice(0, 1).toUpperCase() }}</span>
+              <span class="who">
+                <span class="name">{{ auth.displayName }}</span>
+                <span class="role">{{ auth.user?.role }}</span>
+              </span>
+              <el-icon class="chev"><CaretBottom /></el-icon>
+            </button>
             <template #dropdown>
               <el-dropdown-menu>
                 <el-dropdown-item command="password">修改口令</el-dropdown-item>
@@ -154,19 +182,15 @@ function onInstanceChange(value: number) {
             </template>
           </el-dropdown>
         </div>
-      </el-header>
+      </header>
 
-      <el-main class="main">
-        <router-view v-slot="{ Component }">
-          <transition name="fade" mode="out-in">
-            <component :is="Component" />
-          </transition>
-        </router-view>
-      </el-main>
-    </el-container>
+      <main class="main">
+        <router-view />
+      </main>
+    </div>
 
     <el-dialog v-model="passwordVisible" title="修改口令" width="420px">
-      <el-form label-width="90px" @submit.prevent>
+      <el-form label-width="88px" @submit.prevent>
         <el-form-item label="原口令">
           <el-input v-model="passwordForm.oldPassword" type="password" show-password autocomplete="current-password" />
         </el-form-item>
@@ -182,129 +206,292 @@ function onInstanceChange(value: number) {
         <el-button type="primary" :loading="passwordLoading" @click="submitPassword">保存</el-button>
       </template>
     </el-dialog>
-  </el-container>
+  </div>
 </template>
 
 <style scoped>
-.layout {
+.shell {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
   height: 100vh;
+  background: var(--bg);
 }
 
-.aside {
-  background: #121820;
-  border-right: 1px solid var(--console-border);
+.shell.collapsed {
+  grid-template-columns: 64px minmax(0, 1fr);
+}
+
+/* ---------- 侧栏 ---------- */
+
+.sidebar {
   display: flex;
   flex-direction: column;
-  transition: width 0.2s ease;
+  background: var(--bg-subtle);
+  border-right: 1px solid var(--line);
+  min-height: 0;
 }
 
 .brand {
-  height: 60px;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 18px;
-  border-bottom: 1px solid var(--console-border);
+  gap: 9px;
+  height: 52px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+  flex: none;
 }
 
-.brand-mark {
-  font-size: 20px;
+.mark {
+  width: 20px;
+  height: 20px;
+  color: var(--accent);
+  flex: none;
 }
 
 .brand-text {
-  font-weight: 700;
-  font-size: 15px;
-  line-height: 1.1;
   display: flex;
   flex-direction: column;
+  line-height: 1.15;
+  overflow: hidden;
 }
 
-.brand-text small {
-  font-weight: 400;
-  font-size: 11px;
-  color: var(--el-text-color-secondary);
-  letter-spacing: 0.5px;
+.word {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.sub {
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 0 8px;
+}
+
+.nav-group + .nav-group {
+  margin-top: 14px;
+}
+
+.nav-label {
+  margin: 0 0 4px;
+  padding: 0 16px;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
 }
 
 .menu {
-  border-right: none;
-  flex: 1;
-  padding-top: 8px;
+  padding: 0;
 }
 
-.aside-footer {
-  padding: 8px 12px;
-  border-top: 1px solid var(--console-border);
-}
-
-.header {
-  height: 60px;
+.sidebar-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--console-border);
-  background: #121820;
-  padding: 0 20px;
+  height: 44px;
+  padding: 0 12px;
+  border-top: 1px solid var(--line);
+  flex: none;
 }
 
-.header-left,
-.header-right {
+.collapse {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  transition: background-color 0.14s var(--ease), color 0.14s var(--ease);
+}
+
+.collapse:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.version {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+/* ---------- 主区 ---------- */
+
+.content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.topbar {
   display: flex;
   align-items: center;
-  gap: 14px;
+  justify-content: space-between;
+  height: 52px;
+  padding: 0 20px 0 26px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  flex: none;
 }
 
-.user {
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: none;
+}
+
+.context-label {
+  font-size: 11.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.sep {
+  width: 1px;
+  height: 18px;
+  background: var(--line);
+}
+
+.instance-select {
+  width: 190px;
+}
+
+.instance-select :deep(.el-select__wrapper) {
+  height: 28px;
+  min-height: 28px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.instance-select :deep(.el-select__wrapper:hover) {
+  background: var(--surface-2);
+  box-shadow: none;
+}
+
+.option {
   display: flex;
   align-items: center;
   gap: 8px;
-  cursor: pointer;
-  outline: none;
 }
 
-.user-name {
-  font-size: 13px;
-}
-
-.main {
-  background: var(--console-bg);
-  padding: 0;
-  overflow-y: auto;
-}
-
-.muted {
-  color: var(--el-text-color-secondary);
-  font-size: 11px;
-  margin-left: 8px;
+.health {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-2);
 }
 
 .dot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  margin-right: 6px;
+  display: inline-block;
+  flex: none;
 }
 
 .dot.up {
-  background: #35c98b;
+  background: var(--success);
+  box-shadow: 0 0 0 3px rgba(63, 185, 80, 0.12);
 }
 
 .dot.down {
-  background: #f56c6c;
+  background: var(--danger);
+  box-shadow: 0 0 0 3px rgba(240, 84, 79, 0.12);
 }
 
 .dot.unknown {
-  background: #909399;
+  background: var(--text-3);
 }
 
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.15s ease;
+.account {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 186px;
+  padding: 3px 5px 3px 3px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: background-color 0.14s var(--ease), border-color 0.14s var(--ease);
 }
 
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
+.account:hover {
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: var(--surface-3);
+  border: 1px solid var(--line-strong);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.who {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
+}
+
+.name {
+  font-size: 12.5px;
+  font-weight: 500;
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.role {
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+}
+
+.chev {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.main {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--bg);
 }
 </style>

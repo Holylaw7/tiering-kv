@@ -6,6 +6,7 @@ import type { KeyDetail, KeyEntry } from '@/api/types'
 import { useInstanceStore } from '@/stores/instance'
 import { useAuthStore } from '@/stores/auth'
 import { formatBytes, formatTtl } from '@/utils/format'
+import EmptyState from '@/components/EmptyState.vue'
 
 const store = useInstanceStore()
 const auth = useAuthStore()
@@ -166,6 +167,9 @@ onMounted(() => scan(true))
 
     <div class="panel" v-loading="loading">
       <el-table :data="rows" size="small" height="520">
+        <template #empty>
+          <EmptyState title="没有扫描到键" description="调整匹配模式后重新扫描。" />
+        </template>
         <el-table-column prop="key" label="键" min-width="260" show-overflow-tooltip>
           <template #default="{ row }">
             <span class="mono">{{ row.key }}</span>

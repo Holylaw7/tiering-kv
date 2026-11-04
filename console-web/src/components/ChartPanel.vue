@@ -10,6 +10,7 @@ echarts.use([LineChart, BarChart, GridComponent, TooltipComponent, LegendCompone
 
 const props = defineProps<{
   title?: string
+  hint?: string
   option: EChartsOption
   height?: string
 }>()
@@ -28,7 +29,7 @@ function resize() {
 
 onMounted(() => {
   if (container.value) {
-    chart = echarts.init(container.value, 'dark', { renderer: 'canvas' })
+    chart = echarts.init(container.value, undefined, { renderer: 'canvas' })
     render()
     window.addEventListener('resize', resize)
   }
@@ -44,8 +45,41 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="panel">
-    <div v-if="title" class="panel-title">{{ title }}</div>
-    <div ref="container" :style="{ height: height || '260px', width: '100%' }"></div>
-  </div>
+  <section class="panel chart">
+    <header class="head">
+      <h3 class="title">{{ title }}</h3>
+      <span v-if="hint" class="hint">{{ hint }}</span>
+    </header>
+    <div ref="container" class="canvas" :style="{ height: height || '240px' }"></div>
+  </section>
 </template>
+
+<style scoped>
+.chart {
+  padding: 14px 16px 10px;
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.title {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.hint {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.canvas {
+  width: 100%;
+}
+</style>

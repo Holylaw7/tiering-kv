@@ -7,6 +7,7 @@ import { useInstanceStore } from '@/stores/instance'
 import { formatBytes, formatNumber, formatPercent, formatUptime } from '@/utils/format'
 import StatCard from '@/components/StatCard.vue'
 import ChartPanel from '@/components/ChartPanel.vue'
+import EmptyState from '@/components/EmptyState.vue'
 
 const instanceStore = useInstanceStore()
 const overview = ref<OverviewView>()
@@ -78,13 +79,30 @@ onBeforeUnmount(stopTimer)
 
 const times = computed(() => trends.value.map((item) => item.time.slice(11, 19)))
 
+/* 图表视觉：细线、无点、弱网格；面积填充控制在 12% 以内 */
+const AXIS_LABEL = { fontSize: 10.5, color: '#6b7784' } as const
+const AXIS_LINE = { lineStyle: { color: '#212a34' } } as const
+const SPLIT_LINE = { lineStyle: { color: '#212a34', type: 'dashed' as const } } as const
+
+function areaGradient(color: string) {
+  return {
+    type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+    colorStops: [
+      { offset: 0, color: color.replace('1)', '0.14)') },
+      { offset: 1, color: color.replace('1)', '0)') }
+    ]
+  }
+}
+
 const qpsOption = computed<any>(() => ({
   backgroundColor: 'transparent',
-  grid: { left: 48, right: 24, top: 36, bottom: 30 },
-  tooltip: { trigger: 'axis' },
-  legend: { data: ['QPS'], left: 8, top: 0, textStyle: { fontSize: 11 } },
-  xAxis: { type: 'category', data: times.value, boundaryGap: false, axisLabel: { fontSize: 10 } },
-  yAxis: { type: 'value', splitLine: { lineStyle: { color: '#232c37' } } },
+  grid: { left: 52, right: 20, top: 18, bottom: 26 },
+  tooltip: { trigger: 'axis', backgroundColor: '#172029', borderColor: '#2d3742', textStyle: { fontSize: 12 } },
+  xAxis: {
+    type: 'category', data: times.value, boundaryGap: false,
+    axisLabel: AXIS_LABEL, axisLine: AXIS_LINE, axisTick: { show: false }
+  },
+  yAxis: { type: 'value', axisLabel: AXIS_LABEL, splitLine: SPLIT_LINE, axisLine: { show: false } },
   series: [
     {
       name: 'QPS',
@@ -92,26 +110,28 @@ const qpsOption = computed<any>(() => ({
       smooth: true,
       showSymbol: false,
       data: trends.value.map((item) => Number(item.qps.toFixed(2))),
-      lineStyle: { width: 2, color: '#35c98b' },
-      areaStyle: {
-        color: {
-          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-          colorStops: [
-            { offset: 0, color: 'rgba(53,201,139,0.35)' },
-            { offset: 1, color: 'rgba(53,201,139,0.02)' }
-          ]
-        }
-      }
+      lineStyle: { width: 1.5, color: '#4c8dff' },
+      itemStyle: { color: '#4c8dff' },
+      areaStyle: { color: areaGradient('rgba(76,141,255,1)') }
     }
   ]
 }))
 
 const latencyOption = computed<any>(() => ({
   backgroundColor: 'transparent',
-  grid: { left: 48, right: 24, top: 36, bottom: 30 },
-  tooltip: { trigger: 'axis' },
-  xAxis: { type: 'category', data: times.value, boundaryGap: false, axisLabel: { fontSize: 10 } },
-  yAxis: { type: 'value', name: 'ms', splitLine: { lineStyle: { color: '#232c37' } } },
+  grid: { left: 52, right: 20, top: 18, bottom: 26 },
+  tooltip: {
+    trigger: 'axis',
+    backgroundColor: '#172029',
+    borderColor: '#2d3742',
+    textStyle: { fontSize: 12 },
+    valueFormatter: (value: number) => Number(value).toFixed(3) + ' ms'
+  },
+  xAxis: {
+    type: 'category', data: times.value, boundaryGap: false,
+    axisLabel: AXIS_LABEL, axisLine: AXIS_LINE, axisTick: { show: false }
+  },
+  yAxis: { type: 'value', axisLabel: AXIS_LABEL, splitLine: SPLIT_LINE, axisLine: { show: false } },
   series: [
     {
       name: '平均延迟',
@@ -119,32 +139,39 @@ const latencyOption = computed<any>(() => ({
       smooth: true,
       showSymbol: false,
       data: trends.value.map((item) => Number(item.avgLatencyMs.toFixed(3))),
-      lineStyle: { width: 2, color: '#e6a23c' },
-      areaStyle: {
-        color: {
-          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-          colorStops: [
-            { offset: 0, color: 'rgba(230,162,60,0.3)' },
-            { offset: 1, color: 'rgba(230,162,60,0.02)' }
-          ]
-        }
-      }
+      lineStyle: { width: 1.5, color: '#d9a441' },
+      itemStyle: { color: '#d9a441' },
+      areaStyle: { color: areaGradient('rgba(217,164,65,1)') }
     }
   ]
 }))
 
 const memoryOption = computed<any>(() => ({
   backgroundColor: 'transparent',
-  grid: { left: 62, right: 52, top: 40, bottom: 30 },
+  grid: { left: 66, right: 56, top: 14, bottom: 26 },
   tooltip: {
     trigger: 'axis',
-    valueFormatter: (value: number) => formatBytes(value)
+    backgroundColor: '#172029',
+    borderColor: '#2d3742',
+    textStyle: { fontSize: 12 }
   },
-  legend: { data: ['已用内存', '键总数'], left: 8, top: 0, itemGap: 18, textStyle: { fontSize: 11 } },
-  xAxis: { type: 'category', data: times.value, boundaryGap: false, axisLabel: { fontSize: 10 } },
+  xAxis: {
+    type: 'category', data: times.value, boundaryGap: false,
+    axisLabel: AXIS_LABEL, axisLine: AXIS_LINE, axisTick: { show: false }
+  },
   yAxis: [
-    { type: 'value', axisLabel: { formatter: (value: number) => formatBytes(value) }, splitLine: { lineStyle: { color: '#232c37' } } },
-    { type: 'value', splitLine: { show: false } }
+    {
+      type: 'value',
+      axisLabel: { ...AXIS_LABEL, formatter: (value: number) => formatBytes(value) },
+      splitLine: SPLIT_LINE,
+      axisLine: { show: false }
+    },
+    {
+      type: 'value',
+      axisLabel: AXIS_LABEL,
+      splitLine: { show: false },
+      axisLine: { show: false }
+    }
   ],
   series: [
     {
@@ -153,15 +180,18 @@ const memoryOption = computed<any>(() => ({
       smooth: true,
       showSymbol: false,
       data: trends.value.map((item) => item.usedMemory),
-      lineStyle: { width: 2, color: '#7c5cff' }
+      lineStyle: { width: 1.5, color: '#4c8dff' },
+      itemStyle: { color: '#4c8dff' }
     },
     {
       name: '键总数',
-      type: 'bar',
+      type: 'line',
       yAxisIndex: 1,
-      barMaxWidth: 10,
+      smooth: true,
+      showSymbol: false,
       data: trends.value.map((item) => item.totalKeys),
-      itemStyle: { color: 'rgba(64,158,255,0.55)', borderRadius: [3, 3, 0, 0] }
+      lineStyle: { width: 1.5, color: '#3fb950', type: 'dashed' },
+      itemStyle: { color: '#3fb950' }
     }
   ]
 }))
@@ -194,41 +224,39 @@ const instances = computed(() => overview.value?.instances ?? instanceStore.list
     </div>
 
     <div class="stat-grid">
-      <StatCard label="QPS" :value="formatNumber(live?.qps, 1)" hint="服务端统计吞吐" icon="TrendCharts" />
+      <StatCard label="QPS" :value="formatNumber(live?.qps, 1)" hint="服务端统计吞吐" />
       <StatCard
         label="平均延迟"
         :value="(live?.avgLatencyMs ?? 0).toFixed(3) + ' ms'"
         hint="命令执行平均耗时"
-        icon="Timer"
-        accent="#e6a23c"
       />
-      <StatCard label="连接数" :value="formatNumber(live?.connections)" hint="当前客户端连接" icon="Connection" />
-      <StatCard label="键总数" :value="formatNumber(live?.totalKeys)" hint="db0 键空间" icon="Grid" accent="#409eff" />
+      <StatCard label="连接数" :value="formatNumber(live?.connections)" hint="当前客户端连接" />
+      <StatCard label="键总数" :value="formatNumber(live?.totalKeys)" hint="db0 键空间" />
       <StatCard
         label="内存占用"
         :value="formatBytes(live?.usedMemory)"
         :hint="`水位 ${formatPercent(memoryRatio)} / 上限 ${formatBytes(live?.maxMemory)}`"
-        icon="Cpu"
-        accent="#7c5cff"
       />
       <StatCard
         label="告警"
         :value="formatNumber(overview?.firingAlerts)"
         :hint="`今日已恢复 ${overview?.resolvedToday ?? 0} 条`"
-        icon="Bell"
-        accent="#f56c6c"
+        :tone="(overview?.firingAlerts ?? 0) > 0 ? 'danger' : 'default'"
       />
     </div>
 
     <div class="charts">
-      <ChartPanel title="吞吐趋势" :option="qpsOption" />
-      <ChartPanel title="延迟趋势" :option="latencyOption" />
-      <ChartPanel title="内存与键空间" :option="memoryOption" class="span-2" height="280px" />
+      <ChartPanel title="吞吐" hint="QPS" :option="qpsOption" />
+      <ChartPanel title="延迟" hint="平均命令耗时 (ms)" :option="latencyOption" />
+      <ChartPanel title="内存与键空间" hint="已用内存 / 键总数" :option="memoryOption" class="span-2" height="260px" />
     </div>
 
     <div class="panel" style="margin-top: 18px">
       <div class="panel-title">纳管实例</div>
       <el-table :data="instances" size="small">
+        <template #empty>
+          <EmptyState title="还没有纳管实例" description="在「实例管理」中添加一个 Tiering-KV 实例后，这里会显示它的探测状态。" />
+        </template>
         <el-table-column prop="name" label="名称" min-width="140" />
         <el-table-column label="地址" min-width="170">
           <template #default="{ row }">
@@ -237,7 +265,7 @@ const instances = computed(() => overview.value?.instances ?? instanceStore.list
         </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="row.status === 'UP' ? 'success' : row.status === 'DOWN' ? 'danger' : 'info'" size="small" effect="dark">
+            <el-tag :type="row.status === 'UP' ? 'success' : row.status === 'DOWN' ? 'danger' : 'info'" size="small">
               {{ row.status }}
             </el-tag>
           </template>

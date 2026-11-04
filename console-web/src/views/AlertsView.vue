@@ -5,6 +5,7 @@ import { alertApi } from '@/api'
 import type { AlertEvent, AlertRule } from '@/api/types'
 import { useInstanceStore } from '@/stores/instance'
 import { useAuthStore } from '@/stores/auth'
+import EmptyState from '@/components/EmptyState.vue'
 
 const store = useInstanceStore()
 const auth = useAuthStore()
@@ -127,6 +128,9 @@ onMounted(async () => {
             <el-button size="small" @click="loadEvents">刷新</el-button>
           </div>
           <el-table :data="events" size="small" style="width: 100%">
+        <template #empty>
+          <EmptyState title="暂无告警事件" description="规则命中阈值后会在这里产生事件。" />
+        </template>
             <el-table-column prop="ruleName" label="规则" min-width="140" />
             <el-table-column label="级别" width="90">
               <template #default="{ row }">
@@ -176,6 +180,9 @@ onMounted(async () => {
 
         <el-tab-pane label="告警规则" name="rules">
           <el-table :data="rules" size="small" style="width: 100%">
+        <template #empty>
+          <EmptyState title="还没有告警规则" description="创建规则后，系统按采集周期持续求值，命中即产生事件。" />
+        </template>
             <el-table-column prop="name" label="规则名称" min-width="150" />
             <el-table-column label="作用范围" width="150">
               <template #default="{ row }">

@@ -3,6 +3,7 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import { userApi } from '@/api'
 import type { UserView } from '@/api/types'
+import EmptyState from '@/components/EmptyState.vue'
 
 const rows = ref<UserView[]>([])
 const total = ref(0)
@@ -104,13 +105,16 @@ onMounted(load)
 
     <div class="panel">
       <el-table :data="rows" size="small">
+        <template #empty>
+          <EmptyState title="还没有用户" description="新建账号后，可以在这里分配角色与启用状态。" />
+        </template>
         <el-table-column prop="id" label="ID" width="70" />
         <el-table-column prop="username" label="用户名" width="140" />
         <el-table-column prop="nickname" label="昵称" width="140" />
         <el-table-column prop="email" label="邮箱" min-width="180" />
         <el-table-column label="角色" width="110">
           <template #default="{ row }">
-            <el-tag size="small" :type="row.role === 'ADMIN' ? 'danger' : row.role === 'OPS' ? 'warning' : 'info'">
+            <el-tag size="small" :type="row.role === 'ADMIN' ? 'info' : row.role === 'OPS' ? 'success' : 'info'">
               {{ row.role }}
             </el-tag>
           </template>
@@ -126,7 +130,7 @@ onMounted(load)
         <el-table-column label="操作" width="200">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button link type="warning" size="small" @click="resetPassword(row)">重置口令</el-button>
+            <el-button link size="small" @click="resetPassword(row)">重置口令</el-button>
             <el-button link type="danger" size="small" @click="remove(row)">删除</el-button>
           </template>
         </el-table-column>

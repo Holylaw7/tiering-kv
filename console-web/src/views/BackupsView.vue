@@ -6,6 +6,7 @@ import type { BackupRecord } from '@/api/types'
 import { useInstanceStore } from '@/stores/instance'
 import { useAuthStore } from '@/stores/auth'
 import { formatBytes } from '@/utils/format'
+import EmptyState from '@/components/EmptyState.vue'
 
 const store = useInstanceStore()
 const auth = useAuthStore()
@@ -123,6 +124,9 @@ onUnmounted(stopPolling)
 
     <div class="panel">
       <el-table :data="rows" size="small">
+        <template #empty>
+          <EmptyState title="还没有备份" description="点击右上角「立即备份」为该实例创建第一份快照。" />
+        </template>
         <el-table-column prop="fileName" label="文件名" min-width="240">
           <template #default="{ row }">
             <span class="mono">{{ row.fileName }}</span>
