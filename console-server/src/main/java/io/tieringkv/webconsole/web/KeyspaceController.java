@@ -2,6 +2,7 @@ package io.tieringkv.webconsole.web;
 
 import io.tieringkv.webconsole.common.ApiResponse;
 import io.tieringkv.webconsole.service.KeyspaceService;
+import io.tieringkv.webconsole.web.dto.HashFieldRequest;
 import io.tieringkv.webconsole.web.dto.KeyDetail;
 import io.tieringkv.webconsole.web.dto.KeyScanPage;
 import io.tieringkv.webconsole.web.dto.KeyTtlRequest;
@@ -46,6 +47,23 @@ public class KeyspaceController {
     public ApiResponse<Void> put(@RequestParam Long instanceId,
                                  @Valid @RequestBody KeyValueRequest request) {
         keyspaceService.setString(instanceId, request.key(), request.value());
+        return ApiResponse.ok();
+    }
+
+    @PutMapping("/hash-field")
+    @PreAuthorize("hasAnyRole('ADMIN','OPS')")
+    public ApiResponse<Void> putHashField(@RequestParam Long instanceId,
+                                          @Valid @RequestBody HashFieldRequest request) {
+        keyspaceService.setHashField(instanceId, request.key(), request.field(), request.value());
+        return ApiResponse.ok();
+    }
+
+    @DeleteMapping("/hash-field")
+    @PreAuthorize("hasAnyRole('ADMIN','OPS')")
+    public ApiResponse<Void> deleteHashField(@RequestParam Long instanceId,
+                                             @RequestParam String key,
+                                             @RequestParam String field) {
+        keyspaceService.deleteHashField(instanceId, key, field);
         return ApiResponse.ok();
     }
 

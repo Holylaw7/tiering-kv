@@ -489,6 +489,27 @@
         "required" : [ "newPassword", "oldPassword" ],
         "type" : "object"
       },
+      "HashFieldRequest" : {
+        "properties" : {
+          "field" : {
+            "maxLength" : 512,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "key" : {
+            "maxLength" : 512,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "value" : {
+            "maxLength" : 65536,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "field", "key" ],
+        "type" : "object"
+      },
       "InstanceRequest" : {
         "properties" : {
           "enabled" : {
@@ -1820,6 +1841,82 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/ApiResponseKeyDetail"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "keyspace-controller" ]
+      }
+    },
+    "/api/v1/keys/hash-field" : {
+      "delete" : {
+        "operationId" : "deleteHashField",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "instanceId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "key",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "field",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseVoid"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "keyspace-controller" ]
+      },
+      "put" : {
+        "operationId" : "putHashField",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "instanceId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/HashFieldRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseVoid"
                 }
               }
             },

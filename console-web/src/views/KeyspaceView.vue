@@ -20,6 +20,9 @@ const detail = ref<KeyDetail>()
 const detailLoading = ref(false)
 const editingValue = ref('')
 const ttlInput = ref<number>(-1)
+const hashRows = ref<Array<{ field: string; value: string }>>([])
+const newField = ref({ field: '', value: '' })
+const hashSaving = ref(false)
 
 function typeTagType(type: string) {
   switch (type) {
@@ -61,6 +64,14 @@ async function openDetail(row: KeyEntry) {
     detail.value = data
     ttlInput.value = data.ttl
     editingValue.value = typeof data.value === 'string' ? data.value : ''
+    hashRows.value =
+      data.type === 'hash' && data.value && typeof data.value === 'object'
+        ? Object.entries(data.value as Record<string, string>).map(([field, value]) => ({
+            field,
+            value: String(value)
+          }))
+        : []
+    newField.value = { field: '', value: '' }
   } finally {
     detailLoading.value = false
   }
@@ -70,6 +81,40 @@ async function saveValue() {
   if (!detail.value) return
   await keyspaceApi.put(store.selectedId, detail.value.key, editingValue.value)
   ElMessage.success('已写入')
+  await openDetail(detail.value as KeyEntry)
+  await scan(true)
+}
+
+async function saveHashField(field: string, value: string) {
+  if (!detail.value) return
+  if (!field) {
+    ElMessage.warning('字段名不能为空')
+    return
+  }
+  hashSaving.value = true
+  try {
+    await keyspaceApi.putHashField(store.selectedId, detail.value.key, field, value)
+    ElMessage.success('字段已保存')
+    await openDetail(detail.value as KeyEntry)
+    await scan(true)
+  } finally {
+    hashSaving.value = false
+  }
+}
+
+async function addHashField() {
+  if (!newField.value.field) {
+    ElMessage.warning('请填写字段名')
+    return
+  }
+  await saveHashField(newField.value.field, newField.value.value)
+}
+
+async function removeHashField(field: string) {
+  if (!detail.value) return
+  await ElMessageBox.confirm(`确认删除字段 ${field}？`, '危险操作', { type: 'warning' })
+  await keyspaceApi.removeHashField(store.selectedId, detail.value.key, field)
+  ElMessage.success('字段已删除')
   await openDetail(detail.value as KeyEntry)
   await scan(true)
 }
@@ -169,6 +214,29 @@ onMounted(() => scan(true))
           :rows="8"
           class="mono"
         />
+        <template v-else-if="detail?.type === 'hash' && auth.canOperate">
+          <el-table :data="hashRows" size="small" height="280">
+            <el-table-column prop="field" label="字段" width="160" show-overflow-tooltip>
+              <template #default="{ row }"><span class="mono">{{ row.field }}</span></template>
+            </el-table-column>
+            <el-table-column label="值">
+              <template #default="{ row }">
+                <el-input v-model="row.value" size="small" class="mono" />
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="130">
+              <template #default="{ row }">
+                <el-button link type="primary" size="small" :loading="hashSaving" @click="saveHashField(row.field, row.value)">保存</el-button>
+                <el-button link type="danger" size="small" @click="removeHashField(row.field)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div class="hash-add">
+            <el-input v-model="newField.field" size="small" placeholder="新字段" style="width: 160px" class="mono" />
+            <el-input v-model="newField.value" size="small" placeholder="值" class="mono" />
+            <el-button size="small" type="primary" :loading="hashSaving" @click="addHashField">新增字段</el-button>
+          </div>
+        </template>
         <pre v-else class="value-box mono">{{ renderValue() }}</pre>
         <div v-if="detail?.type === 'string' && auth.canOperate" style="margin-top: 10px">
           <el-button type="primary" size="small" @click="saveValue">保存值</el-button>
@@ -207,6 +275,13 @@ onMounted(() => scan(true))
   margin: 18px 0 8px;
   font-size: 13px;
   color: var(--el-text-color-secondary);
+}
+
+.hash-add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
 }
 
 .value-box {

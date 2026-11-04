@@ -137,6 +137,10 @@
 
 ### Added
 
+- **键空间可写扩展（TD-089）**：新增 `PUT/DELETE /keys/hash-field`（hash 单字段增改删，
+  字段不存在返回 404），前端键详情抽屉对 hash 提供可编辑表格（逐字段保存/删除/新增）；
+  `PUT /keys` 增加类型守卫（非 string 键返回 400 并提示改用对应入口）。
+  list/set/zset 保持只读并在界面标注。新增 8 个服务层用例。
 - **OpenAPI 契约与前端类型生成（TD-088）**：控制面接入 `springdoc`
   （`/v3/api-docs`、`/swagger-ui`），`OpenApiSnapshotTest` 与入库的
   `docs/api/openapi.json` 比对防契约漂移；前端 `npm run gen:api`

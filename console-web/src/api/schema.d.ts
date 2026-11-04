@@ -308,6 +308,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/keys/hash-field": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["putHashField"];
+        post?: never;
+        delete: operations["deleteHashField"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/keys/scan": {
         parameters: {
             query?: never;
@@ -617,6 +633,11 @@ export interface components {
         ChangePasswordRequest: {
             newPassword: string;
             oldPassword: string;
+        };
+        HashFieldRequest: {
+            field: string;
+            key: string;
+            value?: string;
         };
         InstanceRequest: {
             enabled?: boolean;
@@ -1427,6 +1448,56 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseKeyDetail"];
+                };
+            };
+        };
+    };
+    putHashField: {
+        parameters: {
+            query: {
+                instanceId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HashFieldRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    deleteHashField: {
+        parameters: {
+            query: {
+                instanceId: number;
+                key: string;
+                field: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
                 };
             };
         };

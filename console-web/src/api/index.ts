@@ -52,7 +52,11 @@ export const keyspaceApi = {
   ttl: (instanceId: number, key: string, ttlSeconds: number) =>
     http.put<unknown, void>('/keys/ttl', { key, ttlSeconds }, { params: { instanceId } }),
   remove: (instanceId: number, key: string) =>
-    http.delete<unknown, void>('/keys', { params: { instanceId, key } })
+    http.delete<unknown, void>('/keys', { params: { instanceId, key } }),
+  putHashField: (instanceId: number, key: string, field: string, value: string) =>
+    http.put<unknown, void>('/keys/hash-field', { key, field, value }, { params: { instanceId } }),
+  removeHashField: (instanceId: number, key: string, field: string) =>
+    http.delete<unknown, void>('/keys/hash-field', { params: { instanceId, key, field } })
 }
 
 export const terminalApi = {

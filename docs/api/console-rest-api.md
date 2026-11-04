@@ -75,9 +75,14 @@ GET /dashboard/trends?instanceId=1&minutes=30
 | --- | --- | --- |
 | GET | `/keys/scan?instanceId=&cursor=0&pattern=*&count=50` | SCAN 分页（count ≤ 200） |
 | GET | `/keys/detail?instanceId=&key=` | 按类型展开值 |
-| PUT | `/keys?instanceId=` | 写入字符串键 `{key,value}` |
+| PUT | `/keys?instanceId=` | 写入字符串键 `{key,value}`（仅 string/不存在，否则 400） |
+| PUT | `/keys/hash-field?instanceId=` | 写 hash 字段 `{key,field,value}`（仅 hash/不存在） |
+| DELETE | `/keys/hash-field?instanceId=&key=&field=` | 删除 hash 字段（字段不存在 404） |
 | PUT | `/keys/ttl?instanceId=` | 设置过期 `{key,ttlSeconds}`（≤0 表示持久化） |
 | DELETE | `/keys?instanceId=&key=` | 删除 |
+
+> 类型守卫（TD-089）：list/set/zset/json 目前只读；`SET` 命中非 string 键、
+> `HSET` 命中的键已存在且非 hash 时返回 `40000`，避免破坏原有结构。
 
 ## 6. 终端
 

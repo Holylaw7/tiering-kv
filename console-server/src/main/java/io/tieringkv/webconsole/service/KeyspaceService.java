@@ -96,8 +96,44 @@ public class KeyspaceService {
     @Transactional
     public void setString(Long instanceId, String key, String value) {
         DbInstance instance = instanceService.require(instanceId);
+        String type = type(instance, key);
+        if (!"none".equals(type) && !"string".equals(type)) {
+            throw BusinessException.badRequest(
+                    "键 " + key + " 的类型为 " + type + "，不能用 SET 覆盖（请使用对应类型的编辑入口）");
+        }
         execute(instance, "SET", key, value);
         auditService.record("KEY_SET", instance.getName() + "/" + key, null, true);
+    }
+
+    /** hash 单字段写入（TD-089）：不存在则新建，存在则覆盖。 */
+    @Transactional
+    public void setHashField(Long instanceId, String key, String field, String value) {
+        DbInstance instance = instanceService.require(instanceId);
+        String type = type(instance, key);
+        if (!"none".equals(type) && !"hash".equals(type)) {
+            throw BusinessException.badRequest(
+                    "键 " + key + " 的类型为 " + type + "，不能写入 hash 字段");
+        }
+        RespReply reply = execute(instance, "HSET", key, field, value);
+        if (reply instanceof RespReply.Error error) {
+            throw BusinessException.badRequest("HSET 失败：" + error.message());
+        }
+        auditService.record("KEY_HSET", instance.getName() + "/" + key + "/" + field, null, true);
+    }
+
+    /** hash 单字段删除（TD-089）：字段不存在返回 404。 */
+    @Transactional
+    public void deleteHashField(Long instanceId, String key, String field) {
+        DbInstance instance = instanceService.require(instanceId);
+        String type = type(instance, key);
+        if (!"hash".equals(type)) {
+            throw BusinessException.badRequest("键 " + key + " 的类型为 " + type + "，不是 hash");
+        }
+        RespReply reply = execute(instance, "HDEL", key, field);
+        if (integer(reply) == 0) {
+            throw BusinessException.notFound("字段不存在：" + field);
+        }
+        auditService.record("KEY_HDEL", instance.getName() + "/" + key + "/" + field, null, true);
     }
 
     public String type(DbInstance instance, String key) {
