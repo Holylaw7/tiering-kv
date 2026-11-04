@@ -118,4 +118,5 @@ GET /dashboard/trends?instanceId=1&minutes=30
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| GET | `/audit?action=KEY_DELETE&page=1&size=20` | 操作日志分页 |
+| GET | `/audit?action=&username=&success=&from=&to=&page=1&size=20` | 操作日志分页（动作/用户模糊匹配，结果布尔，时间 ISO-8601） |
+| GET | `/audit/export?<同上筛选>` | 导出 CSV（UTF-8 BOM，最多 10000 条，带 `Content-Disposition`） |

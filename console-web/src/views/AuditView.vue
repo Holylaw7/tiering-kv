@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { auditApi } from '@/api'
 import type { OpLog } from '@/api/types'
 
@@ -8,16 +9,60 @@ const total = ref(0)
 const page = ref(1)
 const size = ref(20)
 const action = ref('')
+const username = ref('')
+const result = ref<string>('')
+const range = ref<[string, string] | null>(null)
 const loading = ref(false)
+const exporting = ref(false)
+
+function query(pageNo = page.value) {
+  return {
+    action: action.value || undefined,
+    username: username.value || undefined,
+    success: result.value === '' ? undefined : result.value === 'true',
+    from: range.value?.[0] ? `${range.value[0]}T00:00:00` : undefined,
+    to: range.value?.[1] ? `${range.value[1]}T23:59:59` : undefined,
+    page: pageNo,
+    size: size.value
+  }
+}
 
 async function load() {
   loading.value = true
   try {
-    const result = await auditApi.page({ action: action.value || undefined, page: page.value, size: size.value })
-    rows.value = result.items
-    total.value = result.total
+    const data = await auditApi.page(query())
+    rows.value = data.items
+    total.value = data.total
   } finally {
     loading.value = false
+  }
+}
+
+function reset() {
+  action.value = ''
+  username.value = ''
+  result.value = ''
+  range.value = null
+  page.value = 1
+  load()
+}
+
+async function exportCsv() {
+  exporting.value = true
+  try {
+    const blob = await auditApi.exportCsv(query(1))
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
+    link.href = url
+    link.download = `audit-logs-${stamp}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    ElMessage.success('已导出当前筛选结果')
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -29,13 +74,26 @@ onMounted(load)
     <div class="page-header">
       <div>
         <h2 class="page-title">审计日志</h2>
-        <p class="page-subtitle">所有写操作、登录行为与危险命令均留痕，支持按动作检索</p>
+        <p class="page-subtitle">所有写操作、登录行为与危险命令均留痕；支持按动作、操作人、结果与时间区间筛选</p>
       </div>
-      <div style="display: flex; gap: 10px">
-        <el-input v-model="action" placeholder="动作，如 KEY_DELETE" clearable style="width: 220px" @keyup.enter="load">
-          <template #prefix><el-icon><Search /></el-icon></template>
-        </el-input>
-        <el-button @click="load">查询</el-button>
+      <div class="toolbar">
+        <el-input v-model="action" placeholder="动作，如 KEY_DELETE" clearable style="width: 180px" @keyup.enter="load" />
+        <el-input v-model="username" placeholder="操作人" clearable style="width: 130px" @keyup.enter="load" />
+        <el-select v-model="result" placeholder="结果" clearable style="width: 110px">
+          <el-option label="成功" value="true" />
+          <el-option label="失败" value="false" />
+        </el-select>
+        <el-date-picker
+          v-model="range"
+          type="daterange"
+          value-format="YYYY-MM-DD"
+          start-placeholder="开始"
+          end-placeholder="结束"
+          style="width: 230px"
+        />
+        <el-button type="primary" @click="page = 1; load()">查询</el-button>
+        <el-button @click="reset">重置</el-button>
+        <el-button :loading="exporting" @click="exportCsv">导出 CSV</el-button>
       </div>
     </div>
 
@@ -73,5 +131,12 @@ onMounted(load)
 .pager {
   margin-top: 14px;
   justify-content: flex-end;
+}
+
+.toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 </style>

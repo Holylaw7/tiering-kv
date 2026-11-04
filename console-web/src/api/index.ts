@@ -87,7 +87,19 @@ export const backupApi = {
   remove: (id: number) => http.delete<unknown, void>(`/backups/${id}`)
 }
 
+export interface AuditQuery {
+  action?: string
+  username?: string
+  success?: boolean
+  from?: string
+  to?: string
+  page?: number
+  size?: number
+}
+
 export const auditApi = {
-  page: (params: { action?: string; page?: number; size?: number }) =>
-    http.get<unknown, PageResult<OpLog>>('/audit', { params })
+  page: (params: AuditQuery) => http.get<unknown, PageResult<OpLog>>('/audit', { params }),
+  /** 导出 CSV（返回 Blob，由调用方触发下载）。 */
+  exportCsv: (params: AuditQuery) =>
+    http.get<unknown, Blob>('/audit/export', { params, responseType: 'blob' })
 }

@@ -4,14 +4,21 @@ import io.tieringkv.webconsole.domain.OpLog;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 
-/** 审计日志仓储。 */
-public interface OpLogRepository extends JpaRepository<OpLog, Long> {
+/**
+ * 审计日志仓储。
+ *
+ * <p>带条件的查询用 {@link JpaSpecificationExecutor} 动态拼装（TD-090），
+ * 避免 JPQL 里 `:param is null` 的类型推断坑。
+ */
+public interface OpLogRepository
+        extends JpaRepository<OpLog, Long>, JpaSpecificationExecutor<OpLog> {
 
     Page<OpLog> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
