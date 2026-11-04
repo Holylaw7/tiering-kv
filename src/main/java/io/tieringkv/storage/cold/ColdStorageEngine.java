@@ -46,6 +46,9 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
     private final boolean useMmap;
     private long nextTableId = 1;
     private long pendingBytes;
+    /** 存活键计数缓存（TD-086）：写入置脏，查询时惰性重算。 */
+    private boolean liveCountDirty = true;
+    private long liveCountCache;
     private boolean closed;
 
     public ColdStorageEngine(Config config) throws IOException {
@@ -74,25 +77,72 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
 
     @Override
     public byte[] get(byte[] key) {
+        KeyValueEntry entry = entry(key);
+        return entry == null ? null : entry.value();
+    }
+
+    /**
+     * 读取存活条目（TD-086）：与 {@link #get} 的可见性一致，但保留 TTL 等元数据，
+     * 供上层把冷层数据回填热层时还原过期时间。
+     *
+     * @return 存活条目；不存在、已删除或已过期返回 null
+     */
+    public KeyValueEntry entry(byte[] key) {
         long now = System.currentTimeMillis();
         synchronized (lock) {
-            KeyValueEntry entry = pending.get(Keys.wrap(key));
-            if (entry == null) {
-                for (int i = tables.size() - 1; i >= 0; i--) {
-                    entry = blockCache == null
-                            ? readEntry(tables.get(i), key)
-                            : readEntryWithCache(tables.get(i), key);
-                    if (entry != null) {
-                        break;
-                    }
+            KeyValueEntry entry = findEntryLocked(key);
+            // 首个命中的条目决定结果：tombstone/过期视为不存在（不再查旧表）
+            return entry != null && entry.isLive(now) ? entry : null;
+        }
+    }
+
+    /**
+     * 冷层存活键数（精确，供 DBSIZE 汇总）。
+     *
+     * <p>实现取舍：键可能经由 `put`（逐条迁移）或 `writeTable`（整表 flush /
+     * compaction）进入冷层，逐条维护计数器需要在整表写入时做 N 次历史查询，
+     * 代价过高。这里改为**脏标记 + 惰性全量计数**：发生写入后首次查询触发
+     * 一次迭代，之后命中缓存，直到下一次写入。
+     */
+    public long liveCount() {
+        if (!liveCountDirty) {
+            return liveCountCache;
+        }
+        synchronized (lock) {
+            if (!liveCountDirty) {
+                return liveCountCache;
+            }
+            long counted = 0;
+            try (StorageIterator iterator = iterator()) {
+                while (iterator.hasNext()) {
+                    iterator.next();
+                    counted++;
                 }
             }
-            if (entry == null) {
-                return null;
-            }
-            // 首个命中的条目决定结果：tombstone/过期视为不存在（不再查旧表）
-            return entry.isLive(now) ? entry.value() : null;
+            liveCountCache = counted;
+            liveCountDirty = false;
+            return counted;
         }
+    }
+
+    private void invalidateLiveCount() {
+        liveCountDirty = true;
+    }
+
+    private KeyValueEntry findEntryLocked(byte[] key) {
+        KeyValueEntry entry = pending.get(Keys.wrap(key));
+        if (entry != null) {
+            return entry;
+        }
+        for (int i = tables.size() - 1; i >= 0; i--) {
+            entry = blockCache == null
+                    ? readEntry(tables.get(i), key)
+                    : readEntryWithCache(tables.get(i), key);
+            if (entry != null) {
+                return entry;
+            }
+        }
+        return null;
     }
 
     @Override
@@ -101,6 +151,7 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
             ensureOpen();
             pending.put(Keys.wrap(entry.key()), entry);
             pendingBytes += entry.size();
+            invalidateLiveCount();
             if (pendingBytes >= config.pendingThresholdBytes()) {
                 flushPendingLocked();
             }
@@ -151,6 +202,7 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
             nextTableId++;
             tables.add(meta);
             Manifest.write(config.directory(), tables);
+            invalidateLiveCount();
             compactIfNeededLocked();
             return meta;
         }

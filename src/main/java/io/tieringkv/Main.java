@@ -31,6 +31,7 @@ import io.tieringkv.storage.cold.ColdMigration;
 import io.tieringkv.storage.cold.ColdStorageEngine;
 import io.tieringkv.storage.io.IOStatistics;
 import io.tieringkv.storage.tiering.TieringController;
+import io.tieringkv.storage.tiering.TieringReadStorageEngine;
 import io.tieringkv.storage.tiering.TieringStorageEngine;
 import io.tieringkv.storage.tiering.WatermarkManager;
 import io.tieringkv.storage.wal.RecoveryManager;
@@ -114,8 +115,10 @@ public final class Main {
                 new MultiModelMetricsRegistry(),
                 new BackupMetricsRegistry());
         // M2 增强（ADR-0320）：VECTOR 值 put/delete 经存储层同步索引
+        // TD-086：读路径补齐冷层回退（迁移后的键可读、DBSIZE/SCAN 覆盖冷层）
+        StorageEngine tieredStorage = new TieringReadStorageEngine(storage, cold);
         StorageEngine syncStorage = new VectorIndexSyncStorageEngine(
-                storage, vectorStore, observability.vector());
+                tieredStorage, vectorStore, observability.vector());
         // 可观测性收敛（ADR-0355）：INFO 输出 Redis 兼容标准 section，
         // 供 Web 控制台解析真实运行态
         ServerInfoProvider serverInfo = new ServerInfoProvider(

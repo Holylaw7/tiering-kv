@@ -3,6 +3,25 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [5.1.0] - 2026-10-28
+
+### Fixed
+
+- **冷层数据读不回来（TD-086，ADR-0361）**：迁移只写冷层、主读链从不查询冷层，
+  导致超配后 60 万键仅 51.92% 可读回、`DBSIZE` 只统计热层。
+  修复：`ColdStorageEngine` 新增 `entry()`/`liveCount()`；新增
+  `TieringReadStorageEngine`（读回退、双删防复活、size 汇总、归并迭代器）；
+  原子写 copy-up（INCR/APPEND/GETSET/GETDEL/UPDATE 保留 TTL）；
+  `DBSIZE`/`SCAN`/`FLUSHALL` 覆盖冷层。复测 **命中率 100%**、`DBSIZE` 精确、
+  冷读 P50 0.100ms（热读 0.099ms）。
+- 新增 20 个测试（冷层条目 5 / 读装饰器 7 / 原子回填 8）。
+
+### Added
+
+- 容量模型（TD-084）：`scripts/capacity-probe.mjs` 实测边际每键开销
+  ≈ **值大小 + 74 B**，1GB 可容纳约 614 万（100B）/ 98 万（1KB）/ 10.4 万（10KB）键。
+- 端到端验证脚本 `scripts/verify-tiering.mjs`（确定性键名、命中率、冷热分段延迟）。
+
 ## [5.0.3] - 2026-10-24
 
 ### Fixed
