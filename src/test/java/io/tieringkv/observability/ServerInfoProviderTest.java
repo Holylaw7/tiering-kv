@@ -106,6 +106,7 @@ class ServerInfoProviderTest {
         StorageMetrics storage = new StorageMetrics();
         storage.setMemoryGauges(4096, 1024 * 1024, 12);
         storage.setColdGauges(3, 8192);
+        storage.setColdEntryCount(900);
         storage.recordFlush(2048, 1_000_000L);
         storage.recordCompaction(4096, 2048, 2_000_000L);
         storage.migrationSubmitted();
@@ -122,6 +123,9 @@ class ServerInfoProviderTest {
                 .contains("tiering_memtable_used_bytes:4096\r\n")
                 .contains("tiering_memtable_entries:12\r\n")
                 .contains("tiering_cold_sstable_count:3\r\n")
+                .contains("tiering_hot_keys:12\r\n")
+                .contains("tiering_cold_entries:900\r\n")
+                .contains("tiering_hot_key_share:0.0132\r\n")
                 .contains("tiering_cold_disk_usage_bytes:8192\r\n")
                 .contains("tiering_flush_count:1\r\n")
                 .contains("tiering_migration_success:1\r\n")

@@ -203,6 +203,9 @@ public final class ServerInfoProvider {
                 + "tiering_cold_sstable_count:" + snapshot.coldSstableCount() + "\r\n"
                 + "tiering_cold_disk_usage_bytes:" + cold + "\r\n"
                 + "tiering_cold_share:" + String.format(Locale.ROOT, "%.4f", coldShare) + "\r\n"
+                + "tiering_hot_keys:" + snapshot.memoryEntryCount() + "\r\n"
+                + "tiering_cold_entries:" + snapshot.coldEntryCount() + "\r\n"
+                + "tiering_hot_key_share:" + String.format(Locale.ROOT, "%.4f", hotKeyShare(snapshot)) + "\r\n"
                 + "tiering_flush_count:" + flushTotal + "\r\n"
                 + "tiering_flush_bytes:" + snapshot.flushBytes() + "\r\n"
                 + "tiering_migration_pending:" + snapshot.migrationPending() + "\r\n"
@@ -222,6 +225,14 @@ public final class ServerInfoProvider {
                 + "tiering_compaction_in_progress:" + snapshot.compactionInProgress() + "\r\n"
                 + "tiering_block_cache_hit_rate:"
                 + String.format(Locale.ROOT, "%.4f", cache.hitRate()) + "\r\n";
+    }
+
+    /** 热层键占（热 + 冷表条目）的比例，用于前端键分布条。 */
+    private static double hotKeyShare(StorageMetrics.Snapshot snapshot) {
+        long hot = snapshot.memoryEntryCount();
+        long cold = snapshot.coldEntryCount();
+        long total = hot + cold;
+        return total == 0 ? 0 : hot / (double) total;
     }
 
     private String keyspace() {

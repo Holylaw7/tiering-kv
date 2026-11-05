@@ -39,6 +39,9 @@ const tiering = computed(() => {
     cacheHits: current?.cacheHits ?? 0,
     cacheMisses: current?.cacheMisses ?? 0,
     cacheEvictions: current?.cacheEvictions ?? 0,
+    hotKeys: current?.hotKeys ?? 0,
+    coldEntries: current?.coldEntries ?? 0,
+    hotKeyShare: current?.hotKeyShare ?? 0,
     compactionCount: current?.compactionCount ?? 0,
     compactionInputBytes: current?.compactionInputBytes ?? 0,
     compactionOutputBytes: current?.compactionOutputBytes ?? 0,
@@ -393,30 +396,49 @@ const memoryOption = computed<any>(() => ({
           </div>
         </div>
 
-        <div class="split">
-          <div class="split-labels">
-            <span>热层 {{ formatBytes(tiering.hot) }}</span>
-            <span>冷层 {{ formatBytes(tiering.cold) }}</span>
-          </div>
-          <div class="split-bar" :class="{ empty: tiering.total === 0 }">
-            <template v-if="tiering.total > 0">
-              <div class="split-hot" :style="{ width: Math.max(2, tiering.hotShare * 100) + '%' }"></div>
-              <div class="split-cold" :style="{ width: Math.max(2, tiering.coldShare * 100) + '%' }"></div>
-            </template>
-          </div>
-          <div class="split-foot">
-            <span>
-              总占用 {{ formatBytes(tiering.total) }}
-              <em v-if="tiering.total === 0" class="split-note">· 实例为空，尚无分层数据</em>
+        <div class="composition">
+          <div class="comp-head">
+            <span class="comp-title">存储构成</span>
+            <span class="comp-note">
+              键分布取 SSTable 表条目累加（含历史版本），非去重精确值
             </span>
-            <span>
-              Compaction {{ formatNumber(tiering.compactionCount) }} 次
-              <template v-if="tiering.compactionCount > 0">
-                · {{ formatBytes(tiering.compactionInputBytes) }} → {{ formatBytes(tiering.compactionOutputBytes) }}
-                · 平均 {{ tiering.compactionLatencyMs.toFixed(0) }} ms
+          </div>
+
+          <div class="comp-row">
+            <span class="comp-label">容量</span>
+            <div class="comp-bar" :class="{ empty: tiering.total === 0 }">
+              <template v-if="tiering.total > 0">
+                <div v-if="tiering.hot > 0" class="comp-hot" :style="{ width: Math.max(1, tiering.hotShare * 100) + '%' }"></div>
+                <div class="comp-cold" :style="{ width: Math.max(1, tiering.coldShare * 100) + '%' }"></div>
               </template>
-              · 淘汰 {{ formatNumber(tiering.cacheEvictions) }}
+            </div>
+            <span class="comp-value num">
+              <i class="dot hot"></i>{{ formatBytes(tiering.hot) }}
+              <i class="dot cold"></i>{{ formatBytes(tiering.cold) }}
             </span>
+          </div>
+
+          <div class="comp-row">
+            <span class="comp-label">键</span>
+            <div class="comp-bar" :class="{ empty: tiering.hotKeys + tiering.coldEntries === 0 }">
+              <template v-if="tiering.hotKeys + tiering.coldEntries > 0">
+                <div v-if="tiering.hotKeys > 0" class="comp-hot" :style="{ width: Math.max(1, tiering.hotKeyShare * 100) + '%' }"></div>
+                <div class="comp-cold" :style="{ width: Math.max(1, (1 - tiering.hotKeyShare) * 100) + '%' }"></div>
+              </template>
+            </div>
+            <span class="comp-value num">
+              <i class="dot hot"></i>{{ formatNumber(tiering.hotKeys) }}
+              <i class="dot cold"></i>{{ formatNumber(tiering.coldEntries) }}
+            </span>
+          </div>
+
+          <div class="comp-foot">
+            <span>总占用 {{ formatBytes(tiering.total) }}</span>
+            <span v-if="tiering.total === 0">实例为空，尚无分层数据</span>
+            <span v-else>
+              热层占容量 {{ formatPercent(tiering.hotShare) }} · 键总数（去重）{{ formatNumber(live?.totalKeys) }}
+            </span>
+            <span>Compaction {{ formatNumber(tiering.compactionCount) }} 次 · 淘汰 {{ formatNumber(tiering.cacheEvictions) }}</span>
           </div>
         </div>
       </template>
@@ -752,47 +774,110 @@ const memoryOption = computed<any>(() => ({
   white-space: nowrap;
 }
 
-.split {
+.composition {
   margin-top: 8px;
-  padding: 12px 16px 14px;
+  padding: 14px 16px 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
 }
 
-.split-labels,
-.split-foot {
+.comp-head {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.comp-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.comp-note {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.comp-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 220px;
+  align-items: center;
+  gap: 14px;
+}
+
+.comp-row + .comp-row {
+  margin-top: 8px;
+}
+
+.comp-label {
   font-size: 11.5px;
   color: var(--text-3);
 }
 
-.split-bar.empty {
-  background: repeating-linear-gradient(90deg, var(--surface-3) 0 6px, transparent 6px 12px);
-}
-
-.split-note {
-  font-style: normal;
-  color: var(--text-3);
-}
-
-.split-bar {
+.comp-bar {
   display: flex;
   height: 8px;
-  margin: 8px 0 6px;
   border-radius: 999px;
   overflow: hidden;
   background: var(--surface-3);
 }
 
-.split-hot {
+.comp-bar.empty {
+  background: repeating-linear-gradient(90deg, var(--surface-3) 0 6px, transparent 6px 12px);
+}
+
+.comp-hot {
   background: var(--accent);
 }
 
-.split-cold {
-  background: #4c9a72;
+.comp-cold {
+  background: #6fa88a;
+}
+
+.comp-value {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.comp-value .dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.comp-value .dot.hot {
+  background: var(--accent);
+  margin-left: 8px;
+}
+
+.comp-value .dot.cold {
+  background: #6fa88a;
+  margin-left: 8px;
+}
+
+.comp-value .dot.hot:first-child {
+  margin-left: 0;
+}
+
+.comp-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line-soft);
+  font-size: 11px;
+  color: var(--text-3);
 }
 
 .charts {

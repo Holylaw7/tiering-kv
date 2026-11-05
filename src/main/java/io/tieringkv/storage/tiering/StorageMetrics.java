@@ -25,6 +25,8 @@ public final class StorageMetrics {
     // 冷层（gauge）
     private final AtomicLong coldSstableCount = new AtomicLong();
     private final AtomicLong coldDiskUsage = new AtomicLong();
+    /** 冷层表条目累加（含历史版本，用于键分布，非精确去重值）。 */
+    private final AtomicLong coldEntryCount = new AtomicLong();
 
     // 后台任务进行中标记（TD-097）
     private final AtomicLong flushInProgress = new AtomicLong();
@@ -67,6 +69,11 @@ public final class StorageMetrics {
         coldDiskUsage.set(diskUsage);
     }
 
+    /** 记录冷层表条目累加值（TD-098）。 */
+    public void setColdEntryCount(long entries) {
+        coldEntryCount.set(entries);
+    }
+
     /** 记录一次 SSTable 合并（输入/输出字节 + 耗时）。 */
     public void recordCompaction(long inputBytes, long outputBytes, long latencyNanos) {
         compactionCount.increment();
@@ -93,7 +100,7 @@ public final class StorageMetrics {
                 migrationPending.get(), migrationSuccess.sum(), migrationFailed.sum(),
                 migrationLatencyNanos.sum(),
                 flushCount.sum(), flushBytes.sum(), flushLatencyNanos.sum(),
-                coldSstableCount.get(), coldDiskUsage.get(),
+                coldSstableCount.get(), coldDiskUsage.get(), coldEntryCount.get(),
                 compactionCount.sum(), compactionInputBytes.sum(),
                 compactionOutputBytes.sum(), compactionLatencyNanos.sum(),
                 flushInProgress.get(), compactionInProgress.get());
@@ -112,6 +119,7 @@ public final class StorageMetrics {
             long flushLatencyNanos,
             long coldSstableCount,
             long coldDiskUsage,
+            long coldEntryCount,
             long compactionCount,
             long compactionInputBytes,
             long compactionOutputBytes,

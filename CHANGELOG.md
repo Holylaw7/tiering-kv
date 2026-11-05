@@ -137,6 +137,9 @@
 
 ### Added
 
+- **键分布与存储构成（TD-098）**：`INFO # Tiering` 增加 `tiering_hot_keys`（精确）、
+  `tiering_cold_entries`（表条目累加，上界）、`tiering_hot_key_share`；控制面与前端类型同步；
+  运行总览新增「存储构成」面板（容量条 + 键条 + 去重键总数），并标注冷层条目含历史版本。
 - **可观测性验收（Phase 7 / TD-097 / ADR-0364）**：INFO 路径改为**节流刷新**
   （200ms 内复用 gauge，成本 O(表数)、无目录扫描）；一次 INFO 渲染只取**一个存储快照**，
   `# Memory` 与 `# Tiering` 数值时间一致；新增 `tiering_flush_in_progress` /

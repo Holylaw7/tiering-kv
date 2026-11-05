@@ -50,6 +50,9 @@ export interface LiveMetrics {
   memtableUsedBytes: number
   memtableMaxBytes: number
   memtableEntries: number
+  hotKeys: number
+  coldEntries: number
+  hotKeyShare: number
   coldSstableCount: number
   coldDiskUsageBytes: number
   coldShare: number

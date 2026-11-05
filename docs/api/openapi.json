@@ -745,6 +745,10 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "coldEntries" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
           "coldShare" : {
             "format" : "double",
             "type" : "number"
@@ -790,6 +794,14 @@
             "type" : "integer"
           },
           "flushInProgress" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "hotKeyShare" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "hotKeys" : {
             "format" : "int64",
             "type" : "integer"
           },

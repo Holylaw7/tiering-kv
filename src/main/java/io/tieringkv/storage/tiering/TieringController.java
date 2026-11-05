@@ -103,6 +103,7 @@ public final class TieringController implements AutoCloseable {
         long sstableCount = tables.size();
         long diskUsage = tables.stream().mapToLong(SSTableMeta::fileSize).sum();
         metrics.setColdGauges(sstableCount, diskUsage);
+        metrics.setColdEntryCount(tables.stream().mapToLong(SSTableMeta::entryCount).sum());
         metrics.setFlushInProgress(flushScheduler.inProgress());
         metrics.setCompactionInProgress(cold.isCompacting());
         lastRefreshNanos.set(System.nanoTime());

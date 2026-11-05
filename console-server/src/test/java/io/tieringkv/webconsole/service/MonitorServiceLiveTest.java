@@ -46,6 +46,9 @@ class MonitorServiceLiveTest {
                 tiering_memtable_used_bytes:1024
                 tiering_memtable_max_bytes:4096
                 tiering_memtable_entries:7
+                tiering_hot_keys:7
+                tiering_cold_entries:900
+                tiering_hot_key_share:0.0077
                 tiering_cold_sstable_count:2
                 tiering_cold_disk_usage_bytes:8192
                 tiering_flush_count:3
@@ -65,6 +68,9 @@ class MonitorServiceLiveTest {
         assertThat(live.tieringReported()).isTrue();
         assertThat(live.memtableEntries()).isEqualTo(7);
         assertThat(live.coldSstableCount()).isEqualTo(2);
+        assertThat(live.hotKeys()).isEqualTo(7);
+        assertThat(live.coldEntries()).isEqualTo(900);
+        assertThat(live.hotKeyShare()).isEqualTo(0.0077);
         assertThat(live.compactionCount()).isEqualTo(1);
         assertThat(live.flushInProgress()).isEqualTo(1);
         assertThat(live.cacheHitRate()).isEqualTo(0.9);

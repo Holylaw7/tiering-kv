@@ -763,6 +763,8 @@ export interface components {
             cacheMisses?: number;
             /** Format: int64 */
             coldDiskUsageBytes?: number;
+            /** Format: int64 */
+            coldEntries?: number;
             /** Format: double */
             coldShare?: number;
             /** Format: int64 */
@@ -787,6 +789,10 @@ export interface components {
             flushCount?: number;
             /** Format: int64 */
             flushInProgress?: number;
+            /** Format: double */
+            hotKeyShare?: number;
+            /** Format: int64 */
+            hotKeys?: number;
             /** Format: int64 */
             latencyMaxMillis?: number;
             /** Format: int64 */
