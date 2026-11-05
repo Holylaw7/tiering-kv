@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import { instanceApi } from '@/api'
 import type { InstanceView } from '@/api/types'
@@ -9,6 +9,8 @@ import { useAuthStore } from '@/stores/auth'
 const store = useInstanceStore()
 const auth = useAuthStore()
 const rows = ref<InstanceView[]>([])
+const onlineCount = computed(() => rows.value.filter((row) => row.status === 'UP').length)
+const passwordCount = computed(() => rows.value.filter((row) => row.hasPassword).length)
 const loading = ref(false)
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
@@ -92,6 +94,15 @@ onMounted(load)
       </el-button>
     </div>
 
+    <div class="summary-strip">
+      <span class="summary-item">纳管实例 <strong class="num">{{ rows.length }}</strong></span>
+      <span class="summary-item">在线 <strong class="num">{{ onlineCount }}</strong></span>
+      <span class="summary-item">离线 <strong class="num">{{ rows.length - onlineCount }}</strong></span>
+      <span class="summary-item">已配置口令 <strong class="num">{{ passwordCount }}</strong></span>
+      <span class="summary-item grow"></span>
+      <span class="summary-item dim">协议 RESP · 控制面直连，不经内核进程内 API</span>
+    </div>
+
     <div class="panel">
       <el-table :data="rows" size="default">
         <el-table-column prop="name" label="名称" min-width="140" />
@@ -160,6 +171,31 @@ onMounted(load)
 </template>
 
 <style scoped>
+.summary-strip {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 0 0 14px;
+  font-size: var(--text-sm);
+  color: var(--text-2);
+  flex-wrap: wrap;
+}
+
+.summary-item strong {
+  margin-left: 4px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.summary-item.dim {
+  font-size: var(--text-xs);
+  color: var(--text-3);
+}
+
+.grow {
+  flex: 1;
+}
+
 .muted {
   color: var(--el-text-color-secondary);
 }

@@ -18,6 +18,7 @@ const entries = ref<Entry[]>([])
 const history = ref<TerminalHistory[]>([])
 const busy = ref(false)
 const outputRef = ref<HTMLDivElement | null>(null)
+const expanded = ref(false)
 
 const quickCommands = ['PING', 'INFO', 'DBSIZE', 'SCAN 0 COUNT 20', 'TYPE demo', 'CLIENT LIST']
 
@@ -85,9 +86,12 @@ onMounted(loadHistory)
         <header class="term-bar">
           <span class="term-title">会话 · {{ store.selected?.name ?? '未选择实例' }}</span>
           <span class="term-meta mono">{{ entries.length }} 条命令</span>
+          <button class="term-action" type="button" @click="expanded = !expanded">
+            {{ expanded ? '收起' : '展开' }}
+          </button>
         </header>
 
-        <div ref="outputRef" class="term-body mono">
+        <div ref="outputRef" class="term-body mono" :class="{ expanded }">
           <div v-if="!entries.length" class="term-empty">
             <p class="term-empty-title">会话尚未开始</p>
             <p class="term-empty-desc">输入命令后回车执行；下方快捷命令可直接点击。</p>
@@ -201,7 +205,7 @@ onMounted(loadHistory)
 .term-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
   height: 38px;
   padding: 0 14px;
   border-bottom: 1px solid var(--term-line);
@@ -221,6 +225,7 @@ onMounted(loadHistory)
 
 .term-body {
   height: 460px;
+  scroll-behavior: smooth;
   overflow-y: auto;
   padding: 14px 16px;
   color: var(--term-text);
@@ -278,21 +283,41 @@ onMounted(loadHistory)
 }
 
 .reply {
-  margin: 6px 0 0;
-  padding: 8px 10px;
-  border: 1px solid var(--term-line);
-  border-radius: 6px;
-  background: var(--term-surface);
-  color: #b9c1cb;
+  margin: 4px 0 0 18px;
+  padding: 0 0 0 10px;
+  border: 0;
+  border-left: 1px solid var(--term-line);
+  background: transparent;
+  color: #aab3bf;
   font-size: 12.5px;
+  line-height: 1.65;
   white-space: pre-wrap;
   word-break: break-all;
 }
 
 .reply.error {
-  border-color: #4a2a2c;
-  background: #1e1416;
   color: var(--term-error);
+  border-left-color: #5a2a2d;
+}
+
+.term-body.expanded {
+  height: min(72vh, 720px);
+}
+
+.term-action {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--term-line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--term-muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.term-action:hover {
+  color: var(--term-text);
+  border-color: #3a414b;
 }
 
 /* ---------- 输入区 ---------- */

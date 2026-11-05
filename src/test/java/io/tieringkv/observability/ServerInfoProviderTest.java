@@ -1,6 +1,8 @@
 package io.tieringkv.observability;
 
+import io.tieringkv.cache.block.CacheStatistics;
 import io.tieringkv.monitor.MetricsRegistry;
+import io.tieringkv.storage.tiering.StorageMetrics;
 import io.tieringkv.storage.memory.MemoryManager;
 import org.junit.jupiter.api.Test;
 
@@ -95,5 +97,42 @@ class ServerInfoProviderTest {
         assertThat(ServerInfoProvider.human(512)).isEqualTo("512.00B");
         assertThat(ServerInfoProvider.human(2048)).isEqualTo("2.00K");
         assertThat(ServerInfoProvider.human(3L * 1024 * 1024)).isEqualTo("3.00M");
+    }
+
+    @Test
+    void exposesTieringSectionWithRealCounters() {
+        MetricsRegistry metrics = new MetricsRegistry();
+        MemoryManager memory = new MemoryManager(1024 * 1024);
+        StorageMetrics storage = new StorageMetrics();
+        storage.setMemoryGauges(4096, 1024 * 1024, 12);
+        storage.setColdGauges(3, 8192);
+        storage.recordFlush(2048, 1_000_000L);
+        storage.migrationSubmitted();
+        storage.migrationCompleted(true, 500_000L);
+        CacheStatistics cache = new CacheStatistics();
+        CacheStatistics.Snapshot snapshot = cache.snapshot();
+
+        ServerInfoProvider provider = new ServerInfoProvider(
+                metrics, memory, () -> 12L, 6379, "9.9.9",
+                storage, () -> snapshot, null);
+        String info = provider.render();
+
+        assertThat(info).contains("# Tiering\r\n")
+                .contains("tiering_memtable_used_bytes:4096\r\n")
+                .contains("tiering_memtable_entries:12\r\n")
+                .contains("tiering_cold_sstable_count:3\r\n")
+                .contains("tiering_cold_disk_usage_bytes:8192\r\n")
+                .contains("tiering_flush_count:1\r\n")
+                .contains("tiering_migration_success:1\r\n")
+                .contains("tiering_block_cache_hit_rate:0.0000\r\n");
+    }
+
+    @Test
+    void omitsTieringSectionWhenMetricsUnavailable() {
+        MetricsRegistry metrics = new MetricsRegistry();
+        ServerInfoProvider provider = new ServerInfoProvider(
+                metrics, new MemoryManager(1024), () -> 0L, 6379, "9.9.9");
+
+        assertThat(provider.render()).doesNotContain("# Tiering");
     }
 }

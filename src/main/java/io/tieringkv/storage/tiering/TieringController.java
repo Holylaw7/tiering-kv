@@ -75,12 +75,21 @@ public final class TieringController implements AutoCloseable {
         }
     }
 
+    /**
+     * 刷新内存/冷层 gauge（TD-095）：写路径与 INFO 读取都会调用，
+     * 保证控制台看到的 MemTable / SSTable 指标是最新的。
+     */
+    public void refreshGauges() {
+        metrics.setMemoryGauges(memory.usedBytes(), memory.maxBytes(), memTable.size());
+        var tables = cold.tablesSnapshot();
+        long sstableCount = tables.size();
+        long diskUsage = tables.stream().mapToLong(SSTableMeta::fileSize).sum();
+        metrics.setColdGauges(sstableCount, diskUsage);
+    }
+
     /** 写路径完成回调：刷新指标并检查水位（触发异步 Flush）。 */
     public void onWriteCompleted() {
-        metrics.setMemoryGauges(memory.usedBytes(), memory.maxBytes(), memTable.size());
-        long sstableCount = cold.tablesSnapshot().size();
-        long diskUsage = cold.tablesSnapshot().stream().mapToLong(SSTableMeta::fileSize).sum();
-        metrics.setColdGauges(sstableCount, diskUsage);
+        refreshGauges();
         if (watermark.isFlushNeeded(memory.usedBytes(), memory.maxBytes(), memTable.size())) {
             flushScheduler.scheduleFlush();
         }

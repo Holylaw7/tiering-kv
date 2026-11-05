@@ -17,6 +17,34 @@ const loading = ref(false)
 let timer: number | undefined
 
 const live = computed(() => overview.value?.live)
+const tiering = computed(() => {
+  const current = live.value
+  const hot = current?.memtableUsedBytes ?? 0
+  const cold = current?.coldDiskUsageBytes ?? 0
+  const total = hot + cold
+  return {
+    hot,
+    cold,
+    total,
+    hotShare: total ? hot / total : 0,
+    coldShare: total ? cold / total : 0,
+    entries: current?.memtableEntries ?? 0,
+    sstables: current?.coldSstableCount ?? 0,
+    flushCount: current?.flushCount ?? 0,
+    flushBytes: current?.flushBytes ?? 0,
+    pending: current?.migrationPending ?? 0,
+    migrated: current?.migrationSuccess ?? 0,
+    migrateFailed: current?.migrationFailed ?? 0,
+    cacheHitRate: current?.cacheHitRate ?? 0,
+    cacheHits: current?.cacheHits ?? 0,
+    cacheMisses: current?.cacheMisses ?? 0,
+    cacheEvictions: current?.cacheEvictions ?? 0
+  }
+})
+const tieringReported = computed(() => {
+  const t = tiering.value
+  return t.sstables > 0 || t.entries > 0 || t.flushCount > 0 || t.cacheHits + t.cacheMisses > 0
+})
 const selected = computed(() => instanceStore.selected)
 const memoryRatio = computed(() => {
   const current = live.value
@@ -85,7 +113,18 @@ onBeforeUnmount(stopTimer)
 const times = computed(() => trends.value.map((item) => item.time.slice(11, 19)))
 const instances = computed(() => overview.value?.instances ?? instanceStore.list)
 
-const AXIS_LABEL = { fontSize: 11, color: '#9299a3' } as const
+const AXIS_LABEL = { fontSize: 11, color: '#9299a3', hideOverlap: true } as const
+
+/** 纵轴上界：给峰值留余量，并向上取到 1/2/5×10^n 的整数刻度，避免出现 1,767.37 这种刻度 */
+function axisMax(values: number[]): number | undefined {
+  const max = Math.max(...values, 0)
+  if (!Number.isFinite(max) || max <= 0) return undefined
+  const target = max * 1.15
+  const magnitude = Math.pow(10, Math.floor(Math.log10(target)))
+  const normalized = target / magnitude
+  const step = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10
+  return step * magnitude
+}
 const AXIS_LINE = { lineStyle: { color: '#e5e7eb' } } as const
 const SPLIT_LINE = { lineStyle: { color: '#eceef1' } } as const
 const TOOLTIP = {
@@ -116,7 +155,13 @@ const qpsOption = computed<any>(() => ({
     type: 'category', data: times.value, boundaryGap: false,
     axisLabel: AXIS_LABEL, axisLine: AXIS_LINE, axisTick: { show: false }
   },
-  yAxis: { type: 'value', axisLabel: AXIS_LABEL, splitLine: SPLIT_LINE, axisLine: { show: false } },
+  yAxis: {
+    type: 'value',
+    max: axisMax(trends.value.map((item) => Number(item.qps.toFixed(2)))),
+    axisLabel: AXIS_LABEL,
+    splitLine: SPLIT_LINE,
+    axisLine: { show: false }
+  },
   series: [
     {
       name: 'QPS',
@@ -139,7 +184,13 @@ const latencyOption = computed<any>(() => ({
     type: 'category', data: times.value, boundaryGap: false,
     axisLabel: AXIS_LABEL, axisLine: AXIS_LINE, axisTick: { show: false }
   },
-  yAxis: { type: 'value', axisLabel: AXIS_LABEL, splitLine: SPLIT_LINE, axisLine: { show: false } },
+  yAxis: {
+    type: 'value',
+    max: axisMax(trends.value.map((item) => Number(item.avgLatencyMs.toFixed(3)))),
+    axisLabel: { ...AXIS_LABEL, formatter: (value: number) => Number(value).toFixed(2) },
+    splitLine: SPLIT_LINE,
+    axisLine: { show: false }
+  },
   series: [
     {
       name: '平均延迟',
@@ -268,27 +319,75 @@ const memoryOption = computed<any>(() => ({
 
     <section class="tiering">
       <div class="tiering-head">
-        <h3>存储水位</h3>
-        <span class="hint">超水位数据由内核迁移至 SSTable 冷层，读路径自动回退</span>
+        <h3>存储分层</h3>
+        <span class="hint">MemTable → Flush → SSTable，数据来自内核 <span class="mono">INFO # Tiering</span></span>
       </div>
-      <div class="bars">
-        <div class="bar-row">
-          <span class="bar-label">引擎内存</span>
-          <div class="bar">
-            <div class="bar-fill" :style="{ width: Math.min(100, memoryRatio * 100) + '%' }"></div>
-          </div>
-          <span class="bar-value num">{{ formatPercent(memoryRatio) }}</span>
-          <span class="bar-note mono">{{ formatBytes(live?.usedMemory) }} / {{ formatBytes(live?.maxMemory) }}</span>
-        </div>
-        <div class="bar-row">
-          <span class="bar-label">JVM 堆</span>
-          <div class="bar">
-            <div class="bar-fill jvm" :style="{ width: Math.min(100, heapRatio * 100) + '%' }"></div>
-          </div>
-          <span class="bar-value num">{{ formatPercent(heapRatio) }}</span>
-          <span class="bar-note mono">{{ formatBytes(live?.usedMemoryJvm) }} / {{ formatBytes(live?.maxJvmHeap) }}</span>
-        </div>
+
+      <div v-if="!tieringReported" class="tiering-empty">
+        当前内核未上报分层指标（旧版本或采样尚未发生写入），此处不展示推算值。
       </div>
+
+      <template v-else>
+        <div class="pipeline">
+          <div class="stage">
+            <div class="stage-head">
+              <span class="stage-name">MemTable</span>
+              <span class="stage-tag hot">热层</span>
+            </div>
+            <div class="stage-value num">{{ formatBytes(tiering.hot) }}</div>
+            <div class="stage-meta">
+              {{ formatNumber(tiering.entries) }} 个条目 · 上限 {{ formatBytes(live?.memtableMaxBytes) }}
+            </div>
+          </div>
+
+          <div class="stage-arrow">
+            <span class="arrow-label">Flush {{ formatNumber(tiering.flushCount) }} 次</span>
+            <span class="arrow"></span>
+            <span class="arrow-sub num">{{ formatBytes(tiering.flushBytes) }}</span>
+          </div>
+
+          <div class="stage">
+            <div class="stage-head">
+              <span class="stage-name">SSTable</span>
+              <span class="stage-tag cold">冷层</span>
+            </div>
+            <div class="stage-value num">{{ formatBytes(tiering.cold) }}</div>
+            <div class="stage-meta">{{ formatNumber(tiering.sstables) }} 个表 · 占存储 {{ formatPercent(tiering.coldShare) }}</div>
+          </div>
+
+          <div class="stage-arrow">
+            <span class="arrow-label">迁移 {{ formatNumber(tiering.migrated) }} 次</span>
+            <span class="arrow"></span>
+            <span class="arrow-sub num">待处理 {{ tiering.pending }}</span>
+          </div>
+
+          <div class="stage">
+            <div class="stage-head">
+              <span class="stage-name">BlockCache</span>
+              <span class="stage-tag cache">读缓存</span>
+            </div>
+            <div class="stage-value num">{{ formatPercent(tiering.cacheHitRate) }}</div>
+            <div class="stage-meta">
+              命中 {{ formatNumber(tiering.cacheHits) }} · 未命中 {{ formatNumber(tiering.cacheMisses) }}
+            </div>
+          </div>
+        </div>
+
+        <div class="split">
+          <div class="split-labels">
+            <span>热层 {{ formatBytes(tiering.hot) }}</span>
+            <span>冷层 {{ formatBytes(tiering.cold) }}</span>
+          </div>
+          <div class="split-bar">
+            <div class="split-hot" :style="{ width: Math.max(2, tiering.hotShare * 100) + '%' }"></div>
+            <div class="split-cold" :style="{ width: Math.max(2, tiering.coldShare * 100) + '%' }"></div>
+          </div>
+          <div class="split-foot">
+            <span>总占用 {{ formatBytes(tiering.total) }}</span>
+            <span>淘汰 {{ formatNumber(tiering.cacheEvictions) }} · 迁移失败 {{ formatNumber(tiering.migrateFailed) }}</span>
+          </div>
+        </div>
+      </template>
     </section>
 
     <div class="charts">
@@ -474,56 +573,157 @@ const memoryOption = computed<any>(() => ({
   color: var(--text-3);
 }
 
-.bars {
+.tiering-empty {
+  padding: 16px 18px;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  color: var(--text-3);
+  background: var(--surface-2);
+}
+
+.pipeline {
   display: grid;
-  gap: 10px;
-  padding: 14px 18px;
-  background: var(--surface);
+  grid-template-columns: minmax(0, 1fr) 128px minmax(0, 1fr) 128px minmax(0, 1fr);
+  align-items: stretch;
   border: 1px solid var(--line);
   border-radius: var(--radius);
-}
-
-.bar-row {
-  display: grid;
-  grid-template-columns: 76px minmax(0, 1fr) 56px 190px;
-  align-items: center;
-  gap: 14px;
-}
-
-.bar-label {
-  font-size: var(--text-sm);
-  color: var(--text-2);
-}
-
-.bar {
-  height: 6px;
-  border-radius: 999px;
-  background: var(--surface-3);
+  background: var(--surface);
   overflow: hidden;
 }
 
-.bar-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 999px;
-  transition: width 0.3s var(--ease);
+.stage {
+  padding: 14px 16px 16px;
+  min-width: 0;
 }
 
-.bar-fill.jvm {
-  background: #6b7a8c;
+.stage-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
 }
 
-.bar-value {
+.stage-name {
   font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text);
-  text-align: right;
 }
 
-.bar-note {
-  font-size: 11px;
+.stage-tag {
+  padding: 0 6px;
+  height: 18px;
+  line-height: 18px;
+  border-radius: 3px;
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
+}
+
+.stage-tag.hot {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.stage-tag.cold {
+  background: #eef6f1;
+  color: var(--success);
+}
+
+.stage-tag.cache {
+  background: var(--surface-3);
+  color: var(--text-2);
+}
+
+.stage-value {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  line-height: 1.25;
+}
+
+.stage-meta {
+  margin-top: 3px;
+  font-size: 11.5px;
   color: var(--text-3);
-  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stage-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 6px;
+  border-left: 1px solid var(--line-soft);
+  border-right: 1px solid var(--line-soft);
+  background: var(--surface-2);
+}
+
+.arrow-label {
+  font-size: 10.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.arrow {
+  position: relative;
+  width: 52px;
+  height: 1px;
+  background: var(--line-strong);
+}
+
+.arrow::after {
+  content: '';
+  position: absolute;
+  right: -1px;
+  top: -3px;
+  border-left: 5px solid var(--line-strong);
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+}
+
+.arrow-sub {
+  font-size: 10.5px;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.split {
+  margin-top: 8px;
+  padding: 12px 16px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.split-labels,
+.split-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.split-bar {
+  display: flex;
+  height: 8px;
+  margin: 8px 0 6px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface-3);
+}
+
+.split-hot {
+  background: var(--accent);
+}
+
+.split-cold {
+  background: #4c9a72;
 }
 
 .charts {
@@ -571,12 +771,17 @@ const memoryOption = computed<any>(() => ({
     border-top: 1px solid var(--line-soft);
   }
 
-  .bar-row {
-    grid-template-columns: 68px minmax(0, 1fr) 52px;
+  .pipeline {
+    grid-template-columns: minmax(0, 1fr) 92px minmax(0, 1fr);
   }
 
-  .bar-note {
+  .stage-arrow:last-of-type {
     display: none;
+  }
+
+  .stage:last-of-type {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--line-soft);
   }
 }
 

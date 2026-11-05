@@ -753,14 +753,44 @@ export interface components {
             activeRequests?: number;
             /** Format: double */
             avgLatencyMs?: number;
+            /** Format: int64 */
+            cacheEvictions?: number;
+            /** Format: double */
+            cacheHitRate?: number;
+            /** Format: int64 */
+            cacheHits?: number;
+            /** Format: int64 */
+            cacheMisses?: number;
+            /** Format: int64 */
+            coldDiskUsageBytes?: number;
+            /** Format: double */
+            coldShare?: number;
+            /** Format: int64 */
+            coldSstableCount?: number;
             /** Format: int32 */
             connections?: number;
             /** Format: int64 */
             errors?: number;
             /** Format: int64 */
+            flushBytes?: number;
+            /** Format: int64 */
+            flushCount?: number;
+            /** Format: int64 */
             maxJvmHeap?: number;
             /** Format: int64 */
             maxMemory?: number;
+            /** Format: int64 */
+            memtableEntries?: number;
+            /** Format: int64 */
+            memtableMaxBytes?: number;
+            /** Format: int64 */
+            memtableUsedBytes?: number;
+            /** Format: int64 */
+            migrationFailed?: number;
+            /** Format: int64 */
+            migrationPending?: number;
+            /** Format: int64 */
+            migrationSuccess?: number;
             /** Format: double */
             opsPerSec?: number;
             /** Format: double */

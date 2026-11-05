@@ -46,6 +46,22 @@ export interface LiveMetrics {
   avgLatencyMs: number
   errors: number
   maxJvmHeap: number
+  /* 存储分层（内核 INFO # Tiering，TD-095） */
+  memtableUsedBytes: number
+  memtableMaxBytes: number
+  memtableEntries: number
+  coldSstableCount: number
+  coldDiskUsageBytes: number
+  coldShare: number
+  flushCount: number
+  flushBytes: number
+  migrationPending: number
+  migrationSuccess: number
+  migrationFailed: number
+  cacheHits: number
+  cacheMisses: number
+  cacheHitRate: number
+  cacheEvictions: number
 }
 
 export interface OverviewView {

@@ -725,6 +725,34 @@
             "format" : "double",
             "type" : "number"
           },
+          "cacheEvictions" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "cacheHitRate" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "cacheHits" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "cacheMisses" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "coldDiskUsageBytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "coldShare" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "coldSstableCount" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
           "connections" : {
             "format" : "int32",
             "type" : "integer"
@@ -733,11 +761,43 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "flushBytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "flushCount" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
           "maxJvmHeap" : {
             "format" : "int64",
             "type" : "integer"
           },
           "maxMemory" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "memtableEntries" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "memtableMaxBytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "memtableUsedBytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "migrationFailed" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "migrationPending" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "migrationSuccess" : {
             "format" : "int64",
             "type" : "integer"
           },

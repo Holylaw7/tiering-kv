@@ -29,8 +29,10 @@ check('登录并进入运行总览', page.url().includes('dashboard'))
 
 const metrics = await page.locator('.metric').count()
 check('运行总览指标带渲染', metrics === 6, '指标数=' + metrics)
-const bars = await page.locator('.bar-row').count()
-check('存储水位条渲染', bars === 2, '进度条=' + bars)
+const stages = await page.locator('.pipeline .stage').count()
+check('存储分层流水线渲染', stages === 3, '阶段数=' + stages)
+const splitBar = await page.locator('.split-bar').count()
+check('冷热占比条渲染', splitBar === 1)
 
 await page.goto(BASE + '/#/terminal', { waitUntil: 'networkidle' })
 await page.waitForTimeout(600)

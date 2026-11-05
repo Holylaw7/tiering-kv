@@ -1,7 +1,9 @@
 package io.tieringkv.observability;
 
+import io.tieringkv.cache.block.CacheStatistics;
 import io.tieringkv.monitor.MetricsRegistry;
 import io.tieringkv.storage.memory.MemoryManager;
+import io.tieringkv.storage.tiering.StorageMetrics;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
@@ -28,12 +30,30 @@ public final class ServerInfoProvider {
     private final String version;
     private final long startedAt = System.currentTimeMillis();
     private final String runId = UUID.randomUUID().toString();
+    private final StorageMetrics storageMetrics;
+    private final Supplier<CacheStatistics.Snapshot> cacheStats;
+    private final Runnable refreshGauges;
 
     public ServerInfoProvider(MetricsRegistry metrics,
                               MemoryManager memory,
                               Supplier<Long> keyCount,
                               int port,
                               String version) {
+        this(metrics, memory, keyCount, port, version, null, null, null);
+    }
+
+    /**
+     * 带存储分层指标的构造（TD-095）：向 INFO 追加 `# Tiering` 段落，
+     * 暴露 MemTable / SSTable / Flush / 迁移 / BlockCache 的真实计数。
+     */
+    public ServerInfoProvider(MetricsRegistry metrics,
+                              MemoryManager memory,
+                              Supplier<Long> keyCount,
+                              int port,
+                              String version,
+                              StorageMetrics storageMetrics,
+                              Supplier<CacheStatistics.Snapshot> cacheStats,
+                              Runnable refreshGauges) {
         if (metrics == null) {
             throw new IllegalArgumentException("metrics required");
         }
@@ -45,6 +65,9 @@ public final class ServerInfoProvider {
         this.keyCount = keyCount;
         this.port = port;
         this.version = version == null ? "unknown" : version;
+        this.storageMetrics = storageMetrics;
+        this.cacheStats = cacheStats;
+        this.refreshGauges = refreshGauges;
     }
 
     /** 单个 section 的提供者（INFO &lt;section&gt; 使用）。 */
@@ -55,6 +78,9 @@ public final class ServerInfoProvider {
         sections.put("memory", this::memorySection);
         sections.put("stats", this::stats);
         sections.put("keyspace", this::keyspace);
+        if (storageMetrics != null) {
+            sections.put("tiering", this::tiering);
+        }
         return Map.copyOf(sections);
     }
 
@@ -126,6 +152,42 @@ public final class ServerInfoProvider {
                 + "instantaneous_ops_per_sec:"
                 + String.format(Locale.ROOT, "%.1f", snapshot.qps()) + "\r\n"
                 + "total_keys:" + keys() + "\r\n";
+    }
+
+    /**
+     * 存储分层段落（TD-095）：全部来自 StorageMetrics / CacheStatistics，
+     * 不推算、不估算，取不到就是 0。
+     */
+    private String tiering() {
+        if (refreshGauges != null) {
+            refreshGauges.run();
+        }
+        StorageMetrics.Snapshot snapshot = storageMetrics.snapshot();
+        CacheStatistics.Snapshot cache = cacheStats == null
+                ? new CacheStatistics.Snapshot(0, 0, 0, 0)
+                : cacheStats.get();
+        long hot = snapshot.memoryUsedBytes();
+        long cold = snapshot.coldDiskUsage();
+        long total = hot + cold;
+        double coldShare = total == 0 ? 0 : cold / (double) total;
+        long flushTotal = snapshot.flushCount();
+        return "# Tiering\r\n"
+                + "tiering_memtable_used_bytes:" + hot + "\r\n"
+                + "tiering_memtable_max_bytes:" + snapshot.memoryMaxBytes() + "\r\n"
+                + "tiering_memtable_entries:" + snapshot.memoryEntryCount() + "\r\n"
+                + "tiering_cold_sstable_count:" + snapshot.coldSstableCount() + "\r\n"
+                + "tiering_cold_disk_usage_bytes:" + cold + "\r\n"
+                + "tiering_cold_share:" + String.format(Locale.ROOT, "%.4f", coldShare) + "\r\n"
+                + "tiering_flush_count:" + flushTotal + "\r\n"
+                + "tiering_flush_bytes:" + snapshot.flushBytes() + "\r\n"
+                + "tiering_migration_pending:" + snapshot.migrationPending() + "\r\n"
+                + "tiering_migration_success:" + snapshot.migrationSuccess() + "\r\n"
+                + "tiering_migration_failed:" + snapshot.migrationFailed() + "\r\n"
+                + "tiering_block_cache_hits:" + cache.hits() + "\r\n"
+                + "tiering_block_cache_misses:" + cache.misses() + "\r\n"
+                + "tiering_block_cache_evictions:" + cache.evictions() + "\r\n"
+                + "tiering_block_cache_hit_rate:"
+                + String.format(Locale.ROOT, "%.4f", cache.hitRate()) + "\r\n";
     }
 
     private String keyspace() {

@@ -123,7 +123,9 @@ public final class Main {
         // 供 Web 控制台解析真实运行态
         ServerInfoProvider serverInfo = new ServerInfoProvider(
                 metrics, memoryManager, syncStorage::size,
-                config.server().port(), ServerVersion.current());
+                config.server().port(), ServerVersion.current(),
+                tiering.metrics(), blockCache.statistics()::snapshot,
+                tiering::refreshGauges);
         Map<String, Supplier<String>> infoSections =
                 new HashMap<>(observability.infoSections());
         infoSections.putAll(serverInfo.sections());

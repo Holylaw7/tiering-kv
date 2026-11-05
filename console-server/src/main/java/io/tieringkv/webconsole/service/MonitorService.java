@@ -94,7 +94,22 @@ public class MonitorService {
                     parseDouble(flat.get("instantaneous_ops_per_sec")),
                     parseDouble(flat.get("avg_latency_ms")),
                     parseLong(flat.get("errors")),
-                    parseLong(flat.get("max_jvm_heap"))));
+                    parseLong(flat.get("max_jvm_heap")),
+                    parseLong(flat.get("tiering_memtable_used_bytes")),
+                    parseLong(flat.get("tiering_memtable_max_bytes")),
+                    parseLong(flat.get("tiering_memtable_entries")),
+                    parseLong(flat.get("tiering_cold_sstable_count")),
+                    parseLong(flat.get("tiering_cold_disk_usage_bytes")),
+                    parseDouble(flat.get("tiering_cold_share")),
+                    parseLong(flat.get("tiering_flush_count")),
+                    parseLong(flat.get("tiering_flush_bytes")),
+                    parseLong(flat.get("tiering_migration_pending")),
+                    parseLong(flat.get("tiering_migration_success")),
+                    parseLong(flat.get("tiering_migration_failed")),
+                    parseLong(flat.get("tiering_block_cache_hits")),
+                    parseLong(flat.get("tiering_block_cache_misses")),
+                    parseDouble(flat.get("tiering_block_cache_hit_rate")),
+                    parseLong(flat.get("tiering_block_cache_evictions"))));
         } catch (RuntimeException ex) {
             return Optional.empty();
         }
