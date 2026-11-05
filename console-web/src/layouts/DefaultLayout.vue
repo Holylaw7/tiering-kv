@@ -43,6 +43,7 @@ const navGroups = computed(() => {
 })
 
 const currentTitle = computed(() => String(route.meta?.title ?? ''))
+const currentInstance = computed(() => instanceStore.selected)
 
 // 自助修改口令
 const passwordVisible = ref(false)
@@ -96,7 +97,6 @@ async function handleCommand(command: string) {
 
 function onInstanceChange(value: number) {
   instanceStore.select(value)
-  ElMessage.success('已切换实例')
 }
 </script>
 
@@ -108,10 +108,7 @@ function onInstanceChange(value: number) {
           <path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z" stroke="currentColor" stroke-width="1.5" />
           <path d="M4 7.5 12 12l8-4.5M12 12v9" stroke="currentColor" stroke-width="1.5" />
         </svg>
-        <div v-if="!collapsed" class="brand-text">
-          <span class="word">Tiering-KV</span>
-          <span class="sub">Console</span>
-        </div>
+        <span v-if="!collapsed" class="wordmark">Tiering-KV</span>
       </div>
 
       <nav class="nav">
@@ -137,7 +134,8 @@ function onInstanceChange(value: number) {
     <div class="content">
       <header class="topbar">
         <div class="topbar-left">
-          <span class="context-label">实例</span>
+          <span class="crumb">{{ currentTitle }}</span>
+          <span class="sep"></span>
           <el-select
             :model-value="instanceStore.selectedId"
             class="instance-select"
@@ -152,18 +150,22 @@ function onInstanceChange(value: number) {
             >
               <span class="option">
                 <span class="dot" :class="item.status.toLowerCase()"></span>
-                <span>{{ item.name }}</span>
-                <span class="dim mono">{{ item.host }}:{{ item.port }}</span>
+                <span class="option-name">{{ item.name }}</span>
+                <span class="option-addr mono">{{ item.host }}:{{ item.port }}</span>
               </span>
             </el-option>
           </el-select>
+          <span v-if="currentInstance" class="endpoint mono">
+            {{ currentInstance.host }}:{{ currentInstance.port }}
+          </span>
         </div>
 
         <div class="topbar-right">
-          <span class="health">
-            <span class="dot up"></span>
-            {{ instanceStore.upCount }} / {{ instanceStore.list.length }} 在线
+          <span class="health" :class="currentInstance?.status === 'UP' ? 'is-up' : 'is-down'">
+            <span class="dot" :class="(currentInstance?.status ?? 'unknown').toLowerCase()"></span>
+            {{ currentInstance?.status === 'UP' ? '运行中' : currentInstance?.status === 'DOWN' ? '连接失败' : '未知' }}
           </span>
+          <span class="online">{{ instanceStore.upCount }}/{{ instanceStore.list.length }} 实例在线</span>
           <span class="sep"></span>
           <el-dropdown trigger="click" @command="handleCommand">
             <button class="account" type="button">
@@ -212,13 +214,13 @@ function onInstanceChange(value: number) {
 <style scoped>
 .shell {
   display: grid;
-  grid-template-columns: 232px minmax(0, 1fr);
+  grid-template-columns: 236px minmax(0, 1fr);
   height: 100vh;
   background: var(--bg);
 }
 
 .shell.collapsed {
-  grid-template-columns: 64px minmax(0, 1fr);
+  grid-template-columns: 60px minmax(0, 1fr);
 }
 
 /* ---------- 侧栏 ---------- */
@@ -226,8 +228,8 @@ function onInstanceChange(value: number) {
 .sidebar {
   display: flex;
   flex-direction: column;
-  background: var(--bg-subtle);
-  border-right: 1px solid var(--line);
+  background: var(--surface-2);
+  border-right: 1px solid var(--line-soft);
   min-height: 0;
 }
 
@@ -236,56 +238,41 @@ function onInstanceChange(value: number) {
   align-items: center;
   gap: 9px;
   height: 52px;
-  padding: 0 14px;
-  border-bottom: 1px solid var(--line);
+  padding: 0 16px;
   flex: none;
 }
 
 .mark {
-  width: 20px;
-  height: 20px;
+  width: 19px;
+  height: 19px;
   color: var(--accent);
   flex: none;
 }
 
-.brand-text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.15;
-  overflow: hidden;
-}
-
-.word {
-  font-size: 13px;
+.wordmark {
+  font-size: var(--text-base);
   font-weight: 600;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.015em;
   color: var(--text);
   white-space: nowrap;
-}
-
-.sub {
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-3);
 }
 
 .nav {
   flex: 1;
   overflow-y: auto;
-  padding: 10px 0 8px;
+  padding: 6px 0 10px;
 }
 
 .nav-group + .nav-group {
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 .nav-label {
-  margin: 0 0 4px;
-  padding: 0 16px;
+  margin: 0 0 2px;
+  padding: 0 18px;
   font-size: 10.5px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
+  font-weight: 600;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--text-3);
 }
@@ -298,9 +285,9 @@ function onInstanceChange(value: number) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 44px;
+  height: 40px;
   padding: 0 12px;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--line-soft);
   flex: none;
 }
 
@@ -320,16 +307,16 @@ function onInstanceChange(value: number) {
 }
 
 .collapse:hover {
-  background: var(--surface-2);
-  color: var(--text);
+  background: var(--surface-3);
+  color: var(--text-1);
 }
 
 .version {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--text-3);
 }
 
-/* ---------- 主区 ---------- */
+/* ---------- 顶栏 ---------- */
 
 .content {
   display: flex;
@@ -342,10 +329,11 @@ function onInstanceChange(value: number) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   height: 52px;
-  padding: 0 20px 0 26px;
-  border-bottom: 1px solid var(--line);
-  background: var(--bg);
+  padding: 0 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line-soft);
   flex: none;
 }
 
@@ -359,25 +347,26 @@ function onInstanceChange(value: number) {
 .topbar-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   flex: none;
 }
 
-.context-label {
-  font-size: 11.5px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--text-3);
+.crumb {
+  font-size: var(--text-base);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  white-space: nowrap;
 }
 
 .sep {
   width: 1px;
-  height: 18px;
+  height: 16px;
   background: var(--line);
 }
 
 .instance-select {
-  width: 190px;
+  width: 172px;
 }
 
 .instance-select :deep(.el-select__wrapper) {
@@ -385,10 +374,11 @@ function onInstanceChange(value: number) {
   min-height: 28px;
   background: transparent;
   box-shadow: none;
+  padding-left: 4px;
 }
 
 .instance-select :deep(.el-select__wrapper:hover) {
-  background: var(--surface-2);
+  background: var(--surface-3);
   box-shadow: none;
 }
 
@@ -398,12 +388,34 @@ function onInstanceChange(value: number) {
   gap: 8px;
 }
 
+.option-name {
+  color: var(--text-1);
+}
+
+.option-addr {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.endpoint {
+  font-size: 11.5px;
+  color: var(--text-3);
+}
+
 .health {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--text-2);
+}
+
+.health.is-up {
+  color: var(--success);
+}
+
+.health.is-down {
+  color: var(--danger);
 }
 
 .dot {
@@ -412,39 +424,38 @@ function onInstanceChange(value: number) {
   border-radius: 50%;
   display: inline-block;
   flex: none;
+  background: var(--text-3);
 }
 
 .dot.up {
   background: var(--success);
-  box-shadow: 0 0 0 3px rgba(63, 185, 80, 0.12);
 }
 
 .dot.down {
   background: var(--danger);
-  box-shadow: 0 0 0 3px rgba(240, 84, 79, 0.12);
 }
 
-.dot.unknown {
-  background: var(--text-3);
+.online {
+  font-size: var(--text-sm);
+  color: var(--text-3);
 }
 
 .account {
   display: flex;
   align-items: center;
   gap: 8px;
-  max-width: 186px;
-  padding: 3px 5px 3px 3px;
+  max-width: 190px;
+  padding: 3px 6px 3px 3px;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: var(--text);
+  color: var(--text-1);
   cursor: pointer;
   transition: background-color 0.14s var(--ease), border-color 0.14s var(--ease);
 }
 
 .account:hover {
-  background: var(--surface-2);
-  border-color: var(--line);
+  background: var(--surface-3);
 }
 
 .avatar {
@@ -455,10 +466,10 @@ function onInstanceChange(value: number) {
   height: 24px;
   border-radius: 6px;
   background: var(--surface-3);
-  border: 1px solid var(--line-strong);
-  font-size: 11.5px;
+  border: 1px solid var(--line);
+  font-size: 11px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--text-1);
 }
 
 .who {
@@ -469,7 +480,7 @@ function onInstanceChange(value: number) {
 }
 
 .name {
-  font-size: 12.5px;
+  font-size: var(--text-sm);
   font-weight: 500;
   max-width: 96px;
   overflow: hidden;
@@ -478,13 +489,13 @@ function onInstanceChange(value: number) {
 }
 
 .role {
-  font-size: 10.5px;
-  letter-spacing: 0.04em;
+  font-size: 10px;
+  letter-spacing: 0.05em;
   color: var(--text-3);
 }
 
 .chev {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-3);
 }
 

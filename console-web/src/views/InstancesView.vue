@@ -94,7 +94,6 @@ onMounted(load)
 
     <div class="panel">
       <el-table :data="rows" size="default">
-        <el-table-column prop="id" label="ID" width="70" />
         <el-table-column prop="name" label="名称" min-width="140" />
         <el-table-column label="地址" min-width="180">
           <template #default="{ row }">
@@ -103,7 +102,7 @@ onMounted(load)
         </el-table-column>
         <el-table-column label="状态" width="110">
           <template #default="{ row }">
-            <el-tag :type="row.status === 'UP' ? 'success' : row.status === 'DOWN' ? 'danger' : 'info'" effect="dark" size="small">
+            <el-tag :type="row.status === 'UP' ? 'success' : row.status === 'DOWN' ? 'danger' : 'info'" size="small">
               {{ row.status }}
             </el-tag>
           </template>
@@ -115,13 +114,13 @@ onMounted(load)
         </el-table-column>
         <el-table-column label="口令" width="90">
           <template #default="{ row }">
-            <el-tag v-if="row.hasPassword" size="small" type="warning">已配置</el-tag>
+            <el-tag v-if="row.hasPassword" size="small" type="info">已配置</el-tag>
             <span v-else class="muted">无</span>
           </template>
         </el-table-column>
         <el-table-column prop="remark" label="备注" min-width="140" show-overflow-tooltip />
-        <el-table-column prop="lastProbeAt" label="最近探测" width="200" />
-        <el-table-column label="操作" width="190">
+        <el-table-column prop="lastProbeAt" label="最近探测" width="170" />
+        <el-table-column label="操作" width="170" align="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="probe(row)">探测</el-button>
             <el-button v-if="auth.canOperate" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>

@@ -60,7 +60,7 @@ onMounted(load)
     <div class="cards">
       <div class="panel card">
         <div class="card-title">服务端</div>
-        <el-descriptions :column="1" size="small" border>
+        <el-descriptions :column="1" size="small" class="kv">
           <el-descriptions-item label="版本">{{ info?.server.version || '-' }}</el-descriptions-item>
           <el-descriptions-item label="运行模式">{{ info?.server.mode || '-' }}</el-descriptions-item>
           <el-descriptions-item label="运行时长">{{ uptime(info?.server.uptimeSeconds ?? 0) }}</el-descriptions-item>
@@ -75,7 +75,7 @@ onMounted(load)
 
       <div class="panel card">
         <div class="card-title">连接</div>
-        <el-descriptions :column="1" size="small" border>
+        <el-descriptions :column="1" size="small" class="kv">
           <el-descriptions-item label="当前连接">{{ info?.clients.connected ?? 0 }}</el-descriptions-item>
           <el-descriptions-item label="处理中请求">{{ info?.clients.activeRequests ?? 0 }}</el-descriptions-item>
           <el-descriptions-item label="累计连接">{{ info?.clients.totalConnections ?? 0 }}</el-descriptions-item>
@@ -85,7 +85,7 @@ onMounted(load)
 
       <div class="panel card">
         <div class="card-title">内存</div>
-        <el-descriptions :column="1" size="small" border>
+        <el-descriptions :column="1" size="small" class="kv">
           <el-descriptions-item label="引擎已用">{{ formatBytes(info?.memory.usedBytes) }}</el-descriptions-item>
           <el-descriptions-item label="引擎上限">{{ formatBytes(info?.memory.maxBytes) }}</el-descriptions-item>
           <el-descriptions-item label="JVM 已用">{{ formatBytes(info?.memory.jvmUsedBytes) }}</el-descriptions-item>
@@ -102,7 +102,7 @@ onMounted(load)
 
       <div class="panel card">
         <div class="card-title">吞吐</div>
-        <el-descriptions :column="1" size="small" border>
+        <el-descriptions :column="1" size="small" class="kv">
           <el-descriptions-item label="QPS">{{ (info?.stats.qps ?? 0).toFixed(2) }}</el-descriptions-item>
           <el-descriptions-item label="瞬时 OPS">
             {{ (info?.stats.instantaneousOpsPerSec ?? 0).toFixed(2) }}
@@ -140,6 +140,36 @@ onMounted(load)
 </template>
 
 <style scoped>
+.kv :deep(.el-descriptions__cell) {
+  padding: 7px 0 !important;
+}
+
+.kv :deep(.el-descriptions__label) {
+  width: 96px;
+  font-size: var(--text-sm);
+  color: var(--text-2) !important;
+}
+
+.kv :deep(.el-descriptions__content) {
+  font-size: var(--text-sm);
+  color: var(--text-1);
+}
+
+.kv :deep(.el-descriptions__table) {
+  border-collapse: collapse;
+}
+
+.kv :deep(.el-descriptions__body) {
+  background: transparent;
+}
+
+.kv :deep(tr) {
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.kv :deep(tr:last-child) {
+  border-bottom: none;
+}
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(248px, 1fr));

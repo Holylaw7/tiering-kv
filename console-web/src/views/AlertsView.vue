@@ -131,27 +131,22 @@ onMounted(async () => {
         <template #empty>
           <EmptyState title="暂无告警事件" description="规则命中阈值后会在这里产生事件。" />
         </template>
-            <el-table-column prop="ruleName" label="规则" min-width="180" show-overflow-tooltip>
+            <el-table-column prop="ruleName" label="规则" width="170" show-overflow-tooltip>
           <template #default="{ row }"><span class="mono">{{ row.ruleName }}</span></template>
         </el-table-column>
             <el-table-column label="级别" width="90">
               <template #default="{ row }">
-                <el-tag :type="levelType(row.level)" size="small" effect="dark">{{ row.level }}</el-tag>
+                <el-tag :type="levelType(row.level)" size="small">{{ row.level }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="metric" label="指标" width="150" />
-            <el-table-column label="观测值" width="110">
+            <el-table-column prop="metric" label="指标" width="130" />
+            <el-table-column label="观测 / 阈值" width="140">
               <template #default="{ row }">
-                <span class="mono">{{ Number(row.value).toFixed(3) }}</span>
+                <span class="mono num">{{ Number(row.value).toFixed(3) }} / {{ row.threshold }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="阈值" width="100">
-              <template #default="{ row }">
-                <span class="mono">{{ row.threshold }}</span>
-              </template>
-            </el-table-column>
-            <el-table-column prop="message" label="描述" min-width="240" show-overflow-tooltip />
-            <el-table-column prop="firedAt" label="触发时间" width="185" />
+            <el-table-column prop="message" label="描述" min-width="200" show-overflow-tooltip />
+            <el-table-column prop="firedAt" label="触发时间" width="170" />
             <el-table-column label="状态" width="100">
               <template #default="{ row }">
                 <el-tag :type="row.status === 'FIRING' ? 'danger' : 'success'" size="small">

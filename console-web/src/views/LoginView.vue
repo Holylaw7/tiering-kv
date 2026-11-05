@@ -34,51 +34,55 @@ async function submit() {
 
 <template>
   <div class="login">
-    <section class="brand-panel">
-      <div class="brand-top">
+    <header class="masthead">
+      <div class="brand">
         <svg class="mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z" stroke="currentColor" stroke-width="1.5" />
           <path d="M4 7.5 12 12l8-4.5M12 12v9" stroke="currentColor" stroke-width="1.5" />
         </svg>
-        <span class="name">Tiering-KV</span>
+        <span>Tiering-KV</span>
       </div>
+      <span class="tagline">Redis 协议兼容 · 冷热分层存储</span>
+    </header>
 
-      <div class="brand-copy">
-        <h1>冷热分层键值数据库<br />运维控制台</h1>
-        <p>
-          内存热层 + SSTable 冷层，超水位自动迁移；控制台提供实例管理、指标采集、
-          键空间维护、在线终端、告警与备份。
+    <main class="stage">
+      <section class="intro">
+        <h1>把热数据留在内存，<br />把冷数据交给磁盘。</h1>
+        <p class="lede">
+          内存层与 SSTable 冷层协同工作：写满水位自动迁移，读路径回退冷层。
+          控制台负责实例、键空间、终端、告警与备份的日常运维。
         </p>
-      </div>
 
-      <dl class="facts">
-        <div>
-          <dt>命令</dt>
-          <dd class="num">157</dd>
-        </div>
-        <div>
-          <dt>协议</dt>
-          <dd>RESP2</dd>
-        </div>
-        <div>
-          <dt>运行</dt>
-          <dd class="num">JDK 21</dd>
-        </div>
-      </dl>
-    </section>
+        <dl class="facts">
+          <div>
+            <dt>存储引擎</dt>
+            <dd>LSM-Tree · WAL · BlockCache</dd>
+          </div>
+          <div>
+            <dt>协议</dt>
+            <dd>RESP2 / RESP3 · 157 条命令</dd>
+          </div>
+          <div>
+            <dt>运行时</dt>
+            <dd>Java 21 · Netty</dd>
+          </div>
+        </dl>
+      </section>
 
-    <section class="form-panel">
-      <div class="form-inner">
-        <h2>登录</h2>
-        <p class="lead">使用控制台账号继续</p>
+      <section class="auth">
+        <div class="auth-head">
+          <h2>登录控制台</h2>
+          <p>使用管理员分配的账号继续。</p>
+        </div>
 
-        <el-form ref="formRef" :model="form" :rules="rules" @keyup.enter="submit">
+        <el-form ref="formRef" :model="form" :rules="rules" label-position="top" @keyup.enter="submit">
           <el-form-item prop="username" label="用户名">
-            <el-input v-model="form.username" autocomplete="username" placeholder="admin" />
+            <el-input v-model="form.username" size="large" autocomplete="username" placeholder="admin" />
           </el-form-item>
           <el-form-item prop="password" label="密码">
             <el-input
               v-model="form.password"
+              size="large"
               type="password"
               show-password
               autocomplete="current-password"
@@ -87,6 +91,7 @@ async function submit() {
           </el-form-item>
           <el-button
             type="primary"
+            size="large"
             class="submit"
             data-testid="login-submit"
             :loading="loading"
@@ -96,39 +101,47 @@ async function submit() {
           </el-button>
         </el-form>
 
-        <p class="tip">默认账号 <span class="mono">admin / admin123</span>，首次登录后请在右上角修改口令。</p>
-      </div>
-    </section>
+        <p class="hint">
+          默认账号 <span class="mono">admin / admin123</span>；首次登录后请在右上角修改口令。
+        </p>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <span>Tiering-KV Console</span>
+      <span class="mono">v5.1.0</span>
+    </footer>
   </div>
 </template>
 
 <style scoped>
 .login {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
-  min-height: 100vh;
-  background: var(--bg);
-}
-
-/* ---------- 左侧品牌区 ---------- */
-
-.brand-panel {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: 40px 56px 44px;
-  border-right: 1px solid var(--line);
-  background-color: var(--bg-subtle);
-  background-image:
-    radial-gradient(circle at 22% 38%, rgba(76, 141, 255, 0.07), transparent 46%),
-    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.022) 0 1px, transparent 1px 72px),
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.022) 0 1px, transparent 1px 72px);
+  min-height: 100vh;
+  background: var(--surface);
+  color: var(--text-1);
 }
 
-.brand-top {
+/* ---------- 页眉 ---------- */
+
+.masthead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  padding: 0 48px;
+  border-bottom: 1px solid var(--line-soft);
+  flex: none;
+}
+
+.brand {
   display: flex;
   align-items: center;
   gap: 9px;
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: -0.015em;
 }
 
 .mark {
@@ -137,114 +150,171 @@ async function submit() {
   color: var(--accent);
 }
 
-.name {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+.tagline {
+  font-size: var(--text-sm);
+  color: var(--text-3);
 }
 
-.brand-copy {
-  max-width: 30rem;
+/* ---------- 主体 ---------- */
+
+.stage {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
+  align-items: center;
+  gap: 80px;
+  max-width: 1180px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 64px 48px 72px;
 }
 
-.brand-copy h1 {
+.intro h1 {
   margin: 0;
-  font-size: 28px;
+  font-size: 34px;
   line-height: 1.28;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   color: var(--text);
 }
 
-.brand-copy p {
-  margin: 14px 0 0;
-  font-size: 13px;
-  line-height: 1.7;
+.lede {
+  margin: 18px 0 0;
+  max-width: 40ch;
+  font-size: var(--text-md);
+  line-height: 1.75;
   color: var(--text-2);
 }
 
 .facts {
-  display: flex;
-  gap: 40px;
-  margin: 0;
+  margin: 44px 0 0;
+  display: grid;
+  gap: 0;
+  max-width: 460px;
+}
+
+.facts > div {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 16px;
+  align-items: baseline;
+  padding: 12px 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.facts > div:last-child {
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .facts dt {
-  font-size: 11px;
+  font-size: var(--text-xs);
+  font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-3);
 }
 
 .facts dd {
-  margin: 4px 0 0;
-  font-size: 15px;
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-2);
+}
+
+/* ---------- 表单 ---------- */
+
+.auth {
+  width: 100%;
+  max-width: 352px;
+  justify-self: end;
+}
+
+.auth-head h2 {
+  margin: 0;
+  font-size: var(--text-xl);
   font-weight: 600;
+  letter-spacing: -0.02em;
   color: var(--text);
 }
 
-/* ---------- 右侧表单 ---------- */
-
-.form-panel {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40px;
-}
-
-.form-inner {
-  width: 100%;
-  max-width: 320px;
-}
-
-.form-inner h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-.lead {
-  margin: 6px 0 22px;
-  font-size: 12.5px;
+.auth-head p {
+  margin: 6px 0 26px;
+  font-size: var(--text-sm);
   color: var(--text-2);
 }
 
 .submit {
   width: 100%;
-  height: 34px;
-  margin-top: 4px;
+  margin-top: 6px;
+  height: 40px;
 }
 
-.tip {
+.hint {
   margin: 22px 0 0;
-  font-size: 11.5px;
-  line-height: 1.6;
+  font-size: var(--text-sm);
+  line-height: 1.7;
   color: var(--text-3);
 }
 
+:deep(.el-form-item) {
+  margin-bottom: 18px;
+}
+
 :deep(.el-form-item__label) {
-  font-size: 12px;
+  padding-bottom: 6px;
+  font-size: var(--text-sm);
   color: var(--text-2);
 }
 
-/* 登录页只有两个字段，隐藏必填星号以减少噪声 */
 :deep(.el-form-item.is-required:not(.is-no-asterisk) > .el-form-item__label::before) {
   content: '';
   margin: 0;
 }
 
-:deep(.el-form-item) {
-  margin-bottom: 16px;
+:deep(.el-input__wrapper) {
+  height: 40px;
 }
 
-@media (max-width: 900px) {
-  .login {
+/* ---------- 页脚 ---------- */
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 48px;
+  border-top: 1px solid var(--line-soft);
+  font-size: var(--text-xs);
+  color: var(--text-3);
+  flex: none;
+}
+
+@media (max-width: 960px) {
+  .stage {
     grid-template-columns: 1fr;
+    gap: 40px;
+    padding: 40px 28px 48px;
   }
 
-  .brand-panel {
+  .auth {
+    justify-self: start;
+    max-width: 420px;
+  }
+
+  .masthead,
+  .foot {
+    padding: 0 28px;
+  }
+
+  .tagline {
     display: none;
+  }
+
+  .intro h1 {
+    font-size: 26px;
+  }
+
+  .facts {
+    margin-top: 28px;
   }
 }
 </style>

@@ -152,21 +152,22 @@ onMounted(() => scan(true))
         <h2 class="page-title">键空间浏览</h2>
         <p class="page-subtitle">基于 SCAN 游标遍历，不阻塞内核事件循环；键按类型自动识别</p>
       </div>
-      <div class="toolbar">
-        <el-input v-model="pattern" placeholder="匹配模式，如 user:*" style="width: 220px" clearable @keyup.enter="scan(true)">
+    </div>
+
+    <div class="panel" v-loading="loading">
+      <div class="filters">
+        <el-input v-model="pattern" class="f-pattern mono" placeholder="匹配模式，如 user:*" clearable @keyup.enter="scan(true)">
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
-        <el-select v-model="count" style="width: 110px">
+        <el-select v-model="count" class="f-count">
           <el-option :value="20" label="20 条/页" />
           <el-option :value="50" label="50 条/页" />
           <el-option :value="100" label="100 条/页" />
         </el-select>
-        <el-button type="primary" @click="scan(true)">扫描</el-button>
+        <el-button type="primary" size="small" @click="scan(true)">扫描</el-button>
+        <span class="f-hint">SCAN 游标遍历，单次最多 200 条</span>
       </div>
-    </div>
-
-    <div class="panel" v-loading="loading">
-      <el-table :data="rows" size="small" height="520">
+      <el-table :data="rows" size="small">
         <template #empty>
           <EmptyState title="没有扫描到键" description="调整匹配模式后重新扫描。" />
         </template>
@@ -177,7 +178,7 @@ onMounted(() => scan(true))
         </el-table-column>
         <el-table-column label="类型" width="110">
           <template #default="{ row }">
-            <el-tag size="small" :type="typeTagType(row.type)">{{ row.type }}</el-tag>
+            <el-tag size="small" type="info">{{ row.type }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="过期" width="120">
@@ -257,10 +258,28 @@ onMounted(() => scan(true))
 </template>
 
 <style scoped>
-.toolbar {
+.filters {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.f-pattern {
+  width: 240px;
+}
+
+.f-count {
+  width: 108px;
+}
+
+.f-hint {
+  margin-left: auto;
+  font-size: var(--text-xs);
+  color: var(--text-3);
 }
 
 .footer {

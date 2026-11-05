@@ -1,97 +1,146 @@
 /*
- * 设计令牌（TD-093）
+ * Tiering-KV 控制台设计令牌 —— Light-first（TD-094）
  *
- * 取向：运维控制台的"安静"界面——中性色主导，强调色只出现在
- * 可交互/当前状态上（占比 <5%）；卡片靠 1px 描边而非投影分层；
- * 数字统一等宽（tabular-nums），避免跳位。
+ * 依据：Linear / Vercel / Supabase / Stripe Dashboard 的设计方法——
+ * 中性色打底、单一品牌色只用于"可交互与当前状态"、hairline 分隔代替投影、
+ * 字阶克制（13/12/11）、数字等宽。
  *
- * 参考：Stripe / Linear / Vercel 一脉的 SaaS 控制台实践。
+ * 结构：
+ *   1. 中性色（面 / 线 / 文本）
+ *   2. 品牌与语义色
+ *   3. 尺寸（间距 / 圆角 / 层级）
+ *   4. 字体
+ *   5. Element Plus 变量映射（浅色）
  */
 :root {
-  /* 表面：近黑石墨，带一点冷调，避免纯黑发闷 */
-  --bg: #0a0d11;
-  --bg-subtle: #0d1116;
-  --surface: #121820;
-  --surface-2: #172029;
-  --surface-3: #1d2731;
+  color-scheme: light;
 
-  /* 描边 */
-  --line: #212a34;
-  --line-strong: #2d3742;
+  /* ---------- 1. 中性 ---------- */
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --surface-2: #fafbfc;
+  --surface-3: #f1f3f5;
+  --surface-inset: #f5f6f7;
 
-  /* 文本 */
-  --text: #e7ecf2;
-  --text-2: #9ba7b4;
-  --text-3: #6b7784;
+  --line: #e5e7eb;
+  --line-soft: #eceef1;
+  --line-strong: #d6dae0;
 
-  /* 强调与语义 */
-  --accent: #4c8dff;
-  --accent-hover: #6aa0ff;
-  --accent-soft: rgba(76, 141, 255, 0.12);
-  --success: #3fb950;
-  --success-soft: rgba(63, 185, 80, 0.12);
-  --warn: #d9a441;
-  --warn-soft: rgba(217, 164, 65, 0.12);
-  --danger: #f0544f;
-  --danger-soft: rgba(240, 84, 79, 0.12);
+  --text: #16181c;
+  --text-1: #202124;
+  --text-2: #626b78;
+  --text-3: #9299a3;
+  --text-inverse: #ffffff;
 
-  /* 圆角：控制件 6，面板 8，浮层 10 */
+  /* ---------- 2. 品牌与语义 ---------- */
+  --accent: #3b5bdb;
+  --accent-hover: #2f4bc4;
+  --accent-soft: #eef1fb;
+  --accent-line: #c9d2f4;
+
+  --ink: #16181c;
+  --ink-hover: #2a2d33;
+
+  --success: #18794e;
+  --success-soft: #eaf5ef;
+  --warn: #b45309;
+  --warn-soft: #fdf3e7;
+  --danger: #c62828;
+  --danger-soft: #fdeeee;
+
+  /* 终端（浅色页面中的深色工作区） */
+  --term-bg: #0f1115;
+  --term-surface: #16191f;
+  --term-line: #262a31;
+  --term-text: #d7dce3;
+  --term-muted: #8b939e;
+  --term-prompt: #7aa2f7;
+  --term-error: #f2777a;
+  --term-success: #7ee2a8;
+
+  /* ---------- 3. 尺寸 ---------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
   --radius-sm: 6px;
   --radius: 8px;
   --radius-lg: 10px;
 
-  /* 字体 */
-  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', 'PingFang SC',
-    'Microsoft YaHei', sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Code', Consolas, monospace;
+  --shadow-pop: 0 8px 24px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.04);
 
-  /* 动效：只对用户操作做 ≤160ms 的过渡 */
+  /* ---------- 4. 字体 ---------- */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', ui-monospace, Consolas, 'Liberation Mono',
+    monospace;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 28px;
+
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Element Plus 变量映射（暗色为唯一主题） */
-html.dark {
+/* ---------- 5. Element Plus（浅色） ---------- */
+:root {
   --el-color-primary: var(--accent);
-  --el-color-primary-light-3: #6aa0ff;
-  --el-color-primary-light-5: #3d74d6;
-  --el-color-primary-light-7: #2c548f;
-  --el-color-primary-light-8: #24406b;
+  --el-color-primary-light-3: #6a82e6;
+  --el-color-primary-light-5: #97a7ec;
+  --el-color-primary-light-7: #c4ccf3;
+  --el-color-primary-light-8: #dce1f8;
   --el-color-primary-light-9: var(--accent-soft);
-  --el-color-primary-dark-2: #3f7ae6;
+  --el-color-primary-dark-2: var(--accent-hover);
 
   --el-color-success: var(--success);
+  --el-color-success-light-9: var(--success-soft);
   --el-color-warning: var(--warn);
+  --el-color-warning-light-9: var(--warn-soft);
   --el-color-danger: var(--danger);
+  --el-color-danger-light-9: var(--danger-soft);
   --el-color-error: var(--danger);
   --el-color-info: var(--text-2);
 
   --el-bg-color: var(--surface);
   --el-bg-color-page: var(--bg);
-  --el-bg-color-overlay: var(--surface-2);
+  --el-bg-color-overlay: var(--surface);
   --el-fill-color: var(--surface-3);
   --el-fill-color-light: var(--surface-2);
   --el-fill-color-lighter: var(--surface-2);
+  --el-fill-color-extra-light: var(--surface-2);
   --el-fill-color-blank: var(--surface);
 
-  --el-border-color: var(--line-strong);
-  --el-border-color-light: var(--line);
-  --el-border-color-lighter: var(--line);
-  --el-border-color-extra-light: var(--line);
+  --el-border-color: var(--line);
+  --el-border-color-light: var(--line-soft);
+  --el-border-color-lighter: var(--line-soft);
+  --el-border-color-extra-light: #f2f4f6;
 
-  --el-text-color-primary: var(--text);
-  --el-text-color-regular: #b6c1cd;
+  --el-text-color-primary: var(--text-1);
+  --el-text-color-regular: #3c434d;
   --el-text-color-secondary: var(--text-2);
   --el-text-color-placeholder: var(--text-3);
-  --el-text-color-disabled: #55606b;
+  --el-text-color-disabled: #b4bac2;
 
   --el-border-radius-base: var(--radius-sm);
   --el-border-radius-small: 4px;
-  --el-border-radius-round: 999px;
 
   --el-font-family: var(--font-sans);
   --el-font-size-base: 13px;
 
-  --el-box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-  --el-box-shadow-light: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --el-box-shadow-lighter: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --el-box-shadow: 0 12px 32px rgba(16, 24, 40, 0.1);
+  --el-box-shadow-light: 0 2px 8px rgba(16, 24, 40, 0.06);
+  --el-box-shadow-lighter: 0 1px 2px rgba(16, 24, 40, 0.05);
+
+  --el-disabled-bg-color: var(--surface-3);
+  --el-disabled-text-color: var(--text-3);
 }
