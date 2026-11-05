@@ -147,7 +147,36 @@ node scripts/phase7-ui-states.mjs   # 需要已注册 demo-tiering / phase7-empt
 > 结论：最坏一次 17 ms，且只在冷层变更后发生一次；5 秒采集周期下可接受。
 > 若冷层规模继续增长，可改为后台异步刷新（记为后续优化项）。
 
-## 7. 已知边界
+## 7. SSTable 下钻（TD-099）
+
+`INFO` 全量输出**不包含**表清单（表多时会把 INFO 撑大）。改为按需读取：
+`INFO sstables` 段落 + 控制面 `GET /api/v1/system/tables?instanceId=`。
+
+内核格式（每表一行，键范围用 Base64 保证二进制安全）：
+
+```
+# SSTables
+sstable_count:7
+sstable_total_bytes:820441852
+sstable_total_entries:9377994
+sstable:17|keys=2170696|bytes=191580172|first_b64=dGllcjow|last_b64=dGllcjo5OTk5OTk=
+```
+
+实测（demo-tiering）：
+
+| 表 | 键数 | 大小 | 键范围 |
+| --- | --- | --- | --- |
+| #17 | 2,170,696 | 182.71 MB | tier:0 … tier:999999 |
+| #18 | 200,000 | 16.43 MB | tier:1000000 … tier:999999 |
+| #22 | 2,217,948 | 185.31 MB | perf:1793885536019:0 … tier:999999 |
+
+> 多张表键范围重叠是 LSM 的正常形态（后写覆盖先写，查询从新到旧），
+> 面板只呈现事实，不做"合并后"的推断。
+
+前端：SSTable 阶段的"7 个表"是可点击链接，Drawer 展示 id / 键数 / 大小 / 键范围，
+含加载态、错误态（红条）与空态（"冷层暂无 SSTable"）。
+
+## 8. 已知边界
 
 - 延迟分位是**分桶估算**（桶上界，且以实测 max 封顶），不是精确分位。
 - `tiering_cold_entries` 是**上界**（历史版本未去重），与"键总数（去重）"不同，界面已标注。

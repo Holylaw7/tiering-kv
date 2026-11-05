@@ -200,6 +200,21 @@ export interface SystemInfo {
   warnings: string[]
 }
 
+export interface SstableTable {
+  id: number
+  keys: number
+  bytes: number
+  firstKey: string
+  lastKey: string
+}
+
+export interface SstableTableView {
+  count: number
+  totalBytes: number
+  totalEntries: number
+  tables: SstableTable[]
+}
+
 export interface PageResult<T> {
   items: T[]
   total: number

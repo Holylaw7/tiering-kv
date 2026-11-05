@@ -18,6 +18,7 @@ import io.tieringkv.observability.BackupMetricsRegistry;
 import io.tieringkv.observability.MultiModelMetricsRegistry;
 import io.tieringkv.observability.ObservabilityRegistry;
 import io.tieringkv.observability.ServerInfoProvider;
+import io.tieringkv.observability.SstableInfoRenderer;
 import io.tieringkv.observability.ReplicationMetricsRegistry;
 import io.tieringkv.observability.VectorMetricsRegistry;
 import io.tieringkv.network.tcp.TieringKvServer;
@@ -129,6 +130,9 @@ public final class Main {
         Map<String, Supplier<String>> infoSections =
                 new HashMap<>(observability.infoSections());
         infoSections.putAll(serverInfo.sections());
+        // TD-099：SSTable 清单按需读取，不进入全量 INFO
+        infoSections.put("sstables", () ->
+                SstableInfoRenderer.render(cold.tablesSnapshot()));
         CommandEngine commandEngine = new CommandEngine(
                 CommandRegistry.createDefaultWithVector(
                         serverInfo::render, Map.copyOf(infoSections),

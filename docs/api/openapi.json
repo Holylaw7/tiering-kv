@@ -436,6 +436,21 @@
         },
         "type" : "object"
       },
+      "ApiResponseView" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/View"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseVoid" : {
         "properties" : {
           "code" : {
@@ -1144,6 +1159,29 @@
         },
         "type" : "object"
       },
+      "SstableTable" : {
+        "properties" : {
+          "bytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "firstKey" : {
+            "type" : "string"
+          },
+          "id" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "keys" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "lastKey" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "Stats" : {
         "properties" : {
           "avgLatencyMs" : {
@@ -1388,6 +1426,29 @@
           },
           "username" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "View" : {
+        "properties" : {
+          "count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "tables" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SstableTable"
+            },
+            "type" : "array"
+          },
+          "totalBytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalEntries" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -2404,6 +2465,33 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/ApiResponseSystemInfoView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "system-controller" ]
+      }
+    },
+    "/api/v1/system/tables" : {
+      "get" : {
+        "operationId" : "tables",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "instanceId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseView"
                 }
               }
             },

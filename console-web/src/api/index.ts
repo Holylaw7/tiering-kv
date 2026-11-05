@@ -1,7 +1,7 @@
 import http from './http'
 import type {
   AlertEvent, AlertRule, BackupRecord, InstanceView, KeyDetail, KeyScanPage,
-  LoginResponse, OpLog, OverviewView, PageResult, SystemInfo, TerminalHistory,
+  LoginResponse, OpLog, OverviewView, PageResult, SstableTableView, SystemInfo, TerminalHistory,
   TerminalResult, TrendPoint, UserView
 } from './types'
 
@@ -99,7 +99,10 @@ export interface AuditQuery {
 
 export const systemApi = {
   info: (instanceId: number) =>
-    http.get<unknown, SystemInfo>('/system/info', { params: { instanceId } })
+    http.get<unknown, SystemInfo>('/system/info', { params: { instanceId } }),
+  /** 冷层 SSTable 清单（按需读取，不走全量 INFO） */
+  tables: (instanceId: number) =>
+    http.get<unknown, SstableTableView>('/system/tables', { params: { instanceId } })
 }
 
 export const auditApi = {

@@ -1,0 +1,23 @@
+import { chromium } from 'playwright'
+import { resolve } from 'node:path'
+const BASE = 'http://127.0.0.1:5173'
+const OUT = resolve('../docs/screenshots/v2')
+const browser = await chromium.launch()
+const ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: 'zh-CN' })
+const page = await ctx.newPage()
+await page.goto(BASE + '/#/login', { waitUntil: 'networkidle' })
+await page.fill('input[autocomplete="username"]', 'admin')
+await page.fill('input[autocomplete="current-password"]', 'admin123')
+await page.click('[data-testid="login-submit"]')
+await page.waitForURL(/dashboard/)
+await page.waitForTimeout(1800)
+await page.locator('.instance-select').click()
+await page.waitForTimeout(400)
+await page.locator('.el-select-dropdown__item', { hasText: 'demo-tiering' }).first().click()
+await page.waitForTimeout(3000)
+await page.locator('.link-btn').first().click()
+await page.waitForTimeout(2000)
+await page.screenshot({ path: resolve(OUT, '27-sstable-drawer.png') })
+const text = await page.locator('.el-drawer').innerText()
+console.log(text.replace(/\n+/g, ' | ').slice(0, 400))
+await browser.close()

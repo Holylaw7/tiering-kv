@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { dashboardApi, instanceApi } from '@/api'
-import type { OverviewView, TrendPoint } from '@/api/types'
+import { dashboardApi, instanceApi, systemApi } from '@/api'
+import type { OverviewView, SstableTable, TrendPoint } from '@/api/types'
 import { useInstanceStore } from '@/stores/instance'
 import { formatBytes, formatNumber, formatPercent, formatUptime } from '@/utils/format'
 import ChartPanel from '@/components/ChartPanel.vue'
@@ -125,6 +125,30 @@ onBeforeUnmount(stopTimer)
 
 const times = computed(() => trends.value.map((item) => item.time.slice(11, 19)))
 const instances = computed(() => overview.value?.instances ?? instanceStore.list)
+
+// SSTable 下钻（TD-099）
+const tablesVisible = ref(false)
+const tablesLoading = ref(false)
+const tablesError = ref('')
+const tableList = ref<SstableTable[]>([])
+const tableTotals = ref({ count: 0, totalBytes: 0, totalEntries: 0 })
+
+async function openTables() {
+  const id = instanceStore.selectedId
+  if (!id) return
+  tablesVisible.value = true
+  tablesLoading.value = true
+  tablesError.value = ''
+  try {
+    const view = await systemApi.tables(id)
+    tableList.value = view.tables
+    tableTotals.value = { count: view.count, totalBytes: view.totalBytes, totalEntries: view.totalEntries }
+  } catch (ex: any) {
+    tablesError.value = ex?.message ?? '读取失败'
+  } finally {
+    tablesLoading.value = false
+  }
+}
 
 const AXIS_LABEL = { fontSize: 11, color: '#9299a3', hideOverlap: true } as const
 
@@ -375,7 +399,12 @@ const memoryOption = computed<any>(() => ({
               <span class="stage-tag cold">冷层</span>
             </div>
             <div class="stage-value num">{{ formatBytes(tiering.cold) }}</div>
-            <div class="stage-meta">{{ formatNumber(tiering.sstables) }} 个表 · 占存储 {{ formatPercent(tiering.coldShare) }}</div>
+            <div class="stage-meta">
+              <button class="link-btn" type="button" @click="openTables">
+                {{ formatNumber(tiering.sstables) }} 个表
+              </button>
+              · 占存储 {{ formatPercent(tiering.coldShare) }}
+            </div>
           </div>
 
           <div class="stage-arrow">
@@ -490,6 +519,38 @@ const memoryOption = computed<any>(() => ({
         </el-table-column>
       </el-table>
     </section>
+    <el-drawer v-model="tablesVisible" size="640px" title="冷层 SSTable 清单">
+      <div v-loading="tablesLoading" class="tables">
+        <p class="tables-note">
+          数据来自 <span class="mono">INFO sstables</span>（按需读取）。键数为表条目累加，
+          含历史版本；键范围为 Base64 还原后的可读文本。
+        </p>
+        <div v-if="tablesError" class="tables-error">{{ tablesError }}</div>
+        <template v-else>
+          <div class="tables-summary">
+            <span>{{ tableTotals.count }} 张表</span>
+            <span class="num">{{ formatBytes(tableTotals.totalBytes) }}</span>
+            <span class="num">{{ formatNumber(tableTotals.totalEntries) }} entries</span>
+          </div>
+          <el-table :data="tableList" size="small" empty-text="冷层暂无 SSTable">
+            <el-table-column prop="id" label="ID" width="70">
+              <template #default="{ row }"><span class="mono">#{{ row.id }}</span></template>
+            </el-table-column>
+            <el-table-column label="键数" width="110" align="right">
+              <template #default="{ row }"><span class="num">{{ formatNumber(row.keys) }}</span></template>
+            </el-table-column>
+            <el-table-column label="大小" width="100" align="right">
+              <template #default="{ row }"><span class="num">{{ formatBytes(row.bytes) }}</span></template>
+            </el-table-column>
+            <el-table-column label="键范围" min-width="220">
+              <template #default="{ row }">
+                <span class="mono range">{{ row.firstKey || '—' }} … {{ row.lastKey || '—' }}</span>
+              </template>
+            </el-table-column>
+          </el-table>
+        </template>
+      </div>
+    </el-drawer>
   </div>
 </template>
 <style scoped>
@@ -866,6 +927,55 @@ const memoryOption = computed<any>(() => ({
 
 .comp-value .dot.hot:first-child {
   margin-left: 0;
+}
+
+.link-btn {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: inherit;
+  cursor: pointer;
+}
+
+.link-btn:hover {
+  text-decoration: underline;
+}
+
+.tables {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tables-note {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--text-3);
+}
+
+.tables-error {
+  padding: 12px 14px;
+  border: 1px solid #f3cfcf;
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.tables-summary {
+  display: flex;
+  gap: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.range {
+  font-size: 11.5px;
+  color: var(--text-2);
 }
 
 .comp-foot {

@@ -388,6 +388,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/system/tables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["tables"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/terminal/execute": {
         parameters: {
             query?: never;
@@ -642,6 +658,12 @@ export interface components {
             /** Format: int32 */
             code?: number;
             data?: components["schemas"]["UserView"];
+            message?: string;
+        };
+        ApiResponseView: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["View"];
             message?: string;
         };
         ApiResponseVoid: {
@@ -932,6 +954,16 @@ export interface components {
             uptimeSeconds?: number;
             version?: string;
         };
+        SstableTable: {
+            /** Format: int64 */
+            bytes?: number;
+            firstKey?: string;
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            keys?: number;
+            lastKey?: string;
+        };
         Stats: {
             /** Format: double */
             avgLatencyMs?: number;
@@ -1031,6 +1063,15 @@ export interface components {
             /** Format: int32 */
             status?: number;
             username?: string;
+        };
+        View: {
+            /** Format: int64 */
+            count?: number;
+            tables?: components["schemas"]["SstableTable"][];
+            /** Format: int64 */
+            totalBytes?: number;
+            /** Format: int64 */
+            totalEntries?: number;
         };
     };
     responses: never;
@@ -1761,6 +1802,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseSystemInfoView"];
+                };
+            };
+        };
+    };
+    tables: {
+        parameters: {
+            query: {
+                instanceId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseView"];
                 };
             };
         };

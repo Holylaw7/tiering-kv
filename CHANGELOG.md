@@ -137,6 +137,10 @@
 
 ### Added
 
+- **SSTable 下钻（TD-099）**：新增 `INFO sstables` 按需段落（id/键数/字节/键范围，Base64 键边界，
+  **不进全量 INFO**）与控制面 `GET /system/tables`；运行总览的"N 个表"改为可点击，
+  Drawer 展示每张表的 keys/大小/键范围，含加载/错误/空态。内核新增 3 例渲染测试，
+  控制面新增 4 例解析测试。
 - **键分布与存储构成（TD-098）**：`INFO # Tiering` 增加 `tiering_hot_keys`（精确）、
   `tiering_cold_entries`（表条目累加，上界）、`tiering_hot_key_share`；控制面与前端类型同步；
   运行总览新增「存储构成」面板（容量条 + 键条 + 去重键总数），并标注冷层条目含历史版本。
