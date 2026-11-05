@@ -757,6 +757,10 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "compactionInProgress" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
           "compactionInputBytes" : {
             "format" : "int64",
             "type" : "integer"
@@ -782,6 +786,10 @@
             "type" : "integer"
           },
           "flushCount" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "flushInProgress" : {
             "format" : "int64",
             "type" : "integer"
           },
@@ -844,6 +852,9 @@
           "qps" : {
             "format" : "double",
             "type" : "number"
+          },
+          "tieringReported" : {
+            "type" : "boolean"
           },
           "totalKeys" : {
             "format" : "int64",

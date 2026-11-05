@@ -125,7 +125,7 @@ public final class Main {
                 metrics, memoryManager, syncStorage::size,
                 config.server().port(), ServerVersion.current(),
                 tiering.metrics(), blockCache.statistics()::snapshot,
-                tiering::refreshGauges);
+                tiering::refreshGaugesThrottled);
         Map<String, Supplier<String>> infoSections =
                 new HashMap<>(observability.infoSections());
         infoSections.putAll(serverInfo.sections());

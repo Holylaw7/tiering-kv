@@ -45,10 +45,16 @@ const tiering = computed(() => {
     compactionLatencyMs: current?.compactionLatencyMs ?? 0
   }
 })
-const tieringReported = computed(() => {
-  const t = tiering.value
-  return t.sstables > 0 || t.entries > 0 || t.flushCount > 0 || t.cacheHits + t.cacheMisses > 0
-})
+/** 三态：接口失败 / 内核未上报 / 已上报（可能为真实的 0） */
+const tieringReported = computed(() => live.value?.tieringReported === true)
+const instanceOffline = computed(() => !live.value || selected.value?.status === 'DOWN')
+/** 实例离线时指标显示为 “—”，避免把“没取到”误读成“为 0” */
+const offline = computed(() => !live.value)
+const show = (text: string) => (offline.value ? '—' : text)
+
+const tieringBusy = computed(() =>
+  (live.value?.flushInProgress ?? 0) > 0 || (live.value?.compactionInProgress ?? 0) > 0
+)
 const selected = computed(() => instanceStore.selected)
 const memoryRatio = computed(() => {
   const current = live.value
@@ -291,34 +297,35 @@ const memoryOption = computed<any>(() => ({
     <div class="metrics">
       <div class="metric">
         <span class="metric-label">QPS</span>
-        <span class="metric-value num">{{ formatNumber(live?.qps, 1) }}</span>
-        <span class="metric-hint">近 5 秒均摊</span>
+        <span class="metric-value num">{{ show(formatNumber(live?.qps, 1)) }}</span>
+        <span class="metric-hint">{{ offline ? '实例离线' : '近 5 秒均摊' }}</span>
       </div>
       <div class="metric">
         <span class="metric-label">延迟 P95</span>
-        <span class="metric-value num">{{ (live?.p95Millis ?? 0).toFixed(2) }}<small>ms</small></span>
-        <span class="metric-hint">
+        <span class="metric-value num">{{ show((live?.p95Millis ?? 0).toFixed(2)) }}<small v-if="!offline">ms</small></span>
+        <span class="metric-hint" v-if="!offline">
           平均 {{ (live?.avgLatencyMs ?? 0).toFixed(2) }} · P99 {{ (live?.p99Millis ?? 0).toFixed(2) }} ms
         </span>
+        <span class="metric-hint" v-else>实例离线</span>
       </div>
       <div class="metric">
         <span class="metric-label">键总数</span>
-        <span class="metric-value num">{{ formatNumber(live?.totalKeys) }}</span>
+        <span class="metric-value num">{{ show(formatNumber(live?.totalKeys)) }}</span>
         <span class="metric-hint">db0 键空间</span>
       </div>
       <div class="metric">
         <span class="metric-label">引擎内存</span>
-        <span class="metric-value num">{{ formatBytes(live?.usedMemory) }}</span>
-        <span class="metric-hint">水位 {{ formatPercent(memoryRatio) }}</span>
+        <span class="metric-value num">{{ show(formatBytes(live?.usedMemory)) }}</span>
+        <span class="metric-hint">{{ offline ? '实例离线' : '水位 ' + formatPercent(memoryRatio) }}</span>
       </div>
       <div class="metric">
         <span class="metric-label">JVM 堆</span>
-        <span class="metric-value num">{{ formatBytes(live?.usedMemoryJvm) }}</span>
-        <span class="metric-hint">上限 {{ formatBytes(live?.maxJvmHeap) }}</span>
+        <span class="metric-value num">{{ show(formatBytes(live?.usedMemoryJvm)) }}</span>
+        <span class="metric-hint">{{ offline ? '实例离线' : '上限 ' + formatBytes(live?.maxJvmHeap) }}</span>
       </div>
       <div class="metric" :class="{ warn: (live?.errors ?? 0) > 0 }">
         <span class="metric-label">错误计数</span>
-        <span class="metric-value num">{{ formatNumber(live?.errors) }}</span>
+        <span class="metric-value num">{{ show(formatNumber(live?.errors)) }}</span>
         <span class="metric-hint">累计命令错误</span>
       </div>
     </div>
@@ -327,10 +334,17 @@ const memoryOption = computed<any>(() => ({
       <div class="tiering-head">
         <h3>存储分层</h3>
         <span class="hint">MemTable → Flush → SSTable，数据来自内核 <span class="mono">INFO # Tiering</span></span>
+        <span v-if="tieringBusy" class="busy">
+          <span class="busy-dot"></span>
+          {{ (live?.compactionInProgress ?? 0) > 0 ? 'Compaction 进行中' : 'Flush 进行中' }}
+        </span>
       </div>
 
-      <div v-if="!tieringReported" class="tiering-empty">
-        当前内核未上报分层指标（旧版本或采样尚未发生写入），此处不展示推算值。
+      <div v-if="instanceOffline && !live" class="tiering-empty is-error">
+        实例不可达：未取到 INFO，分层指标不可用。请检查实例状态后重试。
+      </div>
+      <div v-else-if="!tieringReported" class="tiering-empty">
+        当前内核未上报分层指标（INFO 中无 <span class="mono"># Tiering</span> 段），此处不展示推算值。
       </div>
 
       <template v-else>
@@ -384,12 +398,17 @@ const memoryOption = computed<any>(() => ({
             <span>热层 {{ formatBytes(tiering.hot) }}</span>
             <span>冷层 {{ formatBytes(tiering.cold) }}</span>
           </div>
-          <div class="split-bar">
-            <div class="split-hot" :style="{ width: Math.max(2, tiering.hotShare * 100) + '%' }"></div>
-            <div class="split-cold" :style="{ width: Math.max(2, tiering.coldShare * 100) + '%' }"></div>
+          <div class="split-bar" :class="{ empty: tiering.total === 0 }">
+            <template v-if="tiering.total > 0">
+              <div class="split-hot" :style="{ width: Math.max(2, tiering.hotShare * 100) + '%' }"></div>
+              <div class="split-cold" :style="{ width: Math.max(2, tiering.coldShare * 100) + '%' }"></div>
+            </template>
           </div>
           <div class="split-foot">
-            <span>总占用 {{ formatBytes(tiering.total) }}</span>
+            <span>
+              总占用 {{ formatBytes(tiering.total) }}
+              <em v-if="tiering.total === 0" class="split-note">· 实例为空，尚无分层数据</em>
+            </span>
             <span>
               Compaction {{ formatNumber(tiering.compactionCount) }} 次
               <template v-if="tiering.compactionCount > 0">
@@ -586,6 +605,34 @@ const memoryOption = computed<any>(() => ({
   color: var(--text-3);
 }
 
+.busy {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--warn);
+}
+
+.busy-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--warn);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+.tiering-empty.is-error {
+  border-color: #f3cfcf;
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
 .tiering-empty {
   padding: 16px 18px;
   border: 1px dashed var(--line);
@@ -719,6 +766,15 @@ const memoryOption = computed<any>(() => ({
   align-items: center;
   justify-content: space-between;
   font-size: 11.5px;
+  color: var(--text-3);
+}
+
+.split-bar.empty {
+  background: repeating-linear-gradient(90deg, var(--surface-3) 0 6px, transparent 6px 12px);
+}
+
+.split-note {
+  font-style: normal;
   color: var(--text-3);
 }
 

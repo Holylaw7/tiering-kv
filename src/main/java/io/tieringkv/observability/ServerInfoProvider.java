@@ -86,11 +86,31 @@ public final class ServerInfoProvider {
 
     /** 全量 INFO 文本（CRLF 分隔，与 Redis 一致）。 */
     public String render() {
-        StringBuilder out = new StringBuilder(768);
-        for (Supplier<String> section : sections().values()) {
-            out.append(section.get());
+        // TD-097：一次渲染只刷新一次 gauge、只取一次快照，避免新旧快照混排
+        storageSnapshot = storageMetrics == null ? null : prepareSnapshot();
+        try {
+            StringBuilder out = new StringBuilder(768);
+            for (Supplier<String> section : sections().values()) {
+                out.append(section.get());
+            }
+            return out.toString();
+        } finally {
+            storageSnapshot = null;
         }
-        return out.toString();
+    }
+
+    /** 本次渲染的存储快照（render 期间有效）。 */
+    private StorageMetrics.Snapshot storageSnapshot;
+
+    private StorageMetrics.Snapshot prepareSnapshot() {
+        if (refreshGauges != null) {
+            refreshGauges.run();
+        }
+        return storageMetrics.snapshot();
+    }
+
+    private StorageMetrics.Snapshot currentSnapshot() {
+        return storageSnapshot != null ? storageSnapshot : storageMetrics.snapshot();
     }
 
     private long uptimeSeconds() {
@@ -126,7 +146,10 @@ public final class ServerInfoProvider {
         MemoryMXBean bean = ManagementFactory.getMemoryMXBean();
         long jvmUsed = bean.getHeapMemoryUsage().getUsed();
         long jvmMax = bean.getHeapMemoryUsage().getMax();
-        long engineUsed = memory == null ? 0 : memory.usedBytes();
+        // 与 # Tiering 取自同一快照，保证一次 INFO 内数值时间一致
+        StorageMetrics.Snapshot snapshot = storageSnapshot;
+        long engineUsed = snapshot != null ? snapshot.memoryUsedBytes()
+                : (memory == null ? 0 : memory.usedBytes());
         long engineMax = memory == null ? 0 : memory.maxBytes();
         return "# Memory\r\n"
                 + "used_memory:" + engineUsed + "\r\n"
@@ -164,10 +187,7 @@ public final class ServerInfoProvider {
      * 不推算、不估算，取不到就是 0。
      */
     private String tiering() {
-        if (refreshGauges != null) {
-            refreshGauges.run();
-        }
-        StorageMetrics.Snapshot snapshot = storageMetrics.snapshot();
+        StorageMetrics.Snapshot snapshot = currentSnapshot();
         CacheStatistics.Snapshot cache = cacheStats == null
                 ? new CacheStatistics.Snapshot(0, 0, 0, 0)
                 : cacheStats.get();
@@ -198,6 +218,8 @@ public final class ServerInfoProvider {
                 + String.format(Locale.ROOT, "%.3f", snapshot.compactionCount() == 0 ? 0
                         : snapshot.compactionLatencyNanos() / (double) snapshot.compactionCount() / 1_000_000.0)
                 + "\r\n"
+                + "tiering_flush_in_progress:" + snapshot.flushInProgress() + "\r\n"
+                + "tiering_compaction_in_progress:" + snapshot.compactionInProgress() + "\r\n"
                 + "tiering_block_cache_hit_rate:"
                 + String.format(Locale.ROOT, "%.4f", cache.hitRate()) + "\r\n";
     }

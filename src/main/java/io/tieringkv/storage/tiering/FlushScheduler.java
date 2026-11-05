@@ -121,6 +121,11 @@ public final class FlushScheduler {
         autoFlusher.shutdownNow();
     }
 
+    /** Flush 是否正在执行（INFO 用，TD-097）。 */
+    public boolean inProgress() {
+        return flushInProgress.get();
+    }
+
     /** 触发一次后台 Flush；已在执行或入队失败返回 false。 */
     public boolean scheduleFlush() {
         if (!flushInProgress.compareAndSet(false, true)) {

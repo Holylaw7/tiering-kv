@@ -137,6 +137,14 @@
 
 ### Added
 
+- **可观测性验收（Phase 7 / TD-097 / ADR-0364）**：INFO 路径改为**节流刷新**
+  （200ms 内复用 gauge，成本 O(表数)、无目录扫描）；一次 INFO 渲染只取**一个存储快照**，
+  `# Memory` 与 `# Tiering` 数值时间一致；新增 `tiering_flush_in_progress` /
+  `tiering_compaction_in_progress` 与前端"进行中"脉冲标记；控制面新增
+  `tieringReported` 以区分"未上报"与"真实为零"，实例离线时指标显示 `—`。
+  新增验收脚本（性能 / 隔离 / 生命周期 / 三态截图）与报告
+  `docs/testing/phase7-observability-qualification.md`：
+  生命周期 12/12、隔离 18/18、INFO 轮询对 p99 无可见影响（0.537→0.503ms）。
 - **延迟分位与 Compaction 指标（TD-096 / ADR-0363）**：内核新增延迟直方图
   （17 个固定桶 + 60 秒滚动窗口，P50/P95/P99/max，桶上界以实测 max 封顶）与
   SSTable 合并回调计数（次数/输入字节/输出字节/平均耗时）；`INFO` 追加

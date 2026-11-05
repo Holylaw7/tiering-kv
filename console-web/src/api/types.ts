@@ -67,6 +67,9 @@ export interface LiveMetrics {
   p99Millis: number
   latencyMaxMillis: number
   latencySamples: number
+  tieringReported: boolean
+  flushInProgress: number
+  compactionInProgress: number
   compactionCount: number
   compactionInputBytes: number
   compactionOutputBytes: number

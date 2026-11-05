@@ -26,6 +26,10 @@ public final class StorageMetrics {
     private final AtomicLong coldSstableCount = new AtomicLong();
     private final AtomicLong coldDiskUsage = new AtomicLong();
 
+    // 后台任务进行中标记（TD-097）
+    private final AtomicLong flushInProgress = new AtomicLong();
+    private final AtomicLong compactionInProgress = new AtomicLong();
+
     // Compaction（TD-096）
     private final LongAdder compactionCount = new LongAdder();
     private final LongAdder compactionInputBytes = new LongAdder();
@@ -71,6 +75,14 @@ public final class StorageMetrics {
         compactionLatencyNanos.add(Math.max(0, latencyNanos));
     }
 
+    public void setFlushInProgress(boolean inProgress) {
+        flushInProgress.set(inProgress ? 1 : 0);
+    }
+
+    public void setCompactionInProgress(boolean inProgress) {
+        compactionInProgress.set(inProgress ? 1 : 0);
+    }
+
     public long pendingMigrationCount() {
         return migrationPending.get();
     }
@@ -83,7 +95,8 @@ public final class StorageMetrics {
                 flushCount.sum(), flushBytes.sum(), flushLatencyNanos.sum(),
                 coldSstableCount.get(), coldDiskUsage.get(),
                 compactionCount.sum(), compactionInputBytes.sum(),
-                compactionOutputBytes.sum(), compactionLatencyNanos.sum());
+                compactionOutputBytes.sum(), compactionLatencyNanos.sum(),
+                flushInProgress.get(), compactionInProgress.get());
     }
 
     public record Snapshot(
@@ -102,6 +115,8 @@ public final class StorageMetrics {
             long compactionCount,
             long compactionInputBytes,
             long compactionOutputBytes,
-            long compactionLatencyNanos) {
+            long compactionLatencyNanos,
+            long flushInProgress,
+            long compactionInProgress) {
     }
 }

@@ -50,6 +50,9 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
     private boolean liveCountDirty = true;
     private long liveCountCache;
     private boolean closed;
+    /** Compaction 是否正在执行（INFO 用，TD-097）。 */
+    private final java.util.concurrent.atomic.AtomicBoolean compacting =
+            new java.util.concurrent.atomic.AtomicBoolean();
     /** 合并回调（TD-096）：由上层接线到 StorageMetrics，避免冷层反向依赖 tiering。 */
     private volatile CompactionListener compactionListener;
 
@@ -60,6 +63,10 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
 
     public void setCompactionListener(CompactionListener listener) {
         this.compactionListener = listener;
+    }
+
+    public boolean isCompacting() {
+        return compacting.get();
     }
 
     public ColdStorageEngine(Config config) throws IOException {
@@ -323,12 +330,17 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
         }
         List<SSTableMeta> inputs = new ArrayList<>(tables);
         long startedAt = System.nanoTime();
-        SSTableMeta output = new CompactionTask(
-                config, inputs, nextTableId).run();
-        nextTableId++;
-        installCompaction(output, inputs);
-        notifyCompaction(inputs, output, System.nanoTime() - startedAt);
-        return output;
+        compacting.set(true);
+        try {
+            SSTableMeta output = new CompactionTask(
+                    config, inputs, nextTableId).run();
+            nextTableId++;
+            installCompaction(output, inputs);
+            notifyCompaction(inputs, output, System.nanoTime() - startedAt);
+            return output;
+        } finally {
+            compacting.set(false);
+        }
     }
 
     private void flushPendingLocked() {

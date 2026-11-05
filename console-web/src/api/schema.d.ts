@@ -770,6 +770,8 @@ export interface components {
             /** Format: int64 */
             compactionCount?: number;
             /** Format: int64 */
+            compactionInProgress?: number;
+            /** Format: int64 */
             compactionInputBytes?: number;
             /** Format: double */
             compactionLatencyMs?: number;
@@ -783,6 +785,8 @@ export interface components {
             flushBytes?: number;
             /** Format: int64 */
             flushCount?: number;
+            /** Format: int64 */
+            flushInProgress?: number;
             /** Format: int64 */
             latencyMaxMillis?: number;
             /** Format: int64 */
@@ -813,6 +817,7 @@ export interface components {
             p99Millis?: number;
             /** Format: double */
             qps?: number;
+            tieringReported?: boolean;
             /** Format: int64 */
             totalKeys?: number;
             /** Format: int64 */
