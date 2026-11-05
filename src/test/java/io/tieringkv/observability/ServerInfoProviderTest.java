@@ -107,6 +107,7 @@ class ServerInfoProviderTest {
         storage.setMemoryGauges(4096, 1024 * 1024, 12);
         storage.setColdGauges(3, 8192);
         storage.recordFlush(2048, 1_000_000L);
+        storage.recordCompaction(4096, 2048, 2_000_000L);
         storage.migrationSubmitted();
         storage.migrationCompleted(true, 500_000L);
         CacheStatistics cache = new CacheStatistics();
@@ -124,6 +125,9 @@ class ServerInfoProviderTest {
                 .contains("tiering_cold_disk_usage_bytes:8192\r\n")
                 .contains("tiering_flush_count:1\r\n")
                 .contains("tiering_migration_success:1\r\n")
+                .contains("tiering_compaction_count:1\r\n")
+                .contains("tiering_compaction_input_bytes:4096\r\n")
+                .contains("tiering_compaction_output_bytes:2048\r\n")
                 .contains("tiering_block_cache_hit_rate:0.0000\r\n");
     }
 
@@ -134,5 +138,23 @@ class ServerInfoProviderTest {
                 metrics, new MemoryManager(1024), () -> 0L, 6379, "9.9.9");
 
         assertThat(provider.render()).doesNotContain("# Tiering");
+    }
+
+    @Test
+    void reportsLatencyPercentilesFromHistogram() {
+        MetricsRegistry metrics = new MetricsRegistry();
+        metrics.requestStarted();
+        metrics.requestCompleted(300_000L);
+        metrics.requestStarted();
+        metrics.requestCompleted(9_000_000L);
+
+        String info = new ServerInfoProvider(metrics, new MemoryManager(1024),
+                () -> 0L, 6379, "9.9.9").render();
+
+        assertThat(info).contains("latency_p50_ms:")
+                .contains("latency_p95_ms:")
+                .contains("latency_p99_ms:")
+                .contains("latency_max_ms:9\r\n")
+                .contains("latency_samples:2\r\n");
     }
 }

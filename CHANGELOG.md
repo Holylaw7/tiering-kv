@@ -137,6 +137,12 @@
 
 ### Added
 
+- **延迟分位与 Compaction 指标（TD-096 / ADR-0363）**：内核新增延迟直方图
+  （17 个固定桶 + 60 秒滚动窗口，P50/P95/P99/max，桶上界以实测 max 封顶）与
+  SSTable 合并回调计数（次数/输入字节/输出字节/平均耗时）；`INFO` 追加
+  `latency_*_ms` 与 `tiering_compaction_*`；运行总览延迟卡改为 **P95** 主数值
+  （附平均/P99），分层区页脚展示 Compaction 次数与"输入→输出"字节。
+  新增 `LatencyHistogramTest` 4 例与 INFO 用例 1 例。
 - **存储分层指标与可视化（TD-095 / ADR-0362）**：内核 `INFO` 新增只读段落
   `# Tiering`（MemTable 用量/条目、SSTable 数量与磁盘占用、冷热占比、Flush 次数与字节、
   迁移待处理/成功/失败、BlockCache 命中率/淘汰）；控制面 `LiveMetrics` 增加 15 个字段；

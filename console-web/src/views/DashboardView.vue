@@ -38,7 +38,11 @@ const tiering = computed(() => {
     cacheHitRate: current?.cacheHitRate ?? 0,
     cacheHits: current?.cacheHits ?? 0,
     cacheMisses: current?.cacheMisses ?? 0,
-    cacheEvictions: current?.cacheEvictions ?? 0
+    cacheEvictions: current?.cacheEvictions ?? 0,
+    compactionCount: current?.compactionCount ?? 0,
+    compactionInputBytes: current?.compactionInputBytes ?? 0,
+    compactionOutputBytes: current?.compactionOutputBytes ?? 0,
+    compactionLatencyMs: current?.compactionLatencyMs ?? 0
   }
 })
 const tieringReported = computed(() => {
@@ -291,9 +295,11 @@ const memoryOption = computed<any>(() => ({
         <span class="metric-hint">近 5 秒均摊</span>
       </div>
       <div class="metric">
-        <span class="metric-label">平均延迟</span>
-        <span class="metric-value num">{{ (live?.avgLatencyMs ?? 0).toFixed(3) }}<small>ms</small></span>
-        <span class="metric-hint">命令执行耗时</span>
+        <span class="metric-label">延迟 P95</span>
+        <span class="metric-value num">{{ (live?.p95Millis ?? 0).toFixed(2) }}<small>ms</small></span>
+        <span class="metric-hint">
+          平均 {{ (live?.avgLatencyMs ?? 0).toFixed(2) }} · P99 {{ (live?.p99Millis ?? 0).toFixed(2) }} ms
+        </span>
       </div>
       <div class="metric">
         <span class="metric-label">键总数</span>
@@ -384,7 +390,14 @@ const memoryOption = computed<any>(() => ({
           </div>
           <div class="split-foot">
             <span>总占用 {{ formatBytes(tiering.total) }}</span>
-            <span>淘汰 {{ formatNumber(tiering.cacheEvictions) }} · 迁移失败 {{ formatNumber(tiering.migrateFailed) }}</span>
+            <span>
+              Compaction {{ formatNumber(tiering.compactionCount) }} 次
+              <template v-if="tiering.compactionCount > 0">
+                · {{ formatBytes(tiering.compactionInputBytes) }} → {{ formatBytes(tiering.compactionOutputBytes) }}
+                · 平均 {{ tiering.compactionLatencyMs.toFixed(0) }} ms
+              </template>
+              · 淘汰 {{ formatNumber(tiering.cacheEvictions) }}
+            </span>
           </div>
         </div>
       </template>

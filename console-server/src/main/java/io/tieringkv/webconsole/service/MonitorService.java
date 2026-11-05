@@ -109,7 +109,16 @@ public class MonitorService {
                     parseLong(flat.get("tiering_block_cache_hits")),
                     parseLong(flat.get("tiering_block_cache_misses")),
                     parseDouble(flat.get("tiering_block_cache_hit_rate")),
-                    parseLong(flat.get("tiering_block_cache_evictions"))));
+                    parseLong(flat.get("tiering_block_cache_evictions")),
+                    parseDouble(flat.get("latency_p50_ms")),
+                    parseDouble(flat.get("latency_p95_ms")),
+                    parseDouble(flat.get("latency_p99_ms")),
+                    parseLong(flat.get("latency_max_ms")),
+                    parseLong(flat.get("latency_samples")),
+                    parseLong(flat.get("tiering_compaction_count")),
+                    parseLong(flat.get("tiering_compaction_input_bytes")),
+                    parseLong(flat.get("tiering_compaction_output_bytes")),
+                    parseDouble(flat.get("tiering_compaction_latency_ms"))));
         } catch (RuntimeException ex) {
             return Optional.empty();
         }

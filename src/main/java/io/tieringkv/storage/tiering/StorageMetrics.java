@@ -26,6 +26,12 @@ public final class StorageMetrics {
     private final AtomicLong coldSstableCount = new AtomicLong();
     private final AtomicLong coldDiskUsage = new AtomicLong();
 
+    // Compaction（TD-096）
+    private final LongAdder compactionCount = new LongAdder();
+    private final LongAdder compactionInputBytes = new LongAdder();
+    private final LongAdder compactionOutputBytes = new LongAdder();
+    private final LongAdder compactionLatencyNanos = new LongAdder();
+
     public void setMemoryGauges(long usedBytes, long maxBytes, long entryCount) {
         memoryUsedBytes.set(usedBytes);
         memoryMaxBytes.set(maxBytes);
@@ -57,6 +63,14 @@ public final class StorageMetrics {
         coldDiskUsage.set(diskUsage);
     }
 
+    /** 记录一次 SSTable 合并（输入/输出字节 + 耗时）。 */
+    public void recordCompaction(long inputBytes, long outputBytes, long latencyNanos) {
+        compactionCount.increment();
+        compactionInputBytes.add(Math.max(0, inputBytes));
+        compactionOutputBytes.add(Math.max(0, outputBytes));
+        compactionLatencyNanos.add(Math.max(0, latencyNanos));
+    }
+
     public long pendingMigrationCount() {
         return migrationPending.get();
     }
@@ -67,7 +81,9 @@ public final class StorageMetrics {
                 migrationPending.get(), migrationSuccess.sum(), migrationFailed.sum(),
                 migrationLatencyNanos.sum(),
                 flushCount.sum(), flushBytes.sum(), flushLatencyNanos.sum(),
-                coldSstableCount.get(), coldDiskUsage.get());
+                coldSstableCount.get(), coldDiskUsage.get(),
+                compactionCount.sum(), compactionInputBytes.sum(),
+                compactionOutputBytes.sum(), compactionLatencyNanos.sum());
     }
 
     public record Snapshot(
@@ -82,6 +98,10 @@ public final class StorageMetrics {
             long flushBytes,
             long flushLatencyNanos,
             long coldSstableCount,
-            long coldDiskUsage) {
+            long coldDiskUsage,
+            long compactionCount,
+            long compactionInputBytes,
+            long compactionOutputBytes,
+            long compactionLatencyNanos) {
     }
 }

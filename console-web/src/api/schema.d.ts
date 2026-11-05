@@ -767,6 +767,14 @@ export interface components {
             coldShare?: number;
             /** Format: int64 */
             coldSstableCount?: number;
+            /** Format: int64 */
+            compactionCount?: number;
+            /** Format: int64 */
+            compactionInputBytes?: number;
+            /** Format: double */
+            compactionLatencyMs?: number;
+            /** Format: int64 */
+            compactionOutputBytes?: number;
             /** Format: int32 */
             connections?: number;
             /** Format: int64 */
@@ -775,6 +783,10 @@ export interface components {
             flushBytes?: number;
             /** Format: int64 */
             flushCount?: number;
+            /** Format: int64 */
+            latencyMaxMillis?: number;
+            /** Format: int64 */
+            latencySamples?: number;
             /** Format: int64 */
             maxJvmHeap?: number;
             /** Format: int64 */
@@ -793,6 +805,12 @@ export interface components {
             migrationSuccess?: number;
             /** Format: double */
             opsPerSec?: number;
+            /** Format: double */
+            p50Millis?: number;
+            /** Format: double */
+            p95Millis?: number;
+            /** Format: double */
+            p99Millis?: number;
             /** Format: double */
             qps?: number;
             /** Format: int64 */

@@ -62,6 +62,15 @@ export interface LiveMetrics {
   cacheMisses: number
   cacheHitRate: number
   cacheEvictions: number
+  p50Millis: number
+  p95Millis: number
+  p99Millis: number
+  latencyMaxMillis: number
+  latencySamples: number
+  compactionCount: number
+  compactionInputBytes: number
+  compactionOutputBytes: number
+  compactionLatencyMs: number
 }
 
 export interface OverviewView {

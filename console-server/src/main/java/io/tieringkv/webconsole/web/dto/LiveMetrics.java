@@ -36,5 +36,15 @@ public record LiveMetrics(
         long cacheHits,
         long cacheMisses,
         double cacheHitRate,
-        long cacheEvictions) {
+        long cacheEvictions,
+        /* ---- 延迟分位与合并（TD-096） ---- */
+        double p50Millis,
+        double p95Millis,
+        double p99Millis,
+        long latencyMaxMillis,
+        long latencySamples,
+        long compactionCount,
+        long compactionInputBytes,
+        long compactionOutputBytes,
+        double compactionLatencyMs) {
 }

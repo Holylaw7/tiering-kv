@@ -148,6 +148,11 @@ public final class ServerInfoProvider {
                 + "qps:" + String.format(Locale.ROOT, "%.1f", snapshot.qps()) + "\r\n"
                 + "avg_latency_ms:"
                 + String.format(Locale.ROOT, "%.3f", snapshot.avgLatencyMs()) + "\r\n"
+                + "latency_p50_ms:" + String.format(Locale.ROOT, "%.3f", snapshot.p50Millis()) + "\r\n"
+                + "latency_p95_ms:" + String.format(Locale.ROOT, "%.3f", snapshot.p95Millis()) + "\r\n"
+                + "latency_p99_ms:" + String.format(Locale.ROOT, "%.3f", snapshot.p99Millis()) + "\r\n"
+                + "latency_max_ms:" + snapshot.maxMillis() + "\r\n"
+                + "latency_samples:" + snapshot.latencySamples() + "\r\n"
                 + "errors:" + snapshot.errors() + "\r\n"
                 + "instantaneous_ops_per_sec:"
                 + String.format(Locale.ROOT, "%.1f", snapshot.qps()) + "\r\n"
@@ -186,6 +191,13 @@ public final class ServerInfoProvider {
                 + "tiering_block_cache_hits:" + cache.hits() + "\r\n"
                 + "tiering_block_cache_misses:" + cache.misses() + "\r\n"
                 + "tiering_block_cache_evictions:" + cache.evictions() + "\r\n"
+                + "tiering_compaction_count:" + snapshot.compactionCount() + "\r\n"
+                + "tiering_compaction_input_bytes:" + snapshot.compactionInputBytes() + "\r\n"
+                + "tiering_compaction_output_bytes:" + snapshot.compactionOutputBytes() + "\r\n"
+                + "tiering_compaction_latency_ms:"
+                + String.format(Locale.ROOT, "%.3f", snapshot.compactionCount() == 0 ? 0
+                        : snapshot.compactionLatencyNanos() / (double) snapshot.compactionCount() / 1_000_000.0)
+                + "\r\n"
                 + "tiering_block_cache_hit_rate:"
                 + String.format(Locale.ROOT, "%.4f", cache.hitRate()) + "\r\n";
     }

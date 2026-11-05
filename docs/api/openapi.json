@@ -753,6 +753,22 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "compactionCount" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "compactionInputBytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "compactionLatencyMs" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "compactionOutputBytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
           "connections" : {
             "format" : "int32",
             "type" : "integer"
@@ -766,6 +782,14 @@
             "type" : "integer"
           },
           "flushCount" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "latencyMaxMillis" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "latencySamples" : {
             "format" : "int64",
             "type" : "integer"
           },
@@ -802,6 +826,18 @@
             "type" : "integer"
           },
           "opsPerSec" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "p50Millis" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "p95Millis" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "p99Millis" : {
             "format" : "double",
             "type" : "number"
           },

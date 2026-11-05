@@ -50,6 +50,17 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
     private boolean liveCountDirty = true;
     private long liveCountCache;
     private boolean closed;
+    /** 合并回调（TD-096）：由上层接线到 StorageMetrics，避免冷层反向依赖 tiering。 */
+    private volatile CompactionListener compactionListener;
+
+    /** 合并事件监听（输入字节 / 输出字节 / 耗时）。 */
+    public interface CompactionListener {
+        void onCompaction(long inputBytes, long outputBytes, long latencyNanos);
+    }
+
+    public void setCompactionListener(CompactionListener listener) {
+        this.compactionListener = listener;
+    }
 
     public ColdStorageEngine(Config config) throws IOException {
         this(config, null, null, false);
@@ -238,11 +249,13 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
             if (inputs.size() < 2) {
                 return null;
             }
+            long startedAt = System.nanoTime();
             SSTableMeta output = new CompactionTask(
                     config, inputs, nextTableId).run();
             nextTableId++;
             installCompaction(output, inputs);
             leveled.promote(from, output);
+            notifyCompaction(inputs, output, System.nanoTime() - startedAt);
             return output;
         }
     }
@@ -282,6 +295,16 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
         Manifest.write(config.directory(), tables);
     }
 
+    private void notifyCompaction(List<SSTableMeta> inputs, SSTableMeta output, long latencyNanos) {
+        CompactionListener listener = this.compactionListener;
+        if (listener == null) {
+            return;
+        }
+        long inputBytes = inputs.stream().mapToLong(SSTableMeta::fileSize).sum();
+        long outputBytes = output == null ? 0 : output.fileSize();
+        listener.onCompaction(inputBytes, outputBytes, latencyNanos);
+    }
+
     private boolean compactIfNeededLocked() {
         if (tables.size() < config.compactionThreshold()) {
             return false;
@@ -299,10 +322,12 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
             return null;
         }
         List<SSTableMeta> inputs = new ArrayList<>(tables);
+        long startedAt = System.nanoTime();
         SSTableMeta output = new CompactionTask(
                 config, inputs, nextTableId).run();
         nextTableId++;
         installCompaction(output, inputs);
+        notifyCompaction(inputs, output, System.nanoTime() - startedAt);
         return output;
     }
 

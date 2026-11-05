@@ -10,6 +10,7 @@ public final class MetricsRegistry {
     private final LongAdder completedCommands = new LongAdder();
     private final LongAdder latencyNanos = new LongAdder();
     private final LongAdder errors = new LongAdder();
+    private final LatencyStats latencyStats = new LatencyStats();
     private final long startedAt = System.currentTimeMillis();
     private volatile boolean accepting = true;
 
@@ -29,6 +30,7 @@ public final class MetricsRegistry {
         activeRequests.decrement();
         completedCommands.increment();
         this.latencyNanos.add(latencyNanos);
+        latencyStats.record(latencyNanos);
     }
 
     public void error() {
@@ -48,7 +50,10 @@ public final class MetricsRegistry {
         long elapsedMillis = Math.max(1, System.currentTimeMillis() - startedAt);
         double qps = completed * 1000.0 / elapsedMillis;
         double avgLatencyMs = completed == 0 ? 0 : latencyNanos.sum() / (double) completed / 1_000_000.0;
-        return new Snapshot(connections.sum(), activeRequests.sum(), qps, avgLatencyMs, errors.sum());
+        LatencyStats.Snapshot latency = latencyStats.snapshot();
+        return new Snapshot(connections.sum(), activeRequests.sum(), qps, avgLatencyMs,
+                errors.sum(), latency.p50Millis(), latency.p95Millis(),
+                latency.p99Millis(), latency.maxMillis(), latency.samples());
     }
 
     public String infoText() {
@@ -64,6 +69,11 @@ public final class MetricsRegistry {
             long activeRequests,
             double qps,
             double avgLatencyMs,
-            long errors) {
+            long errors,
+            double p50Millis,
+            double p95Millis,
+            double p99Millis,
+            long maxMillis,
+            long latencySamples) {
     }
 }

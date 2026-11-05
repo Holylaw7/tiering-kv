@@ -63,8 +63,15 @@ public final class TieringController implements AutoCloseable {
                 new MigrationLog(config.migrationDirectory()),
                 cold, wal, memTable, metrics,
                 config.maxMigrationRetries(), config.retryBackoffMillis());
+        cold.setCompactionListener(this::onCompaction);
         this.backpressure = new BackPressureController(
                 watermark, memory, memTable::size, metrics::pendingMigrationCount);
+    }
+
+    /** Compaction 事件 → StorageMetrics（TD-096）。 */
+    private void onCompaction(long inputBytes, long outputBytes, long latencyNanos) {
+        metrics.recordCompaction(inputBytes, outputBytes, latencyNanos);
+        refreshGauges();
     }
 
     /** 启动恢复：重放未完成迁移；水位高时立即调度 Flush。 */
