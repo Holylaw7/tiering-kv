@@ -203,61 +203,159 @@ onMounted(() => scan(true))
     </div>
 
     <el-drawer v-model="drawerVisible" size="560px" :title="detail?.key ?? '键详情'">
-      <div v-loading="detailLoading">
-        <el-descriptions :column="2" border size="small">
-          <el-descriptions-item label="类型">
-            <el-tag size="small">{{ detail?.type }}</el-tag>
-          </el-descriptions-item>
-          <el-descriptions-item label="过期">{{ formatTtl(detail?.ttl) }}</el-descriptions-item>
-        </el-descriptions>
-
-        <div class="section-title">值</div>
-        <el-input
-          v-if="detail?.type === 'string' && auth.canOperate"
-          v-model="editingValue"
-          type="textarea"
-          :rows="8"
-          class="mono"
-        />
-        <template v-else-if="detail?.type === 'hash' && auth.canOperate">
-          <el-table :data="hashRows" size="small" height="280">
-            <el-table-column prop="field" label="字段" width="160" show-overflow-tooltip>
-              <template #default="{ row }"><span class="mono">{{ row.field }}</span></template>
-            </el-table-column>
-            <el-table-column label="值">
-              <template #default="{ row }">
-                <el-input v-model="row.value" size="small" class="mono" />
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="130">
-              <template #default="{ row }">
-                <el-button link type="primary" size="small" :loading="hashSaving" @click="saveHashField(row.field, row.value)">保存</el-button>
-                <el-button link type="danger" size="small" @click="removeHashField(row.field)">删除</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-          <div class="hash-add">
-            <el-input v-model="newField.field" size="small" placeholder="新字段" style="width: 160px" class="mono" />
-            <el-input v-model="newField.value" size="small" placeholder="值" class="mono" />
-            <el-button size="small" type="primary" :loading="hashSaving" @click="addHashField">新增字段</el-button>
+      <div v-loading="detailLoading" class="detail">
+        <div class="meta">
+          <div class="meta-item">
+            <span class="meta-label">类型</span>
+            <span class="meta-value mono">{{ detail?.type ?? '—' }}</span>
           </div>
-        </template>
-        <pre v-else class="value-box mono">{{ renderValue() }}</pre>
-        <div v-if="detail?.type === 'string' && auth.canOperate" style="margin-top: 10px">
-          <el-button type="primary" size="small" @click="saveValue">保存值</el-button>
+          <div class="meta-item">
+            <span class="meta-label">过期</span>
+            <span class="meta-value">{{ formatTtl(detail?.ttl) }}</span>
+          </div>
         </div>
 
-        <div class="section-title">过期时间（秒，-1 表示永久）</div>
-        <div style="display: flex; gap: 10px; align-items: center">
-          <el-input-number v-model="ttlInput" :min="-1" controls-position="right" :disabled="!auth.canOperate" />
-          <el-button v-if="auth.canOperate" size="small" @click="saveTtl">应用</el-button>
-        </div>
+        <section class="block">
+          <header class="block-head">
+            <h4>值</h4>
+            <span class="block-hint">{{ detail?.type === 'string' ? '可直接编辑并保存' : '按类型只读展示' }}</span>
+          </header>
+
+          <template v-if="detail?.type === 'string' && auth.canOperate">
+            <el-input v-model="editingValue" type="textarea" :rows="9" class="mono value-editor" />
+            <div class="block-actions">
+              <el-button type="primary" size="small" @click="saveValue">保存值</el-button>
+            </div>
+          </template>
+
+          <template v-else-if="detail?.type === 'hash' && auth.canOperate">
+            <el-table :data="hashRows" size="small" max-height="300">
+              <el-table-column prop="field" label="字段" width="150" show-overflow-tooltip>
+                <template #default="{ row }"><span class="mono">{{ row.field }}</span></template>
+              </el-table-column>
+              <el-table-column label="值">
+                <template #default="{ row }">
+                  <el-input v-model="row.value" size="small" class="mono" />
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="120" align="right">
+                <template #default="{ row }">
+                  <el-button link size="small" :loading="hashSaving" @click="saveHashField(row.field, row.value)">保存</el-button>
+                  <el-button link type="danger" size="small" @click="removeHashField(row.field)">删除</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+            <div class="hash-add">
+              <el-input v-model="newField.field" size="small" placeholder="新字段" class="mono f-name" />
+              <el-input v-model="newField.value" size="small" placeholder="值" class="mono" />
+              <el-button size="small" :loading="hashSaving" @click="addHashField">新增字段</el-button>
+            </div>
+          </template>
+
+          <pre v-else class="value-box mono">{{ renderValue() }}</pre>
+        </section>
+
+        <section class="block">
+          <header class="block-head">
+            <h4>过期时间</h4>
+            <span class="block-hint">单位秒，-1 表示永久</span>
+          </header>
+          <div class="ttl-row">
+            <el-input-number v-model="ttlInput" :min="-1" controls-position="right" :disabled="!auth.canOperate" />
+            <el-button v-if="auth.canOperate" size="small" @click="saveTtl">应用</el-button>
+          </div>
+        </section>
       </div>
     </el-drawer>
   </div>
 </template>
 
 <style scoped>
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.meta-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 14px;
+}
+
+.meta-item + .meta-item {
+  border-left: 1px solid var(--line);
+}
+
+.meta-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.meta-value {
+  font-size: var(--text-sm);
+  color: var(--text-1);
+}
+
+.block-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.block-head h4 {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.block-hint {
+  font-size: var(--text-xs);
+  color: var(--text-3);
+}
+
+.value-editor :deep(.el-textarea__inner) {
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.block-actions {
+  margin-top: 10px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ttl-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hash-add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.f-name {
+  width: 150px;
+}
+
 .filters {
   display: flex;
   gap: 8px;

@@ -499,6 +499,12 @@ function onInstanceChange(value: number) {
   color: var(--text-3);
 }
 
+@media (max-width: 1380px) {
+  .endpoint {
+    display: none;
+  }
+}
+
 .main {
   flex: 1;
   min-height: 0;

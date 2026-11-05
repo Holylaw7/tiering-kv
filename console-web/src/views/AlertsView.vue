@@ -178,7 +178,7 @@ onMounted(async () => {
         <el-tab-pane label="告警规则" name="rules">
           <el-table :data="rules" size="small" style="width: 100%">
         <template #empty>
-          <EmptyState title="还没有告警规则" description="创建规则后，系统按采集周期持续求值，命中即产生事件。" />
+          <EmptyState title="还没有告警规则" description="创建规则后，系统按采集周期求值，命中即产生事件。" />
         </template>
             <el-table-column prop="name" label="规则名称" min-width="150" />
             <el-table-column label="作用范围" width="150">
