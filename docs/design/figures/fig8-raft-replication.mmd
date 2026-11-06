@@ -1,0 +1,26 @@
+%%{init: {'theme':'base','themeVariables':{'fontFamily':"'Segoe UI','Microsoft YaHei',sans-serif",'fontSize':'13px','primaryColor':'#FFFFFF','primaryBorderColor':'#CBD2D9','primaryTextColor':'#202124','lineColor':'#9AA4B2','secondaryColor':'#F7F8FA','tertiaryColor':'#FBFCFE','noteBkgColor':'#FBFCFE','noteBorderColor':'#E5E7EB','noteTextColor':'#626B78','actorBkg':'#FFFFFF','actorBorder':'#CBD2D9','actorTextColor':'#202124','signalColor':'#626B78','signalTextColor':'#202124','labelBoxBkgColor':'#EEF2FF','labelBoxBorderColor':'#C7D2F5','labelTextColor':'#3B5BDB'}}}%%
+%% Raft 日志复制时序（源码：cluster/raft/RaftNode、ReplicationController、LogEntry、CommitNotifier）
+sequenceDiagram
+    participant CL as 客户端 / ReplicatedStorageEngine
+    participant LD as Leader RaftNode
+    participant LOG as RaftLog（FileRaftLog）
+    participant RC as ReplicationController
+    participant F1 as Follower 1
+    participant F2 as Follower 2
+
+    CL->>LD: propose(command)
+    LD->>LOG: append(LogEntry, term)
+    LOG-->>LD: index
+    LD->>RC: 批量复制（ADR-0044）
+    par 并行复制
+        RC->>F1: AppendEntries(prevIndex, prevTerm, entries, leaderCommit)
+        and
+        RC->>F2: AppendEntries(prevIndex, prevTerm, entries, leaderCommit)
+    end
+    F1-->>RC: AppendEntriesResponse(success, matchIndex)
+    F2-->>RC: AppendEntriesResponse(success, matchIndex)
+    RC->>LD: 更新 FollowerProgress / matchIndex
+    Note over LD: 多数派 matchIndex ≥ index → commitIndex 前移<br/>（ADR-0077：不越过心跳承诺的提交边界）
+    LD->>LD: apply(index, command) → 状态机
+    LD-->>CL: 返回结果（按 log index 对应）
+    LD-)F1: 心跳携带 leaderCommit

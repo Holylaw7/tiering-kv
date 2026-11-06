@@ -49,6 +49,8 @@
 
 ### 4.2.2 Netty 接入与并发模型
 
+清单 4-2　Netty 接入管线
+
 ```text
 ChannelPipeline: 解码器 → CommandHandler → CommandEngine → KeyShardExecutor(16)
                                   ↓
@@ -67,6 +69,8 @@ Redis 客户端默认假设响应与请求一一对应且有序，乱序会让�
 
 157 个命令名由 `CommandCatalog` 注册，按族组织（string / hash / list / set / zset / stream /
 geo / bit / json / ts / vector / 管理类）。每个命令实现 `Command` 接口：
+
+清单 4-1　命令接口
 
 ```java
 RespValue execute(List<byte[]> args, StorageEngine storage);
@@ -119,9 +123,9 @@ RespValue execute(List<byte[]> args, StorageEngine storage);
 
 ### 4.4.3 请求时序
 
-![图 5 INFO 请求处理时序](../design/figures/fig5-info-sequence.png)
+![图 4-1 INFO 请求处理时序](../design/figures/fig5-info-sequence.png)
 
-*图 5　INFO 请求处理时序（含 gauge 刷新、单快照、延迟分位读取）*
+*图 4-1　INFO 请求处理时序（含 gauge 刷新、单快照、延迟分位读取）*
 
 关键设计点有三：
 
@@ -183,6 +187,8 @@ RespValue execute(List<byte[]> args, StorageEngine storage);
 
 ### 4.5.4 失败语义
 
+**表 4-1　控制面的失败状态与错误码**
+
 | 状态 | 场景 | 错误码 |
 | --- | --- | --- |
 | 401 | 未认证 / token 过期或签名非法 | 40100 |
@@ -213,9 +219,9 @@ RespValue execute(List<byte[]> args, StorageEngine storage);
 
 ### 4.6.2 时序
 
-![图 6 备份与恢复时序](../design/figures/fig6-backup-sequence.png)
+![图 4-2 备份与恢复时序](../design/figures/fig6-backup-sequence.png)
 
-*图 6　备份 / 恢复 / 下载时序（含鉴权、审计、网关与文件读写）*
+*图 4-2　备份 / 恢复 / 下载时序（含鉴权、审计、网关与文件读写）*
 
 ### 4.6.3 三个关键决策
 
@@ -258,6 +264,8 @@ RespValue execute(List<byte[]> args, StorageEngine storage);
 
 ### 4.7.1 端到端验收
 
+**表 4-2　七条业务闭环的断言与代表结果**
+
 | 闭环 | 断言数 | 代表结果 |
 | --- | --- | --- |
 | 认证与权限 | 10 | 改密后旧口令 401；VIEWER 越权 403 |
@@ -271,6 +279,8 @@ RespValue execute(List<byte[]> args, StorageEngine storage);
 合计 91 条断言，全部在真实内核 + 真实 MySQL 上执行。
 
 ### 4.7.2 故障注入
+
+**表 4-3　四类故障注入的实测结果**
 
 | 故障 | 结果 |
 | --- | --- |

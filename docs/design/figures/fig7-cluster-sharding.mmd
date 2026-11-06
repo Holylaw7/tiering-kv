@@ -1,0 +1,41 @@
+%%{init: {'theme':'base','themeVariables':{'fontFamily':"'Segoe UI','Microsoft YaHei',sans-serif",'fontSize':'13px','primaryColor':'#FFFFFF','primaryBorderColor':'#CBD2D9','primaryTextColor':'#202124','lineColor':'#9AA4B2','secondaryColor':'#F7F8FA','tertiaryColor':'#FBFCFE','noteBkgColor':'#FBFCFE','noteBorderColor':'#E5E7EB','noteTextColor':'#626B78','actorBkg':'#FFFFFF','actorBorder':'#CBD2D9','actorTextColor':'#202124','signalColor':'#626B78','signalTextColor':'#202124','labelBoxBkgColor':'#EEF2FF','labelBoxBorderColor':'#C7D2F5','labelTextColor':'#3B5BDB'}}}%%
+%% 集群与分片架构（源码：cluster/**、cluster/raft/**、cluster/region/**、cluster/metadata/**）
+flowchart LR
+    subgraph Client["客户端"]
+        C1["ClusterClient<br/>按 Region 路由"]
+    end
+
+    subgraph Meta["元数据 Raft 组（ADR-0047 / 0095）"]
+        M1["MetadataServer"]
+        M2["MetadataRaftGroup"]
+        M3["ClusterMetadata<br/>Region → 节点映射"]
+    end
+
+    subgraph N1["节点 A"]
+        R1["Region 1（Leader）<br/>RaftNode + LocalStorage"]
+        R2["Region 2（Follower）"]
+    end
+    subgraph N2["节点 B"]
+        R3["Region 1（Follower）"]
+        R4["Region 3（Leader）"]
+    end
+    subgraph N3["节点 C"]
+        R5["Region 3（Follower）"]
+        R6["Region 2（Leader）"]
+    end
+
+    C1 -->|"查询 Region 元数据"| M2
+    M3 --> M2
+    C1 -->|"读写请求"| R1
+    C1 -->|"读写请求"| R4
+    R1 <-.->|"AppendEntries / Vote"| R3
+    R4 <-.->|"AppendEntries / Vote"| R5
+    R6 <-.->|"AppendEntries / Vote"| R2
+
+    subgraph Ops["Region 生命周期"]
+        direction LR
+        S1["SplitController<br/>ADR-0061"]
+        S2["MergeController<br/>ADR-0062"]
+        S3["RegionRaftMigrationManager<br/>ADR-0063/0067"]
+    end
+    Ops -.->|"元数据变更经元数据 Raft 提交"| Meta

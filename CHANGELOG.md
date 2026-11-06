@@ -137,6 +137,12 @@
 
 ### Added
 
+- **论文图表体系与第五章（分布式）**：图表改为章节编号（图 3-1/3-2/4-1/4-2/5-1~5-3、
+  表 3-1~5-2、清单 3-1~5-1），工程文档保留连续编号，新增 `formatting-conventions.md`
+  新旧对照表；新增第五章 `chapter5-distributed.md`（分片/元数据 Raft/Region 生命周期/
+  Raft 复制与选举/HLC 与时间戳/两阶段事务/迁移/证据分级），并按 E1/E2/E3 三档
+  标注每项能力的验证边界（跨机、跨机房、掉电、完整 MVCC 均标为未验证）。
+  新增三张图：图 5-1 集群与分片、图 5-2 Raft 日志复制、图 5-3 事务协调（Mermaid 源 + SVG/PNG）。
 - **UML 图与论文正文草稿（第三、四章）**：新增三张可从源码追溯的 UML 图
   （图 4 核心存储类图、图 5 INFO 时序、图 6 备份恢复时序，Mermaid 源 + SVG/PNG）；
   新增 `docs/thesis/chapter3-storage-engine.md`（WAL/MemTable/SSTable/Compaction/分层/缓存）

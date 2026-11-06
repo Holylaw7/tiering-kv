@@ -4,8 +4,10 @@
 
 | 文件 | 内容 | 引用图表 |
 | --- | --- | --- |
-| `chapter3-storage-engine.md` | 第三章　系统核心存储引擎设计与实现（WAL / MemTable / SSTable / Compaction / 冷热分层 / BlockCache） | 图 2、图 4 |
-| `chapter4-control-plane.md` | 第四章　系统控制与管理模块设计与实现（RESP/Netty / INFO 可观测性 / RBAC 与审计 / 备份恢复） | 图 1、图 5、图 6 |
+| `chapter3-storage-engine.md` | 第三章　系统核心存储引擎设计与实现（WAL / MemTable / SSTable / Compaction / 冷热分层 / BlockCache） | 图 3-1、图 3-2 |
+| `chapter4-control-plane.md` | 第四章　系统控制与管理模块设计与实现（RESP/Netty / INFO 可观测性 / RBAC 与审计 / 备份恢复） | 图 4-1、图 4-2 |
+| `chapter5-distributed.md` | 第五章　分布式架构与一致性机制设计（分片 / Raft / 故障恢复 / HLC / 两阶段事务） | 图 5-1、图 5-2、图 5-3 |
+| `formatting-conventions.md` | 图表编号与交叉引用规范（章节编号、新旧对照） | — |
 
 图表源文件在 `docs/design/figures/`：
 图 1–3 为直接生成的 SVG/PNG，图 4–6 为 Mermaid（`.mmd`）+ 渲染结果。

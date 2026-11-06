@@ -1,0 +1,25 @@
+%%{init: {'theme':'base','themeVariables':{'fontFamily':"'Segoe UI','Microsoft YaHei',sans-serif",'fontSize':'13px','primaryColor':'#FFFFFF','primaryBorderColor':'#CBD2D9','primaryTextColor':'#202124','lineColor':'#9AA4B2','secondaryColor':'#F7F8FA','tertiaryColor':'#FBFCFE','noteBkgColor':'#FBFCFE','noteBorderColor':'#E5E7EB','noteTextColor':'#626B78','actorBkg':'#FFFFFF','actorBorder':'#CBD2D9','actorTextColor':'#202124','signalColor':'#626B78','signalTextColor':'#202124','labelBoxBkgColor':'#EEF2FF','labelBoxBorderColor':'#C7D2F5','labelTextColor':'#3B5BDB'}}}%%
+%% 分布式事务协调时序（源码：transaction/AutoTransactionExecutor、GlobalOnePhaseCommit、
+%% CrossClusterTxnCoordinator、LockRecord、LockResolver、HybridLogicalClock）
+sequenceDiagram
+    participant CL as 客户端
+    participant EX as AutoTransactionExecutor
+    participant HLC as HybridLogicalClock（ADR-0072）
+    participant CO as Coordinator<br/>（GlobalOnePhaseCommit / CrossClusterTxnCoordinator）
+    participant P as 参与者（Region Leader）
+    participant LK as LockRecord（预写锁）
+    participant LR as LockResolver
+
+    CL->>EX: 提交事务（命令序列）
+    EX->>HLC: now() → startTS
+    EX->>CO: begin(startTS, 命令集)
+    CO->>P: prewrite(keys, startTS)（写锁 + 数据）
+    P->>LK: 记录主锁（startTS / commitTS 占位）
+    LK-->>CO: 预写成功
+    CO->>HLC: now() → commitTS（> startTS）
+    CO->>P: commit(primary, commitTS)
+    P->>LK: 写入 commitTS，释放锁
+    CO-->>EX: 事务已提交
+    EX-->>CL: 结果
+
+    Note over LR: 崩溃或超时：另一事务扫描到过期锁 →<br/>按 TransactionLifecycleManager / TxnStatusCache 判定<br/>提交或回滚（ADR-0076 / 0088）
