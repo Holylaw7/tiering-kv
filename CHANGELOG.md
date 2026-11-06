@@ -137,6 +137,15 @@
 
 ### Added
 
+- **SSTable 清单加固（TD-100 / Phase 9）**：`INFO sstables` 新增
+  `sstable_key_order:bytewise`（声明比较器语义）与 `first_text/last_text`
+  （非可打印字节转义、64 字节截断）；控制面新增 `keyOrder` 与
+  `firstKeyBase64/lastKeyBase64`（无损原始字节，旧内核自动回退解码）；
+  抽屉支持按 ID/键数/大小排序、超 50 张分页、悬停查看完整键范围与 Base64、
+  一键复制原始 Key、BYTEWISE ORDER 徽标；修复"请求失败时残留上一实例数据"。
+  新增 `SstableInventoryScaleTest`（1/10/100/1000 张表 + Flush/Compaction 并发一致性）
+  与 `SystemTablesApiTest`（401/404/502）。实测 1000 张表：快照 52µs、渲染 2.2ms、
+  控制面解析 9.1ms、JSON 143KB。
 - **SSTable 下钻（TD-099）**：新增 `INFO sstables` 按需段落（id/键数/字节/键范围，Base64 键边界，
   **不进全量 INFO**）与控制面 `GET /system/tables`；运行总览的"N 个表"改为可点击，
   Drawer 展示每张表的 keys/大小/键范围，含加载/错误/空态。内核新增 3 例渲染测试，
