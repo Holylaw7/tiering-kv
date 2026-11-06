@@ -14,6 +14,7 @@
 | `consistency-review.md` | 第三至六章数据/术语/结论强度的一致性核对 | — |
 | `chapter7-review.md` | 第七章复核记录（篇幅、成果对应、局限与未来工作溯源、机械检查） | — |
 | `terminology.md` | 技术术语统一表（中文名/英文写法/边界表述/单位格式） | — |
+| `chapter1-reference-map.md` | 第一章文献筛选原则与映射表（16 核心 + 2 备选 + 4 规范） | — |
 
 图表源文件在 `docs/design/figures/`：
 图 1–3 为直接生成的 SVG/PNG，图 4–6 为 Mermaid（`.mmd`）+ 渲染结果。
