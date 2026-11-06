@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { dashboardApi, instanceApi, systemApi } from '@/api'
 import type { OverviewView, SstableTable, TrendPoint } from '@/api/types'
+import { paginate, sortTables } from '@/utils/inventory'
 import { useInstanceStore } from '@/stores/instance'
 import { formatBytes, formatNumber, formatPercent, formatUptime } from '@/utils/format'
 import ChartPanel from '@/components/ChartPanel.vue'
@@ -137,15 +138,8 @@ const sortOrder = ref<'asc' | 'desc'>('asc')
 const page = ref(1)
 const pageSize = 50
 
-const sortedTables = computed(() => {
-  const rows = [...tableList.value]
-  const direction = sortOrder.value === 'asc' ? 1 : -1
-  rows.sort((a, b) => (a[sortKey.value] - b[sortKey.value]) * direction)
-  return rows
-})
-const pagedTables = computed(() =>
-  sortedTables.value.slice((page.value - 1) * pageSize, page.value * pageSize),
-)
+const sortedTables = computed(() => sortTables(tableList.value, sortKey.value, sortOrder.value))
+const pagedTables = computed(() => paginate(sortedTables.value, page.value, pageSize))
 
 function onSortChange({ prop, order }: { prop: string; order: string | null }) {
   sortKey.value = (prop as 'id' | 'keys' | 'bytes') ?? 'id'
