@@ -14,6 +14,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
@@ -39,6 +41,14 @@ public class AuditService {
         this.repository = repository;
     }
 
+    /**
+     * 写审计（TD-102）。
+     *
+     * <p>必须用 REQUIRES_NEW：失败操作往往伴随业务异常，若加入调用方事务会被一起回滚，
+     * 导致"失败操作不留痕"——而这恰是审计最需要记录的场景（Phase 10 实测：
+     * 终端被拦截命令返回 400，但审计里查不到）。
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void record(String action, String target, String detail, boolean success) {
         OpLog entry = new OpLog();
         try {

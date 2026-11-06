@@ -95,6 +95,56 @@ class BackupServiceAsyncTest {
     }
 
     @Test
+    void simultaneousRequestsAreSerializedToOneBackup() throws Exception {
+        // 模拟真实仓库：保存后即可被后续查询看到（RUNNING 状态）
+        java.util.concurrent.atomic.AtomicReference<BackupRecord> stored =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        when(repository.findFirstByInstanceIdAndStatusOrderByCreatedAtDesc(1L, BackupStatus.RUNNING))
+                .thenAnswer(invocation -> Optional.ofNullable(stored.get()));
+        when(repository.save(any(BackupRecord.class))).thenAnswer(invocation -> {
+            BackupRecord record = invocation.getArgument(0);
+            if (record.getId() == null) {
+                record.setId(42L);
+            }
+            if (record.getStatus() == BackupStatus.RUNNING) {
+                stored.set(record);
+            }
+            return record;
+        });
+
+        List<Runnable> queued = java.util.Collections.synchronizedList(new ArrayList<>());
+        BackupService service = service(queued::add);
+        java.util.concurrent.CountDownLatch start = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.atomic.AtomicInteger success = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger conflict = new java.util.concurrent.atomic.AtomicInteger();
+
+        List<Thread> threads = new ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            Thread thread = new Thread(() -> {
+                try {
+                    start.await();
+                    service.export(1L);
+                    success.incrementAndGet();
+                } catch (BusinessException ex) {
+                    conflict.incrementAndGet();
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            threads.add(thread);
+            thread.start();
+        }
+        start.countDown();
+        for (Thread thread : threads) {
+            thread.join(5000);
+        }
+
+        assertThat(success.get()).as("只允许一次成功提交").isEqualTo(1);
+        assertThat(conflict.get()).as("另一个请求必须被 409 拒绝").isEqualTo(1);
+        assertThat(queued).as("只能提交一个导出任务").hasSize(1);
+    }
+
+    @Test
     void allowsBackupWhenPreviousRunIsStale() {
         when(repository.findFirstByInstanceIdAndStatusOrderByCreatedAtDesc(1L, BackupStatus.RUNNING))
                 .thenReturn(Optional.of(runningRecord(LocalDateTime.now().minusHours(2))));

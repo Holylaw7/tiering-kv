@@ -44,6 +44,8 @@ config/local/
 # ---- Web 控制台平台 ----
 console-server/target/
 console-server/logs/
+# 备份产物（运行期生成，不入库）
+console-server/backups/
 console-web/node_modules/
 console-web/dist/
 console-web/.vite/

@@ -83,32 +83,46 @@ public class BackupService {
      *   <li>前端轮询 {@code GET /backups} 观察状态变化。</li>
      * </ul>
      */
+    /**
+     * 同一实例的"检查 + 落库"必须原子（TD-101）。
+     *
+     * <p>此前两个同时到达的请求都会读到"无 RUNNING 记录"，双双返回 200，
+     * 导致同一实例并行跑两个导出任务（Phase 10 实测 5/5 轮复现）。
+     * 这里按实例加锁，把检查与插入合并为一个临界区；导出仍在锁外提交给线程池。
+     */
+    private final java.util.concurrent.ConcurrentHashMap<Long, Object> exportLocks =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     public BackupRecord export(Long instanceId) {
         instanceService.require(instanceId);
-        repository.findFirstByInstanceIdAndStatusOrderByCreatedAtDesc(instanceId, BackupStatus.RUNNING)
-                .ifPresent(running -> {
-                    if (running.getCreatedAt() != null
-                            && running.getCreatedAt().isAfter(
-                                    LocalDateTime.now().minusMinutes(STALE_RUNNING_MINUTES))) {
-                        throw BusinessException.conflict(
-                                "该实例已有备份任务在执行（id=" + running.getId() + "），请稍后再试");
-                    }
-                    running.setStatus(BackupStatus.FAILED);
-                    running.setMessage("任务超时未完成，已标记为失败");
-                    running.setFinishedAt(LocalDateTime.now());
-                    repository.save(running);
-                });
+        Object lock = exportLocks.computeIfAbsent(instanceId, key -> new Object());
+        BackupRecord created;
+        synchronized (lock) {
+            repository.findFirstByInstanceIdAndStatusOrderByCreatedAtDesc(instanceId, BackupStatus.RUNNING)
+                    .ifPresent(running -> {
+                        if (running.getCreatedAt() != null
+                                && running.getCreatedAt().isAfter(
+                                        LocalDateTime.now().minusMinutes(STALE_RUNNING_MINUTES))) {
+                            throw BusinessException.conflict(
+                                    "该实例已有备份任务在执行（id=" + running.getId() + "），请稍后再试");
+                        }
+                        running.setStatus(BackupStatus.FAILED);
+                        running.setMessage("任务超时未完成，已标记为失败");
+                        running.setFinishedAt(LocalDateTime.now());
+                        repository.save(running);
+                    });
 
-        BackupRecord record = new BackupRecord();
-        record.setInstanceId(instanceId);
-        record.setFileName("backup-" + instanceId + "-" + LocalDateTime.now().format(STAMP) + ".jsonl");
-        record.setStatus(BackupStatus.RUNNING);
-        record.setCreatedAt(LocalDateTime.now());
-        repository.save(record);
+            BackupRecord record = new BackupRecord();
+            record.setInstanceId(instanceId);
+            record.setFileName("backup-" + instanceId + "-" + LocalDateTime.now().format(STAMP) + ".jsonl");
+            record.setStatus(BackupStatus.RUNNING);
+            record.setCreatedAt(LocalDateTime.now());
+            created = repository.save(record);
+        }
 
-        Long recordId = record.getId();
+        Long recordId = created.getId();
         executor.execute(() -> runExport(recordId));
-        return record;
+        return created;
     }
 
     /** 异步执行体：可单独调用以便测试与重试。 */

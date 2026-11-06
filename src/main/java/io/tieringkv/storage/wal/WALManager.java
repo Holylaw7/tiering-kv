@@ -20,11 +20,41 @@ public final class WALManager implements AutoCloseable {
     private final AtomicLong recordSequence = new AtomicLong();
     private final Object writeLock = new Object();
     private boolean closed;
+    /** EVERY_SEC 的后台落盘器（TD-103）：空闲时也必须把 buffer 刷出去。 */
+    private final java.util.concurrent.ScheduledExecutorService flusher;
 
     public WALManager(WALConfig config) throws IOException {
         this.config = config;
         this.segments = new SegmentManager(config.directory());
         this.writer = new WALWriter(segments, config.fsyncPolicy());
+        if (config.fsyncPolicy() == WALConfig.FsyncPolicy.EVERY_SEC) {
+            // 仅靠 append 时判断"距上次 force ≥1s"会让空闲期写入一直留在
+            // BufferedOutputStream 里：崩溃即丢失（Phase 10 实测 99/100 丢失）。
+            this.flusher = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(
+                    runnable -> {
+                        Thread thread = new Thread(runnable, "wal-fsync");
+                        thread.setDaemon(true);
+                        return thread;
+                    });
+            this.flusher.scheduleWithFixedDelay(this::flushQuietly, 500, 500,
+                    java.util.concurrent.TimeUnit.MILLISECONDS);
+        } else {
+            this.flusher = null;
+        }
+    }
+
+    /** 后台定时落盘：失败只记录，不打断写路径（下次 append 仍会重试）。 */
+    private void flushQuietly() {
+        synchronized (writeLock) {
+            if (closed) {
+                return;
+            }
+            try {
+                writer.force();
+            } catch (IOException ignored) {
+                // 由后续 append/force 重试；此处不抛出，避免线程退出
+            }
+        }
     }
 
     /** 追加记录（写失败抛 {@link WalWriteException}，不进入 MemTable）。 */
@@ -109,6 +139,9 @@ public final class WALManager implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
+        if (flusher != null) {
+            flusher.shutdownNow();
+        }
         synchronized (writeLock) {
             writer.close();
             closed = true;
