@@ -18,6 +18,11 @@
 | `chapter1-reference-map.md` | 第一章文献筛选与映射表（15 篇核心，定稿版） | — |
 | `references.md` | **全文参考文献总表**（20 篇学术 + S1/S2 规范，GB/T 7714-2025） | — |
 | `reference-mapping.md` | 旧编号→全文编号合并去重映射 | — |
+| `front-matter.md` | 中文摘要 / Abstract / 关键词（正式稿前置部分） | — |
+| `preface.md` | 前言（不编号） | — |
+| `acknowledgments.md` | 致谢 | — |
+| `references-school.md` | 学校格式参考文献（无类型标识/DOI/页码） | — |
+| `Tiering-KV-毕业论文(草稿).docx` | **正式论文 DOCX（按学校模板生成，62 页）** | 全部 |
 | `final-check.md` | **七章全文终检报告**（五维度 + 三项重点检查 + 修复清单） | — |
 
 图表源文件在 `docs/design/figures/`：
