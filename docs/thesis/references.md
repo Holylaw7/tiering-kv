@@ -2,7 +2,9 @@
 
 著录格式：**GB/T 7714-2025 顺序编码制**；按正文首次出现顺序连续编号。
 说明：正文引用使用上标数字（如 <sup>[1]</sup>）；技术规范单列于文末，不占学术文献编号。
-核对状态：页码带"（待核）"者定稿前须逐条核对出版社页面，不得以估计值替代。
+核对状态：**页码已全部核验**（2026-11-06，据出版社页面、会议论文集目录与 DBLP 记录）；
+其中 Spanner 与 Percolator 均取自 OSDI 官方论文集目录（251 起，下一篇 265 起），
+不以 USENIX 单篇页面 BibTeX 中不一致的页码为准。
 
 ## 一、学术文献（20 篇）
 
@@ -26,7 +28,8 @@
     Proceedings of the 10th Biennial Conference on Innovative Data Systems Research (CIDR). 2020.
 
 [7] DAYAN N, ATHANASSOULIS M, IDREOS S. Monkey: optimal navigable key-value store[C]//
-    Proceedings of the 2017 ACM International Conference on Management of Data (SIGMOD). 2017.（页码待核）
+    Proceedings of the 2017 ACM International Conference on Management of Data (SIGMOD). 2017: 79-94.
+    DOI: 10.1145/3035918.3064054.
 
 [8] DAYAN N, IDREOS S. Dostoevsky: better space-time trade-offs for LSM-tree based key-value stores via
     adaptive removal of superfluous merging[C]//Proceedings of the 2018 ACM SIGMOD. 2018.
@@ -42,10 +45,10 @@
      Proceedings of the 2014 USENIX Annual Technical Conference (ATC). 2014: 305-319.
 
 [12] CORBETT J C, DEAN J, EPSTEIN M, et al. Spanner: Google's globally-distributed database[C]//
-     Proceedings of the 10th USENIX Symposium on Operating Systems Design and Implementation (OSDI). 2012.（页码待核）
+     Proceedings of the 10th USENIX Symposium on Operating Systems Design and Implementation (OSDI). 2012: 251-264.
 
 [13] PENG D, DABEK F. Large-scale incremental processing using distributed transactions and notifications[C]//
-     Proceedings of the 9th USENIX Symposium on Operating Systems Design and Implementation (OSDI). 2010.（页码待核）
+     Proceedings of the 9th USENIX Symposium on Operating Systems Design and Implementation (OSDI). 2010: 251-264.
 
 [14] KULKARNI S S, DEMIRBAS M, MADAPPA D, et al. Logical physical clocks[C]//
      Proceedings of the 18th International Conference on Principles of Distributed Systems (OPODIS),
