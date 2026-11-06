@@ -48,9 +48,12 @@ public class TieringTableService {
         List<SstableTable> tables = new ArrayList<>();
         long totalBytes = 0;
         long totalEntries = 0;
+        String keyOrder = "unknown";
         for (String rawLine : text.split("\r?\n")) {
             String line = rawLine.trim();
-            if (line.startsWith("sstable_total_bytes:")) {
+            if (line.startsWith("sstable_key_order:")) {
+                keyOrder = line.substring("sstable_key_order:".length()).trim();
+            } else if (line.startsWith("sstable_total_bytes:")) {
                 totalBytes = parseLong(line.substring("sstable_total_bytes:".length()));
             } else if (line.startsWith("sstable_total_entries:")) {
                 totalEntries = parseLong(line.substring("sstable_total_entries:".length()));
@@ -58,7 +61,7 @@ public class TieringTableService {
                 tables.add(parseRow(line));
             }
         }
-        return new SstableTable.View(tables.size(), totalBytes, totalEntries, tables);
+        return new SstableTable.View(keyOrder, tables.size(), totalBytes, totalEntries, tables);
     }
 
     private static SstableTable parseRow(String line) {
@@ -69,6 +72,8 @@ public class TieringTableService {
         long bytes = 0;
         String first = "";
         String last = "";
+        String firstB64 = "";
+        String lastB64 = "";
         for (int i = 1; i < parts.length; i++) {
             String part = parts[i];
             int eq = part.indexOf('=');
@@ -80,13 +85,22 @@ public class TieringTableService {
             switch (name) {
                 case "keys" -> keys = parseLong(value);
                 case "bytes" -> bytes = parseLong(value);
-                case "first_b64" -> first = decode(value);
-                case "last_b64" -> last = decode(value);
+                case "first_b64" -> firstB64 = value;
+                case "last_b64" -> lastB64 = value;
+                case "first_text" -> first = value;
+                case "last_text" -> last = value;
                 default -> {
                 }
             }
         }
-        return new SstableTable(id, keys, bytes, first, last);
+        // 兼容没有 *_text 字段的旧内核：回退到 Base64 解码
+        if (first.isEmpty() && !firstB64.isEmpty()) {
+            first = decode(firstB64);
+        }
+        if (last.isEmpty() && !lastB64.isEmpty()) {
+            last = decode(lastB64);
+        }
+        return new SstableTable(id, keys, bytes, first, last, firstB64, lastB64);
     }
 
     private static String decode(String base64) {

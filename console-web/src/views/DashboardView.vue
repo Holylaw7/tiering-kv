@@ -131,24 +131,73 @@ const tablesVisible = ref(false)
 const tablesLoading = ref(false)
 const tablesError = ref('')
 const tableList = ref<SstableTable[]>([])
-const tableTotals = ref({ count: 0, totalBytes: 0, totalEntries: 0 })
+const tableTotals = ref({ count: 0, totalBytes: 0, totalEntries: 0, keyOrder: 'unknown' })
+const sortKey = ref<'id' | 'keys' | 'bytes'>('id')
+const sortOrder = ref<'asc' | 'desc'>('asc')
+const page = ref(1)
+const pageSize = 50
+
+const sortedTables = computed(() => {
+  const rows = [...tableList.value]
+  const direction = sortOrder.value === 'asc' ? 1 : -1
+  rows.sort((a, b) => (a[sortKey.value] - b[sortKey.value]) * direction)
+  return rows
+})
+const pagedTables = computed(() =>
+  sortedTables.value.slice((page.value - 1) * pageSize, page.value * pageSize),
+)
+
+function onSortChange({ prop, order }: { prop: string; order: string | null }) {
+  sortKey.value = (prop as 'id' | 'keys' | 'bytes') ?? 'id'
+  sortOrder.value = order === 'descending' ? 'desc' : 'asc'
+  page.value = 1
+}
 
 async function openTables() {
   const id = instanceStore.selectedId
   if (!id) return
   tablesVisible.value = true
   tablesLoading.value = true
+  // 失败时不得残留上一个实例的数据
   tablesError.value = ''
+  tableList.value = []
+  tableTotals.value = { count: 0, totalBytes: 0, totalEntries: 0, keyOrder: 'unknown' }
+  page.value = 1
   try {
     const view = await systemApi.tables(id)
     tableList.value = view.tables
-    tableTotals.value = { count: view.count, totalBytes: view.totalBytes, totalEntries: view.totalEntries }
+    tableTotals.value = {
+      count: view.count,
+      totalBytes: view.totalBytes,
+      totalEntries: view.totalEntries,
+      keyOrder: view.keyOrder ?? 'unknown',
+    }
   } catch (ex: any) {
     tablesError.value = ex?.message ?? '读取失败'
   } finally {
     tablesLoading.value = false
   }
 }
+
+async function copyRange(row: SstableTable) {
+  const text = 'first_b64=' + row.firstKeyBase64 + '\nlast_b64=' + row.lastKeyBase64
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('已复制原始 Key（Base64）')
+  } catch {
+    ElMessage.error('复制失败：浏览器未授权剪贴板')
+  }
+}
+
+/** 键范围遵循的比较器语义（内核 INFO sstables 的 sstable_key_order） */
+const keyOrderLabel = computed(() =>
+  tableTotals.value.keyOrder === 'bytewise' ? 'BYTEWISE ORDER' : '排序语义未知',
+)
+const keyOrderHint = computed(() =>
+  tableTotals.value.keyOrder === 'bytewise'
+    ? '键范围为无符号字节字典序：tier:1000000 < tier:999999，界面不会按数值重排'
+    : '内核未声明键比较器语义，列表按 ID 排序，键范围原样展示',
+)
 
 const AXIS_LABEL = { fontSize: 11, color: '#9299a3', hideOverlap: true } as const
 
@@ -519,35 +568,70 @@ const memoryOption = computed<any>(() => ({
         </el-table-column>
       </el-table>
     </section>
-    <el-drawer v-model="tablesVisible" size="640px" title="冷层 SSTable 清单">
+    <el-drawer v-model="tablesVisible" size="760px" title="冷层 SSTable 清单">
       <div v-loading="tablesLoading" class="tables">
-        <p class="tables-note">
-          数据来自 <span class="mono">INFO sstables</span>（按需读取）。键数为表条目累加，
-          含历史版本；键范围为 Base64 还原后的可读文本。
-        </p>
+        <div class="tables-head">
+          <p class="tables-note">
+            数据来自 <span class="mono">INFO sstables</span>（按需读取）。键数为表条目累加，
+            含历史版本，不是去重后的键数。
+          </p>
+          <span class="order-badge" :title="keyOrderHint">{{ keyOrderLabel }}</span>
+        </div>
         <div v-if="tablesError" class="tables-error">{{ tablesError }}</div>
         <template v-else>
           <div class="tables-summary">
             <span>{{ tableTotals.count }} 张表</span>
             <span class="num">{{ formatBytes(tableTotals.totalBytes) }}</span>
             <span class="num">{{ formatNumber(tableTotals.totalEntries) }} entries</span>
+            <span v-if="tableList.length > pageSize" class="tables-hint">
+              排序作用于全部 {{ tableList.length }} 张表，分页仅影响展示
+            </span>
           </div>
-          <el-table :data="tableList" size="small" empty-text="冷层暂无 SSTable">
-            <el-table-column prop="id" label="ID" width="70">
+          <el-table
+            :data="pagedTables"
+            size="small"
+            empty-text="冷层暂无 SSTable"
+            :default-sort="{ prop: 'id', order: 'ascending' }"
+            @sort-change="onSortChange"
+          >
+            <el-table-column prop="id" label="ID" width="86" sortable="custom">
               <template #default="{ row }"><span class="mono">#{{ row.id }}</span></template>
             </el-table-column>
-            <el-table-column label="键数" width="110" align="right">
+            <el-table-column prop="keys" label="键数" width="118" align="right" sortable="custom">
               <template #default="{ row }"><span class="num">{{ formatNumber(row.keys) }}</span></template>
             </el-table-column>
-            <el-table-column label="大小" width="100" align="right">
+            <el-table-column prop="bytes" label="大小" width="110" align="right" sortable="custom">
               <template #default="{ row }"><span class="num">{{ formatBytes(row.bytes) }}</span></template>
             </el-table-column>
-            <el-table-column label="键范围" min-width="220">
+            <el-table-column label="键范围（字节序）" min-width="250">
               <template #default="{ row }">
-                <span class="mono range">{{ row.firstKey || '—' }} … {{ row.lastKey || '—' }}</span>
+                <el-tooltip placement="top-start" :show-after="300">
+                  <template #content>
+                    <div class="range-full">
+                      <div>first: {{ row.firstKey || '(空)' }}</div>
+                      <div>last: {{ row.lastKey || '(空)' }}</div>
+                      <div class="range-raw">first_b64: {{ row.firstKeyBase64 || '(空)' }}</div>
+                      <div class="range-raw">last_b64: {{ row.lastKeyBase64 || '(空)' }}</div>
+                    </div>
+                  </template>
+                  <span class="mono range">{{ row.firstKey || '—' }} … {{ row.lastKey || '—' }}</span>
+                </el-tooltip>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="96" align="right">
+              <template #default="{ row }">
+                <button class="link-btn" type="button" @click="copyRange(row)">复制 Key</button>
               </template>
             </el-table-column>
           </el-table>
+          <el-pagination
+            v-if="tableList.length > pageSize"
+            v-model:current-page="page"
+            class="tables-pager"
+            layout="prev, pager, next"
+            :page-size="pageSize"
+            :total="tableList.length"
+          />
         </template>
       </div>
     </el-drawer>
@@ -940,6 +1024,45 @@ const memoryOption = computed<any>(() => ({
 
 .link-btn:hover {
   text-decoration: underline;
+}
+
+.tables-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.order-badge {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: var(--text-2);
+}
+
+.tables-hint {
+  margin-left: auto;
+  color: var(--text-3);
+}
+
+.tables-pager {
+  justify-content: flex-end;
+}
+
+.range-full {
+  max-width: 420px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.range-raw {
+  color: rgba(255, 255, 255, 0.6);
+  font-family: var(--font-mono, monospace);
 }
 
 .tables {

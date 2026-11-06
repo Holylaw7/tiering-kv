@@ -958,11 +958,13 @@ export interface components {
             /** Format: int64 */
             bytes?: number;
             firstKey?: string;
+            firstKeyBase64?: string;
             /** Format: int64 */
             id?: number;
             /** Format: int64 */
             keys?: number;
             lastKey?: string;
+            lastKeyBase64?: string;
         };
         Stats: {
             /** Format: double */
@@ -1067,6 +1069,7 @@ export interface components {
         View: {
             /** Format: int64 */
             count?: number;
+            keyOrder?: string;
             tables?: components["schemas"]["SstableTable"][];
             /** Format: int64 */
             totalBytes?: number;

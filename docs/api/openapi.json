@@ -1168,6 +1168,9 @@
           "firstKey" : {
             "type" : "string"
           },
+          "firstKeyBase64" : {
+            "type" : "string"
+          },
           "id" : {
             "format" : "int64",
             "type" : "integer"
@@ -1177,6 +1180,9 @@
             "type" : "integer"
           },
           "lastKey" : {
+            "type" : "string"
+          },
+          "lastKeyBase64" : {
             "type" : "string"
           }
         },
@@ -1435,6 +1441,9 @@
           "count" : {
             "format" : "int64",
             "type" : "integer"
+          },
+          "keyOrder" : {
+            "type" : "string"
           },
           "tables" : {
             "items" : {

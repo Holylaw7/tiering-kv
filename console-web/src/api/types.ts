@@ -204,11 +204,17 @@ export interface SstableTable {
   id: number
   keys: number
   bytes: number
+  /** 转义后的可读文本（非可打印字节为 \xNN） */
   firstKey: string
   lastKey: string
+  /** 无损原始字节（Base64），用于复制 */
+  firstKeyBase64: string
+  lastKeyBase64: string
 }
 
 export interface SstableTableView {
+  /** 内核声明的键比较器语义，当前恒为 bytewise */
+  keyOrder: string
   count: number
   totalBytes: number
   totalEntries: number

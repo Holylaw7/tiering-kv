@@ -23,6 +23,9 @@ public final class SstableInfoRenderer {
     public static String render(List<SSTableMeta> tables) {
         StringBuilder out = new StringBuilder(256);
         out.append("# SSTables\r\n");
+        // 键范围的第一依赖：比较器语义。Keys.compare 为 Arrays.compareUnsigned，
+        // 即无符号字节字典序——"tier:1000000" < "tier:999999"，前端不得按数值重排。
+        out.append("sstable_key_order:bytewise\r\n");
         out.append("sstable_count:").append(tables.size()).append("\r\n");
         long totalBytes = tables.stream().mapToLong(SSTableMeta::fileSize).sum();
         long totalKeys = tables.stream().mapToLong(SSTableMeta::entryCount).sum();
@@ -36,7 +39,35 @@ public final class SstableInfoRenderer {
                         .append("|bytes=").append(table.fileSize())
                         .append("|first_b64=").append(b64(table.firstKey()))
                         .append("|last_b64=").append(b64(table.lastKey()))
+                        .append("|first_text=").append(escapeKey(table.firstKey()))
+                        .append("|last_text=").append(escapeKey(table.lastKey()))
                         .append("\r\n"));
+        return out.toString();
+    }
+
+    /**
+     * 可读文本：可打印 ASCII 原样输出，其余字节转义为 \\xNN，避免二进制键破坏行格式。
+     * 该字段仅用于展示，不经受任何排序/比较语义。
+     */
+    static String escapeKey(byte[] key) {
+        if (key == null || key.length == 0) {
+            return "";
+        }
+        StringBuilder out = new StringBuilder(key.length + 8);
+        int limit = Math.min(key.length, 64);
+        for (int i = 0; i < limit; i++) {
+            int b = key[i] & 0xFF;
+            if (b >= 0x20 && b < 0x7F && b != '\\' ) {
+                out.append((char) b);
+            } else if (b == '\\') {
+                out.append("\\\\");
+            } else {
+                out.append(String.format(Locale.ROOT, "\\x%02x", b));
+            }
+        }
+        if (key.length > limit) {
+            out.append('…');
+        }
         return out.toString();
     }
 
