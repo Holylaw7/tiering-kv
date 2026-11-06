@@ -70,6 +70,59 @@ class WALDurabilityTest {
     }
 
     @Test
+    void flushLatencyIsObservedNotAssumed() throws Exception {
+        // 量化"写入 → 落盘"的实际延迟，而不是假设调度周期等于最坏窗口
+        long worstMicros = 0;
+        StringBuilder samples = new StringBuilder();
+        for (int round = 0; round < 10; round++) {
+            Path dir2 = dir.resolve("latency-" + round);
+            Files.createDirectories(dir2);
+            WALManager wal = new WALManager(new WALConfig(dir2, 4L << 20, WALConfig.FsyncPolicy.EVERY_SEC));
+            try {
+                // 起手写一条：本次 append 会内联 force 并刷新 lastForceMillis，
+                // 之后 1s 内的写入只能依赖后台调度 → 测出的才是真实的最坏窗口
+                wal.append(put("warm", "v"));
+                Thread.sleep(100);
+                long sizeBefore = segmentSize(dir2);
+
+                long started = System.nanoTime();
+                wal.append(put("k", "v"));
+                long deadline = System.nanoTime() + 3_000_000_000L;
+                while (System.nanoTime() < deadline && segmentSize(dir2) <= sizeBefore) {
+                    Thread.sleep(2);
+                }
+                long elapsedMicros = (System.nanoTime() - started) / 1_000;
+                assertThat(segmentSize(dir2)).as("第 %d 轮必须落盘", round).isGreaterThan(sizeBefore);
+                worstMicros = Math.max(worstMicros, elapsedMicros);
+                samples.append(String.format(java.util.Locale.ROOT, "%.1f ", elapsedMicros / 1000.0));
+            } finally {
+                wal.close();
+            }
+        }
+        System.out.printf("[wal-latency] 10 轮后台落盘延迟(ms)= %s| 最坏=%.1f ms%n",
+                samples, worstMicros / 1000.0);
+        // 后台调度周期为 500ms：最坏延迟应落在 0~600ms 量级（含调度与 IO 抖动）
+        assertThat(worstMicros).as("最坏延迟应在 1s 以内").isLessThan(1_000_000L);
+    }
+
+    @Test
+    void idlePeriodDoesNotKeepSyncing() throws Exception {
+        WALManager wal = new WALManager(new WALConfig(dir, 4L << 20, WALConfig.FsyncPolicy.EVERY_SEC));
+        try {
+            wal.append(put("k1", "v1"));
+            Thread.sleep(1200); // 至少完成一次后台落盘
+            long sizeAfterFlush = segmentSize(dir);
+            assertThat(sizeAfterFlush).isGreaterThan(0);
+
+            // 再空闲 2s：没有新写入时不应持续 flush（dirty=false 直接跳过）
+            Thread.sleep(2000);
+            assertThat(segmentSize(dir)).isEqualTo(sizeAfterFlush);
+        } finally {
+            wal.close();
+        }
+    }
+
+    @Test
     void appendAfterIdleIsDurableWithoutExtraWrites() throws Exception {
         WALManager wal = new WALManager(new WALConfig(dir, 4L << 20, WALConfig.FsyncPolicy.EVERY_SEC));
         try {

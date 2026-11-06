@@ -137,6 +137,14 @@
 
 ### Added
 
+- **Phase 10 复核整改（TD-104/105/106）**：备份操作补齐审计（`CREATE_BACKUP` /
+  `RESTORE_BACKUP`（含失败）/ `DOWNLOAD_BACKUP`）；数据库不可用由 500 改为
+  **503 + 50300**（仅限事务创建/连接获取/资源不可用三类异常，文案不暴露内部细节）；
+  WAL 增加 `dirty` 标记，空闲期不再每 500ms 做无意义 flush+fsync；
+  E2E-7 补时间范围筛选与失败动作断言、E2E-5 补"回放数 == keyCount"不变量与批量抽样。
+  新增 `ADR-0365` 明确备份恢复语义（合并式、幂等、部分失败不回滚）。
+  实测：落盘延迟 403–421ms（10 轮）、空闲 2s 文件大小不变、DB 断连 5046ms 返回 503、
+  恢复后 108ms 自愈。
 - **SSTable 清单加固（TD-100 / Phase 9）**：`INFO sstables` 新增
   `sstable_key_order:bytewise`（声明比较器语义）与 `first_text/last_text`
   （非可打印字节转义、64 字节截断）；控制面新增 `keyOrder` 与

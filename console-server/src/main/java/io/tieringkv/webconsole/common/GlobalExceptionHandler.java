@@ -54,6 +54,26 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(40100, "未认证或凭证已失效"));
     }
 
+    /**
+     * 数据库不可用（Phase 11 P1）。
+     *
+     * <p>只覆盖"连不上数据库"这一类：事务创建失败、连接获取失败、数据访问资源不可用。
+     * 语义上是"依赖暂不可用"，应为 503 而不是 500；其余异常仍走兜底处理器。
+     * 文案不暴露 SQL、驱动、连接串或堆栈。
+     */
+    @ExceptionHandler({
+            org.springframework.transaction.CannotCreateTransactionException.class,
+            org.springframework.dao.DataAccessResourceFailureException.class,
+            org.springframework.jdbc.CannotGetJdbcConnectionException.class
+    })
+    public ResponseEntity<ApiResponse<Void>> handleDatabaseUnavailable(Exception ex,
+                                                                      HttpServletRequest request) {
+        log.error("数据库不可用 {} {}: {}", request.getMethod(), request.getRequestURI(),
+                ex.getClass().getSimpleName());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.error(50300, "数据库暂不可用，请稍后重试"));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleOther(Exception ex, HttpServletRequest request) {
         log.error("请求处理失败 {} {}", request.getMethod(), request.getRequestURI(), ex);

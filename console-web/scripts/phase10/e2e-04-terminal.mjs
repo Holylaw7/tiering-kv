@@ -1,14 +1,14 @@
 /**
  * E2E-4 在线终端：正常命令、错误命令、危险命令拦截、历史按实例隔离。
  */
-import { api, check, exitWith, login } from './lib.mjs'
+import { api, check, ensureInstance, exitWith, login } from './lib.mjs'
 
 const admin = await login('admin', 'admin123')
 const token = admin.token
 
+const test = await ensureInstance(token)
 const instances = await api('/instances', { token })
 const find = (name) => instances.json.data.find((item) => item.name === name)
-const test = find('phase10-kernel')
 const other = find('local-6379')
 check('测试实例与对照实例都存在', Boolean(test && other), `${test?.name}/${other?.name}`)
 

@@ -62,13 +62,17 @@ class BackupServiceAsyncTest {
     }
 
     private KeyspaceService keyspaceService;
+    private AuditService auditService;
 
     private BackupService service(Executor executor) {
         if (keyspaceService == null) {
             keyspaceService = mock(KeyspaceService.class);
         }
+        if (auditService == null) {
+            auditService = mock(AuditService.class);
+        }
         return new BackupService(repository, instanceService, keyspaceService,
-                gateway, new ObjectMapper(), properties, executor);
+                gateway, new ObjectMapper(), properties, executor, auditService);
     }
 
     private BackupRecord runningRecord(LocalDateTime createdAt) {
@@ -142,6 +146,17 @@ class BackupServiceAsyncTest {
         assertThat(success.get()).as("只允许一次成功提交").isEqualTo(1);
         assertThat(conflict.get()).as("另一个请求必须被 409 拒绝").isEqualTo(1);
         assertThat(queued).as("只能提交一个导出任务").hasSize(1);
+    }
+
+    @Test
+    void createBackupWritesAudit() {
+        when(repository.findFirstByInstanceIdAndStatusOrderByCreatedAtDesc(1L, BackupStatus.RUNNING))
+                .thenReturn(Optional.empty());
+        BackupService service = service(Runnable::run);
+
+        service.export(1L);
+
+        verify(auditService).record(eq("CREATE_BACKUP"), anyString(), anyString(), eq(true));
     }
 
     @Test

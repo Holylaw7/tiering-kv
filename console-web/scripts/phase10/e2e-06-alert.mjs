@@ -2,13 +2,12 @@
  * E2E-6 告警：唯一规则名 + 确定性触发条件（total_keys < 极大阈值恒真）→ 轮询事件 → 确认恢复。
  * 不依赖开发环境的真实负载。
  */
-import { api, check, exitWith, login, waitFor } from './lib.mjs'
+import { api, check, ensureInstance, exitWith, login, waitFor } from './lib.mjs'
 
 const admin = await login('admin', 'admin123')
 const token = admin.token
 
-const instances = await api('/instances', { token })
-const target = instances.json.data.find((item) => item.name === 'phase10-kernel')
+const target = await ensureInstance(token)
 const ruleName = 'phase10-alert-' + Date.now()
 
 let ruleId = null

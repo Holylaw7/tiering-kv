@@ -12,6 +12,8 @@ public final class WALWriter implements AutoCloseable {
     private final SegmentManager segments;
     private final WALConfig.FsyncPolicy fsyncPolicy;
     private long lastForceMillis;
+    /** 自上次 force 以来是否有新写入（TD-106）：空闲时跳过无意义的 fsync。 */
+    private volatile boolean dirty;
 
     public WALWriter(SegmentManager segments, WALConfig.FsyncPolicy fsyncPolicy) {
         this.segments = segments;
@@ -38,19 +40,31 @@ public final class WALWriter implements AutoCloseable {
     private void appendRecord(byte[] record) throws IOException {
         LogSegment segment = segments.current();
         segment.append(record);
+        dirty = true;
         if (fsyncPolicy == WALConfig.FsyncPolicy.ALWAYS) {
             segment.force();
+            dirty = false;
         } else if (fsyncPolicy == WALConfig.FsyncPolicy.EVERY_SEC) {
             long now = System.currentTimeMillis();
             if (now - lastForceMillis >= 1000) {
                 segment.force();
+                dirty = false;
                 lastForceMillis = now;
             }
         }
     }
 
+    /** 是否有未落盘的写入（供后台调度判断是否需要 force）。 */
+    public boolean hasPendingWrites() {
+        return dirty;
+    }
+
     public void force() throws IOException {
+        if (!dirty) {
+            return; // 空闲期不做无意义的 flush + fsync
+        }
         segments.current().force();
+        dirty = false;
         lastForceMillis = System.currentTimeMillis();
     }
 

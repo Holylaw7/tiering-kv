@@ -50,7 +50,7 @@ public class BackupController {
 
     @GetMapping("/{id}/download")
     public ResponseEntity<Resource> download(@PathVariable Long id) {
-        Path file = backupService.fileOf(id);
+        Path file = backupService.download(id);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"" + file.getFileName() + "\"")

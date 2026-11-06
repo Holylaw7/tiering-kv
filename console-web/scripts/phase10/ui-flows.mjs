@@ -9,7 +9,7 @@
 import crypto from 'node:crypto'
 import { chromium } from 'playwright'
 import { resolve } from 'node:path'
-import { api, check, exitWith, login } from './lib.mjs'
+import { api, check, ensureInstance, exitWith, login } from './lib.mjs'
 
 const BASE = 'http://127.0.0.1:5173'
 const OUT = resolve('../docs/screenshots/v2')
@@ -35,7 +35,7 @@ if (!offline) {
 }
 await api(`/instances/${offline.id}/probe`, { method: 'POST', token })
 
-const testInstance = instances.json.data.find((i) => i.name === 'phase10-kernel')
+const testInstance = await ensureInstance(token)
 const ruleName = 'phase10-ui-alert-' + Date.now()
 const rule = await api('/alerts/rules', {
   method: 'POST', token,

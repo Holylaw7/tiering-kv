@@ -1,7 +1,7 @@
 # Phase 10：端到端业务闭环验收
 
-- 日期：2026-11-06
-- 基线：`38b4097`（Phase 9 完成）
+- 日期：2026-11-06（Phase 10 验收）+ 2026-11-06（Phase 11 复核整改）
+- 基线：`38b4097`（Phase 9 完成）；整改提交见 §12
 - 范围：7 条 API 业务闭环 + 4 类故障注入 + 3 组 Playwright 场景 + 覆盖率与前端单测
 - 原则：**只认实测**；截图只是证据，PASS 由断言决定
 
@@ -9,13 +9,13 @@
 
 | 验收项 | 结果 |
 | --- | --- |
-| 7 条业务闭环 | **全部通过**（82 条断言） |
-| 4 类故障注入 | **全部通过且环境恢复**（F1 6 / F2 5 / F3 8 / F4 3） |
+| 7 条业务闭环 | **全部通过**（Phase 10：82 条；Phase 11 复查后 91 条） |
+| 4 类故障注入 | **全部通过且环境恢复**（F1 6 / F2 5 / F3 8 / F4 3；F3 已改为 503 语义） |
 | Playwright 三组场景 | **17/17 通过** |
-| 控制面覆盖率 | LINE **62.76%**（1321/2105）、BRANCH 40.80%、INSTR 59.25%（103 个类） |
+| 控制面覆盖率 | LINE **62.57%**（1329/2124）、BRANCH 40.71%、INSTR 59.12%（103 个类） |
 | 前端单测 | Vitest **20/20** |
-| 内核回归 | **15,012 通过 / 0 失败 / 13 跳过** |
-| 控制面回归 | **90 通过 / 0 失败**（20 个测试类） |
+| 内核回归 | **15,014 通过 / 0 失败 / 13 跳过** |
+| 控制面回归 | **93 通过 / 0 失败**（21 个测试类） |
 | UI 回归 | **12/12** |
 | 工程检查 | build ✅、typecheck ✅ |
 
@@ -44,11 +44,11 @@
 | E2E-2 实例管理 | 9 | 纳管→探测 UP(5.1.0)→不可达实例 DOWN→离线 INFO 502→改备注→删除后列表不含 |
 | E2E-3 键空间 | 14 | 值/类型一致；hash 两字段写入、删一留一；TTL 到期后**内核 EXISTS=0** 且控制面 404；删除后 EXISTS=0 且未误删其他键 |
 | E2E-4 在线终端 | 11 | PING→PONG；SET/GET 回读；未知命令 error=true；FLUSHALL 被策略拦截 400；历史按实例隔离 |
-| E2E-5 备份 | 13 | 3006 键 SUCCESS、文件 386,403 B、下载带 attachment；破坏数据后恢复，**含逗号/引号的值原样还原**；并发 200+409 |
+| E2E-5 备份 | 16 | 3123 键 SUCCESS、下载带 attachment；破坏后恢复，**含逗号/引号的值原样还原**；批量首/中/尾抽样 3/3；**回放数 == 记录 keyCount**（3123/3123）；**合并式回放**（备份后新增键保留）；并发 200+409 |
 | E2E-6 告警 | 10 | 唯一规则名 + `total_keys < 1e12` 确定性触发 → FIRING → resolve → RESOLVED（含 resolvedAt） |
-| E2E-7 审计 | 15 | 分页/字段/action 过滤；CSV 带 UTF-8 BOM、中文表头、每行列数与表头一致（真解析器，非 split） |
+| E2E-7 审计 | 21 | 分页/字段/**时间范围过滤**（本地时区，历史窗口 total=0）/action 过滤；失败记录 action 必为 `TERMINAL_BLOCKED`；**备份三类审计存在**（CREATE/RESTORE/DOWNLOAD）；CSV 带 BOM、中文表头、每行列数与表头一致 |
 
-合计 **82 条断言全部通过**。
+合计 **91 条断言全部通过**（Phase 10 时 82 条；复核后补齐 9 条）。
 
 ## 3. 四类故障注入
 
@@ -65,9 +65,9 @@
 | 阶段 | 实测 |
 | --- | --- |
 | 基线 | 登录 200 |
-| 停止 MySQL 后请求 | **5,050 ms 返回 500**（Hikari `connection-timeout=5000`），**未挂起** |
-| 错误内容 | `服务内部错误：Could not open JPA EntityManager for transaction`，无 SQL/凭据/堆栈 |
-| 恢复 MySQL 后**不重启控制面** | 登录 **200**，耗时 2,388 ms → 连接池自愈 |
+| 停止 MySQL 后请求 | **5,046 ms 返回 503**（Hikari `connection-timeout=5000`），**未挂起** |
+| 错误内容 | `{"code":50300,"message":"数据库暂不可用，请稍后重试"}`，无 SQL/凭据/堆栈、无内部术语 |
+| 恢复 MySQL 后**不重启控制面** | 登录 **200**，耗时 **108 ms** → 连接池自愈 |
 | 健康检查 | `/actuator/health` 200 |
 
 ### F4 Token（3 条）
@@ -95,17 +95,27 @@
 
 三个修复都有"修复前失败 → 修复后通过"的对照，不是预防性改动。
 
+### Phase 11（复核整改）新增
+
+| # | 项目 | 处理 |
+| --- | --- | --- |
+| TD-104 | 备份创建/恢复/下载**无审计** | `BackupService` 注入 `AuditService`，写 `CREATE_BACKUP` / `RESTORE_BACKUP`（含失败） / `DOWNLOAD_BACKUP`；E2E 断言三类记录均存在 |
+| TD-105 | DB 仅不可用也返回 **500** | 只针对事务创建/连接获取/资源不可用三类异常映射 **503 + 50300**，文案 `数据库暂不可用，请稍后重试`；其余异常仍走兜底 |
+| TD-106 | 空闲期仍每 500ms 做一次无意义的 flush+fsync | WALWriter 增加 `dirty` 标记，`force()` 在无新写入时直接返回；新增"空闲 2s 文件大小不变"用例 |
+| — | E2E-7 缺时间筛选与动作断言 | 补齐：本地时区 10 分钟窗口命中、2000 年窗口 total=0、失败记录 action=`TERMINAL_BLOCKED` |
+| — | E2E-5 恢复完整性证据不足 | 补齐：回放数==keyCount 不变量、批量首/中/尾抽样、合并式语义断言 |
+
 ## 6. 覆盖率（JaCoCo，实测）
 
 `mvn -s maven-settings.xml test`（`report` 绑定到 test 阶段，数据来源 `target/site/jacoco/jacoco.csv`）：
 
 | 指标 | Covered | Missed | 覆盖率 |
 | --- | --- | --- | --- |
-| LINE | 1,321 | 784 | **62.76%** |
-| BRANCH | 264 | 383 | 40.80% |
-| INSTRUCTION | 5,861 | 4,031 | 59.25% |
+| LINE | 1,329 | 795 | **62.57%** |
+| BRANCH | 265 | 386 | 40.71% |
+| INSTRUCTION | 5,913 | 4,088 | 59.12% |
 
-- 统计范围：103 个类（`console-server` 全部 main 源）；
+- 统计范围：103 个类（`console-server` 全部 main 源；Phase 11 新增 `GlobalExceptionHandlerTest` 后行数基数从 2,105 → 2,124）；
 - **未排除任何业务类**，DTO/record 的 getter 也计入，因此数字偏低但真实；
 - 不设及格线，作为后续可比基线。
 
@@ -161,6 +171,17 @@ console-web/scripts/phase10/run-e2e.ps1           全量复跑入口
 console-web/scripts/phase10/probe-backup-race.mjs 并发复现探针（缺陷证据）
 ```
 
+**Phase 11（复核整改）**
+
+- `console-server/.../service/BackupService.java`（三类审计 + `download()`）
+- `console-server/.../web/BackupController.java`（下载走审计入口）
+- `console-server/.../common/GlobalExceptionHandler.java`（DB 不可用 → 503）
+- `console-server/src/test/.../common/GlobalExceptionHandlerTest.java`（新增 2 例）
+- `console-server/src/test/.../service/BackupServiceAsyncTest.java`（+1 例审计断言）
+- `src/main/java/io/tieringkv/storage/wal/WALWriter.java`（dirty 标记，空闲不 fsync）
+- `src/test/.../storage/wal/WALDurabilityTest.java`（+2 例：落盘延迟采样、空闲不重复同步）
+- `docs/adr/ADR-0365-backup-restore-semantics.md`（新增）
+
 **报告**
 
 `docs/testing/phase10-e2e.md`（本文）、`docs/screenshots/v2/ui-0*.png`
@@ -172,15 +193,24 @@ console-web/scripts/phase10/probe-backup-race.mjs 并发复现探针（缺陷证
 
 ## 10. 已知问题与未覆盖项
 
-1. **DB 断连错误语义**：当前返回 `500` + "Could not open JPA EntityManager for transaction"。
-   语义上 `503` 更准确、文案可更友好，但改动会影响全局异常处理，**记录为待办未修改**。
+1. ~~DB 断连返回 500~~ → **Phase 11 已改为 503 + 50300**，见 §5 TD-105。
 2. **备份恢复是全量回放**：实测恢复 3006/3008 键，没有增量/冲突策略（备份为逻辑快照）。
-3. **审计只覆盖部分动作**：目前记录 LOGIN / 键操作 / 实例 / 告警 / 用户 / 终端；
-   备份创建未写审计（`CREATE_BACKUP` 查询为空），属于功能缺口，未在本阶段扩大范围。
-4. **F2 的持久化窗口**：修复后为"后台每 500ms 落盘"，极端情况下仍可能丢失最近 ≤500ms 的写入，
-   与 `EVERY_SEC` 语义一致；未做崩溃瞬间的字节级一致性校验（依赖 WAL CRC，已有既有用例覆盖）。
+3. ~~备份创建未写审计~~ → **Phase 11 已补齐**（CREATE/RESTORE/DOWNLOAD），见 §5 TD-104。
+4. **F2 的持久化窗口（已量化）**：后台调度周期 500ms；连续 10 轮实测"写入 → 落盘到 OS"延迟
+   **403–421 ms（最坏 420.8 ms）**，因此**进程崩溃**最多丢失最近一次未落盘窗口的写入。
+   注意：`force()` 同时做 flush + fsync，**掉电**窗口与该周期相同；本阶段未做掉电注入
+   （需要虚拟化/物理断电，超出当前环境能力），因此不对掉电场景做强断言。
 5. **未覆盖**：并发 Compaction 期间的业务闭环（Phase 9 已单独覆盖快照一致性）、
    多浏览器兼容、移动端布局。
+
+## 10.1 复核备注（保留）
+
+- Phase 10 提交时的 E2E-7 **未覆盖时间范围筛选**，也未断言备份审计记录；已在 Phase 11 补齐（见 §5）。
+- 备份恢复的**数量/抽样**证据在 Phase 10 不足（曾出现"3006/3008"两个口径混写），
+  Phase 11 以"回放数 == 记录 keyCount"作为不变量固定，并补充首/中/尾抽样；
+  恢复语义见 `ADR-0365`（合并式、幂等、部分失败不回滚）。
+- WAL 的 500ms 是**调度周期**，不等于严格的最坏持久化窗口；Phase 11 以 10 轮实测
+  403–421ms 给出经验上界，并明确未做掉电注入。
 
 ## 11. 复现命令
 
@@ -204,7 +234,8 @@ cd ../console-web; npm test
 
 | 提交 | 内容 |
 | --- | --- |
-| `9acf3c8` | `test(e2e): Phase 10 端到端业务闭环与故障注入（TD-101/102/103）` —— 7 条闭环、4 类故障注入、3 组 UI 场景、3 处缺陷修复、测试数据清理 |
-| 本提交 | `test(coverage): 控制面 JaCoCo + 前端 Vitest + Phase 10 报告` —— 覆盖率、单测、本报告 |
+| `9acf3c8` | `test(e2e): Phase 10 端到端业务闭环与故障注入（TD-101/102/103）` |
+| `54dcdef` | `test(coverage): 控制面 JaCoCo + 前端 Vitest + Phase 10 报告` |
+| 本提交 | `fix(backup,wal): Phase 10 复核整改（TD-104/105/106）` —— 备份审计、503 语义、WAL 空闲不落盘、E2E 补强、ADR-0365 |
 
 all 测试数据已清理：`phase10-*` 实例/用户/规则与备份记录均已删除，`console-server/backups/` 已加入 `.gitignore`。

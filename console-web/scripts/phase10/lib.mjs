@@ -68,6 +68,20 @@ export async function waitFor(fn, { timeoutMs = 15000, intervalMs = 300, label =
   throw new Error(`等待${label}超时（${timeoutMs}ms）`)
 }
 
+/** 确保测试实例存在（Phase 10 用例共用 6383）。 */
+export async function ensureInstance(token, { name = TEST_INSTANCE, port = TEST_PORT, remark = 'Phase 10 专用测试实例' } = {}) {
+  const list = await api('/instances', { token })
+  const found = list.json.data.find((item) => item.name === name)
+  if (found) return found
+  const created = await api('/instances', {
+    method: 'POST', token,
+    body: { name, host: '127.0.0.1', port, remark, enabled: true }
+  })
+  if (created.status !== 200) throw new Error('创建测试实例失败：' + created.text)
+  await api(`/instances/${created.json.data.id}/probe`, { method: 'POST', token })
+  return { ...created.json.data }
+}
+
 /* ---------------- RESP 直连（验证内核真实状态） ---------------- */
 
 function encode(parts) {

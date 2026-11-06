@@ -1,19 +1,14 @@
 /**
  * E2E-3 键空间：写入 → 详情 → hash 字段增删 → TTL 真实过期（带超时轮询）→ 删除后确认为空。
  */
-import { api, check, exitWith, login, respClient, waitFor } from './lib.mjs'
+import { api, check, ensureInstance, exitWith, login, respClient, waitFor } from './lib.mjs'
 
 const admin = await login('admin', 'admin123')
 const token = admin.token
 
 // 找到 phase10 测试实例（E2E-2 会临时创建实例，这里用固定名称的实例）
-const instances = await api('/instances', { token })
-const target = instances.json.data.find((item) => item.name === 'phase10-kernel')
+const target = await ensureInstance(token)
   ?? instances.json.data.find((item) => item.remark?.includes('冷热分层演示'))
-if (!target) {
-  console.log('FAIL 未找到测试实例（需要用 phase10-kernel:6383）')
-  setTimeout(() => process.exit(1), 100)
-}
 const instanceId = target.id
 check('找到测试实例', Boolean(instanceId), 'id=' + instanceId + ' port=' + target.port)
 

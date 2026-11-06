@@ -2,13 +2,12 @@
  * E2E-7 审计：筛选分页 + CSV 导出（真解析器校验字段，不按逗号切割）。
  * 依赖前置用例产生的操作记录（登录、备份、终端、告警）。
  */
-import { api, check, exitWith, login, parseCsv } from './lib.mjs'
+import { api, check, ensureInstance, exitWith, login, parseCsv } from './lib.mjs'
 
 const admin = await login('admin', 'admin123')
 const token = admin.token
 
-const instances = await api('/instances', { token })
-const target = instances.json.data.find((item) => item.name === 'phase10-kernel')
+const target = await ensureInstance(token)
 
 const page = await api('/audit?page=1&size=10', { token })
 check('审计分页 200', page.status === 200, 'status=' + page.status)
@@ -27,12 +26,44 @@ const allLogin = (loginPage.json?.data?.items ?? []).every((row) => row.action =
 check('action=LOGIN 过滤生效', allLogin && (loginPage.json?.data?.items ?? []).length > 0,
   'rows=' + (loginPage.json?.data?.items ?? []).length)
 
+// 时间范围筛选：最近 10 分钟应包含刚才的记录；2000 年的窗口应为空
+const now = Date.now()
+// 服务端按本地时区解析 LocalDateTime，必须传本地时间而不是 UTC ISO
+const local = (ms) => {
+  const d = new Date(ms)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`
+}
+const from = local(now - 10 * 60_000)
+const to = local(now + 60_000)
+const recent = await api(`/audit?from=${from}&to=${to}&page=1&size=20`, { token })
+const recentRows = recent.json?.data?.items ?? []
+const lower = from.replace('T', ' ')
+const upper = to.replace('T', ' ')
+const inRange = recentRows.every((row) => row.createdAt >= lower && row.createdAt <= upper)
+check('时间范围筛选生效（最近 10 分钟且全在区间内）', recentRows.length > 0 && inRange,
+  `rows=${recentRows.length} window=${lower}..${upper}`)
+
+const ancient = await api('/audit?from=2000-01-01T00:00:00&to=2000-01-02T00:00:00&page=1&size=20', { token })
+check('历史窗口无数据（时间过滤真实生效）',
+  Number(ancient.json?.data?.total ?? -1) === 0, 'total=' + ancient.json?.data?.total)
+
 // 失败记录：先制造一次被拦截的终端命令（确定性），再验证筛选与内容
 await api('/terminal/execute', { method: 'POST', token, body: { instanceId: target?.id ?? 4, command: 'FLUSHALL' } })
 const failed = await api('/audit?success=false&page=1&size=20', { token })
 const failedRows = failed.json?.data?.items ?? []
 check('失败操作已入审计（success=false 有记录）', failedRows.length > 0, 'rows=' + failedRows.length)
 check('失败记录一律 success=false', failedRows.every((row) => row.success === false))
+check('失败记录动作是被拦截的终端命令',
+  failedRows.some((row) => row.action === 'TERMINAL_BLOCKED'),
+  'actions=' + [...new Set(failedRows.map((r) => r.action))].join(','))
+
+// 备份审计（Phase 11 P1 补齐后必须有记录）
+for (const action of ['CREATE_BACKUP', 'RESTORE_BACKUP', 'DOWNLOAD_BACKUP']) {
+  const res = await api(`/audit?action=${action}&page=1&size=5`, { token })
+  check(`备份操作审计存在：${action}`,
+    Number(res.json?.data?.total ?? 0) > 0, 'total=' + res.json?.data?.total)
+}
 
 // CSV 导出
 const csv = await api('/audit/export?action=LOGIN', { token, raw: true })

@@ -44,11 +44,13 @@ public class BackupService {
     private final ObjectMapper objectMapper;
     private final Path directory;
     private final Executor executor;
+    private final AuditService auditService;
 
     public BackupService(BackupRecordRepository repository, InstanceService instanceService,
                          KeyspaceService keyspaceService, RespGateway gateway,
                          ObjectMapper objectMapper, ConsoleProperties properties,
-                         @Qualifier("backupExecutor") Executor executor) {
+                         @Qualifier("backupExecutor") Executor executor,
+                         AuditService auditService) {
         this.repository = repository;
         this.instanceService = instanceService;
         this.keyspaceService = keyspaceService;
@@ -56,6 +58,7 @@ public class BackupService {
         this.objectMapper = objectMapper;
         this.directory = Paths.get(properties.getBackup().getDir()).toAbsolutePath().normalize();
         this.executor = executor;
+        this.auditService = auditService;
     }
 
     /** 备份条目（JSONL 一行）。 */
@@ -121,6 +124,8 @@ public class BackupService {
         }
 
         Long recordId = created.getId();
+        // 备份是可恢复数据的敏感操作，必须留痕（Phase 11 P1）
+        auditService.record("CREATE_BACKUP", instanceName(instanceId), created.getFileName(), true);
         executor.execute(() -> runExport(recordId));
         return created;
     }
@@ -188,6 +193,14 @@ public class BackupService {
         return count;
     }
 
+    private String instanceName(Long instanceId) {
+        try {
+            return instanceService.require(instanceId).getName();
+        } catch (RuntimeException ex) {
+            return "instance#" + instanceId;
+        }
+    }
+
     /** 从备份文件回放（先删同键再写入，保持幂等）。 */
     public long restore(Long recordId) {
         BackupRecord record = repository.findById(recordId)
@@ -211,8 +224,12 @@ public class BackupService {
                 restored++;
             }
         } catch (IOException ex) {
+            auditService.record("RESTORE_BACKUP", instance.getName(),
+                    "file=" + record.getFileName() + " restored=" + restored + " result=failed", false);
             throw BusinessException.upstream("恢复失败：" + ex.getMessage());
         }
+        auditService.record("RESTORE_BACKUP", instance.getName(),
+                "file=" + record.getFileName() + " restored=" + restored, true);
         return restored;
     }
 
@@ -265,6 +282,20 @@ public class BackupService {
         if (entry.ttl() > 0) {
             gateway.execute(instance, "EXPIRE", key, String.valueOf(entry.ttl()));
         }
+    }
+
+    /**
+     * 下载入口（Phase 11 P1）：先审计再取文件。
+     *
+     * <p>审计在此处完成，避免控制器直接调 {@link #fileOf} 绕过留痕。
+     */
+    public Path download(Long recordId) {
+        Path file = fileOf(recordId);
+        BackupRecord record = repository.findById(recordId).orElse(null);
+        String target = record == null ? "backup#" + recordId : instanceName(record.getInstanceId());
+        auditService.record("DOWNLOAD_BACKUP", target,
+                record == null ? "-" : record.getFileName(), true);
+        return file;
     }
 
     public Path fileOf(Long recordId) {

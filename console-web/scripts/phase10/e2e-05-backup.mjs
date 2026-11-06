@@ -3,13 +3,12 @@
  *
  * 并发窗口：先写入足量键，让导出持续足够时间；两次请求用 Promise.all 同时发出。
  */
-import { api, check, exitWith, login, respClient, waitFor } from './lib.mjs'
+import { api, check, ensureInstance, exitWith, login, respClient, waitFor } from './lib.mjs'
 
 const admin = await login('admin', 'admin123')
 const token = admin.token
 
-const instances = await api('/instances', { token })
-const target = instances.json.data.find((item) => item.name === 'phase10-kernel')
+const target = await ensureInstance(token)
 const instanceId = target.id
 
 const client = respClient(target.port)
@@ -56,14 +55,34 @@ await client.call('DEL', k2)
 const afterCorruption = await client.call('GET', k1)
 check('数据已被破坏（前置）', afterCorruption === 'CORRUPTED')
 
+// 备份之后新增的键：用于判定恢复是"覆盖式"还是"合并式"
+const postBackupKey = 'phase10:after-backup:' + Date.now()
+await client.call('SET', postBackupKey, 'keep-me')
+
 const restored = await api(`/backups/${backupId}/restore`, { method: 'POST', token })
 check('恢复接口 200', restored.status === 200, 'status=' + restored.status)
-check('恢复返回键数 > 0', Number(restored.json?.data) > 0, 'keys=' + restored.json?.data)
+check('恢复回放数 == 备份记录键数（同一文件的不变量）',
+  Number(restored.json?.data) === Number(finished.keyCount),
+  'restored=' + restored.json?.data + ' keyCount=' + finished.keyCount)
+
+const survived = await client.call('GET', postBackupKey)
+check('恢复为合并式回放（备份后新增的键保留）', survived === 'keep-me', 'value=' + survived)
 
 const restoredV1 = await client.call('GET', k1)
 const restoredV2 = await client.call('GET', k2)
 check('恢复后键值 1 与备份时一致', restoredV1 === v1, 'value=' + JSON.stringify(restoredV1))
 check('恢复后键值 2 与备份时一致', restoredV2 === v2, 'value=' + JSON.stringify(restoredV2))
+
+// 批量数据的首/中/尾抽样，验证不是"只写了两个特殊键"
+let sampleOk = 0
+for (const idx of [0, 1500, 2999]) {
+  const value = await client.call('GET', 'phase10:bulk:' + idx)
+  if (value === 'x'.repeat(64)) sampleOk++
+}
+check('批量键首/中/尾抽样恢复正确', sampleOk === 3, 'ok=' + sampleOk + '/3')
+
+const bulkSize = await client.call('DBSIZE')
+check('恢复后键总数覆盖批量数据', bulkSize >= 3000, 'DBSIZE=' + bulkSize)
 
 // 5) 并发创建：同时发两个请求，期望一个 200、一个 409
 const [a, b] = await Promise.all([
