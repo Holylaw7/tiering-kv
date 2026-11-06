@@ -101,7 +101,8 @@ RespValue execute(List<byte[]> args, StorageEngine storage);
 
 ### 4.3.3 局限
 
-跨节点事务使用两阶段提交 <sup>[6][7]</sup>，未实现 Percolator 的全局时间戳快照读 <sup>[8]</sup>；
+跨节点事务使用两阶段提交 + 全局时间戳 <sup>[6][7]</sup>，借鉴 Percolator 思路 <sup>[8]</sup>，',
+'但**未实现其多版本存储与快照读**（详见 5.5.3 与 5.6.4）；
 一致性验证限于单机多进程。
 
 ---

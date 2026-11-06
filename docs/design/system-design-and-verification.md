@@ -179,7 +179,8 @@ Tiering-KV 选择第三条路：**自己实现 WAL → MemTable → SSTable → 
 
 ### 5.2 分布式事务
 
-- Percolator 风格：`txn.ttl-seconds=60`、`txn.max-duration-seconds=300`；
+- 两阶段提交 + 全局时间戳（借鉴 Percolator 思路，但**未实现其多版本存储与快照读**，见 ADR-0073/0083）：
+  `txn.ttl-seconds=60`、`txn.max-duration-seconds=300`；
 - 事务状态与锁随 WAL 持久化，重启后由恢复路径清理超时锁；
 - 事务相关测试纳入 CI 的 `transaction-e2e` 作业。
 
