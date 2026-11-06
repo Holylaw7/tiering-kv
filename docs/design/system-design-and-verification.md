@@ -514,9 +514,13 @@ cd ..; mvn -o -B "-Dtest=WALDurabilityTest" test
 | 图 1 总体架构 | `docs/design/figures/fig1-architecture.svg` | `fig1-architecture.png`（2080×1240） |
 | 图 2 存储数据流 | `docs/design/figures/fig2-storage-flow.svg` | `fig2-storage-flow.png`（2080×1280） |
 | 图 3 故障恢复 | `docs/design/figures/fig3-failure-recovery.svg` | `fig3-failure-recovery.png`（2080×1320） |
+| 图 4 核心存储类图 | `docs/design/figures/fig4-storage-class.mmd`（Mermaid） | `fig4-storage-class.png`（2564×1586） |
+| 图 5 INFO 时序 | `docs/design/figures/fig5-info-sequence.mmd` | `fig5-info-sequence.png`（2387×1150） |
+| 图 6 备份恢复时序 | `docs/design/figures/fig6-backup-sequence.mmd` | `fig6-backup-sequence.png`（2333×2160） |
 
-> SVG 为矢量源文件（适合 LaTeX/Word 直接插入），PNG 为 2× 渲染结果（适合快速预览）。
-> 生成脚本：`console-web/scripts/gen-figures.mjs` 与 `render-figures.mjs`。
+> 图 1–3 由 `gen-figures.mjs` 直接生成 SVG/PNG；图 4–6 以 Mermaid（`.mmd`）为可编辑源，
+> 由 `render-mermaid.mjs` 渲染为 SVG/PNG，类图关系取自实际源码字段与继承。
+> 论文章节草稿见 `docs/thesis/chapter3-storage-engine.md` 与 `chapter4-control-plane.md`。
 
 ---
 

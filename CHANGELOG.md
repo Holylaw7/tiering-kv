@@ -137,6 +137,12 @@
 
 ### Added
 
+- **UML 图与论文正文草稿（第三、四章）**：新增三张可从源码追溯的 UML 图
+  （图 4 核心存储类图、图 5 INFO 时序、图 6 备份恢复时序，Mermaid 源 + SVG/PNG）；
+  新增 `docs/thesis/chapter3-storage-engine.md`（WAL/MemTable/SSTable/Compaction/分层/缓存）
+  与 `chapter4-control-plane.md`（RESP·Netty/INFO 可观测性/RBAC·审计/备份恢复），
+  每模块按"目标→选型→实现→图→实验→局限"组织，并给出与实现对应的参考文献
+  （LSM-Tree、Bigtable、Bloom Filter、Raft、2PC；ARC 标注为评估后未采用）。
 - **系统设计与工程验证说明（论文底稿）**：新增 `docs/design/system-design-and-verification.md`
   （10 章 + 2 附录：背景/架构/存储引擎/冷热分层/分布式/可观测性/工程质量/性能实测/
   缺陷矩阵/局限性，附证据索引与论文拆分建议）与三张矢量图（SVG+PNG）：

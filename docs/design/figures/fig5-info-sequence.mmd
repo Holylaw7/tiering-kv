@@ -1,0 +1,32 @@
+%%{init: {'theme':'base','themeVariables':{'fontFamily':"'Segoe UI','Microsoft YaHei',sans-serif",'fontSize':'13px','primaryColor':'#FFFFFF','primaryBorderColor':'#CBD2D9','primaryTextColor':'#202124','lineColor':'#9AA4B2','secondaryColor':'#F7F8FA','tertiaryColor':'#FBFCFE','noteBkgColor':'#FBFCFE','noteBorderColor':'#E5E7EB','noteTextColor':'#626B78','actorBkg':'#FFFFFF','actorBorder':'#CBD2D9','actorTextColor':'#202124','signalColor':'#626B78','signalTextColor':'#202124','labelBoxBkgColor':'#EEF2FF','labelBoxBorderColor':'#C7D2F5','labelTextColor':'#3B5BDB'}}}%%
+%% INFO 请求处理时序（源码：network/connection/CommandHandler → command/* → observability/ServerInfoProvider）
+sequenceDiagram
+    participant CH as CommandHandler
+    participant CE as CommandEngine
+    participant CR as CommandRegistry
+    participant IC as InfoCommand
+    participant SIP as ServerInfoProvider
+    participant TC as TieringController
+    participant SM as StorageMetrics
+    participant MR as MetricsRegistry
+
+    CH->>CE: execute(RespCommand)
+    CE->>CR: find("info")
+    CR-->>CE: InfoCommand
+    CE->>IC: execute(args, storage)
+
+    Note over IC,SIP: 全量 INFO 走 render()；INFO sstables 走 sections()
+    IC->>SIP: render()
+    SIP->>TC: refreshGaugesThrottled()（200ms 窗口）
+    TC->>SM: setMemoryGauges / setColdGauges / in-progress
+    SIP->>SM: snapshot()（本次渲染唯一快照）
+    SM-->>SIP: Snapshot(memory, cold, flush, compaction, cache)
+    SIP->>MR: snapshot()（QPS/延迟分位）
+    MR-->>SIP: Snapshot(p50/p95/p99/max)
+    SIP-->>IC: INFO 文本（Server / Memory / Tiering 段落）
+    IC-->>CE: RespBulkString
+    CE-->>CH: RespValue
+    CH->>CH: ResponseSequencer 保序
+    CH-->>CH: ctx.writeAndFlush()
+
+    Note over SM: gauge 来自 O(1) 计数器与表元数据；<br/>counter 为自启动累计，重启归零

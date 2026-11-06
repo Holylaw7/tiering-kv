@@ -1,0 +1,101 @@
+%%{init: {'theme':'base','themeVariables':{'fontFamily':"'Segoe UI','Microsoft YaHei',sans-serif",'fontSize':'13px','primaryColor':'#FFFFFF','primaryBorderColor':'#CBD2D9','primaryTextColor':'#202124','lineColor':'#9AA4B2','secondaryColor':'#F7F8FA','tertiaryColor':'#FBFCFE','noteBkgColor':'#FBFCFE','noteBorderColor':'#E5E7EB','noteTextColor':'#626B78','actorBkg':'#FFFFFF','actorBorder':'#CBD2D9','actorTextColor':'#202124','signalColor':'#626B78','signalTextColor':'#202124','labelBoxBkgColor':'#EEF2FF','labelBoxBorderColor':'#C7D2F5','labelTextColor':'#3B5BDB'}}}%%
+%% Tiering-KV 核心存储模块类图（源码：src/main/java/io/tieringkv/storage/**）
+%% 关系均来自实际字段/继承/构造依赖，未虚构继承
+classDiagram
+    direction TB
+
+    class StorageEngine { <<interface>> }
+    class AbstractStorageDecorator { <<abstract>> #StorageEngine delegate }
+    class TieringStorageEngine { -TieringController controller }
+    class TieringReadStorageEngine { -ColdStorageEngine cold }
+
+    namespace 编排层 {
+        class TieringController {
+            -MemoryManager memory
+            -MemTable memTable
+            -WALManager wal
+            -ColdStorageEngine cold
+            -StorageMetrics metrics
+            -WatermarkManager watermark
+            -FlushScheduler flushScheduler
+            -MigrationScheduler migrationScheduler
+            +refreshGauges()
+            +refreshGaugesThrottled()
+        }
+        class WatermarkManager {
+            +evaluate(used, max, entries, pending) TierState
+        }
+        class StorageMetrics {
+            +setMemoryGauges()
+            +setColdGauges()
+            +recordFlush()
+            +recordCompaction()
+            +snapshot() Snapshot
+        }
+    }
+
+    namespace 写入与迁移 {
+        class WALManager {
+            -SegmentManager segments
+            -WALWriter writer
+            +append(WALEntry)
+            +recover(MemTable)
+        }
+        class MemTable {
+            <<16 分片跳表>>
+            +size() long
+        }
+        class FlushScheduler {
+            -AtomicBoolean flushInProgress
+            +scheduleFlush() bool
+        }
+        class MigrationScheduler {
+            -Set inFlight
+            +submit(MigrationTask)
+        }
+    }
+
+    namespace 冷层 {
+        class ColdStorageEngine {
+            -Object lock
+            -TreeMap pending
+            -List tables
+            -Map readers
+            -CompactionManager compactionManager
+            -BlockCache blockCache
+            +tablesSnapshot() List
+            +compactAll() SSTableMeta
+        }
+        class BlockCache {
+            -CacheStatistics statistics
+            +get(CacheKey) ByteBuffer
+        }
+        class CompactionManager {
+            +compactIfNeeded() bool
+        }
+        class SSTableWriter { +finish() SSTableMeta }
+        class SSTableReader { +get(key) KeyValueEntry }
+        class SSTableMeta { <<record>> +long entryCount +long fileSize +byte[] firstKey }
+    }
+
+    TieringStorageEngine --|> AbstractStorageDecorator
+    TieringReadStorageEngine --|> AbstractStorageDecorator
+    AbstractStorageDecorator ..|> StorageEngine
+
+    TieringStorageEngine --> TieringController
+    TieringController *-- WatermarkManager
+    TieringController *-- StorageMetrics
+    TieringController *-- MemTable
+    TieringController *-- WALManager
+    TieringController *-- ColdStorageEngine
+    TieringController *-- FlushScheduler
+    TieringController *-- MigrationScheduler
+    FlushScheduler --> ColdStorageEngine
+    FlushScheduler --> StorageMetrics
+    MigrationScheduler --> ColdStorageEngine
+    MigrationScheduler --> StorageMetrics
+    ColdStorageEngine *-- BlockCache
+    ColdStorageEngine *-- CompactionManager
+    ColdStorageEngine o-- SSTableReader
+    CompactionManager ..> SSTableMeta : 输出
+    SSTableWriter ..> SSTableMeta : 生成

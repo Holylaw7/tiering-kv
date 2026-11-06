@@ -1,0 +1,61 @@
+%%{init: {'theme':'base','themeVariables':{'fontFamily':"'Segoe UI','Microsoft YaHei',sans-serif",'fontSize':'13px','primaryColor':'#FFFFFF','primaryBorderColor':'#CBD2D9','primaryTextColor':'#202124','lineColor':'#9AA4B2','secondaryColor':'#F7F8FA','tertiaryColor':'#FBFCFE','noteBkgColor':'#FBFCFE','noteBorderColor':'#E5E7EB','noteTextColor':'#626B78','actorBkg':'#FFFFFF','actorBorder':'#CBD2D9','actorTextColor':'#202124','signalColor':'#626B78','signalTextColor':'#202124','labelBoxBkgColor':'#EEF2FF','labelBoxBorderColor':'#C7D2F5','labelTextColor':'#3B5BDB'}}}%%
+%% 备份 / 恢复 / 下载时序（源码：Console BackupController → BackupService）
+sequenceDiagram
+    participant UI as 控制台前端
+    participant BC as BackupController
+    participant BS as BackupService
+    participant REPO as BackupRecordRepository
+    participant AUD as AuditService
+    participant EXE as backupExecutor
+    participant GW as RespGateway
+    participant KV as 内核实例
+    participant FS as 本地文件
+
+    rect rgb(238,242,255)
+    Note over UI,FS: ① 创建备份（异步）
+    UI->>BC: POST /api/v1/backups?instanceId
+    BC->>BS: export(instanceId)
+    BS->>REPO: findFirst(RUNNING)
+    REPO-->>BS: 无 / 超时记录
+    Note over BS: 按实例加锁（TD-101）<br/>检查与落库原子
+    BS->>REPO: save(RUNNING)
+    BS->>AUD: record(CREATE_BACKUP)
+    BS->>EXE: submit(runExport)
+    BS-->>UI: 200 RUNNING 记录
+    EXE->>GW: execute(SCAN cursor MATCH * COUNT 200)
+    GW->>KV: RESP 请求
+    KV-->>GW: 键列表（游标 + keys）
+    GW-->>EXE: RespReply
+    EXE->>KV: TYPE / TTL / GET（逐键取值，同样经网关）
+    EXE->>FS: 写 JSONL（一行一个 SnapshotEntry）
+    EXE->>REPO: save(SUCCESS, keyCount, sizeBytes)
+    end
+
+    rect rgb(239,246,241)
+    Note over UI,FS: ② 恢复（合并式 / 幂等 / 非原子，ADR-0365）
+    UI->>BC: POST /backups/{id}/restore
+    BC->>BS: restore(id)
+    BS->>REPO: findById(id)
+    BS->>FS: readAllLines
+    loop 每一行 SnapshotEntry
+        BS->>GW: execute(DEL key)
+        GW->>KV: 删除同键
+        BS->>GW: execute(SET / HSET / RPUSH / SADD / ZADD)
+        GW->>KV: 写入备份值
+        opt ttl > 0
+            BS->>GW: execute(EXPIRE key ttl)
+            GW->>KV: 恢复过期时间
+        end
+    end
+    BS->>AUD: record(RESTORE_BACKUP, restored=N)
+    BS-->>UI: 返回回放条数（== keyCount）
+    end
+
+    rect rgb(253,244,231)
+    Note over UI,FS: ③ 下载
+    UI->>BC: GET /backups/{id}/download
+    BC->>BS: download(id)
+    BS->>FS: 校验路径在备份目录内
+    BS->>AUD: record(DOWNLOAD_BACKUP)
+    BS-->>UI: 文件流（attachment）
+    end
