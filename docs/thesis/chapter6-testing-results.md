@@ -1,6 +1,6 @@
 # 第六章　系统测试与实验结果分析
 
-> 论文正文初稿 · 对应基线 `64f3cad`
+> 论文正文初稿 · 对应基线 `6439ecf`
 > 图表：图 6-1（故障处理与恢复流程）
 > 数据来源：`docs/testing/phase10-e2e.md`、`docs/benchmark/*`、本次实测输出
 
@@ -341,13 +341,7 @@ UI 只验证"浏览器实际表现"（终端连续会话、离线三态、权限
 
 ---
 
-## 参考文献（本章）
+## 本章引用文献
 
-[1] IEEE. *IEEE Standard for Software and System Test Documentation (IEEE 829-2008)*. 2008.
-
-[2] B. Beizer. *Software Testing Techniques* (2nd ed.). Van Nostrand Reinhold, 1990.
-
-[3] M. Fowler. *Patterns of Enterprise Application Architecture*. Addison-Wesley, 2002.
-    （测试替身与分层测试的组织方式）
-
-[4] J. Humble, D. Farley. *Continuous Delivery*. Addison-Wesley, 2010.（回归与门禁）
+本章为实验与结果分析，未引入新的学术文献；涉及的机制与工具见第 2–5 章及文末《参考文献》。
+技术规范 S3（指标类型）、S4（语义约定）见文末"技术规范"清单。

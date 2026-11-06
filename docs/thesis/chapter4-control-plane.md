@@ -1,7 +1,7 @@
 # 第四章　系统控制与管理模块设计与实现
 
-> 论文正文初稿 · 对应基线 `4cc7a62`
-> 图表：图 1（总体架构）、图 5（INFO 时序）、图 6（备份恢复时序）
+> 论文正文初稿 · 对应基线 `6439ecf`
+> 图表：图 2-1（总体架构）、图 4-1（INFO 时序）、图 4-2（备份恢复时序）
 > 数据来源：`docs/testing/phase10-e2e.md`、`docs/api/openapi.json`、本仓库实测
 
 ## 4.1 设计目标与问题背景
@@ -15,7 +15,7 @@
 1. **故障域扩大**：控制台的 bug（如一次慢查询、一次 OOM）会拖垮数据面；
 2. **协议污染**：管理类命令会进入 Redis 命令空间，破坏兼容性。
 
-因此本项目把控制面做成**独立进程**（Spring Boot），只通过 RESP 与内核通信（图 1）。
+因此本项目把控制面做成**独立进程**（Spring Boot），只通过 RESP 与内核通信（图 2-1）。
 这条边界带来两个直接收益：内核可单独升级/重启；控制面可独立部署与限流。
 
 ### 4.1.2 设计目标
@@ -49,7 +49,7 @@
 
 ### 4.2.2 Netty 接入与并发模型
 
-清单 4-2　Netty 接入管线
+清单 4-1　Netty 接入管线
 
 ```text
 ChannelPipeline: 解码器 → CommandHandler → CommandEngine → KeyShardExecutor(16)
@@ -70,7 +70,7 @@ Redis 客户端默认假设响应与请求一一对应且有序，乱序会让�
 157 个命令名由 `CommandCatalog` 注册，按族组织（string / hash / list / set / zset / stream /
 geo / bit / json / ts / vector / 管理类）。每个命令实现 `Command` 接口：
 
-清单 4-1　命令接口
+清单 4-2　命令接口
 
 ```java
 RespValue execute(List<byte[]> args, StorageEngine storage);
@@ -101,8 +101,8 @@ RespValue execute(List<byte[]> args, StorageEngine storage);
 
 ### 4.3.3 局限
 
-跨节点事务使用两阶段提交 + 全局时间戳 <sup>[6][7]</sup>，借鉴 Percolator 思路 <sup>[8]</sup>，',
-'但**未实现其多版本存储与快照读**（详见 5.5.3 与 5.6.4）；
+跨节点事务使用两阶段提交 + 全局时间戳 <sup>[19][20]</sup>，借鉴 Percolator 的设计思想 <sup>[13]</sup>，
+但**未实现其多版本存储与快照读**（详见 5.5.3 与 5.6.4）。
 一致性验证限于单机多进程。
 
 ---
@@ -309,20 +309,7 @@ RespValue execute(List<byte[]> args, StorageEngine storage);
 
 ---
 
-## 参考文献（本章）
+## 本章引用文献
 
-[1] Redis. *Redis Protocol Specification (RESP)*. https://redis.io/docs/latest/develop/reference/protocol-spec/
-
-[2] Netty Project. *Netty: An asynchronous event-driven network application framework*.
-    https://netty.io/
-
-[3] D. Ongaro, J. Ousterhout. In Search of an Understandable Consensus Algorithm.
-    *Proceedings of USENIX ATC 2014*, pp. 305–319.
-
-[4] P. A. Bernstein, V. Hadzilacos, N. Goodman. *Concurrency Control and Recovery in Database Systems*.
-    Addison-Wesley, 1987.
-
-[5] D. Peng, F. Dabek. Large-scale Incremental Processing Using Distributed Transactions and Notifications.
-    *Proceedings of OSDI 2010*.（Percolator；本项目采用 2PC + 全局时间戳，未实现其快照读）
-
-[6] J. Gray, A. Reuter. *Transaction Processing: Concepts and Techniques*. Morgan Kaufmann, 1992.
+本章引用 [11][13][19][20]，完整条目见文末《参考文献》。
+协议、网络库与指标语义规范见文末"技术规范"（S1、S2）。

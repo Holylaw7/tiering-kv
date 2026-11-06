@@ -1,7 +1,7 @@
 # 第三章　系统核心存储引擎设计与实现
 
-> 论文正文初稿 · 对应基线 `4cc7a62`（Phase 11 之后）
-> 图表：图 2（存储数据流）、图 4（核心存储模块类图）
+> 论文正文初稿 · 对应基线 `6439ecf`（Phase 11 之后）
+> 图表：图 3-1（存储数据流）、图 3-2（核心存储模块类图）
 > 数据来源：`docs/benchmark/*`、`docs/testing/*`、本仓库实测（口径见 §3.9）
 
 ## 3.1 设计目标与问题背景
@@ -15,7 +15,7 @@ KV 存储的教学实现通常止步于"内存哈希表 + RESP 协议"，其问�
 因此本章的设计起点是：**在可控复杂度内，完整实现一条可解释、可观测、可验证的 LSM 写入与读取链路**，
 再在其上叠加冷热分层，使"内存只保留热数据"成为结构性保证，而不是靠调参。
 
-LSM-Tree 的核心思想早在 1996 年由 O'Neil 等人提出：把随机写转化为顺序写，
+存储引擎的读写权衡是数据系统设计的基础议题 <sup>[18]</sup>。LSM-Tree 的核心思想早在 1996 年由 O'Neil 等人提出：把随机写转化为顺序写，
 用多层有序结构加后台合并换取写吞吐 <sup>[1]</sup>；Bigtable 进一步给出了"内存表 + 不可变 SSTable + 合并"
 的工程化形态 <sup>[2]</sup>，本项目的 WAL / MemTable / SSTable / Compaction 四段式结构与之一致。
 
@@ -39,9 +39,14 @@ LSM-Tree 的核心思想早在 1996 年由 O'Neil 等人提出：把随机写转
 
 ## 3.2 总体方案与模块划分
 
+![图 3-1 存储引擎数据流](../design/figures/fig2-storage-flow.png)
+
+*图 3-1　存储引擎数据流：写入（WAL→MemTable→Flush→Compaction）与读取（热层→BlockCache→SSTable）*
+
+
 ### 3.2.1 分层结构
 
-存储引擎自下而上分为四层（图 4）：
+存储引擎自下而上分为四层（图 3-2）：
 
 | 层 | 组件 | 职责 |
 | --- | --- | --- |
@@ -72,7 +77,7 @@ StorageEngine (interface)
 | 内存索引 | 16 分片跳表（无锁读 + 段写锁） | 红黑树并发写锁粒度大；跳表实现简单、范围扫描天然有序 |
 | 键序 | `Arrays.compareUnsigned`（无符号字节序） | 与 RESP 二进制键一致；避免字符串解码开销与本地化差异 |
 | 冷层格式 | 块 + 块索引 + 布隆过滤 + CRC 的自定义格式 | 直接复用 SSTable 开源格式会引入外部依赖，且不利于论文解释 |
-| 块缓存策略 | LRU（accessOrder） | 评估过 LFU 与 ARC <sup>[5]</sup>（ADR-0012），块缓存访问局部性强、ARC 的 ghost 机制收益有限，最终取 LRU（ADR-0028） |
+| 块缓存策略 | LRU（accessOrder） | 评估过 LFU 与 ARC <sup>[17]</sup>（ADR-0012），块缓存访问局部性强、ARC 的 ghost 机制收益有限，最终取 LRU（ADR-0028） |
 | 合并策略 | 表数阈值触发全量/分层合并 | 与工业界 size-tiered 思路一致，实现成本低于 leveled |
 
 ---
@@ -202,7 +207,7 @@ SSTable 一旦写出就不再修改，因此它的设计目标是：**顺序写�
 +----------------+
 ```
 
-块级 CRC 用于检测损坏；布隆过滤器借鉴 Bloom 的经典结论 <sup>[3]</sup>：
+块级 CRC 用于检测损坏；布隆过滤器借鉴 Bloom 的经典结论 <sup>[16]</sup>：
 用少量位数组即可把"键一定不存在"的判断前置，避免无效块读。Bigtable 也在 SSTable 中采用了同样的组合 <sup>[2]</sup>。
 
 ### 3.5.3 写与读
@@ -419,18 +424,6 @@ P99 为"提交→完成"的端到端延迟，包含提交快于消费时的队�
 
 ---
 
-## 参考文献（本章）
+## 本章引用文献
 
-[1] P. E. O'Neil, E. Cheng, D. Gawlick, E. J. O'Neil. The Log-Structured Merge-Tree (LSM-Tree).
-    *Acta Informatica*, 33(4): 351–385, 1996.
-
-[2] F. Chang, J. Dean, S. Ghemawat, et al. Bigtable: A Distributed Storage System for Structured Data.
-    *Proceedings of OSDI 2006*, pp. 205–218.
-
-[3] B. H. Bloom. Space/Time Trade-offs in Hash Coding with Allowable Errors.
-    *Communications of the ACM*, 13(7): 422–426, 1970.
-
-[4] M. Kleppmann. *Designing Data-Intensive Applications*. O'Reilly Media, 2017.（第 3 章：存储与检索）
-
-[5] N. Megiddo, D. S. Modha. ARC: A Self-Tuning, Low Overhead Replacement Cache.
-    *Proceedings of FAST 2003*.（本项目评估后未采用，见 ADR-0012）
+本章引用 [1][2][16][17][18]，完整条目见文末《参考文献》。

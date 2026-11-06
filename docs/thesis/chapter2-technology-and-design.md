@@ -1,7 +1,8 @@
 # 第二章　相关技术与系统总体设计
 
-> 论文正文初稿 · 对应基线 `b76ad39`
-> 图表：图 2-1（系统总体架构）、表 2-1（核心技术选型）、表 2-2（需求与目标映射）
+> 论文正文初稿 · 基线 `6439ecf`
+> 图表：图 2-1（系统总体架构）、表 2-1（需求与目标映射）、表 2-2（核心技术选型）
+> 基线：`6439ecf`
 > 本章定位：回答"采用了哪些技术、为什么采用、系统如何组织"；具体实现见第三至第五章。
 
 ## 2.1 系统需求与设计目标
@@ -25,7 +26,7 @@
 
 ### 2.1.2 设计目标
 
-**表 2-2　需求、设计目标与对应章节**
+**表 2-1　需求、设计目标与对应章节**
 
 | 需求 | 设计目标 | 主要落实章节 |
 | --- | --- | --- |
@@ -67,16 +68,16 @@ RESP 是 Redis 的线协议，分为 RESP2 与 RESP3：前者用 `+ - : $ *` 五
 ### 2.2.3 LSM-Tree
 
 LSM-Tree 的核心是把随机写转化为顺序写：写入先进入内存结构，积累到阈值后顺序落盘，
-后台合并多层以控制读放大（O'Neil 等，1996）。它牺牲部分读性能换取写吞吐与空间利用率，
+后台合并多层以控制读放大（O'Neil 等，1996）<sup>[1]</sup>。它牺牲部分读性能换取写吞吐与空间利用率，
 与本项目"内存装不下、写入频繁、读取以热数据为主"的负载特征吻合，因此选作存储主结构。
 
 ### 2.2.4 Raft 与混合逻辑时钟
 
 Raft 用"领导者选举 + 日志复制"把一致性问题分解为三个子问题（领导者选举、日志复制、安全性），
-比 Paxos 更易实现与解释（Ongaro 与 Ousterhout，2014）。本项目以 Raft 作为多副本写入的共识层。
+比 Paxos 更易实现与解释（Ongaro 与 Ousterhout，2014）<sup>[11]</sup>。本项目以 Raft 作为多副本写入的共识层。
 
 混合逻辑时钟（HLC）把物理时间与逻辑计数结合：物理时间前进时取物理值，回拨时用逻辑计数保证单调，
-从而在分布式事务中得到可比的时间戳（Kulkarni 等，2014）。
+从而在分布式事务中得到可比的时间戳（Kulkarni 等，2014）<sup>[14]</sup>。
 
 **边界说明**：HLC 只解决"时间戳单调可比"，**不等于**多版本并发控制；系统没有实现多版本存储与垃圾回收。
 
@@ -108,8 +109,8 @@ WAL 的作用是在修改落入内存结构之前，先把"这次修改"变成�
 ### 2.3.3 不可变磁盘表（SSTable）与布隆过滤器
 
 SSTable 一旦写出即不可变，内部由数据块、块索引、布隆过滤器与校验组成。
-布隆过滤器（Bloom，1970）用少量位数组回答"键一定不存在"，把无效块读挡在磁盘之前；
-Bigtable 的工程实践也采用这一组合（Chang 等，2006）。本项目在此基础上加入了块级校验，
+布隆过滤器（Bloom，1970）<sup>[16]</sup>用少量位数组回答"键一定不存在"，把无效块读挡在磁盘之前；
+Bigtable 的工程实践也采用这一组合（Chang 等，2006）<sup>[2]</sup>。本项目在此基础上加入了块级校验，
 使损坏可被检测而非静默返回错误数据。
 
 ### 2.3.4 合并（Compaction）
@@ -137,7 +138,7 @@ Bigtable 的工程实践也采用这一组合（Chang 等，2006）。本项目�
 ### 2.4.3 块缓存策略：LRU 而非 ARC
 
 块缓存按块缓存解码后的数据。候选策略包括 LRU、LFU、ARC 与 TinyLFU。
-项目早期评估过 ARC（Megiddo 与 Modha，2003）——它通过 B1/B2 幽灵队列感知"被淘汰键的再次访问"，
+项目早期评估过 ARC（Megiddo 与 Modha，2003）<sup>[17]</sup>——它通过 B1/B2 幽灵队列感知"被淘汰键的再次访问"，
 对突发访问模式更友好；但块缓存的访问局部性强、容量以条目计，ARC 的收益不足以抵消实现与维护成本，
 最终采用 LRU（访问序链表）。
 
@@ -172,7 +173,7 @@ Bigtable 的工程实践也采用这一组合（Chang 等，2006）。本项目�
 跨分片事务采用"两阶段提交 + 全局时间戳"的骨架：协调者分配开始时间戳，参与者在写入时加锁并记录时间戳，
 提交阶段写入提交时间戳并释放锁；崩溃或超时由后台锁清理机制依据事务状态决定提交或回滚。
 
-这一骨架借鉴了 Percolator 的设计思想（Peng 与 Dabek，2010）——用"时间戳 + 锁记录"替代阻塞式两阶段提交。
+这一骨架借鉴了 Percolator 的设计思想（Peng 与 Dabek，2010）<sup>[13]</sup>——用"时间戳 + 锁记录"替代阻塞式两阶段提交。
 **但本项目没有实现 Percolator 的多版本存储与快照读**：时间戳用于事务可见性与锁判定，
 读请求得到的是某一时间戳下"已提交"的视图，不提供线性一致读。
 
@@ -214,7 +215,7 @@ Bigtable 的工程实践也采用这一组合（Chang 等，2006）。本项目�
 
 ### 2.6.3 核心技术选型
 
-**表 2-1　系统核心技术选型及应用**
+**表 2-2　系统核心技术选型及应用**
 
 | 技术 | 应用位置 | 选型依据 | 备注（边界） |
 | --- | --- | --- | --- |
@@ -248,27 +249,7 @@ Bigtable 的工程实践也采用这一组合（Chang 等，2006）。本项目�
 
 ---
 
-## 参考文献（本章）
+## 本章引用文献
 
-[1] P. E. O'Neil, E. Cheng, D. Gawlick, E. J. O'Neil. The Log-Structured Merge-Tree (LSM-Tree).
-    *Acta Informatica*, 33(4): 351–385, 1996.
-
-[2] F. Chang, J. Dean, S. Ghemawat, et al. Bigtable: A Distributed Storage System for Structured Data.
-    *Proceedings of OSDI 2006*, pp. 205–218.
-
-[3] B. H. Bloom. Space/Time Trade-offs in Hash Coding with Allowable Errors.
-    *Communications of the ACM*, 13(7): 422–426, 1970.
-
-[4] D. Ongaro, J. Ousterhout. In Search of an Understandable Consensus Algorithm.
-    *Proceedings of USENIX ATC 2014*, pp. 305–319.
-
-[5] S. S. Kulkarni, A. Demirbas, et al. Logical Physical Clocks and Consistent Snapshots in Globally
-    Distributed Databases. *OPODIS 2014*.
-
-[6] D. Peng, F. Dabek. Large-scale Incremental Processing Using Distributed Transactions and Notifications.
-    *Proceedings of OSDI 2010*.
-
-[7] N. Megiddo, D. S. Modha. ARC: A Self-Tuning, Low Overhead Replacement Cache.
-    *Proceedings of FAST 2003*.（评估后未采用）
-
-[8] Redis. *Redis Protocol Specification (RESP)*. https://redis.io/docs/latest/develop/reference/protocol-spec/
+本章引用 [1][2][11][13][14][16][17]，完整条目见文末《参考文献》；
+协议与网络库规范见文末"技术规范"（S1、S2）。

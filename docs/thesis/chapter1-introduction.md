@@ -16,11 +16,11 @@
 把随机写转化为顺序写，在写入密集的场景下显著优于传统的磁盘索引结构 <sup>[1]</sup>；
 Bigtable 则给出了这一思想在工业系统中的工程形态——内存表、不可变文件与合并的三段式结构 <sup>[2]</sup>。
 在此基础上，"把冷数据放到慢速介质、把热数据留在内存"的分层存储成为自然延伸：
-近年来的研究进一步关注**热度识别与记录提升**，即写入热点与读取热点可能并不在同一层级 <sup>[6]</sup>，
-以及本地介质与远端存储组合时的放置、缓存与恢复问题 <sup>[7]</sup>。
+近年来的研究进一步关注**热度识别与记录提升**，即写入热点与读取热点可能并不在同一层级 <sup>[3]</sup>，
+以及本地介质与远端存储组合时的放置、缓存与恢复问题 <sup>[4]</sup>。
 
-与此同时，数据库系统的部署形态也在变化。云原生数据库把计算与存储解耦，用弹性资源与副本一致性支撑多租户场景 <sup>[13]</sup>；
-数据中心资源解耦后，数据组织方式本身也需要重新设计 <sup>[14]</sup>。这使得"管理面"从附属工具变成一等公民：
+与此同时，数据库系统的部署形态也在变化。云原生数据库把计算与存储解耦，用弹性资源与副本一致性支撑多租户场景 <sup>[5]</sup>；
+数据中心资源解耦后，数据组织方式本身也需要重新设计 <sup>[6]</sup>。这使得"管理面"从附属工具变成一等公民：
 系统的可观测性、可运维性与可验证性，直接决定了它能否被真正使用。
 
 ### 1.1.2 研究问题
@@ -64,10 +64,10 @@ Bigtable 把这一思想工程化，明确了"内存表—不可变文件—合�
 **读放大**（一次查询可能要查多层多个文件）与**空间放大**（旧版本与删除标记占用空间）。
 后续研究大体沿着"在某一个放大上换取代价"展开：
 
-- Monkey 研究布隆过滤器的内存分配，指出过滤器占用的内存与读放大之间存在最优分配点 <sup>[3]</sup>；
+- Monkey 研究布隆过滤器的内存分配，指出过滤器占用的内存与读放大之间存在最优分配点 <sup>[7]</sup>；
 - Dostoevsky 进一步讨论合并频率的选择，说明"合并得多"会降低读与空间放大但抬高写放大，
-  并提出根据负载自适应地减少"多余合并" <sup>[4]</sup>；
-- 国内综述则从工程实现角度梳理了 LSM 键值存储的关键技术与优化方向 <sup>[5]</sup>。
+  并提出根据负载自适应地减少"多余合并" <sup>[8]</sup>；
+- 国内综述则从工程实现角度梳理了 LSM 键值存储的关键技术与优化方向 <sup>[9]</sup>。
 
 **比较与评述**：这一方向的研究已经相当充分，但结论高度依赖负载假设。
 对于以内存命中的热读为主、写入相对均匀的场景，"按表数阈值触发合并"这类简化策略
@@ -81,8 +81,8 @@ Bigtable 把这一思想工程化，明确了"内存表—不可变文件—合�
 
 HotRAP 指出，在采用分层存储的 LSM 系统中，**写入热点与读取热点可能位于不同层级**：
 新写入的数据停留在上层，而真正被频繁读取的记录可能已被下沉，导致读性能与存储效率之间出现矛盾；
-其解法是跟踪记录热度并把热点记录提升回上层 <sup>[6]</sup>。
-RocksMash 则把分层扩展到"本地存储 + 云存储"的组合，讨论数据放置、细粒度缓存（LAP cache）与故障恢复 <sup>[7]</sup>。
+其解法是跟踪记录热度并把热点记录提升回上层 <sup>[3]</sup>。
+RocksMash 则把分层扩展到"本地存储 + 云存储"的组合，讨论数据放置、细粒度缓存（LAP cache）与故障恢复 <sup>[4]</sup>。
 
 **比较与评述**：两项工作的共同点是把"放置决策"看作动态优化问题，差异在于介质假设——
 前者面向 SSD/HDD 的层级，后者面向本地与远端的分层。二者都表明：冷热分层的关键不是"能不能落盘"，
@@ -97,13 +97,13 @@ RocksMash 则把分层扩展到"本地存储 + 云存储"的组合，讨论数�
 当单机容量与可用性都不再足够时，系统需要走向多副本。围绕"多副本如何达成一致"，形成了两条代表性路线。
 
 一条是**去中心化的最终一致**路线。Dynamo 用一致性哈希做分片、用向量时钟处理冲突、用可调读写法定人数在
-可用性与一致性之间滑动 <sup>[9]</sup>，其目标是"永远可写"。另一条是**基于共识的强一致**路线：
-Raft 把共识分解为领导者选举、日志复制与安全性三个子问题 <sup>[8]</sup>，
+可用性与一致性之间滑动 <sup>[10]</sup>，其目标是"永远可写"。另一条是**基于共识的强一致**路线：
+Raft 把共识分解为领导者选举、日志复制与安全性三个子问题 <sup>[11]</sup>，
 以更易实现与解释的方式达到与 Paxos 同等的安全性，成为近年来分布式存储的主流选择。
 
-跨分片事务则引出时间戳问题。Spanner 用 TrueTime 把"时间不确定性"显式暴露，通过等待不确定区间获得外部一致性 <sup>[10]</sup>；
-Percolator 用"时间戳 + 锁记录"替代阻塞式两阶段提交，在 Bigtable 之上实现跨行事务 <sup>[11]</sup>；
-混合逻辑时钟（HLC）则在无法获得全局物理时钟时，用"物理毫秒 + 逻辑计数"保证时间戳单调可比 <sup>[12]</sup>。
+跨分片事务则引出时间戳问题。Spanner 用 TrueTime 把"时间不确定性"显式暴露，通过等待不确定区间获得外部一致性 <sup>[12]</sup>；
+Percolator 用"时间戳 + 锁记录"替代阻塞式两阶段提交，在 Bigtable 之上实现跨行事务 <sup>[13]</sup>；
+混合逻辑时钟（HLC）则在无法获得全局物理时钟时，用"物理毫秒 + 逻辑计数"保证时间戳单调可比 <sup>[14]</sup>。
 
 **比较与评述**：三种时间戳方案对应不同的假设与代价——TrueTime 需要专用硬件（GPS/原子钟），
 TSO 需要集中式授时服务，HLC 只需要松散同步的物理时钟但只能保证单调与因果序。
@@ -113,8 +113,8 @@ TSO 需要集中式授时服务，HLC 只需要松散同步的物理时钟但只
 ### 1.2.4 云原生数据库与控制平面研究
 
 云原生数据库的核心是**资源解耦**：把计算、存储与日志分离，使三者可以独立扩展与故障恢复。
-综述性工作系统梳理了这一形态下的关键技术，包括计算存储分离的架构、副本一致性、弹性资源管理与故障恢复 <sup>[13]</sup>；
-针对解耦数据中心的讨论则进一步指出，当网络成为存储访问的一部分时，数据组织方式（放置、缓存、复制）需要重新设计 <sup>[14]</sup>。
+综述性工作系统梳理了这一形态下的关键技术，包括计算存储分离的架构、副本一致性、弹性资源管理与故障恢复 <sup>[5]</sup>；
+针对解耦数据中心的讨论则进一步指出，当网络成为存储访问的一部分时，数据组织方式（放置、缓存、复制）需要重新设计 <sup>[6]</sup>。
 
 **比较与评述**：这类研究关注的往往是"如何让数据库本身更云化"。
 而另一个常被忽视的维度是**管理面**：当实例数量增加、部署形态多样时，
@@ -161,7 +161,7 @@ TSO 需要集中式授时服务，HLC 只需要松散同步的物理时钟但只
 - **验证成本**：崩溃、掉电与跨机故障难以在普通实验环境中复现，结论必须标注证据边界。
 
 需要强调的是，本文**不主张**"国内外尚无类似系统"或"首次提出分层键值引擎"。
-HotRAP 等工作已经表明 LSM 与分层存储的结合是活跃研究方向 <sup>[6]</sup>，
+HotRAP 等工作已经表明 LSM 与分层存储的结合是活跃研究方向 <sup>[3]</sup>，
 本文的定位是：面向 **Redis 协议兼容**的键值引擎，探索冷热分层与分布式管理能力的**系统设计、工程实现与验证方法**。
 
 ---
@@ -208,63 +208,7 @@ HotRAP 等工作已经表明 LSM 与分层存储的结合是活跃研究方向 <
 
 ---
 
-## 参考文献（本章）
+## 本章引用文献
 
-[1] P. E. O'Neil, E. Cheng, D. Gawlick, E. J. O'Neil. The Log-Structured Merge-Tree (LSM-Tree).
-    *Acta Informatica*, 33(4): 351–385, 1996.
-
-[2] F. Chang, J. Dean, S. Ghemawat, et al. Bigtable: A Distributed Storage System for Structured Data.
-    *Proceedings of OSDI 2006*, pp. 205–218.
-
-[3] N. Dayan, M. Athanassoulis, S. Idreos. Monkey: Optimal Navigable Key-Value Store.
-    *Proceedings of ACM SIGMOD 2017*.（页码待核）
-
-[4] N. Dayan, S. Idreos. Dostoevsky: Better Space-Time Trade-Offs for LSM-Tree Based Key-Value Stores
-    via Adaptive Removal of Superfluous Merging. *Proceedings of ACM SIGMOD 2018*.
-    DOI: 10.1145/3183713.3196927.
-
-[5] 吕萌, 华文镝, 谢平. 基于 LSM 树的键值存储系统技术研究综述. 计算机科学, 50(8): 1–15, 2023.
-    DOI: 10.11896/jsjkx.220900178.
-
-[6] J. Qiu, F. Yuan, M. Gao, H. Zhang. HotRAP: Hot Record Retention and Promotion for LSM-trees with
-    Tiered Storage. *Proceedings of USENIX ATC 2025*, pp. 497–511.
-
-[7] P. Xu, et al. RocksMash: Building a Fast and Efficient LSM-tree Store by Integrating Local Storage
-    with Cloud Storage. *ACM Transactions on Architecture and Code Optimization*, 19(3), 2022.
-    DOI: 10.1145/3527452.
-
-[8] D. Ongaro, J. Ousterhout. In Search of an Understandable Consensus Algorithm.
-    *Proceedings of USENIX ATC 2014*, pp. 305–319.
-
-[9] G. DeCandia, D. Hastorun, M. Jampani, et al. Dynamo: Amazon's Highly Available Key-value Store.
-    *Proceedings of ACM SOSP 2007*, pp. 205–220.
-
-[10] J. C. Corbett, J. Dean, M. Epstein, et al. Spanner: Google's Globally-Distributed Database.
-    *Proceedings of OSDI 2012*.（页码待核）
-
-[11] D. Peng, F. Dabek. Large-scale Incremental Processing Using Distributed Transactions and
-    Notifications. *Proceedings of OSDI 2010*.（页码待核）
-
-[12] S. S. Kulkarni, M. Demirbas, D. Madappa, B. Avva, M. Leone. Logical Physical Clocks.
-    *Proceedings of OPODIS 2014*, LNCS 8878, pp. 17–32.
-
-[13] H. Dong, C. Zhang, G. Li, H. Zhang. Cloud-Native Databases: A Survey.
-    *IEEE Transactions on Knowledge and Data Engineering*, 36(12): 7772–7791, 2024.
-    DOI: 10.1109/TKDE.2024.3397508.
-
-[14] Q. Zhang, et al. Rethinking Data Management Systems for Disaggregated Data Centers.
-    *Proceedings of CIDR 2020*.
-
-[15] B. Li, et al. Enjoy your observability: an industrial survey of microservice tracing and analysis.
-    *Empirical Software Engineering*, 27(1), Article 25, 2022.
-    DOI: 10.1007/s10664-021-10063-9.
-
-## 技术规范（单列）
-
-[S1] Redis. Redis Protocol Specification (RESP). https://redis.io/docs/latest/develop/reference/protocol-spec/
-
-[S2] Netty Project. Netty Documentation. https://netty.io/
-
-[S3] Prometheus. Metric Types. https://prometheus.io/docs/concepts/metric_types/
-
-[S4] OpenTelemetry. Semantic Conventions for Metrics. https://opentelemetry.io/docs/specs/semconv/
+本章引用 [1]–[15]，完整条目见文末《参考文献》（`references.md`）。
+技术规范 S1（RESP）、S2（Netty）见文末"技术规范"清单。

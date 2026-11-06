@@ -1,6 +1,6 @@
 # 第五章　分布式架构与一致性机制设计
 
-> 论文正文初稿 · 对应基线 `4cc7a62`
+> 论文正文初稿 · 对应基线 `6439ecf`
 > 图表：图 5-1（集群与分片）、图 5-2（Raft 日志复制）、图 5-3（分布式事务协调）
 > 依据：`cluster/**`、`cluster/raft/**`、`transaction/**`、ADR-0037～0091、ADR-0298/0339/0352
 
@@ -67,6 +67,11 @@
 
 ## 5.2 集群管理与数据分片
 
+![图 5-1 集群与分片架构](../design/figures/fig7-cluster-sharding.png)
+
+*图 5-1　集群与分片架构（元数据 Raft 组、Region 与复制关系、生命周期控制器）*
+
+
 ### 5.2.1 两级分片
 
 | 层级 | 机制 | 说明 |
@@ -104,7 +109,7 @@
 
 ### 5.3.1 实现范围
 
-`RaftNode` 是一个**完整但精简**的实现（ADR-0037～0044）：
+`RaftNode` 是一个**完整但精简**的实现（ADR-0037～0044）<sup>[11]</sup>：
 
 | 能力 | 实现要点 | 证据 |
 | --- | --- | --- |
@@ -178,7 +183,7 @@ public void put(KeyValueEntry entry) {
 
 ### 5.5.1 为什么需要 HLC
 
-分布式事务需要"全局可比的时间戳"，但物理时钟会回拨。HLC 用 `physicalMillis × 10^6 + logical`
+分布式事务需要"全局可比的时间戳"，但物理时钟会回拨。HLC<sup>[14]</sup> 用 `physicalMillis × 10^6 + logical`
 构造单调时间戳（ADR-0072）：物理时间前进时用物理值，回拨时用逻辑计数保证**不倒退**。
 
 ### 5.5.2 实现
@@ -219,7 +224,7 @@ public void put(KeyValueEntry entry) {
 
 ### 5.6.1 协议
 
-事务协议采用 Percolator 的"两阶段 + 时间戳"骨架（Peng & Dabek, OSDI 2010）：
+事务协议采用 Percolator 的"两阶段 + 时间戳"骨架（Peng & Dabek, OSDI 2010）<sup>[13]</sup>，其两阶段提交的基本语义见 Bernstein 等 <sup>[19]</sup>：
 
 1. **Prewrite**：用 `startTS` 在各参与者写入数据与锁（`LockRecord`）；
 2. **Commit**：协调者取 `commitTS > startTS`，先提交主锁，再提交其余锁；
@@ -248,7 +253,7 @@ public void put(KeyValueEntry entry) {
 
 | 维度 | Percolator | 本项目 |
 | --- | --- | --- |
-| 底层存储 | Bigtable（多版本） | 自研 LSM（单版本 + 锁记录） |
+| 底层存储 | Bigtable<sup>[2]</sup>（多版本） | 自研 LSM（单版本 + 锁记录） |
 | 快照读 | `readTS` 多版本可见 | `readTS` 仅用于事务可见性判定（E2） |
 | 锁清理 | 客户端惰性清理 | 后台 `LockResolver` 主动清理 |
 | 跨集群 | 不涉及 | 有 `CrossClusterTxnCoordinator`（E3，单机模拟） |
@@ -315,22 +320,6 @@ public void put(KeyValueEntry entry) {
 
 ---
 
-## 参考文献（本章）
+## 本章引用文献
 
-[1] D. Ongaro, J. Ousterhout. In Search of an Understandable Consensus Algorithm.
-    *Proceedings of USENIX ATC 2014*, pp. 305–319.
-
-[2] D. Peng, F. Dabek. Large-scale Incremental Processing Using Distributed Transactions and Notifications.
-    *Proceedings of OSDI 2010*.
-
-[3] J. C. Corbett, J. Dean, M. Epstein, et al. Spanner: Google's Globally-Distributed Database.
-    *ACM Transactions on Computer Systems*, 31(3), 2013.（TrueTime 与 HLC 的对照）
-
-[4] S. S. Kulkarni, A. Demirbas, et al. Logical Physical Clocks and Consistent Snapshots in Globally Distributed Databases.
-    *OPODIS 2014*.（HLC 原始论文）
-
-[5] F. Chang, J. Dean, S. Ghemawat, et al. Bigtable: A Distributed Storage System for Structured Data.
-    *Proceedings of OSDI 2006*.（Percolator 的底层存储）
-
-[6] P. A. Bernstein, V. Hadzilacos, N. Goodman. *Concurrency Control and Recovery in Database Systems*.
-    Addison-Wesley, 1987.（两阶段提交基础）
+本章引用 [2][11][13][14][19]，完整条目见文末《参考文献》。

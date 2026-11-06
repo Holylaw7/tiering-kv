@@ -15,7 +15,10 @@
 | `consistency-review.md` | 第三至六章数据/术语/结论强度的一致性核对 | — |
 | `chapter7-review.md` | 第七章复核记录（篇幅、成果对应、局限与未来工作溯源、机械检查） | — |
 | `terminology.md` | 技术术语统一表（中文名/英文写法/边界表述/单位格式） | — |
-| `chapter1-reference-map.md` | 第一章文献筛选与映射表（15 篇核心 + 4 项规范，定稿版） | — |
+| `chapter1-reference-map.md` | 第一章文献筛选与映射表（15 篇核心，定稿版） | — |
+| `references.md` | **全文参考文献总表**（20 篇学术 + S1/S2 规范，GB/T 7714-2025） | — |
+| `reference-mapping.md` | 旧编号→全文编号合并去重映射 | — |
+| `final-check.md` | **七章全文终检报告**（五维度 + 三项重点检查 + 修复清单） | — |
 
 图表源文件在 `docs/design/figures/`：
 图 1–3 为直接生成的 SVG/PNG，图 4–6 为 Mermaid（`.mmd`）+ 渲染结果。
