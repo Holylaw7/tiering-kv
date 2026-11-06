@@ -9,7 +9,9 @@
 | `chapter5-distributed.md` | 第五章　分布式架构与一致性机制设计（分片 / Raft / 故障恢复 / HLC / 两阶段事务） | 图 5-1、图 5-2、图 5-3 |
 | `chapter6-testing-results.md` | 第六章　系统测试与实验结果分析（策略/环境/功能/E2E/故障/性能/质量/缺陷案例/局限） | 图 6-1 |
 | `formatting-conventions.md` | 图表编号与交叉引用规范（章节编号、新旧对照） | — |
+| `chapter7-conclusion.md` | 第七章　总结与展望（工作总结 / 主要成果 / 局限 / 未来工作 / 小结） | — |
 | `consistency-review.md` | 第三至六章数据/术语/结论强度的一致性核对 | — |
+| `chapter7-review.md` | 第七章复核记录（篇幅、成果对应、局限与未来工作溯源、机械检查） | — |
 
 图表源文件在 `docs/design/figures/`：
 图 1–3 为直接生成的 SVG/PNG，图 4–6 为 Mermaid（`.mmd`）+ 渲染结果。
