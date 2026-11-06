@@ -4,6 +4,7 @@
 
 | 文件 | 内容 | 引用图表 |
 | --- | --- | --- |
+| `chapter1-introduction.md` | 第一章　绪论（研究背景/现状评述/研究内容/组织结构） | 图 1-1 |
 | `chapter2-technology-and-design.md` | 第二章　相关技术与系统总体设计（需求/核心技术/存储/分层/分布式/总体架构） | 图 2-1、表 2-1、表 2-2 |
 | `chapter3-storage-engine.md` | 第三章　系统核心存储引擎设计与实现（WAL / MemTable / SSTable / Compaction / 冷热分层 / BlockCache） | 图 3-1、图 3-2 |
 | `chapter4-control-plane.md` | 第四章　系统控制与管理模块设计与实现（RESP/Netty / INFO 可观测性 / RBAC 与审计 / 备份恢复） | 图 4-1、图 4-2 |
@@ -14,7 +15,7 @@
 | `consistency-review.md` | 第三至六章数据/术语/结论强度的一致性核对 | — |
 | `chapter7-review.md` | 第七章复核记录（篇幅、成果对应、局限与未来工作溯源、机械检查） | — |
 | `terminology.md` | 技术术语统一表（中文名/英文写法/边界表述/单位格式） | — |
-| `chapter1-reference-map.md` | 第一章文献筛选原则与映射表（16 核心 + 2 备选 + 4 规范） | — |
+| `chapter1-reference-map.md` | 第一章文献筛选与映射表（15 篇核心 + 4 项规范，定稿版） | — |
 
 图表源文件在 `docs/design/figures/`：
 图 1–3 为直接生成的 SVG/PNG，图 4–6 为 Mermaid（`.mmd`）+ 渲染结果。
