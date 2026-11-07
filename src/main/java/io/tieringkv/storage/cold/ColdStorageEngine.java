@@ -47,8 +47,16 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
     private long nextTableId = 1;
     private long pendingBytes;
     /** 存活键计数缓存（TD-086）：写入置脏，查询时惰性重算。 */
-    private boolean liveCountDirty = true;
-    private long liveCountCache;
+    /**
+     * 存活键计数（F1，ADR-0370）：对上层只暴露快照值，不在 INFO 请求线程里全量扫描。
+     *
+     * <p>写入只置脏（{@code liveCountDirty}），由后台线程定期重算并发布；
+     * 构造时同步算一次，避免刚启动时 INFO 报 0。
+     */
+    private volatile boolean liveCountDirty = true;
+    private volatile long liveCountCache;
+    private volatile boolean liveCountKnown;
+    private Thread liveCountRefresher;
     private boolean closed;
     /** Compaction 是否正在执行（INFO 用，TD-097）。 */
     private final java.util.concurrent.atomic.AtomicBoolean compacting =
@@ -91,6 +99,15 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
         if (ioStats != null) {
             ioStats.setMappedBytes(loaded.stream().mapToLong(SSTableMeta::fileSize).sum());
         }
+        // 启动时算一次，之后交给后台线程；INFO 只读快照
+        try {
+            refreshLiveCount();
+        } catch (RuntimeException ex) {
+            // 计数失败不影响读写，后台线程会重试
+            liveCountCache = 0;
+            liveCountKnown = false;
+        }
+        startLiveCountRefresher();
     }
 
     @Override
@@ -123,13 +140,13 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
      * 一次迭代，之后命中缓存，直到下一次写入。
      */
     public long liveCount() {
-        if (!liveCountDirty) {
-            return liveCountCache;
-        }
+        // F1：只读快照，绝不在此处扫描冷层
+        return liveCountCache;
+    }
+
+    /** 重新扫描并发布计数快照（后台线程与测试使用，不在 INFO 路径调用）。 */
+    public void refreshLiveCount() {
         synchronized (lock) {
-            if (!liveCountDirty) {
-                return liveCountCache;
-            }
             long counted = 0;
             try (StorageIterator iterator = iterator()) {
                 while (iterator.hasNext()) {
@@ -139,8 +156,43 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
             }
             liveCountCache = counted;
             liveCountDirty = false;
-            return counted;
+            liveCountKnown = true;
         }
+    }
+
+    /** 计数快照是否已就绪（供测试与诊断）。 */
+    public boolean liveCountKnown() {
+        return liveCountKnown;
+    }
+
+    /** 是否有未合并到快照的写入（供测试与诊断）。 */
+    public boolean liveCountStale() {
+        return liveCountDirty;
+    }
+
+    /** 后台校正：单线程、串行、失败保留上一次有效快照。 */
+    private void startLiveCountRefresher() {
+        Thread thread = new Thread(() -> {
+            while (!closed) {
+                try {
+                    Thread.sleep(1000L);
+                } catch (InterruptedException ex) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                if (!liveCountDirty || closed) {
+                    continue;
+                }
+                try {
+                    refreshLiveCount();
+                } catch (RuntimeException ex) {
+                    // 保留旧快照，下个周期重试
+                }
+            }
+        }, "cold-live-count-refresher");
+        thread.setDaemon(true);
+        this.liveCountRefresher = thread;
+        thread.start();
     }
 
     private void invalidateLiveCount() {
@@ -426,6 +478,9 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
 
     @Override
     public void close() throws IOException {
+        if (liveCountRefresher != null) {
+            liveCountRefresher.interrupt();
+        }
         synchronized (lock) {
             for (SSTableReader reader : readers.values()) {
                 reader.close();

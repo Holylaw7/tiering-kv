@@ -67,16 +67,21 @@ class ColdStorageEngineEntryTest {
 
     @Test
     void liveCountIgnoresOverwritesAndTracksDeletes() {
+        // ADR-0370：liveCount 现在是后台快照，写入后需显式刷新再断言
         cold.put(live("k1", "v1", -1));
+        cold.refreshLiveCount();
         assertThat(cold.liveCount()).isEqualTo(1);
 
         cold.put(live("k1", "v2", -1));
+        cold.refreshLiveCount();
         assertThat(cold.liveCount()).isEqualTo(1);
 
         cold.put(live("k2", "v2", -1));
+        cold.refreshLiveCount();
         assertThat(cold.liveCount()).isEqualTo(2);
 
         cold.delete(bytes("k1"));
+        cold.refreshLiveCount();
         assertThat(cold.liveCount()).isEqualTo(1);
         assertThat(cold.entry(bytes("k2"))).isNotNull();
     }
