@@ -391,6 +391,36 @@
         },
         "type" : "object"
       },
+      "ApiResponsePurgeReport" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/PurgeReport"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiResponseRetentionView" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/RetentionView"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseSystemInfoView" : {
         "properties" : {
           "code" : {
@@ -468,6 +498,13 @@
         "properties" : {
           "createdAt" : {
             "format" : "date-time",
+            "type" : "string"
+          },
+          "deleteClaimedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "deleteState" : {
             "type" : "string"
           },
           "fileName" : {
@@ -1145,6 +1182,74 @@
           }
         },
         "required" : [ "password" ],
+        "type" : "object"
+      },
+      "PurgeReport" : {
+        "properties" : {
+          "candidates" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "deleted" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "failed" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "finishedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "instances" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "orphanRemoved" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "skipped" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "startedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "RetentionView" : {
+        "properties" : {
+          "claimTimeoutMinutes" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "defaultCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "failedDays" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "intervalMs" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "lastReport" : {
+            "$ref" : "#/components/schemas/PurgeReport"
+          },
+          "orphanGraceMinutes" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
         "type" : "object"
       },
       "Server" : {
@@ -1922,6 +2027,42 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/ApiResponseBackupRecord"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "backup-controller" ]
+      }
+    },
+    "/api/v1/backups/purge" : {
+      "post" : {
+        "operationId" : "purge",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponsePurgeReport"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "backup-controller" ]
+      }
+    },
+    "/api/v1/backups/retention" : {
+      "get" : {
+        "operationId" : "retention",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseRetentionView"
                 }
               }
             },

@@ -63,6 +63,29 @@ public class BackupRecord {
     @Column(name = "restore_message", length = 255)
     private String restoreMessage;
 
+    /** 清理认领状态：NULL 正常；RETIRING 已被某个实例认领，正在删除（ADR-0367）。 */
+    @Column(name = "delete_state", length = 16)
+    private String deleteState;
+
+    @Column(name = "delete_claimed_at")
+    private LocalDateTime deleteClaimedAt;
+
+    public String getDeleteState() {
+        return deleteState;
+    }
+
+    public void setDeleteState(String deleteState) {
+        this.deleteState = deleteState;
+    }
+
+    public LocalDateTime getDeleteClaimedAt() {
+        return deleteClaimedAt;
+    }
+
+    public void setDeleteClaimedAt(LocalDateTime deleteClaimedAt) {
+        this.deleteClaimedAt = deleteClaimedAt;
+    }
+
     public RestoreStatus getRestoreStatus() {
         return restoreStatus;
     }

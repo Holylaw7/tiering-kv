@@ -137,6 +137,15 @@
 
 ### Added
 
+- **G0-2 备份保留策略与安全删除（ADR-0367）**：新增 `BackupRetentionService`——
+  按实例保留最近 N 个成功备份（实例可覆盖，默认 10），永远保留最近一个可恢复点，
+  FAILED 记录按天数清理，RUNNING/RESTORING 受保护；删除走"数据库认领 → 删文件 →
+  删记录"的幂等协议，孤儿文件按宽限期回收；新增 `POST /backups/purge`、
+  `GET /backups/retention` 与每小时定时清理；手工删除复用同一协议。V4 迁移新增
+  `backup_record.delete_state/delete_claimed_at` 与 `db_instance.backup_retention`。
+  10 例单测 + 真实 MySQL 验证（保留 2 个、RESTORING 保护、孤儿回收、两实例并发清理）。
+  真实环境暴露并修复两处单测未能发现的问题：JPQL 枚举比较未生效（改原生 SQL）、
+  `@Modifying` 缺事务导致 500。
 - **G0-1 验收证据（真实 MySQL + 跨实例 E2E）**：MySQL 8.0.39 上验证 V3 迁移
   （5 列 + 索引 + 默认值，重复启动时 Flyway 报 up to date）；两台控制面实例
   （8080/8081，同库）并发恢复同一备份，实测 200 + 409，恢复耗时 2,857 ms、

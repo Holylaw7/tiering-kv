@@ -127,6 +127,7 @@ public class ConsoleProperties {
 
     public static class Backup {
         private String dir = "./backups";
+        private Retention retention = new Retention();
 
         public String getDir() {
             return dir;
@@ -135,6 +136,47 @@ public class ConsoleProperties {
         public void setDir(String dir) {
             this.dir = dir;
         }
+
+        public Retention getRetention() {
+            return retention;
+        }
+
+        public void setRetention(Retention retention) {
+            this.retention = retention;
+        }
+    }
+
+    /**
+     * 备份保留配置（ADR-0367）。
+     *
+     * <p>只约束"保留多少个成功备份"，不保证磁盘占用，磁盘水位由容量保护单独处理。
+     */
+    public static class Retention {
+        /** 每个实例保留的最近成功备份数量；实例可用 backup_retention 覆盖。 */
+        private int defaultCount = 10;
+        /** FAILED 记录保留天数。 */
+        private int failedDays = 7;
+        /** 认领后超过该分钟数仍未删完，允许其他实例接手。 */
+        private int claimTimeoutMinutes = 30;
+        /** 孤儿文件的宽限分钟数（避免误删正在写入的备份）。 */
+        private int orphanGraceMinutes = 60;
+        /** 定时清理间隔（毫秒），默认 1 小时。 */
+        private long intervalMs = 3_600_000L;
+        /** 是否启用定时清理。 */
+        private boolean enabled = true;
+
+        public int getDefaultCount() { return defaultCount; }
+        public void setDefaultCount(int defaultCount) { this.defaultCount = defaultCount; }
+        public int getFailedDays() { return failedDays; }
+        public void setFailedDays(int failedDays) { this.failedDays = failedDays; }
+        public int getClaimTimeoutMinutes() { return claimTimeoutMinutes; }
+        public void setClaimTimeoutMinutes(int claimTimeoutMinutes) { this.claimTimeoutMinutes = claimTimeoutMinutes; }
+        public int getOrphanGraceMinutes() { return orphanGraceMinutes; }
+        public void setOrphanGraceMinutes(int orphanGraceMinutes) { this.orphanGraceMinutes = orphanGraceMinutes; }
+        public long getIntervalMs() { return intervalMs; }
+        public void setIntervalMs(long intervalMs) { this.intervalMs = intervalMs; }
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
     }
 
     public static class Terminal {
