@@ -137,6 +137,13 @@
 
 ### Added
 
+- **G0-5B-1 冷层计数快照化（F1，ADR-0370）**：`ColdStorageEngine.liveCount()` 改为读
+  `volatile` 快照，INFO/DBSIZE 不再在请求线程触发冷层全量扫描；写入只置脏，由
+  1 秒周期的守护线程重算并原子发布（单线程、失败保留旧快照），构造时同步算一次。
+  新增 `ColdLiveCountTest` 9 例（增删改、tombstone、TTL、flush、compaction、重启、
+  并发、INFO 读快照语义），两处旧测试补 `refreshLiveCount()`（断言数值未改）。
+  内核全量回归 **15,126 例 0 失败（13 跳过）**。未做 10 万冷键的 INFO 延迟对照，
+  启动扫描与约 1 秒陈旧窗口作为明确语义保留。
 - **G0-5A INFO 指标代码路径审计**：新增 `docs/thesis/g0-5a-info-audit.md`，
   逐段追踪 `INFO` 调用链（CommandRegistry → InfoCommand → ServerInfoProvider.render →
   各 section → ObservabilityRegistry），静态统计 **84 个字段**（O(1) 71、O(n) 10、IO/阻塞 3–4），

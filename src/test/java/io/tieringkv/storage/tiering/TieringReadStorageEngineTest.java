@@ -97,6 +97,8 @@ class TieringReadStorageEngineTest {
         cold.put(entry("c2", "2", -1));
         cold.put(entry("c3", "3", -1));
 
+        // ADR-0370：冷层计数为后台快照，写入后显式刷新
+        cold.refreshLiveCount();
         assertThat(engine.size()).isEqualTo(5);
     }
 
