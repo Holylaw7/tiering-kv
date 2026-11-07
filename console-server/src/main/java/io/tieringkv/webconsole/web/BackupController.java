@@ -2,6 +2,7 @@ package io.tieringkv.webconsole.web;
 
 import io.tieringkv.webconsole.common.ApiResponse;
 import io.tieringkv.webconsole.domain.BackupRecord;
+import io.tieringkv.webconsole.service.BackupRetentionService;
 import io.tieringkv.webconsole.service.BackupService;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -26,9 +27,11 @@ import java.util.List;
 public class BackupController {
 
     private final BackupService backupService;
+    private final BackupRetentionService retentionService;
 
-    public BackupController(BackupService backupService) {
+    public BackupController(BackupService backupService, BackupRetentionService retentionService) {
         this.backupService = backupService;
+        this.retentionService = retentionService;
     }
 
     @GetMapping
@@ -58,10 +61,24 @@ public class BackupController {
                 .body(new FileSystemResource(file));
     }
 
+    /** 手工触发一次保留清理（ADR-0367）。 */
+    @PostMapping("/purge")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<BackupRetentionService.PurgeReport> purge() {
+        return ApiResponse.ok(retentionService.purge());
+    }
+
+    /** 保留策略与上次清理结果。 */
+    @GetMapping("/retention")
+    @PreAuthorize("hasAnyRole('ADMIN','OPS')")
+    public ApiResponse<BackupRetentionService.RetentionView> retention() {
+        return ApiResponse.ok(retentionService.view());
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','OPS')")
     public ApiResponse<Void> delete(@PathVariable Long id) {
-        backupService.delete(id);
+        retentionService.delete(id);
         return ApiResponse.ok();
     }
 }

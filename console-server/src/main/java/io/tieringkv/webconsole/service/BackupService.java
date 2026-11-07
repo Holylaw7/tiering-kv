@@ -390,17 +390,6 @@ public class BackupService {
         return file;
     }
 
-    public void delete(Long recordId) {
-        BackupRecord record = repository.findById(recordId)
-                .orElseThrow(() -> BusinessException.notFound("备份记录不存在：" + recordId));
-        try {
-            Files.deleteIfExists(directory.resolve(record.getFileName()));
-        } catch (IOException ex) {
-            log.warn("删除备份文件失败 {}", record.getFileName(), ex);
-        }
-        repository.delete(record);
-    }
-
     private static String text(RespReply reply) {
         return reply instanceof RespReply.Bulk bulk ? Text.decode(bulk.value()) : null;
     }

@@ -49,6 +49,18 @@ public class DbInstance {
     @Column(length = 255)
     private String remark;
 
+    /** 保留的最近成功备份数量；NULL 表示使用全局默认（ADR-0367）。 */
+    @Column(name = "backup_retention")
+    private Integer backupRetention;
+
+    public Integer getBackupRetention() {
+        return backupRetention;
+    }
+
+    public void setBackupRetention(Integer backupRetention) {
+        this.backupRetention = backupRetention;
+    }
+
     @Column(nullable = false)
     private boolean enabled = true;
 
