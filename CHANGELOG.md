@@ -137,6 +137,13 @@
 
 ### Added
 
+- **G0-4 备份容量保护与预留（ADR-0369）**：新增 `BackupCapacityService`——
+  导出前按"文件系统可用空间 − 已预留 − 最小保留余量"判定，不足直接 **507**；
+  预留写入 `backup_reservation`，用 `backup_capacity` 行级悲观锁串行化同存储路径判定；
+  导出改为临时文件 + `ATOMIC_MOVE` 发布，失败清理临时文件并标记 FAILED；
+  新增 `GET /backups/capacity`；V5 迁移建两张表。7 例单测 + 真实 MySQL 验证
+  （正常导出预留→释放、无 .tmp 残留、空间不足 507 且发生在导出前）。
+  未验证：真实 ENOSPC、双实例容量竞争 E2E、预留超时实际触发。
 - **G0-3 生产配置安全启动门禁（ADR-0368）**：新增 `ProductionConfigGuard`（仅 prod/production），
   在 bean 初始化阶段校验并按 FATAL/WARN/INFO 分级：JWT 密钥（缺失/空白/默认值/<32 字节/
   低多样性/示例占位）、数据库口令（空/示例弱口令）、初始管理员口令（未配置/admin123/<12 位）

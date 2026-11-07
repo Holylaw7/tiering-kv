@@ -2,6 +2,7 @@ package io.tieringkv.webconsole.web;
 
 import io.tieringkv.webconsole.common.ApiResponse;
 import io.tieringkv.webconsole.domain.BackupRecord;
+import io.tieringkv.webconsole.service.BackupCapacityService;
 import io.tieringkv.webconsole.service.BackupRetentionService;
 import io.tieringkv.webconsole.service.BackupService;
 import org.springframework.core.io.FileSystemResource;
@@ -28,10 +29,13 @@ public class BackupController {
 
     private final BackupService backupService;
     private final BackupRetentionService retentionService;
+    private final BackupCapacityService capacityService;
 
-    public BackupController(BackupService backupService, BackupRetentionService retentionService) {
+    public BackupController(BackupService backupService, BackupRetentionService retentionService,
+                            BackupCapacityService capacityService) {
         this.backupService = backupService;
         this.retentionService = retentionService;
+        this.capacityService = capacityService;
     }
 
     @GetMapping
@@ -66,6 +70,13 @@ public class BackupController {
     @PreAuthorize("hasRole('ADMIN')")
     public ApiResponse<BackupRetentionService.PurgeReport> purge() {
         return ApiResponse.ok(retentionService.purge());
+    }
+
+    /** 磁盘容量视图（ADR-0369）。 */
+    @GetMapping("/capacity")
+    @PreAuthorize("hasAnyRole('ADMIN','OPS')")
+    public ApiResponse<BackupCapacityService.CapacityView> capacity() {
+        return ApiResponse.ok(capacityService.view());
     }
 
     /** 保留策略与上次清理结果。 */

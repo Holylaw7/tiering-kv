@@ -8,6 +8,7 @@ import io.tieringkv.webconsole.domain.BackupStatus;
 import io.tieringkv.webconsole.domain.DbInstance;
 import io.tieringkv.webconsole.domain.RestoreStatus;
 import io.tieringkv.webconsole.repository.BackupRecordRepository;
+import io.tieringkv.webconsole.repository.BackupReservationRepository;
 import io.tieringkv.webconsole.resp.RespReply;
 import io.tieringkv.webconsole.support.Text;
 import org.slf4j.Logger;
@@ -46,12 +47,14 @@ public class BackupService {
     private final Path directory;
     private final Executor executor;
     private final AuditService auditService;
+    private final BackupCapacityService capacityService;
 
     public BackupService(BackupRecordRepository repository, InstanceService instanceService,
                          KeyspaceService keyspaceService, RespGateway gateway,
                          ObjectMapper objectMapper, ConsoleProperties properties,
                          @Qualifier("backupExecutor") Executor executor,
-                         AuditService auditService) {
+                         AuditService auditService,
+                         BackupCapacityService capacityService) {
         this.repository = repository;
         this.instanceService = instanceService;
         this.keyspaceService = keyspaceService;
@@ -60,6 +63,7 @@ public class BackupService {
         this.directory = Paths.get(properties.getBackup().getDir()).toAbsolutePath().normalize();
         this.executor = executor;
         this.auditService = auditService;
+        this.capacityService = capacityService;
     }
 
     /** 备份条目（JSONL 一行）。 */
@@ -141,6 +145,15 @@ public class BackupService {
         }
 
         Long recordId = created.getId();
+        try {
+            capacityService.reserve(instanceId, recordId, capacityService.estimate(instanceId));
+        } catch (RuntimeException ex) {
+            created.setStatus(BackupStatus.FAILED);
+            created.setMessage(truncate(ex.getMessage()));
+            created.setFinishedAt(LocalDateTime.now());
+            repository.save(created);
+            throw ex;
+        }
         // 备份是可恢复数据的敏感操作，必须留痕（Phase 11 P1）
         auditService.record("CREATE_BACKUP", instanceName(instanceId), created.getFileName(), true);
         executor.execute(() -> runExport(recordId));
@@ -154,21 +167,44 @@ public class BackupService {
             return;
         }
         DbInstance instance = instanceService.require(record.getInstanceId());
+        Path file = directory.resolve(record.getFileName());
+        Path temp = directory.resolve(record.getFileName() + ".tmp");
+        long written = 0;
         try {
             Files.createDirectories(directory);
-            Path file = directory.resolve(record.getFileName());
-            long keys = writeSnapshot(instance, file);
+            long keys = writeSnapshot(instance, temp);
+            written = Files.size(temp);
+            publish(temp, file);
             record.setKeyCount(keys);
-            record.setSizeBytes(Files.size(file));
+            record.setSizeBytes(written);
             record.setStatus(BackupStatus.SUCCESS);
             record.setMessage("导出 " + keys + " 个键");
         } catch (IOException | RuntimeException ex) {
+            // 磁盘写满、只读、进程级异常：临时文件必须清掉，记录必须失败
+            try {
+                Files.deleteIfExists(temp);
+            } catch (IOException cleanup) {
+                log.warn("删除临时备份文件失败：{}", temp, cleanup);
+            }
             record.setStatus(BackupStatus.FAILED);
             record.setMessage(truncate(ex.getMessage()));
             log.error("备份失败 instance={}", instance.getName(), ex);
+        } finally {
+            capacityService.release(recordId, written);
         }
         record.setFinishedAt(LocalDateTime.now());
         repository.save(record);
+    }
+
+    /** 原子发布：同目录 ATOMIC_MOVE；不支持时降级并告警。 */
+    private void publish(Path temp, Path target) throws IOException {
+        try {
+            Files.move(temp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        } catch (java.nio.file.AtomicMoveNotSupportedException ex) {
+            log.warn("文件系统不支持 ATOMIC_MOVE，降级为普通移动：{}", target);
+            Files.move(temp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }
     }
 
     private long writeSnapshot(DbInstance instance, Path file) throws IOException {

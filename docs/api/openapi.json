@@ -168,6 +168,21 @@
         },
         "type" : "object"
       },
+      "ApiResponseCapacityView" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/CapacityView"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseInstanceView" : {
         "properties" : {
           "code" : {
@@ -555,6 +570,34 @@
           "status" : {
             "enum" : [ "RUNNING", "SUCCESS", "FAILED" ],
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "CapacityView" : {
+        "properties" : {
+          "activeReservations" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "estimateFloorBytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "minFreeBytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "reservedBytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "storageKey" : {
+            "type" : "string"
+          },
+          "usableBytes" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -2027,6 +2070,24 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/ApiResponseBackupRecord"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "backup-controller" ]
+      }
+    },
+    "/api/v1/backups/capacity" : {
+      "get" : {
+        "operationId" : "capacity",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseCapacityView"
                 }
               }
             },

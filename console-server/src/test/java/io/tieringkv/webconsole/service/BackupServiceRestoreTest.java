@@ -45,6 +45,8 @@ class BackupServiceRestoreTest {
 
     @TempDir
     Path dir;
+    private final BackupCapacityService capacity = mock(BackupCapacityService.class);
+
 
     private final Map<Long, BackupRecord> store = new ConcurrentHashMap<>();
     private BackupRecordRepository repository;
@@ -84,7 +86,7 @@ class BackupServiceRestoreTest {
         ConsoleProperties properties = new ConsoleProperties();
         properties.getBackup().setDir(dir.toString());
         service = new BackupService(repository, instanceService, keyspace, gateway,
-                new ObjectMapper(), properties, Runnable::run, audit);
+                new ObjectMapper(), properties, Runnable::run, audit, capacity);
     }
 
     /** 造一份可恢复的备份（两行 JSONL）与对应记录。 */

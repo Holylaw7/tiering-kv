@@ -35,6 +35,8 @@ class BackupServiceAsyncTest {
 
     @TempDir
     Path dir;
+    private final BackupCapacityService capacity = mock(BackupCapacityService.class);
+
 
     private BackupRecordRepository repository;
     private InstanceService instanceService;
@@ -72,7 +74,7 @@ class BackupServiceAsyncTest {
             auditService = mock(AuditService.class);
         }
         return new BackupService(repository, instanceService, keyspaceService,
-                gateway, new ObjectMapper(), properties, executor, auditService);
+                gateway, new ObjectMapper(), properties, executor, auditService, capacity);
     }
 
     private BackupRecord runningRecord(LocalDateTime createdAt) {
