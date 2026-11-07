@@ -137,6 +137,11 @@
 
 ### Added
 
+- **G0-1 恢复互斥与恢复状态机（ADR-0366）**：新增 `RestoreStatus` 与
+  `backup_record` 的恢复字段（V3 迁移），恢复与导出按实例互斥（恢复中导出 409、
+  备份中恢复 409、二次恢复 409），恢复状态与备份状态分离，失败记 `FAILED` +
+  已回放键数，30 分钟僵尸状态自动回收。新增 `BackupServiceRestoreTest` 6 例，
+  并发用例在移除守卫后实测失败、恢复守卫后通过；控制面全量 99 例 0 失败。
 - **产品化路线图**：新增 `docs/planning/productization-roadmap.md`，按既有 RFC-0002、
   能力分层基线（PRODUCT/EXPERIMENTAL/ADAPTER）、质量门禁与 GA 运维闭环，
   给出 G0 单机生产就绪（含本次审计的恢复互斥/备份保留/密钥强制等 7 项）、

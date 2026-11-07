@@ -45,6 +45,64 @@ public class BackupRecord {
     @Column(name = "finished_at")
     private LocalDateTime finishedAt;
 
+    /** 恢复状态与备份状态分离（ADR-0366）。 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "restore_status", nullable = false, length = 16)
+    private RestoreStatus restoreStatus = RestoreStatus.NONE;
+
+    @Column(name = "restore_started_at")
+    private LocalDateTime restoreStartedAt;
+
+    @Column(name = "restore_finished_at")
+    private LocalDateTime restoreFinishedAt;
+
+    /** 已回放键数；失败时为部分值，用于向用户说明"恢复了多少"。 */
+    @Column(name = "restored_keys", nullable = false)
+    private long restoredKeys;
+
+    @Column(name = "restore_message", length = 255)
+    private String restoreMessage;
+
+    public RestoreStatus getRestoreStatus() {
+        return restoreStatus;
+    }
+
+    public void setRestoreStatus(RestoreStatus restoreStatus) {
+        this.restoreStatus = restoreStatus;
+    }
+
+    public LocalDateTime getRestoreStartedAt() {
+        return restoreStartedAt;
+    }
+
+    public void setRestoreStartedAt(LocalDateTime restoreStartedAt) {
+        this.restoreStartedAt = restoreStartedAt;
+    }
+
+    public LocalDateTime getRestoreFinishedAt() {
+        return restoreFinishedAt;
+    }
+
+    public void setRestoreFinishedAt(LocalDateTime restoreFinishedAt) {
+        this.restoreFinishedAt = restoreFinishedAt;
+    }
+
+    public long getRestoredKeys() {
+        return restoredKeys;
+    }
+
+    public void setRestoredKeys(long restoredKeys) {
+        this.restoredKeys = restoredKeys;
+    }
+
+    public String getRestoreMessage() {
+        return restoreMessage;
+    }
+
+    public void setRestoreMessage(String restoreMessage) {
+        this.restoreMessage = restoreMessage;
+    }
+
     public Long getId() {
         return id;
     }

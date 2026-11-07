@@ -492,6 +492,25 @@
           "message" : {
             "type" : "string"
           },
+          "restoreFinishedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "restoreMessage" : {
+            "type" : "string"
+          },
+          "restoreStartedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "restoreStatus" : {
+            "enum" : [ "NONE", "RESTORING", "SUCCEEDED", "FAILED" ],
+            "type" : "string"
+          },
+          "restoredKeys" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
           "sizeBytes" : {
             "format" : "int64",
             "type" : "integer"

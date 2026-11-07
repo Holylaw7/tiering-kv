@@ -6,6 +6,7 @@ import io.tieringkv.webconsole.config.ConsoleProperties;
 import io.tieringkv.webconsole.domain.BackupRecord;
 import io.tieringkv.webconsole.domain.BackupStatus;
 import io.tieringkv.webconsole.domain.DbInstance;
+import io.tieringkv.webconsole.domain.RestoreStatus;
 import io.tieringkv.webconsole.repository.BackupRecordRepository;
 import io.tieringkv.webconsole.resp.RespReply;
 import io.tieringkv.webconsole.support.Text;
@@ -93,14 +94,30 @@ public class BackupService {
      * 导致同一实例并行跑两个导出任务（Phase 10 实测 5/5 轮复现）。
      * 这里按实例加锁，把检查与插入合并为一个临界区；导出仍在锁外提交给线程池。
      */
-    private final java.util.concurrent.ConcurrentHashMap<Long, Object> exportLocks =
+    private final java.util.concurrent.ConcurrentHashMap<Long, Object> instanceLocks =
             new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 恢复超过该时长仍未结束，视为进程崩溃遗留的僵尸状态（ADR-0366）。 */
+    private static final long STALE_RESTORING_MINUTES = 30;
 
     public BackupRecord export(Long instanceId) {
         instanceService.require(instanceId);
-        Object lock = exportLocks.computeIfAbsent(instanceId, key -> new Object());
+        Object lock = instanceLocks.computeIfAbsent(instanceId, key -> new Object());
         BackupRecord created;
         synchronized (lock) {
+            // 恢复进行中禁止导出：此时导出的是一份"半恢复"的数据（ADR-0366）
+            repository.findFirstByInstanceIdAndRestoreStatusOrderByRestoreStartedAtDesc(
+                            instanceId, RestoreStatus.RESTORING)
+                    .ifPresent(restoring -> {
+                        if (isFresh(restoring.getRestoreStartedAt(), STALE_RESTORING_MINUTES)) {
+                            throw BusinessException.conflict(
+                                    "该实例正在恢复（备份 id=" + restoring.getId() + "），请稍后再试");
+                        }
+                        restoring.setRestoreStatus(RestoreStatus.FAILED);
+                        restoring.setRestoreMessage("恢复超时未完成，已标记为失败");
+                        restoring.setRestoreFinishedAt(LocalDateTime.now());
+                        repository.save(restoring);
+                    });
             repository.findFirstByInstanceIdAndStatusOrderByCreatedAtDesc(instanceId, BackupStatus.RUNNING)
                     .ifPresent(running -> {
                         if (running.getCreatedAt() != null
@@ -202,6 +219,17 @@ public class BackupService {
     }
 
     /** 从备份文件回放（先删同键再写入，保持幂等）。 */
+    /**
+     * 从备份文件回放（ADR-0366）。
+     *
+     * <p>三道约束：
+     * <ol>
+     *   <li><b>实例级互斥</b>：与导出共用同一把按实例锁，且恢复期间导出、另一次恢复都返回 409；</li>
+     *   <li><b>状态隔离</b>：恢复状态写入 {@code restoreStatus}，不污染备份记录自身的 {@code status}；</li>
+     *   <li><b>异常安全</b>：失败时标记 {@link RestoreStatus#FAILED} 并记录已回放键数，
+     *       绝不把失败的恢复标成 SUCCEEDED，也不把备份标成坏文件。</li>
+     * </ol>
+     */
     public long restore(Long recordId) {
         BackupRecord record = repository.findById(recordId)
                 .orElseThrow(() -> BusinessException.notFound("备份记录不存在：" + recordId));
@@ -213,6 +241,40 @@ public class BackupService {
         if (!Files.exists(file)) {
             throw BusinessException.notFound("备份文件已丢失：" + record.getFileName());
         }
+
+        Long instanceId = record.getInstanceId();
+        Object lock = instanceLocks.computeIfAbsent(instanceId, key -> new Object());
+        synchronized (lock) {
+            // 恢复进行中：拒绝第二次恢复
+            repository.findFirstByInstanceIdAndRestoreStatusOrderByRestoreStartedAtDesc(
+                            instanceId, RestoreStatus.RESTORING)
+                    .ifPresent(restoring -> {
+                        if (isFresh(restoring.getRestoreStartedAt(), STALE_RESTORING_MINUTES)) {
+                            throw BusinessException.conflict(
+                                    "该实例正在恢复（备份 id=" + restoring.getId() + "），请稍后再试");
+                        }
+                        restoring.setRestoreStatus(RestoreStatus.FAILED);
+                        restoring.setRestoreMessage("恢复超时未完成，已标记为失败");
+                        restoring.setRestoreFinishedAt(LocalDateTime.now());
+                        repository.save(restoring);
+                    });
+            // 备份进行中：恢复会与导出争用同一实例，返回 409
+            repository.findFirstByInstanceIdAndStatusOrderByCreatedAtDesc(instanceId, BackupStatus.RUNNING)
+                    .ifPresent(running -> {
+                        if (isFresh(running.getCreatedAt(), STALE_RUNNING_MINUTES)) {
+                            throw BusinessException.conflict(
+                                    "该实例正在备份（id=" + running.getId() + "），请稍后再试");
+                        }
+                    });
+            // 标记进入恢复：先落库再回放，保证其他请求能看到 RESTORING
+            record.setRestoreStatus(RestoreStatus.RESTORING);
+            record.setRestoreStartedAt(LocalDateTime.now());
+            record.setRestoreFinishedAt(null);
+            record.setRestoredKeys(0);
+            record.setRestoreMessage(null);
+            repository.save(record);
+        }
+
         long restored = 0;
         try {
             for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
@@ -223,14 +285,31 @@ public class BackupService {
                 restoreEntry(instance, entry);
                 restored++;
             }
-        } catch (IOException ex) {
+            finishRestore(record, RestoreStatus.SUCCEEDED, restored, null);
+            auditService.record("RESTORE_BACKUP", instance.getName(),
+                    "file=" + record.getFileName() + " restored=" + restored, true);
+            return restored;
+        } catch (Exception ex) {
+            // 异常安全：已写入的部分保留，状态明确标失败，并记录"恢复了多少"
+            String reason = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+            finishRestore(record, RestoreStatus.FAILED, restored, truncate(reason));
             auditService.record("RESTORE_BACKUP", instance.getName(),
                     "file=" + record.getFileName() + " restored=" + restored + " result=failed", false);
-            throw BusinessException.upstream("恢复失败：" + ex.getMessage());
+            throw BusinessException.upstream("恢复失败（已回放 " + restored + " 个键，数据可能不完整）：" + reason);
         }
-        auditService.record("RESTORE_BACKUP", instance.getName(),
-                "file=" + record.getFileName() + " restored=" + restored, true);
-        return restored;
+    }
+
+    /** 写终态并落库；无论成功失败都必须执行，避免实例停留在 RESTORING。 */
+    private void finishRestore(BackupRecord record, RestoreStatus status, long restored, String message) {
+        record.setRestoreStatus(status);
+        record.setRestoreFinishedAt(LocalDateTime.now());
+        record.setRestoredKeys(restored);
+        record.setRestoreMessage(message);
+        repository.save(record);
+    }
+
+    private static boolean isFresh(LocalDateTime time, long minutes) {
+        return time != null && time.isAfter(LocalDateTime.now().minusMinutes(minutes));
     }
 
     @SuppressWarnings("unchecked")
