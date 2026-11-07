@@ -137,6 +137,11 @@
 
 ### Added
 
+- **产品化路线图**：新增 `docs/planning/productization-roadmap.md`，按既有 RFC-0002、
+  能力分层基线（PRODUCT/EXPERIMENTAL/ADAPTER）、质量门禁与 GA 运维闭环，
+  给出 G0 单机生产就绪（含本次审计的恢复互斥/备份保留/密钥强制等 7 项）、
+  G1 Operator 真实动作、G2 真实对象存储、G3 能力转正、G4 发布五个阶段，
+  含关键路径、依赖、51–75 人日工作量与三项"不能靠改代码解决"的事项。
 - **项目缺口审计**：新增 `docs/review/project-gap-audit.md`，代码走查确认无 TODO 桩、
   UnsupportedOperationException 均为设计内显式失败；列出 6 项真实缺口——
   恢复无并发保护且无进行中状态、恢复非原子且无部分成功标记、备份无保留清理、
