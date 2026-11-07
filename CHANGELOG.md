@@ -137,6 +137,14 @@
 
 ### Added
 
+- **G0-1 验收证据（真实 MySQL + 跨实例 E2E）**：MySQL 8.0.39 上验证 V3 迁移
+  （5 列 + 索引 + 默认值，重复启动时 Flyway 报 up to date）；两台控制面实例
+  （8080/8081，同库）并发恢复同一备份，实测 200 + 409，恢复耗时 2,857 ms、
+  restoredKeys=20,520、DBSIZE 与键值核对一致；损坏备份文件返回 502 且
+  restoreStatus=FAILED、restoredKeys=100、备份状态仍 SUCCESS，修复后重试 200；
+  45 分钟僵尸 RESTORING 被标记 FAILED 后放行；恢复中导出（跨实例）返回 409。
+  证据归档 `docs/planning/g0-1-acceptance-evidence.md`，复现脚本
+  `console-web/scripts/g01-e2e-*.mjs`。
 - **G0-1 恢复互斥与恢复状态机（ADR-0366）**：新增 `RestoreStatus` 与
   `backup_record` 的恢复字段（V3 迁移），恢复与导出按实例互斥（恢复中导出 409、
   备份中恢复 409、二次恢复 409），恢复状态与备份状态分离，失败记 `FAILED` +
