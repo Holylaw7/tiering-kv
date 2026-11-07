@@ -137,6 +137,13 @@
 
 ### Added
 
+- **G0-5B-3 Tracing 有界缓冲与聚合缓存（F2，ADR-0372）**：`TraceExporter` 从无界
+  `CopyOnWriteArrayList` 改为容量 1024 的环形缓冲（可配置），满载淘汰最旧并累计
+  `dropped`；总量/均值/最大值改为增量累加，`snapshot()` 为 O(1)；`TracingMetricsRegistry`
+  不再遍历 Span，新增 `tracing_spans_total`/`tracing_dropped`/`tracing_capacity`。
+  新增 9 例测试（含 1 万次写入后容量 64 保持不超限、并发读写下 total/dropped 一致）。
+  内核全量回归 **15,143 例 0 失败 13 跳过**。`tracing_spans` 语义由"累计数"变为"保留数"，
+  已在 ADR-0372 记录并保留 total 字段。
 - **G0-5B-2 Gauge 刷新与写路径解耦（F3，ADR-0371）**：`onWriteCompleted()` 只更新
   3 个内存原子值，不再 `tablesSnapshot()` 与按表求和；新增独立 `StorageGaugeRefresher`
   （单线程、500ms、CAS 防重入、失败保留旧快照、幂等关闭）；`StorageMetrics` 增加不可变
