@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="640" viewBox="0 0 1000 640">
+<rect width="1000" height="640" fill="#FFFFFF"/>
+<text x="40" y="58" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="26" font-weight="700" fill="#202124">G0-5 INFO 指标治理进度</text>
+<text x="40" y="86" font-family="Segoe UI, Microsoft YaHei, sans-serif" font-size="14" fill="#626B78">结构性改造已完成 4/4；性能资格验证待补</text>
+<line x1="40" y1="104" x2="960" y2="104" stroke="#E5E7EB" stroke-width="1"/>
+<g font-family="Segoe UI, Microsoft YaHei, sans-serif">
+  <rect x="40" y="128" width="440" height="104" rx="10" fill="#F7FAF8" stroke="#CFE3D5" stroke-width="1"/>
+  <text x="62" y="162" font-size="17" font-weight="700" fill="#2F6B4F">F1 冷层计数快照化</text>
+  <text x="62" y="188" font-size="13" fill="#626B78">liveCount 读 volatile 快照；后台 1s 重算</text>
+  <text x="62" y="210" font-size="12" fill="#8A919B">ADR-0370 · 01716f9 · 回归 15,126</text>
+  <text x="430" y="162" font-size="14" font-weight="700" fill="#2F6B4F">已完成</text>
+
+  <rect x="520" y="128" width="440" height="104" rx="10" fill="#F7FAF8" stroke="#CFE3D5" stroke-width="1"/>
+  <text x="542" y="162" font-size="17" font-weight="700" fill="#2F6B4F">F3 Gauge 写路径解耦</text>
+  <text x="542" y="188" font-size="13" fill="#626B78">写路径只更新原子值；后台刷新 + 不可变快照</text>
+  <text x="542" y="210" font-size="12" fill="#8A919B">ADR-0371 · 5f6bd7f · 回归 15,134</text>
+  <text x="910" y="162" font-size="14" font-weight="700" fill="#2F6B4F">已完成</text>
+
+  <rect x="40" y="252" width="440" height="104" rx="10" fill="#F7FAF8" stroke="#CFE3D5" stroke-width="1"/>
+  <text x="62" y="286" font-size="17" font-weight="700" fill="#2F6B4F">F2 Tracing 有界缓冲</text>
+  <text x="62" y="312" font-size="13" fill="#626B78">容量 1024，淘汰最旧并计数；聚合 O(1)</text>
+  <text x="62" y="334" font-size="12" fill="#8A919B">ADR-0372 · 6d033c8 · 回归 15,143</text>
+  <text x="430" y="286" font-size="14" font-weight="700" fill="#2F6B4F">已完成</text>
+
+  <rect x="520" y="252" width="440" height="104" rx="10" fill="#F7FAF8" stroke="#CFE3D5" stroke-width="1"/>
+  <text x="542" y="286" font-size="17" font-weight="700" fill="#2F6B4F">F4 延迟统计去监视器化</text>
+  <text x="542" y="312" font-size="13" fill="#626B78">record 无锁；窗口轮转才加锁；语义不变</text>
+  <text x="542" y="334" font-size="12" fill="#8A919B">ADR-0373 · 807b653 · 回归 15,147</text>
+  <text x="910" y="286" font-size="14" font-weight="700" fill="#2F6B4F">已完成</text>
+
+  <rect x="40" y="392" width="920" height="132" rx="10" fill="#FFF9EC" stroke="#EBD9A8" stroke-width="1"/>
+  <text x="62" y="426" font-size="17" font-weight="700" fill="#8A6A1F">性能资格验证（未完成）</text>
+  <text x="62" y="456" font-size="13" fill="#6B5A33">F1：10 万冷键 INFO 延迟（启动扫描单独记录）　F3：GET/SET P99 与写入吞吐</text>
+  <text x="62" y="480" font-size="13" fill="#6B5A33">F2：Span 写入/淘汰延迟与内存曲线　F4：record 并发吞吐、snapshot 延迟、分配量</text>
+  <text x="62" y="504" font-size="13" fill="#6B5A33">全局：INFO p50/p95/p99 与 GET/SET p99——统一机器/JVM/数据规模，三轮对照</text>
+
+  <text x="40" y="570" font-size="13" fill="#626B78">结论：F1–F4 结构目标均已达成并有测试覆盖；性能资格未通过，G0-5 仍未关闭。</text>
+  <text x="40" y="596" font-size="12" fill="#8A919B">基线 807b653 · main = develop = origin · 内核全量回归 15,147 例 / 0 失败 / 13 跳过</text>
+</g>
+</svg>

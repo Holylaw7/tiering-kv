@@ -1,0 +1,11 @@
+{
+  "capturedAt": "2026-11-07 14:47:54",
+  "os": "Windows 11 (10.0.26200)",
+  "logicalCores": 20,
+  "memoryGB": 31.6,
+  "jdk": "Microsoft OpenJDK 21.0.12 LTS",
+  "javaHome": "E:\\Java\\microsoft-jdk-21",
+  "jvmArgs": "默认（无额外参数）",
+  "gitHead": "807b653",
+  "note": "CPU 型号与磁盘类型未采集，属于证据缺口"
+}
