@@ -53,14 +53,21 @@ public class BootstrapDataInitializer implements ApplicationRunner {
         if (userRepository.count() > 0) {
             return;
         }
+        String username = properties.getBootstrap().getAdminUsername();
+        String raw = properties.getBootstrap().getAdminPassword();
+        boolean customized = raw != null && !raw.isBlank();
         User admin = new User();
-        admin.setUsername("admin");
-        admin.setPassword(passwordEncoder.encode("admin123"));
+        admin.setUsername(username == null || username.isBlank() ? "admin" : username);
+        admin.setPassword(passwordEncoder.encode(customized ? raw : "admin123"));
         admin.setNickname("系统管理员");
         admin.setRole(Role.ADMIN);
         admin.setStatus(1);
         userRepository.save(admin);
-        log.warn("已创建默认管理员 admin / admin123，请立即登录后修改口令");
+        if (customized) {
+            log.info("已创建初始管理员 {}（口令来自配置，不打印）", admin.getUsername());
+        } else {
+            log.warn("已创建默认管理员 {} / admin123，请立即登录后修改口令", admin.getUsername());
+        }
     }
 
     /**
