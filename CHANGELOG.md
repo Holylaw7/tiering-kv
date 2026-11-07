@@ -137,6 +137,11 @@
 
 ### Added
 
+- **G0-5A INFO 指标代码路径审计**：新增 `docs/thesis/g0-5a-info-audit.md`，
+  逐段追踪 `INFO` 调用链（CommandRegistry → InfoCommand → ServerInfoProvider.render →
+  各 section → ObservabilityRegistry），静态统计 **84 个字段**（O(1) 71、O(n) 10、IO/阻塞 3–4），
+  确认 4 组 NEEDS_FIX：INFO 触发冷层全量扫描（cold.liveCount）、tracing 无界遍历、
+  写路径每命令 O(表数) 刷新 gauge、每命令加锁与每 INFO 直方图分配；本阶段未改任何代码。
 - **G0-4B 双实例容量竞争验证**：两个控制面进程（8080/8081）、两个独立数据目录的内核
   （6379/6383）、同一 MySQL 8.0.39 与同一备份路径；容量收紧到可用 150 MB、单次估算 100 MB。
   实测 A 导出 200 并预留 100 MB，B 并发导出 **507**，消息显示「已预留 100 MB」；
