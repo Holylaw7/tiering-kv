@@ -4,7 +4,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 
 /** 存储调度指标（ADR-0020）：内存 / 迁移 / Flush / 冷层。 */
-public final class StorageMetrics {
+public class StorageMetrics {
 
     // 内存（gauge，由控制器刷新）
     private final AtomicLong memoryUsedBytes = new AtomicLong();
@@ -22,11 +22,17 @@ public final class StorageMetrics {
     private final LongAdder flushBytes = new LongAdder();
     private final LongAdder flushLatencyNanos = new LongAdder();
 
-    // 冷层（gauge）
-    private final AtomicLong coldSstableCount = new AtomicLong();
-    private final AtomicLong coldDiskUsage = new AtomicLong();
-    /** 冷层表条目累加（含历史版本，用于键分布，非精确去重值）。 */
-    private final AtomicLong coldEntryCount = new AtomicLong();
+    /**
+     * 冷层与后台任务的不可变快照（F3，ADR-0371）。
+     *
+     * <p>整份由刷新线程构建后一次性发布，INFO 只读一次引用，避免读到"半新半旧"的组合。
+     */
+    public record ColdSnapshot(long sstableCount, long diskUsageBytes, long entryCount,
+                               long flushInProgress, long compactionInProgress,
+                               long refreshedAtMillis) {
+    }
+
+    private volatile ColdSnapshot coldGauges = new ColdSnapshot(0, 0, 0, 0, 0, 0);
 
     // 后台任务进行中标记（TD-097）
     private final AtomicLong flushInProgress = new AtomicLong();
@@ -64,14 +70,29 @@ public final class StorageMetrics {
         flushLatencyNanos.add(latencyNanos);
     }
 
+    /** 兼容旧调用：只替换记录中的对应字段，仍保持整份引用替换。 */
     public void setColdGauges(long sstableCount, long diskUsage) {
-        coldSstableCount.set(sstableCount);
-        coldDiskUsage.set(diskUsage);
+        ColdSnapshot old = coldGauges;
+        coldGauges = new ColdSnapshot(sstableCount, diskUsage, old.entryCount(),
+                old.flushInProgress(), old.compactionInProgress(), System.currentTimeMillis());
+    }
+
+    /** 一次性发布完整冷层快照（刷新线程调用）。 */
+    public void publishColdSnapshot(long sstableCount, long diskUsage, long entryCount,
+                                    long flushInProgress, long compactionInProgress) {
+        coldGauges = new ColdSnapshot(sstableCount, diskUsage, entryCount,
+                flushInProgress, compactionInProgress, System.currentTimeMillis());
+    }
+
+    public ColdSnapshot coldSnapshot() {
+        return coldGauges;
     }
 
     /** 记录冷层表条目累加值（TD-098）。 */
     public void setColdEntryCount(long entries) {
-        coldEntryCount.set(entries);
+        ColdSnapshot old = coldGauges;
+        coldGauges = new ColdSnapshot(old.sstableCount(), old.diskUsageBytes(), entries,
+                old.flushInProgress(), old.compactionInProgress(), System.currentTimeMillis());
     }
 
     /** 记录一次 SSTable 合并（输入/输出字节 + 耗时）。 */
@@ -83,11 +104,15 @@ public final class StorageMetrics {
     }
 
     public void setFlushInProgress(boolean inProgress) {
-        flushInProgress.set(inProgress ? 1 : 0);
+        ColdSnapshot old = coldGauges;
+        coldGauges = new ColdSnapshot(old.sstableCount(), old.diskUsageBytes(), old.entryCount(),
+                inProgress ? 1 : 0, old.compactionInProgress(), System.currentTimeMillis());
     }
 
     public void setCompactionInProgress(boolean inProgress) {
-        compactionInProgress.set(inProgress ? 1 : 0);
+        ColdSnapshot old = coldGauges;
+        coldGauges = new ColdSnapshot(old.sstableCount(), old.diskUsageBytes(), old.entryCount(),
+                old.flushInProgress(), inProgress ? 1 : 0, System.currentTimeMillis());
     }
 
     public long pendingMigrationCount() {
@@ -95,15 +120,16 @@ public final class StorageMetrics {
     }
 
     public Snapshot snapshot() {
+        ColdSnapshot cold = coldGauges;
         return new Snapshot(
                 memoryUsedBytes.get(), memoryMaxBytes.get(), memoryEntryCount.get(),
                 migrationPending.get(), migrationSuccess.sum(), migrationFailed.sum(),
                 migrationLatencyNanos.sum(),
                 flushCount.sum(), flushBytes.sum(), flushLatencyNanos.sum(),
-                coldSstableCount.get(), coldDiskUsage.get(), coldEntryCount.get(),
+                cold.sstableCount(), cold.diskUsageBytes(), cold.entryCount(),
                 compactionCount.sum(), compactionInputBytes.sum(),
                 compactionOutputBytes.sum(), compactionLatencyNanos.sum(),
-                flushInProgress.get(), compactionInProgress.get());
+                cold.flushInProgress(), cold.compactionInProgress());
     }
 
     public record Snapshot(

@@ -42,6 +42,8 @@ public final class TieringController implements AutoCloseable {
     private final FlushScheduler flushScheduler;
     private final MigrationScheduler migrationScheduler;
     private final BackPressureController backpressure;
+    /** F3：冷层 gauge 由独立线程刷新，写路径不再复制表清单。 */
+    private final StorageGaugeRefresher gaugeRefresher;
 
     public TieringController(
             Config config,
@@ -66,12 +68,15 @@ public final class TieringController implements AutoCloseable {
         cold.setCompactionListener(this::onCompaction);
         this.backpressure = new BackPressureController(
                 watermark, memory, memTable::size, metrics::pendingMigrationCount);
+        this.gaugeRefresher = new StorageGaugeRefresher(cold, metrics, flushScheduler::inProgress);
+        this.gaugeRefresher.start();
     }
 
     /** Compaction 事件 → StorageMetrics（TD-096）。 */
     private void onCompaction(long inputBytes, long outputBytes, long latencyNanos) {
         metrics.recordCompaction(inputBytes, outputBytes, latencyNanos);
-        refreshGauges();
+        // F3：合并事件只请求一次后台刷新，不在事件线程里复制表清单
+        gaugeRefresher.requestRefresh();
     }
 
     /** 启动恢复：重放未完成迁移；水位高时立即调度 Flush。 */
@@ -98,14 +103,9 @@ public final class TieringController implements AutoCloseable {
      * （表数量级个位数，持锁时间微秒级），**不做磁盘目录扫描**。
      */
     public void refreshGauges() {
+        // 只做 O(1) 的内存 gauge；冷层统计交给 StorageGaugeRefresher
         metrics.setMemoryGauges(memory.usedBytes(), memory.maxBytes(), memTable.size());
-        var tables = cold.tablesSnapshot();
-        long sstableCount = tables.size();
-        long diskUsage = tables.stream().mapToLong(SSTableMeta::fileSize).sum();
-        metrics.setColdGauges(sstableCount, diskUsage);
-        metrics.setColdEntryCount(tables.stream().mapToLong(SSTableMeta::entryCount).sum());
-        metrics.setFlushInProgress(flushScheduler.inProgress());
-        metrics.setCompactionInProgress(cold.isCompacting());
+        gaugeRefresher.requestRefresh();
         lastRefreshNanos.set(System.nanoTime());
     }
 
@@ -121,7 +121,8 @@ public final class TieringController implements AutoCloseable {
 
     /** 写路径完成回调：刷新指标并检查水位（触发异步 Flush）。 */
     public void onWriteCompleted() {
-        refreshGauges();
+        // F3：写路径只更新 3 个原子值，不做表清单复制与求和
+        metrics.setMemoryGauges(memory.usedBytes(), memory.maxBytes(), memTable.size());
         if (watermark.isFlushNeeded(memory.usedBytes(), memory.maxBytes(), memTable.size())) {
             flushScheduler.scheduleFlush();
         }
@@ -156,8 +157,14 @@ public final class TieringController implements AutoCloseable {
         return migrationPool;
     }
 
+    /** 供测试/诊断：后台 gauge 刷新器。 */
+    public StorageGaugeRefresher gaugeRefresher() {
+        return gaugeRefresher;
+    }
+
     @Override
     public void close() throws IOException {
+        gaugeRefresher.close();
         migrationScheduler.close();
         flushPool.close();
         migrationPool.close();

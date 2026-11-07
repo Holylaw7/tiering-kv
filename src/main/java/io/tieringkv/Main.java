@@ -126,7 +126,7 @@ public final class Main {
                 metrics, memoryManager, syncStorage::size,
                 config.server().port(), ServerVersion.current(),
                 tiering.metrics(), blockCache.statistics()::snapshot,
-                tiering::refreshGaugesThrottled);
+                null); // F3：INFO 不触发刷新、不等待刷新，只读最近一次快照
         Map<String, Supplier<String>> infoSections =
                 new HashMap<>(observability.infoSections());
         infoSections.putAll(serverInfo.sections());

@@ -319,10 +319,19 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
         }
     }
 
+    private final java.util.concurrent.atomic.AtomicLong tablesSnapshotCalls =
+            new java.util.concurrent.atomic.AtomicLong();
+
     public List<SSTableMeta> tablesSnapshot() {
+        tablesSnapshotCalls.incrementAndGet();
         synchronized (lock) {
             return List.copyOf(tables);
         }
+    }
+
+    /** 诊断用：tablesSnapshot 被调用的次数（验证写路径不再触发全量复制）。 */
+    public long tablesSnapshotCalls() {
+        return tablesSnapshotCalls.get();
     }
 
     CompactionManager compactionManager() {

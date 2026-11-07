@@ -39,6 +39,8 @@ class TieringControllerTest {
                 storage.put(("k" + i).getBytes(StandardCharsets.UTF_8), new byte[200]);
             }
             assertThat(controller.flushPool().awaitIdle(10_000)).isTrue();
+            // F3：冷层 gauge 由后台刷新，断言前显式刷新一次
+            controller.gaugeRefresher().refreshOnce();
 
             assertThat(memTable.size()).isLessThan(30);
             assertThat(cold.tablesSnapshot()).isNotEmpty();
