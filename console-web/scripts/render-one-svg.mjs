@@ -1,0 +1,10 @@
+import { chromium } from 'playwright';
+import fs from 'node:fs';
+const [,, svgPath, pngPath] = process.argv;
+const browser = await chromium.launch();
+const page = await browser.newPage({ viewport: { width: 1000, height: 640 }, deviceScaleFactor: 2 });
+const svg = fs.readFileSync(svgPath, 'utf8');
+await page.setContent('<html><body style="margin:0">' + svg + '</body></html>');
+await page.screenshot({ path: pngPath, fullPage: true });
+await browser.close();
+console.log('rendered', pngPath);
