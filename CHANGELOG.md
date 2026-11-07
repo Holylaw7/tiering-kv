@@ -137,6 +137,11 @@
 
 ### Added
 
+- **项目缺口审计**：新增 `docs/review/project-gap-audit.md`，代码走查确认无 TODO 桩、
+  UnsupportedOperationException 均为设计内显式失败；列出 6 项真实缺口——
+  恢复无并发保护且无进行中状态、恢复非原子且无部分成功标记、备份无保留清理、
+  JWT 生产默认密钥、备份目录无磁盘水位检查、/actuator/info 匿名可读，
+  并给出三项最小收尾包（恢复互斥、备份保留、密钥强制）。
 - **正式论文 DOCX（按学校模板）**：新增 `front-matter.md`（中英文摘要与关键词）、
   `preface.md`（前言，不编号）、`acknowledgments.md`（致谢）、`references-school.md`
   （学校简化格式：无 [J]/[C]、无 DOI、无页码），并生成
