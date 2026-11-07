@@ -137,6 +137,13 @@
 
 ### Added
 
+- **G0-3 生产配置安全启动门禁（ADR-0368）**：新增 `ProductionConfigGuard`（仅 prod/production），
+  在 bean 初始化阶段校验并按 FATAL/WARN/INFO 分级：JWT 密钥（缺失/空白/默认值/<32 字节/
+  低多样性/示例占位）、数据库口令（空/示例弱口令）、初始管理员口令（未配置/admin123/<12 位）
+  为 FATAL；root 账户与本机 URL 为 WARN。日志只输出配置项名称与原因。新增
+  `console.bootstrap.admin-password/username`，首次初始化管理员口令改由配置提供且不再打印。
+  8 例单测 + 四个真实启动场景：prod 缺密钥/默认密钥均 EXIT=1，prod 合法配置启动且
+  health 200，dev 默认配置不受影响；日志字符串检索未发现任何密钥或口令。
 - **G0-2 备份保留策略与安全删除（ADR-0367）**：新增 `BackupRetentionService`——
   按实例保留最近 N 个成功备份（实例可覆盖，默认 10），永远保留最近一个可恢复点，
   FAILED 记录按天数清理，RUNNING/RESTORING 受保护；删除走"数据库认领 → 删文件 →

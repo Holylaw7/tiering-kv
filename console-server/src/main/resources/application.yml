@@ -44,6 +44,10 @@ spring:
     exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
 
 console:
+  bootstrap:
+    # 生产必须配置（ADR-0368）；dev/test 留空则使用 admin/admin123
+    admin-password: ${CONSOLE_ADMIN_PASSWORD:}
+    admin-username: ${CONSOLE_ADMIN_USERNAME:admin}
   jwt:
     # 生产环境必须通过环境变量覆盖
     secret: ${CONSOLE_JWT_SECRET:tiering-kv-console-dev-secret-key-change-me-please-0123456789}

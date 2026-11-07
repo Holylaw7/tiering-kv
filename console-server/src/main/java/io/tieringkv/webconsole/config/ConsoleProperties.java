@@ -43,6 +43,10 @@ public class ConsoleProperties {
     /** 启动引导：{@code name@host:port}，为空则沿用数据库中的实例。 */
     public static class Bootstrap {
         private String instance;
+        /** 生产环境必须显式提供的初始管理员口令（ADR-0368）；dev/test 为空时用默认值。 */
+        private String adminPassword;
+        /** 初始管理员用户名，默认 admin。 */
+        private String adminUsername = "admin";
 
         public String getInstance() {
             return instance;
@@ -50,6 +54,22 @@ public class ConsoleProperties {
 
         public void setInstance(String instance) {
             this.instance = instance;
+        }
+
+        public String getAdminPassword() {
+            return adminPassword;
+        }
+
+        public void setAdminPassword(String adminPassword) {
+            this.adminPassword = adminPassword;
+        }
+
+        public String getAdminUsername() {
+            return adminUsername;
+        }
+
+        public void setAdminUsername(String adminUsername) {
+            this.adminUsername = adminUsername;
         }
     }
 
