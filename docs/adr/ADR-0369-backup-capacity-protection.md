@@ -56,7 +56,7 @@
 | V5 迁移 | 两张新表创建成功 |
 | 正常导出 | 预留 16 MB → 实际 4.5 MB → RELEASED，无 .tmp 残留 |
 | 空间不足 | **507 + 50700**，消息含可用/预留/保留/需求四项数值 |
-| 双实例容量竞争 | **未触发**（被备份并发守卫先拦），需可控磁盘补做 |
-| 真实 ENOSPC | **未验证**（Windows 无可靠受限文件系统） |
+| 双实例容量竞争 | **未完成**：第二实例受阻（6379 端口被占、(host,port) 唯一约束），待补 |
+| 真实 ENOSPC | **已验证**：WSL2 + tmpfs 2 MB，导出 FAILED「No space left on device」，无 .tmp 残留，预留 RELEASED；扩容后重试 SUCCESS |
 
 证据：`docs/planning/g0-4-acceptance-evidence.md`；单测 7 例；控制面全量 124 例通过。

@@ -1,0 +1,1 @@
+mkdir -p /mnt/tiny; mount -t tmpfs -o size=2m tmpfs /mnt/tiny 2>/dev/null || true; df -h /mnt/tiny | tail -1; echo "HOSTIP=$(ip route show default | awk "{print \$3}")"; echo "MYSQL_TEST=$( (echo > /dev/tcp/$(ip route show default | awk "{print \$3}")/3307) >/dev/null 2>&1 && echo open || echo closed)"
