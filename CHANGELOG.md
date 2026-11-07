@@ -137,6 +137,12 @@
 
 ### Added
 
+- **G0-5B-2 Gauge 刷新与写路径解耦（F3，ADR-0371）**：`onWriteCompleted()` 只更新
+  3 个内存原子值，不再 `tablesSnapshot()` 与按表求和；新增独立 `StorageGaugeRefresher`
+  （单线程、500ms、CAS 防重入、失败保留旧快照、幂等关闭）；`StorageMetrics` 增加不可变
+  `ColdSnapshot` 整份发布，INFO 一次读取不会读到半新半旧；`Main` 中 INFO 的刷新钩子改为
+  `null`（不触发、不等待）。新增 8 例测试（含 1000 次写路径调用后 tablesSnapshot 计数为 0）。
+  内核全量回归 **15,134 例 0 失败 13 跳过**。未做吞吐/P99 前后对照。
 - **G0-5B-1 冷层计数快照化（F1，ADR-0370）**：`ColdStorageEngine.liveCount()` 改为读
   `volatile` 快照，INFO/DBSIZE 不再在请求线程触发冷层全量扫描；写入只置脏，由
   1 秒周期的守护线程重算并原子发布（单线程、失败保留旧快照），构造时同步算一次。
