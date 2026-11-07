@@ -137,6 +137,12 @@
 
 ### Added
 
+- **G0-4A 真实 ENOSPC 验证**：在 WSL2 + tmpfs 2 MB 受限文件系统上运行同一 fat jar
+  （控制面在 WSL，数据源为 Windows MySQL 8.0.39 跨边界），导出触发**真实 ENOSPC**：
+  记录 FAILED「No space left on device」、临时文件清理干净、预留 RELEASED（used=0）；
+  扩容到 64 MB 后重试 SUCCESS（3,716,478 B）。G0-4B 双实例竞争未完成：
+  内核端口来自配置文件、6379 被残留进程占用、db_instance 对 (host,port) 唯一，
+  无法在单机登记第二个可达实例，已如实记录为待补。
 - **G0-4 备份容量保护与预留（ADR-0369）**：新增 `BackupCapacityService`——
   导出前按"文件系统可用空间 − 已预留 − 最小保留余量"判定，不足直接 **507**；
   预留写入 `backup_reservation`，用 `backup_capacity` 行级悲观锁串行化同存储路径判定；
