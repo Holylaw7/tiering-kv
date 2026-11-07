@@ -24,6 +24,11 @@ public class BusinessException extends RuntimeException {
         return new BusinessException(409, 40900, message);
     }
 
+    /** 存储容量不足（507）：备份预检不通过。 */
+    public static BusinessException insufficientStorage(String message) {
+        return new BusinessException(507, 50700, message);
+    }
+
     public static BusinessException unauthorized(String message) {
         return new BusinessException(401, 40100, message);
     }

@@ -157,6 +157,16 @@ public class ConsoleProperties {
             this.dir = dir;
         }
 
+        private Capacity capacity = new Capacity();
+
+        public Capacity getCapacity() {
+            return capacity;
+        }
+
+        public void setCapacity(Capacity capacity) {
+            this.capacity = capacity;
+        }
+
         public Retention getRetention() {
             return retention;
         }
@@ -164,6 +174,23 @@ public class ConsoleProperties {
         public void setRetention(Retention retention) {
             this.retention = retention;
         }
+    }
+
+    /** 备份容量保护配置（ADR-0369）。 */
+    public static class Capacity {
+        /** 导出后必须保留的最小可用空间。 */
+        private long minFreeBytes = 512L * 1024 * 1024;
+        /** 无历史备份时的估算下限。 */
+        private long estimateFloorBytes = 16L * 1024 * 1024;
+        /** 有历史备份时按最近一次大小乘该系数估算。 */
+        private double estimateFactor = 1.25;
+
+        public long getMinFreeBytes() { return minFreeBytes; }
+        public void setMinFreeBytes(long minFreeBytes) { this.minFreeBytes = minFreeBytes; }
+        public long getEstimateFloorBytes() { return estimateFloorBytes; }
+        public void setEstimateFloorBytes(long estimateFloorBytes) { this.estimateFloorBytes = estimateFloorBytes; }
+        public double getEstimateFactor() { return estimateFactor; }
+        public void setEstimateFactor(double estimateFactor) { this.estimateFactor = estimateFactor; }
     }
 
     /**
