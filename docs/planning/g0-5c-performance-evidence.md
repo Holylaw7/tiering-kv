@@ -192,3 +192,53 @@ dbsize           = 100000
 
 > 我倾向 B：它保持默认水位与默认 flush 配置，只是把写入粒度调大，最接近"真实大对象负载"。
 > 但这需要你确认——因为它是"用负载形状去适配触发条件"，和 A 一样有解释力上的代价。
+## 9. G0-5C-2B：单次大对象写入触发验证（部分成功）
+
+### 9.1 调用顺序审计
+
+```text
+TrackingStorageEngine.put()
+  → delegate.put(...)             // MemTable 计入 usedBytes
+  → evictionManager.maybeEvict()  // 判据 usedBytes > maxBytes
+  （返回后）TieringStorageEngine.put() → onWriteCompleted() → 可能 scheduleFlush()
+```
+
+证据：`TrackingStorageEngine.java:31-36`、`TieringStorageEngine.java:25`。
+驱逐检查在同一次写入中先于 flush 调度，**关键在于单次写入能否把 usedBytes 顶过 maxBytes**。
+
+### 9.2 实验数据（memory.limit = 64 MB，默认水位）
+
+| 阶段 | memtable | flush | cold 表 | migration 成功 |
+| --- | --- | --- | --- | --- |
+| 基础填充 184,000 × 200 B | 50.5 MB | 0 | 0 | 0 |
+| **单次 SET 25 MB（148 ms）** | **75.5 MB > 64 MB** | 1 | 0 | **1** |
+| 追加 7 × 20 MB | 20.0 MB | 3 | 0 | 1 |
+
+大对象 `GET` 读回 25,008,582 字节正确；`DBSIZE = 184,008`。
+
+### 9.3 解释
+
+- 驱逐**确实被触发**（内存越过 maxBytes，`migration_success=1`）；
+- 但**没有冷层 SSTable**：迁移条目应该落在冷层 pending 缓冲，未达落表阈值（默认 4 MB）；
+- 后续 20 MB 写入再次被 flush 抢先，迁移次数没有增加；
+- `INFO` 未暴露冷层 pending 条目数，导致"迁移成功但冷表为 0"这一中间状态只能间接推断。
+
+### 9.4 判定
+
+| 条件 | 结果 |
+| --- | --- |
+| usedBytes 越过 maxBytes | ✅ 75.5 > 64 MB |
+| EvictionManager 触发 | ✅ 由 migOk=1 反推 |
+| Migration 成功 | ✅ 1 次 |
+| 冷层 SSTable > 0 | ❌ 0 |
+| 冷层磁盘占用 > 0 | ❌ 0 |
+| 目标 Value 可读回 | ✅ |
+| Flush/Migration 稳定 | ✅ 采样 6 秒内不变 |
+
+**触发机制：PASS（部分）；冷层数据集资格：NOT QUALIFIED。**
+
+### 9.5 剩余问题
+
+1. 冷层 pending 落表阈值与所需迁移量未验证；
+2. `INFO` 缺冷层 pending 指标，中间状态不可直接观测；
+3. 大 Value 属于特殊负载，即便后续构造出 100k 冷键，也不能外推为"小 Value 写入可触发冷热迁移"。
