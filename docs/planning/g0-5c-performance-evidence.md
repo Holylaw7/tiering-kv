@@ -106,3 +106,35 @@ SET Before 0.1895/0.2567、After 0.1798/0.2565；INFO p99 Before 0.6108、After 
 - 就"GET/SET 是否出现可复现回归"这一问题：**未复现，暂不认定回归**；
 - 就 G0-5C 整体资格：**仍为 NOT QUALIFIED**——冷键场景、F2/F3/F4 专项、环境隔离均未完成；
 - 冒烟数据与本次复测数据全部保留在 `raw/`，不删除不利结果。
+## 7. F1 冷层专项：资格检查未通过（NOT QUALIFIED）
+
+尝试构造 100,000 个冷层逻辑 Key（`docs/benchmarks/g0-5/scripts/f1-cold.mjs`），配置 `memory.limit=4 MB`，
+写入 100,000 × 40 B，等待 flush 与迁移稳定。
+
+### 实测资格数据（After `807b653`）
+
+```text
+coldSstableCount = 0      ← 冷层没有表
+flushCount       = 3      ← 发生了 3 次 flush
+coldDiskBytes    = 0
+dbsize           = 100000
+```
+
+### 结论
+
+- **资格检查不通过**：`coldSstableCount = 0` 且 `coldDiskBytes = 0`，100,000 个 Key 并没有落进冷层；
+  它们仍在内存/WAL 路径上（`DBSIZE` 读到 100000 只说明逻辑键在，不说明在冷层）；
+- 按任务书要求，**该轮数据作废，没有用于对比**；INFO/DBSIZE 采样虽已跑出（INFO p50 0.24–0.29 ms），
+  但**不具备 F1 解释力**，不写入结论；
+- 未通过的原因（假设，待验证）：flush 只把 MemTable 写成"热层磁盘表"，冷层表要由迁移写入，
+  而迁移由 `EvictionManager` 在内存临界水位时触发；4 MB 限额下 flush 持续把内存压低，
+  从未触及临界水位，因此没有迁移发生。
+
+### 下一步（需要额外构造实验）
+
+1. 提高 `memory.limit`（例如 64 MB）并写入 ≥ 水位的数据，使内存越过临界水位触发 `EvictionManager` 迁移；
+2. 或降低 `tiering.critical-watermark`（如 0.10）让小数据量也能触发迁移；
+3. 构造后先验 `tiering_cold_sstable_count > 0` 且 `tiering_cold_disk_usage_bytes > 0`，再开始采样；
+4. 启动成本与 INFO/DBSIZE 采样脚本已就绪，可在资格通过后直接复用。
+
+**F1 性能资格：NOT QUALIFIED（未取得冷层数据）。**
