@@ -205,6 +205,8 @@ public final class ServerInfoProvider {
                 + "tiering_cold_share:" + String.format(Locale.ROOT, "%.4f", coldShare) + "\r\n"
                 + "tiering_hot_keys:" + snapshot.memoryEntryCount() + "\r\n"
                 + "tiering_cold_entries:" + snapshot.coldEntryCount() + "\r\n"
+                + "tiering_cold_pending_entries:" + coldPendingEntries() + "\r\n"
+                + "tiering_cold_pending_bytes:" + coldPendingBytes() + "\r\n"
                 + "tiering_hot_key_share:" + String.format(Locale.ROOT, "%.4f", hotKeyShare(snapshot)) + "\r\n"
                 + "tiering_flush_count:" + flushTotal + "\r\n"
                 + "tiering_flush_bytes:" + snapshot.flushBytes() + "\r\n"
@@ -225,6 +227,17 @@ public final class ServerInfoProvider {
                 + "tiering_compaction_in_progress:" + snapshot.compactionInProgress() + "\r\n"
                 + "tiering_block_cache_hit_rate:"
                 + String.format(Locale.ROOT, "%.4f", cache.hitRate()) + "\r\n";
+    }
+
+    /** 冷层 pending 条目数（F1/B1 观测盲区补充）；快照缺失时返回 0。 */
+    private long coldPendingEntries() {
+        StorageMetrics.Snapshot snapshot = storageSnapshot;
+        return snapshot == null ? 0 : snapshot.coldPendingEntries();
+    }
+
+    private long coldPendingBytes() {
+        StorageMetrics.Snapshot snapshot = storageSnapshot;
+        return snapshot == null ? 0 : snapshot.coldPendingBytes();
     }
 
     /** 热层键占（热 + 冷表条目）的比例，用于前端键分布条。 */

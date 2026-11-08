@@ -103,7 +103,8 @@ public final class StorageGaugeRefresher implements AutoCloseable {
                 entries += meta.entryCount();
             }
             metrics.publishColdSnapshot(count, diskUsage, entries,
-                    flushInProgress.getAsBoolean() ? 1 : 0, cold.isCompacting() ? 1 : 0);
+                    flushInProgress.getAsBoolean() ? 1 : 0, cold.isCompacting() ? 1 : 0,
+                    cold.pendingCount(), cold.pendingByteSize());
             refreshCount.incrementAndGet();
         } catch (RuntimeException ex) {
             // 失败保留上一份有效快照，并计数，不静默

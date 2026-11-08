@@ -79,7 +79,8 @@ class StorageGaugeRefresherTest {
         try (ColdStorageEngine cold = engine()) {
             StorageMetrics failing = new StorageMetrics() {
                 @Override
-                public void publishColdSnapshot(long a, long b, long c, long d, long e) {
+                public void publishColdSnapshot(long a, long b, long c, long d, long e,
+                                                long f, long g) {
                     throw new IllegalStateException("publish failed");
                 }
             };
