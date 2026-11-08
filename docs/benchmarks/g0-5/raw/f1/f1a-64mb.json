@@ -1,0 +1,132 @@
+{
+  "label": "f1a-64mb",
+  "port": 6379,
+  "keys": 100000,
+  "valueSize": 800,
+  "seedMs": 6579,
+  "dbsize": 100000,
+  "readBackOk": 200,
+  "final": {
+    "mem": 29324448,
+    "coldTables": 0,
+    "coldBytes": 0,
+    "migPending": 0,
+    "migOk": 0,
+    "migFail": 0,
+    "flush": 1,
+    "coldEntries": 0
+  },
+  "timeline": [
+    {
+      "sec": 0,
+      "written": 1000,
+      "mem": 871890,
+      "coldTables": 0,
+      "coldBytes": 0,
+      "migPending": 0,
+      "migOk": 0,
+      "migFail": 0,
+      "flush": 0
+    },
+    {
+      "sec": 0,
+      "written": 11000,
+      "mem": 9602890,
+      "coldTables": 0,
+      "coldBytes": 0,
+      "migPending": 0,
+      "migOk": 0,
+      "migFail": 0,
+      "flush": 0
+    },
+    {
+      "sec": 0,
+      "written": 21000,
+      "mem": 18342890,
+      "coldTables": 0,
+      "coldBytes": 0,
+      "migPending": 0,
+      "migOk": 0,
+      "migFail": 0,
+      "flush": 0
+    },
+    {
+      "sec": 1,
+      "written": 31000,
+      "mem": 27082890,
+      "coldTables": 0,
+      "coldBytes": 0,
+      "migPending": 0,
+      "migOk": 0,
+      "migFail": 0,
+      "flush": 0
+    },
+    {
+      "sec": 1,
+      "written": 41000,
+      "mem": 35822890,
+      "coldTables": 0,
+      "coldBytes": 0,
+      "migPending": 0,
+      "migOk": 0,
+      "migFail": 0,
+      "flush": 0
+    },
+    {
+      "sec": 1,
+      "written": 51000,
+      "mem": 44562890,
+      "coldTables": 0,
+      "coldBytes": 0,
+      "migPending": 0,
+      "migOk": 0,
+      "migFail": 0,
+      "flush": 0
+    },
+    {
+      "sec": 1,
+      "written": 61000,
+      "mem": 53302890,
+      "coldTables": 0,
+      "coldBytes": 0,
+      "migPending": 0,
+      "migOk": 0,
+      "migFail": 0,
+      "flush": 0
+    },
+    {
+      "sec": 1,
+      "written": 71000,
+      "mem": 62042890,
+      "coldTables": 0,
+      "coldBytes": 0,
+      "migPending": 0,
+      "migOk": 0,
+      "migFail": 0,
+      "flush": 0
+    },
+    {
+      "sec": 1,
+      "written": 81000,
+      "mem": 12718448,
+      "coldTables": 0,
+      "coldBytes": 0,
+      "migPending": 0,
+      "migOk": 0,
+      "migFail": 0,
+      "flush": 1
+    },
+    {
+      "sec": 1,
+      "written": 91000,
+      "mem": 21458448,
+      "coldTables": 0,
+      "coldBytes": 0,
+      "migPending": 0,
+      "migOk": 0,
+      "migFail": 0,
+      "flush": 1
+    }
+  ],
+  "at": "2026-11-08T12:04:11.551Z"
+}

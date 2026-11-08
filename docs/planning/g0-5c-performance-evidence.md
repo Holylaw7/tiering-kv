@@ -138,3 +138,57 @@ dbsize           = 100000
 4. 启动成本与 INFO/DBSIZE 采样脚本已就绪，可在资格通过后直接复用。
 
 **F1 性能资格：NOT QUALIFIED（未取得冷层数据）。**
+## 8. F1 冷层构造：64 MB 方案同样未触发（G0-5C-2A）
+
+### 8.1 配置与数据
+
+`memory.limit = 64 MB`，默认 `tiering` 水位（70/85/95），分两阶段写入：
+
+- 阶段一：100,000 × 800 B（批量 1,000），耗时约 2 s；
+- 阶段二（突发）：追加 200,000 × 800 B（批量 20,000）。
+
+### 8.2 观测（阶段一的时间线，摘自 `raw/f1/f1a-64mb.json`）
+
+| 已写键 | memtable | flush | cold 表 | migration 成功 |
+| --- | --- | --- | --- | --- |
+| 11,000 | 9.2 MB | 0 | 0 | 0 |
+| 51,000 | 42.5 MB | 0 | 0 | 0 |
+| 71,000 | **59.2 MB** | 0 | 0 | 0 |
+| 81,000 | 12.1 MB | **1** | 0 | 0 |
+| 100,000 | 20.5 MB | 1 | 0 | 0 |
+
+阶段二结束后终态：`mem=30.2 MB`、`flush=4`、`coldTables=0`、`coldBytes=0`、`migOk=0`、`migFail=0`、`DBSIZE=100,000+`（阶段二前缀不同）。
+
+### 8.3 触发机制分析（代码证据）
+
+- 驱逐入口：`TrackingStorageEngine:35` 每次写后调用 `evictionManager.maybeEvict()`；
+- 触发条件：`EvictionManager:106` → `memoryManager.isOverLimit()`；
+- 判据：`MemoryManager:101-107` → **`usedBytes > maxBytes`**（或堆占用超过 -Xmx 的 90%）；
+- 抑制因素：内存达到 **85% 高水位**时 `FlushScheduler` 先触发 flush，把 memtable 清空，
+  因此 `usedBytes` 在触及 100% 之前就被压回去 —— 观测到 59.2 MB 后立刻掉到 12.1 MB。
+
+**结论：在默认水位 + 纯 SET 负载下，flush 会先于驱逐发生，`EvictionManager` 永远不会被触发，冷层永远不会产生数据。**
+这不是配置不够大，而是两条路径的触发顺序决定的。
+
+### 8.4 资格判定
+
+| 条件 | 结果 |
+| --- | --- |
+| 冷层 SSTable > 0 | ❌ 0 |
+| 冷层磁盘占用 > 0 | ❌ 0 |
+| 100,000 逻辑 Key 可读 | ✅ DBSIZE=100,000，抽样 200 个 GET 值长度正确 |
+| 证明 EvictionManager 触发过迁移 | ❌ `migOk=0`、`migPending=0` |
+| flush/migration 稳定 | ✅ flush=4 后不再增长 |
+
+**F1 冷层资格：NOT QUALIFIED（第二次尝试）。** 两轮构造脚本（`f1-construct.mjs`、`f1-burst.mjs`）与原始数据均已保留。
+
+### 8.5 下一步（需要先决策，不宜继续盲试）
+
+| 方案 | 代价 | 说明 |
+| --- | --- | --- |
+| A. 关闭 flush（把 high-watermark 设为 ≥1.0） | 改变默认行为 | 让内存真正越过 limit，由驱逐接管；但测的已不是默认配置 |
+| B. 单条写入超大 value（如 8 MB） | 仍是正常写入路径 | 单次写入即可让 `usedBytes` 跃过 limit，可能先于 flush 触发驱逐 |
+| C. 用测试代码直接调用 `EvictionManager.maybeEvict()` | 非端到端 | 只能证明迁移链路可用，不能证明"正常路径会产生冷层" |
+
+> 我倾向 B：它保持默认水位与默认 flush 配置，只是把写入粒度调大，最接近"真实大对象负载"。
+> 但这需要你确认——因为它是"用负载形状去适配触发条件"，和 A 一样有解释力上的代价。
