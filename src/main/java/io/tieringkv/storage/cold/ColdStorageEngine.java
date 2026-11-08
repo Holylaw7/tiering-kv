@@ -322,6 +322,20 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
     private final java.util.concurrent.atomic.AtomicLong tablesSnapshotCalls =
             new java.util.concurrent.atomic.AtomicLong();
 
+    /** 冷层 pending 条目数（O(1)，供观测用）。 */
+    public int pendingCount() {
+        synchronized (lock) {
+            return pending.size();
+        }
+    }
+
+    /** 冷层 pending 字节数（O(1)，供观测用）。 */
+    public long pendingByteSize() {
+        synchronized (lock) {
+            return pendingBytes;
+        }
+    }
+
     public List<SSTableMeta> tablesSnapshot() {
         tablesSnapshotCalls.incrementAndGet();
         synchronized (lock) {

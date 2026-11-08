@@ -29,10 +29,11 @@ public class StorageMetrics {
      */
     public record ColdSnapshot(long sstableCount, long diskUsageBytes, long entryCount,
                                long flushInProgress, long compactionInProgress,
+                               long pendingEntries, long pendingBytes,
                                long refreshedAtMillis) {
     }
 
-    private volatile ColdSnapshot coldGauges = new ColdSnapshot(0, 0, 0, 0, 0, 0);
+    private volatile ColdSnapshot coldGauges = new ColdSnapshot(0, 0, 0, 0, 0, 0, 0, 0);
 
     // 后台任务进行中标记（TD-097）
     private final AtomicLong flushInProgress = new AtomicLong();
@@ -74,14 +75,17 @@ public class StorageMetrics {
     public void setColdGauges(long sstableCount, long diskUsage) {
         ColdSnapshot old = coldGauges;
         coldGauges = new ColdSnapshot(sstableCount, diskUsage, old.entryCount(),
-                old.flushInProgress(), old.compactionInProgress(), System.currentTimeMillis());
+                old.flushInProgress(), old.compactionInProgress(),
+                old.pendingEntries(), old.pendingBytes(), System.currentTimeMillis());
     }
 
     /** 一次性发布完整冷层快照（刷新线程调用）。 */
     public void publishColdSnapshot(long sstableCount, long diskUsage, long entryCount,
-                                    long flushInProgress, long compactionInProgress) {
+                                    long flushInProgress, long compactionInProgress,
+                                    long pendingEntries, long pendingBytes) {
         coldGauges = new ColdSnapshot(sstableCount, diskUsage, entryCount,
-                flushInProgress, compactionInProgress, System.currentTimeMillis());
+                flushInProgress, compactionInProgress, pendingEntries, pendingBytes,
+                System.currentTimeMillis());
     }
 
     public ColdSnapshot coldSnapshot() {
@@ -92,7 +96,8 @@ public class StorageMetrics {
     public void setColdEntryCount(long entries) {
         ColdSnapshot old = coldGauges;
         coldGauges = new ColdSnapshot(old.sstableCount(), old.diskUsageBytes(), entries,
-                old.flushInProgress(), old.compactionInProgress(), System.currentTimeMillis());
+                old.flushInProgress(), old.compactionInProgress(),
+                old.pendingEntries(), old.pendingBytes(), System.currentTimeMillis());
     }
 
     /** 记录一次 SSTable 合并（输入/输出字节 + 耗时）。 */
@@ -106,13 +111,15 @@ public class StorageMetrics {
     public void setFlushInProgress(boolean inProgress) {
         ColdSnapshot old = coldGauges;
         coldGauges = new ColdSnapshot(old.sstableCount(), old.diskUsageBytes(), old.entryCount(),
-                inProgress ? 1 : 0, old.compactionInProgress(), System.currentTimeMillis());
+                inProgress ? 1 : 0, old.compactionInProgress(),
+                old.pendingEntries(), old.pendingBytes(), System.currentTimeMillis());
     }
 
     public void setCompactionInProgress(boolean inProgress) {
         ColdSnapshot old = coldGauges;
         coldGauges = new ColdSnapshot(old.sstableCount(), old.diskUsageBytes(), old.entryCount(),
-                old.flushInProgress(), inProgress ? 1 : 0, System.currentTimeMillis());
+                old.flushInProgress(), inProgress ? 1 : 0,
+                old.pendingEntries(), old.pendingBytes(), System.currentTimeMillis());
     }
 
     public long pendingMigrationCount() {
@@ -129,7 +136,8 @@ public class StorageMetrics {
                 cold.sstableCount(), cold.diskUsageBytes(), cold.entryCount(),
                 compactionCount.sum(), compactionInputBytes.sum(),
                 compactionOutputBytes.sum(), compactionLatencyNanos.sum(),
-                cold.flushInProgress(), cold.compactionInProgress());
+                cold.flushInProgress(), cold.compactionInProgress(),
+                cold.pendingEntries(), cold.pendingBytes());
     }
 
     public record Snapshot(
@@ -151,6 +159,8 @@ public class StorageMetrics {
             long compactionOutputBytes,
             long compactionLatencyNanos,
             long flushInProgress,
-            long compactionInProgress) {
+            long compactionInProgress,
+            long coldPendingEntries,
+            long coldPendingBytes) {
     }
 }
