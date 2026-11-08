@@ -267,7 +267,7 @@ TrackingStorageEngine.put()
 
 ### 10.3 证伪了什么
 
-此前推断"迁移成功只是写进冷层 pending、未达 4 MB 阈值"，**该假设被数据否定**：
+此前推断"迁移成功只是写进冷层 pending、未达 4 MB 阈值"，**该假设被数据否定，正式撤回**：
 
 - 若确实写入 pending，即便迁移的是 200 B 的小键，`pending_entries` 也应 ≥ 1；
 - 实测迁移完成后 pending 与冷表**双双为 0**；
