@@ -242,3 +242,45 @@ TrackingStorageEngine.put()
 1. 冷层 pending 落表阈值与所需迁移量未验证；
 2. `INFO` 缺冷层 pending 指标，中间状态不可直接观测；
 3. 大 Value 属于特殊负载，即便后续构造出 100k 冷键，也不能外推为"小 Value 写入可触发冷热迁移"。
+## 10. G0-5C-2B-3：pending 指标接入后的 B1 重跑——pending 假设被证伪
+
+### 10.1 实验（`memory.limit=64MB`，默认水位，默认 4MB 落表阈值）
+
+| 阶段 | mem | migPending | migOk | pending entries/bytes | cold 表/字节 | flush |
+| --- | --- | --- | --- | --- | --- | --- |
+| T0 基础 184,000 × 200 B | 50.5 MB | 0 | 0 | 0 / 0 | 0 / 0 | 0 |
+| T1 单次 SET 25 MB（27 ms） | **76.7 MB** | **1** | 0 | 0 / 0 | 0 / 0 | 0 |
+| T2 0 s | — | 0 | **1** | 0 / 0 | 0 / 0 | 0 |
+| T2 1 s | — | 0 | 1 | 0 / 0 | 0 / 0 | 1 |
+| T2 2/5/10/30 s | — | 0 | 1 | 0 / 0 | 0 / 0 | 1 |
+
+`DBSIZE = 184,001`；`GET big:one` 读回 **26,214,400 字节（25 MiB）**，完整。
+
+### 10.2 四个独立结论
+
+| 判定项 | 结果 | 证据 |
+| --- | --- | --- |
+| Eviction Trigger | **PASS** | `usedBytes` 50.5 → 76.7 MB 越过 64 MB；`migPending` 0→1 |
+| Pending Admission | **FAIL（0）** | 迁移完成（`migOk=1`）后 `pending_entries/bytes` **始终为 0** |
+| Cold Flush | **NOT REACHED** | 无 pending，自然谈不上落表；`coldTables=0`、`coldBytes=0` |
+| Persistence | **NOT VERIFIED** | 无冷层数据可重启验证 |
+
+### 10.3 证伪了什么
+
+此前推断"迁移成功只是写进冷层 pending、未达 4 MB 阈值"，**该假设被数据否定**：
+
+- 若确实写入 pending，即便迁移的是 200 B 的小键，`pending_entries` 也应 ≥ 1；
+- 实测迁移完成后 pending 与冷表**双双为 0**；
+- 因此 `migration_success` 与"数据进入 ColdStorageEngine"之间存在缺口：
+  要么迁移写入了另一个组件（`ColdMigration`/WAL 路径），要么迁移任务并未真正写入冷层就被计为成功。
+
+### 10.4 下一步（代码审计，不再猜）
+
+1. 审计 `MigrationScheduler`/`MigrationTask` 的 `migrate()` 调用链：迁移成功后数据写到哪里；
+2. 核对 `ColdMigration` 与 `Main` 中 `ColdStorageEngine` 是否为同一实例；
+3. 检查迁移成功计数的递增位置是否早于实际写入；
+4. 在确认数据落点之前，不再构造 100k 冷键场景。
+
+### 10.5 判定
+
+**触发 PASS / pending FAIL / 落表 NOT REACHED / 持久化 NOT VERIFIED。G0-5C 仍为 NOT QUALIFIED。**
