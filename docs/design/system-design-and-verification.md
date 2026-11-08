@@ -558,3 +558,18 @@ cd ..; mvn -o -B "-Dtest=WALDurabilityTest" test
 - §8 的每个数字都带口径，直接引用时**必须连同口径一起引用**（例如"P99 0.503 ms"要说明是"单连接串行 GET+SET，客户端侧观测，4 秒约 4.8 万次"）；
 - §9 的缺陷矩阵可以整表搬入"测试与结果分析"，它比"跑通了 15,014 个测试"更有说服力；
 - §10 的"已验证 / 未验证"表格建议原样保留，答辩时被问到的正是这些边界。
+## 附录：默认水位下 Flush 与 Eviction 的触发关系（观测记录）
+
+**观察**：默认水位（70/85/95）下，持续写入小 Value（200 B / 800 B）时，MemTable 在达到 `maxBytes` 之前
+先触发 85% 高水位 flush；flush 清空 MemTable 后 `usedBytes` 回落到 20–30 MB，
+`EvictionManager.maybeEvict()`（判据 `usedBytes > maxBytes`）因此不触发，冷层不产生数据。
+
+**调用顺序**：`put → delegate.put（计入 usedBytes） → maybeEvict() → onWriteCompleted() → scheduleFlush()`。
+
+| 负载形状 | 观测结果 |
+| --- | --- |
+| 小 Value 持续写（200 / 800 B，184k–284k 键） | 先到 85% 触发 flush；驱逐未触发；冷层为空 |
+| 单次 25 MB 写入（mem 50.5 → 75.5 MB） | 越过 maxBytes；`migration_success = 1`；冷层仍无 SSTable |
+
+**尚未验证**：迁移条目在冷层 pending 中的数量、落表阈值、以及构造 10 万冷键所需的迁移规模。
+**不得据此声称**"默认配置下冷热分层不可用"或"普通负载可触发冷热迁移"。
