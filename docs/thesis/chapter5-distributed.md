@@ -224,7 +224,7 @@ public void put(KeyValueEntry entry) {
 
 ### 5.6.1 协议
 
-事务协议采用 Percolator 的"两阶段 + 时间戳"骨架（Peng & Dabek, OSDI 2010）<sup>[13]</sup>，其两阶段提交的基本语义见 Bernstein 等 <sup>[19]</sup>：
+事务协议采用 Percolator 的"两阶段 + 时间戳"骨架（Peng & Dabek, OSDI 2010）<sup>[13]</sup>，其两阶段提交的基本语义见 Bernstein 等 <sup>[25]</sup>：
 
 1. **Prewrite**：用 `startTS` 在各参与者写入数据与锁（`LockRecord`）；
 2. **Commit**：协调者取 `commitTS > startTS`，先提交主锁，再提交其余锁；
@@ -322,4 +322,4 @@ public void put(KeyValueEntry entry) {
 
 ## 本章引用文献
 
-本章引用 [2][11][13][14][19]，完整条目见文末《参考文献》。
+本章引用 [2][11][13][14][25]，完整条目见文末《参考文献》。

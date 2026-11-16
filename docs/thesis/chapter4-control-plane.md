@@ -101,7 +101,7 @@ RespValue execute(List<byte[]> args, StorageEngine storage);
 
 ### 4.3.3 局限
 
-跨节点事务使用两阶段提交 + 全局时间戳 <sup>[19][20]</sup>，借鉴 Percolator 的设计思想 <sup>[13]</sup>，
+跨节点事务使用两阶段提交 + 全局时间戳 <sup>[25][26]</sup>，借鉴 Percolator 的设计思想 <sup>[13]</sup>，
 但**未实现其多版本存储与快照读**（详见 5.5.3 与 5.6.4）。
 一致性验证限于单机多进程。
 
@@ -168,7 +168,7 @@ RespValue execute(List<byte[]> args, StorageEngine storage);
 
 ### 4.5.2 审计
 
-审计表记录：时间、用户、动作、对象、详情、IP、成功与否。
+审计表记录：时间、用户、动作、对象、详情、IP、成功与否。 <sup>[27]</sup>
 关键实现细节是：**失败操作必须留痕**。
 
 早期 `AuditService.record()` 与业务方法共享事务，业务抛异常时记录被一起回滚，
@@ -311,5 +311,5 @@ RespValue execute(List<byte[]> args, StorageEngine storage);
 
 ## 本章引用文献
 
-本章引用 [11][13][19][20]，完整条目见文末《参考文献》。
+本章引用 [13][25][26][27]，完整条目见文末《参考文献》。
 协议、网络库与指标语义规范见文末"技术规范"（S1、S2）。
