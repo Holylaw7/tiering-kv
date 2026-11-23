@@ -23,32 +23,65 @@ public final class WALManager implements AutoCloseable {
     private final Object[] keyLocks = createKeyLocks();
     private boolean closed;
     /** EVERY_SEC 的后台落盘器（TD-103）：空闲时也必须把 buffer 刷出去。 */
-    private final java.util.concurrent.ScheduledExecutorService flusher;
+    private java.util.concurrent.ScheduledExecutorService flusher;
 
     public WALManager(WALConfig config) throws IOException {
         this.config = config;
         this.segments = new SegmentManager(config.directory());
         this.writer = new WALWriter(segments, config.fsyncPolicy());
         if (config.fsyncPolicy() == WALConfig.FsyncPolicy.EVERY_SEC) {
-            // 仅靠 append 时判断"距上次 force ≥1s"会让空闲期写入一直留在
-            // BufferedOutputStream 里：崩溃即丢失（Phase 10 实测 99/100 丢失）。
-            this.flusher = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(
-                    runnable -> {
-                        Thread thread = new Thread(runnable, "wal-fsync");
-                        thread.setDaemon(true);
-                        return thread;
-                    });
-            this.flusher.scheduleWithFixedDelay(this::flushQuietly, 500, 500,
-                    java.util.concurrent.TimeUnit.MILLISECONDS);
-        } else {
-            this.flusher = null;
+            ensureFlusherStarted();
+        }
+    }
+
+    private void ensureFlusherStarted() {
+        if (flusher != null) {
+            return;
+        }
+        // 仅靠 append 时判断"距上次 force ≥1s"会让空闲期写入一直留在
+        // BufferedOutputStream 里：崩溃即丢失（Phase 10 实测 99/100 丢失）。
+        this.flusher = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(
+                runnable -> {
+                    Thread thread = new Thread(runnable, "wal-fsync");
+                    thread.setDaemon(true);
+                    return thread;
+                });
+        this.flusher.scheduleWithFixedDelay(this::flushQuietly, 500, 500,
+                java.util.concurrent.TimeUnit.MILLISECONDS);
+    }
+
+    public WALConfig.FsyncPolicy fsyncPolicy() {
+        synchronized (writeLock) {
+            return writer.fsyncPolicy();
+        }
+    }
+
+    /** 运行期切换 WAL fsync 策略（供 CONFIG SET appendfsync 接线）。 */
+    public void setFsyncPolicy(WALConfig.FsyncPolicy policy) {
+        if (policy == null) {
+            throw new IllegalArgumentException("policy required");
+        }
+        synchronized (writeLock) {
+            if (closed) {
+                throw new WalWriteException("WAL is closed", null);
+            }
+            writer.setFsyncPolicy(policy);
+            if (policy == WALConfig.FsyncPolicy.EVERY_SEC) {
+                ensureFlusherStarted();
+            } else if (policy == WALConfig.FsyncPolicy.ALWAYS) {
+                try {
+                    writer.force();
+                } catch (IOException e) {
+                    throw new WalWriteException("WAL force failed", e);
+                }
+            }
         }
     }
 
     /** 后台定时落盘：失败只记录，不打断写路径（下次 append 仍会重试）。 */
     private void flushQuietly() {
         synchronized (writeLock) {
-            if (closed) {
+            if (closed || writer.fsyncPolicy() != WALConfig.FsyncPolicy.EVERY_SEC) {
                 return;
             }
             try {
@@ -176,12 +209,14 @@ public final class WALManager implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
-        if (flusher != null) {
-            flusher.shutdownNow();
-        }
+        java.util.concurrent.ScheduledExecutorService executorToStop;
         synchronized (writeLock) {
-            writer.close();
             closed = true;
+            executorToStop = flusher;
+            writer.close();
+        }
+        if (executorToStop != null) {
+            executorToStop.shutdownNow();
         }
     }
 

@@ -4,6 +4,7 @@ import io.tieringkv.execution.KeyShardExecutor;
 import io.tieringkv.protocol.RespError;
 import io.tieringkv.protocol.RespValue;
 import io.tieringkv.protocol.RespSimpleString;
+import io.tieringkv.security.AclPolicy;
 import io.tieringkv.session.ConnectionContext;
 import io.tieringkv.storage.StorageEngine;
 
@@ -33,13 +34,18 @@ public final class CommandEngine {
     private final StorageEngine storage;
     private final KeyShardExecutor executor;
     private final java.util.function.BooleanSupplier memoryPressure;
+    private final AclPolicy aclPolicy;
 
     public CommandEngine(CommandRegistry registry, StorageEngine storage) {
-        this(registry, storage, null, null);
+        this(registry, storage, null, null, null);
+    }
+
+    public CommandEngine(CommandRegistry registry, StorageEngine storage, AclPolicy aclPolicy) {
+        this(registry, storage, null, null, aclPolicy);
     }
 
     public CommandEngine(CommandRegistry registry, StorageEngine storage, KeyShardExecutor executor) {
-        this(registry, storage, executor, null);
+        this(registry, storage, executor, null, null);
     }
 
     /**
@@ -48,13 +54,25 @@ public final class CommandEngine {
     public CommandEngine(CommandRegistry registry, StorageEngine storage,
                          KeyShardExecutor executor,
                          java.util.function.BooleanSupplier memoryPressure) {
+        this(registry, storage, executor, memoryPressure, null);
+    }
+
+    public CommandEngine(CommandRegistry registry, StorageEngine storage,
+                         KeyShardExecutor executor,
+                         java.util.function.BooleanSupplier memoryPressure,
+                         AclPolicy aclPolicy) {
         this.registry = registry;
         this.storage = storage;
         this.executor = executor;
         this.memoryPressure = memoryPressure;
+        this.aclPolicy = aclPolicy;
     }
 
     public RespValue execute(RespCommand command) {
+        RespError accessError = checkAccess(command);
+        if (accessError != null) {
+            return accessError;
+        }
         ConnectionContext context = ConnectionContext.current();
         if (context != null && context.inMulti()
                 && !isTxnControl(command.name())) {
@@ -72,6 +90,16 @@ public final class CommandEngine {
             return new RespError(OOM_ERROR);
         }
         return handler.execute(command.args(), storage);
+    }
+
+    private RespError checkAccess(RespCommand command) {
+        if (aclPolicy == null) {
+            return null;
+        }
+        ConnectionContext context = ConnectionContext.current();
+        String user = context == null ? null : context.authenticatedUser();
+        String denied = aclPolicy.authorize(user, command.name(), command.args());
+        return denied == null ? null : new RespError(denied);
     }
 
     private static boolean isTxnControl(String name) {
@@ -183,6 +211,11 @@ public final class CommandEngine {
                     ConnectionContext.attach(captured);
                 } else {
                     ConnectionContext.detach();
+                }
+                RespError accessError = checkAccess(command);
+                if (accessError != null) {
+                    callback.accept(accessError, null);
+                    return;
                 }
                 if (memoryPressure != null
                         && WriteCommands.isRejectedUnderPressure(command.name())

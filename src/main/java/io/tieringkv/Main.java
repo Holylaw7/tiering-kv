@@ -2,6 +2,7 @@ package io.tieringkv;
 
 import io.tieringkv.command.CommandEngine;
 import io.tieringkv.command.CommandRegistry;
+import io.tieringkv.command.RuntimeConfigBridge;
 import io.tieringkv.config.TieringConfig;
 import io.tieringkv.cache.block.BlockCache;
 import io.tieringkv.cache.block.CachePolicy;
@@ -22,6 +23,7 @@ import io.tieringkv.observability.SstableInfoRenderer;
 import io.tieringkv.observability.ReplicationMetricsRegistry;
 import io.tieringkv.observability.VectorMetricsRegistry;
 import io.tieringkv.network.tcp.TieringKvServer;
+import io.tieringkv.security.AclPolicy;
 import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.storage.VectorIndexSyncStorageEngine;
 import io.tieringkv.storage.cache.CacheConfig;
@@ -40,6 +42,7 @@ import io.tieringkv.storage.wal.RecoveryManager;
 import io.tieringkv.storage.wal.WALConfig;
 import io.tieringkv.storage.wal.WALManager;
 import io.tieringkv.storage.wal.WALStorageEngine;
+import io.tieringkv.vector.collection.VectorCollectionRegistry;
 import io.tieringkv.vector.indexfile.VectorIndexStore;
 
 import java.nio.file.Path;
@@ -58,7 +61,17 @@ public final class Main {
     public static void main(String[] args) throws Exception {
         TieringConfig config = TieringConfig.load(Path.of("config/application.yaml"));
         System.out.println("effective configuration: " + config.describe());
-        ServerConfig serverConfig = new ServerConfig(config.server().host(), config.server().port());
+        TieringConfig.Server srv = config.server();
+        ServerConfig.TlsConfig tlsConfig = srv.tls() != null && srv.tls().enabled()
+                ? new ServerConfig.TlsConfig(
+                        true,
+                        srv.tls().certPath() == null ? null : Path.of(srv.tls().certPath()),
+                        srv.tls().keyPath() == null ? null : Path.of(srv.tls().keyPath()),
+                        srv.tls().caPath() == null ? null : Path.of(srv.tls().caPath()),
+                        srv.tls().requireClientAuth())
+                : ServerConfig.TlsConfig.disabled();
+        ServerConfig serverConfig = new ServerConfig(
+                srv.host(), srv.port(), srv.maxClients(), srv.timeoutSeconds(), srv.password(), tlsConfig);
         MemoryManager memoryManager = new MemoryManager(config.memory().maxBytes());
         MemTable memTable = MemTable.create(memoryManager);
         WALManager walManager = new WALManager(new WALConfig(
@@ -141,17 +154,33 @@ public final class Main {
         // TD-099：SSTable 清单按需读取，不进入全量 INFO
         infoSections.put("sstables", () ->
                 SstableInfoRenderer.render(cold.tablesSnapshot()));
+        AclPolicy aclPolicy = new AclPolicy();
+        if (serverConfig.password() != null && !serverConfig.password().isBlank()) {
+            aclPolicy.configureRequirePass(serverConfig.password());
+        }
+        TieringKvServer.RuntimeOptions serverOptions = new TieringKvServer.RuntimeOptions(
+                serverConfig.maxClients(), serverConfig.idleTimeoutSeconds());
+        RuntimeConfigBridge runtimeConfig = RuntimeConfigBridge.builder()
+                .maxMemory(memoryManager::maxBytes, memoryManager::setMaxBytes)
+                .appendFsync(walManager::fsyncPolicy, walManager::setFsyncPolicy)
+                .maxClients(serverOptions::maxClients, serverOptions::setMaxClients)
+                .timeout(serverOptions::idleTimeoutSeconds, serverOptions::setIdleTimeoutSeconds)
+                .requirePass(aclPolicy::requiresAuthForAnonymous, aclPolicy::configureRequirePass)
+                .build();
         CommandEngine commandEngine = new CommandEngine(
-                CommandRegistry.createDefaultWithVector(
+                CommandRegistry.createDefaultWithRuntime(
                         serverInfo::render, Map.copyOf(infoSections),
-                        vectorStore),
-                syncStorage, executor, memoryManager::isOverLimit);
+                        VectorCollectionRegistry.ofDefault(vectorStore),
+                        observability.multimodel(), observability.vector(),
+                        aclPolicy, runtimeConfig),
+                syncStorage, executor, memoryManager::isOverLimit, aclPolicy);
         // 必须复用同一个 MetricsRegistry：否则 INFO 读取的实例与服务端
         // 实际埋点的实例不是同一个，qps/连接数会恒为 0（TD-082）
         TieringKvServer server = new TieringKvServer(
                 serverConfig,
                 commandEngine,
-                metrics);
+                metrics,
+                serverOptions);
         ShutdownManager shutdownManager = new ShutdownManager(
                 server, metrics, walManager, memTable, config.tiering().drainTimeoutMillis(),
                 executor, tiering, cold, walManager);

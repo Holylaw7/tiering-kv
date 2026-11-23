@@ -18,7 +18,27 @@ public record TieringConfig(
         Gc gc,
         Txn txn) {
 
-    public record Server(String host, int port) {
+    public record Server(
+            String host,
+            int port,
+            int maxClients,
+            int timeoutSeconds,
+            String password,
+            Tls tls) {
+        public Server(String host, int port) {
+            this(host, port, 10_000, 0, null, Tls.disabled());
+        }
+
+        public record Tls(
+                boolean enabled,
+                String certPath,
+                String keyPath,
+                String caPath,
+                boolean requireClientAuth) {
+            public static Tls disabled() {
+                return new Tls(false, null, null, null, false);
+            }
+        }
     }
 
     public record Workers(int shardCount, int flushWorkers, int migrationWorkers) {
@@ -71,6 +91,7 @@ public record TieringConfig(
                 return base;
             }
             Map<String, Object> server = map(root.get("server"));
+            Map<String, Object> serverTls = map(server.get("tls"));
             Map<String, Object> workers = map(root.get("worker"));
             Map<String, Object> memory = map(root.get("memory"));
             Map<String, Object> wal = map(root.get("wal"));
@@ -78,9 +99,26 @@ public record TieringConfig(
             Map<String, Object> tiering = map(root.get("tiering"));
             Map<String, Object> gc = map(root.get("gc"));
             Map<String, Object> txn = map(root.get("txn"));
+            String password = str(server.get("password"), null);
+            if (password == null || password.isBlank()) {
+                String envPass = System.getenv("TIERING_PASSWORD");
+                if (envPass != null && !envPass.isBlank()) {
+                    password = envPass;
+                }
+            }
             return new TieringConfig(
-                    new Server(str(server.get("host"), base.server().host()),
-                            num(server.get("port"), base.server().port())),
+                    new Server(
+                            str(server.get("host"), base.server().host()),
+                            num(server.get("port"), base.server().port()),
+                            num(server.get("max-clients"), base.server().maxClients()),
+                            num(server.get("timeout-seconds"), base.server().timeoutSeconds()),
+                            password,
+                            new Server.Tls(
+                                    bool(serverTls.get("enabled"), base.server().tls().enabled()),
+                                    str(serverTls.get("cert-path"), base.server().tls().certPath()),
+                                    str(serverTls.get("key-path"), base.server().tls().keyPath()),
+                                    str(serverTls.get("ca-path"), base.server().tls().caPath()),
+                                    bool(serverTls.get("require-client-auth"), base.server().tls().requireClientAuth()))),
                     new Workers(num(workers.get("shard-count"), base.workers().shardCount()),
                             num(workers.get("flush-workers"), base.workers().flushWorkers()),
                             num(workers.get("migration-workers"), base.workers().migrationWorkers())),
@@ -108,13 +146,17 @@ public record TieringConfig(
 
     public String describe() {
         return String.format(
-                "server.host=%s server.port=%d shard-count=%d flush-workers=%d "
+                "server.host=%s server.port=%d server.max-clients=%d server.timeout-seconds=%d "
+                        + "server.auth=%s server.tls=%s shard-count=%d flush-workers=%d "
                         + "migration-workers=%d memory.limit=%d wal.fsync=%s "
                         + "cache.block-size=%d hotkey-window=%d hotkey-threshold=%d "
                         + "watermarks=%.2f/%.2f/%.2f backpressure-timeout=%d drain-timeout=%d "
                         + "gc.batch-size=%d gc.worker-count=%d gc.max-memory=%d "
                         + "txn.ttl-seconds=%d txn.max-duration-seconds=%d",
-                server().host(), server().port(), workers().shardCount(),
+                server().host(), server().port(), server().maxClients(), server().timeoutSeconds(),
+                (server().password() != null && !server().password().isBlank()) ? "enabled" : "disabled",
+                server().tls().enabled(),
+                workers().shardCount(),
                 workers().flushWorkers(), workers().migrationWorkers(),
                 memory().maxBytes(), wal().fsyncPolicy(), cache().blockCacheCapacity(),
                 cache().hotKeyWindowMillis(), cache().hotKeyThreshold(),
@@ -144,5 +186,9 @@ public record TieringConfig(
 
     private static double dbl(Object value, double fallback) {
         return value instanceof Number n ? n.doubleValue() : fallback;
+    }
+
+    private static boolean bool(Object value, boolean fallback) {
+        return value instanceof Boolean b ? b : fallback;
     }
 }

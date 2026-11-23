@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class MemoryManager {
 
-    private final long maxBytes;
+    private volatile long maxBytes;
     private final long heapLimitBytes;
 
     private final AtomicLong usedBytes = new AtomicLong();
@@ -77,6 +77,14 @@ public final class MemoryManager {
 
     public long maxBytes() {
         return maxBytes;
+    }
+
+    /** 运行期动态调整内存上限（供 CONFIG SET maxmemory 接线）。 */
+    public void setMaxBytes(long maxBytes) {
+        if (maxBytes <= 0) {
+            throw new IllegalArgumentException("maxBytes must be positive");
+        }
+        this.maxBytes = maxBytes;
     }
 
     /** 当前 JVM 堆占用（total - free）。 */

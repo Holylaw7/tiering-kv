@@ -4,6 +4,8 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.handler.timeout.IdleState;
+import io.netty.handler.timeout.IdleStateEvent;
 import io.tieringkv.command.CommandEngine;
 import io.tieringkv.command.RespCommand;
 import io.tieringkv.command.RespRequestParser;
@@ -26,6 +28,8 @@ import io.tieringkv.network.response.ResponseBuffer;
 
 import java.util.List;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntSupplier;
 
 /** 命令入站处理器：解析请求 → 执行 → 写回；协议错误写入后关闭连接。 */
 public final class CommandHandler extends ChannelInboundHandlerAdapter {
@@ -35,24 +39,46 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
 
     private final CommandEngine engine;
     private final MetricsRegistry metrics;
+    private final AtomicInteger activeConnections;
+    private final IntSupplier maxClients;
     private final ResponseSequencer sequencer = new ResponseSequencer();
     private long nextSequence = 1;
     private final java.util.Map<Long, Long> startTimes = new java.util.HashMap<>();
     private final java.util.Deque<PendingCommand> deferred = new java.util.ArrayDeque<>();
     private boolean barrierRunning;
     private int inflight;
+    private boolean accepted;
 
     private record PendingCommand(long sequence, io.tieringkv.command.RespCommand command) { }
     private ResponseBatcher batcher;
     private ConnectionContext context;
 
     public CommandHandler(CommandEngine engine, MetricsRegistry metrics) {
+        this(engine, metrics, null, null);
+    }
+
+    public CommandHandler(CommandEngine engine, MetricsRegistry metrics,
+                          AtomicInteger activeConnections, IntSupplier maxClients) {
         this.engine = engine;
         this.metrics = metrics;
+        this.activeConnections = activeConnections;
+        this.maxClients = maxClients;
     }
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) {
+        if (activeConnections != null && maxClients != null) {
+            int current = activeConnections.incrementAndGet();
+            int limit = maxClients.getAsInt();
+            if (limit > 0 && current > limit) {
+                activeConnections.decrementAndGet();
+                ByteBuf buf = ctx.alloc().buffer();
+                RespEncoder.write(buf, new RespError("ERR max number of clients reached"));
+                ctx.writeAndFlush(buf).addListener(ChannelFutureListener.CLOSE);
+                return;
+            }
+        }
+        accepted = true;
         metrics.connectionOpened();
         context = new ConnectionContext();
         batcher = new ResponseBatcher(
@@ -62,6 +88,12 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) {
+        if (!accepted) {
+            return;
+        }
+        if (activeConnections != null) {
+            activeConnections.decrementAndGet();
+        }
         deferred.clear();
         startTimes.clear();
         if (context != null) {
@@ -74,7 +106,19 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
     }
 
     @Override
+    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+        if (evt instanceof IdleStateEvent event && event.state() == IdleState.READER_IDLE) {
+            ctx.close();
+            return;
+        }
+        super.userEventTriggered(ctx, evt);
+    }
+
+    @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
+        if (!accepted) {
+            return;
+        }
         if (msg instanceof RespValue value) {
             try {
                 RespCommand command;
@@ -121,7 +165,8 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
             return true;
         }
         return switch (command.name()) {
-            case "multi", "exec", "discard", "watch", "unwatch",
+            case "auth", "acl", "config",
+                 "multi", "exec", "discard", "watch", "unwatch",
                  "hello", "flushdb", "flushall", "dbsize", "scan",
                  "mget", "mset", "msetnx", "blpop", "brpop", "keys", "client",
                  "subscribe", "unsubscribe", "psubscribe", "punsubscribe" -> true;

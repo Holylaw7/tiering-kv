@@ -10,13 +10,24 @@ import java.util.List;
 public final class WALWriter implements AutoCloseable {
 
     private final SegmentManager segments;
-    private final WALConfig.FsyncPolicy fsyncPolicy;
+    private volatile WALConfig.FsyncPolicy fsyncPolicy;
     private long lastForceMillis;
     /** 自上次 force 以来是否有新写入（TD-106）：空闲时跳过无意义的 fsync。 */
     private volatile boolean dirty;
 
     public WALWriter(SegmentManager segments, WALConfig.FsyncPolicy fsyncPolicy) {
         this.segments = segments;
+        this.fsyncPolicy = fsyncPolicy;
+    }
+
+    public WALConfig.FsyncPolicy fsyncPolicy() {
+        return fsyncPolicy;
+    }
+
+    public void setFsyncPolicy(WALConfig.FsyncPolicy fsyncPolicy) {
+        if (fsyncPolicy == null) {
+            throw new IllegalArgumentException("fsyncPolicy required");
+        }
         this.fsyncPolicy = fsyncPolicy;
     }
 

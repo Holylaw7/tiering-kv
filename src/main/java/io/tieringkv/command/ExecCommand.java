@@ -4,6 +4,7 @@ import io.tieringkv.protocol.RespArray;
 import io.tieringkv.protocol.RespError;
 import io.tieringkv.protocol.RespNull;
 import io.tieringkv.protocol.RespValue;
+import io.tieringkv.security.AclPolicy;
 import io.tieringkv.session.ConnectionContext;
 import io.tieringkv.storage.AtomicStringOps;
 import io.tieringkv.storage.AtomicStringOps;
@@ -23,15 +24,24 @@ public final class ExecCommand implements Command {
 
     private final CommandRegistry registry;
     private final ExecJournal journal;
+    private final AclPolicy aclPolicy;
 
     public ExecCommand(CommandRegistry registry) {
-        this(registry, new ExecJournal());
+        this(registry, new ExecJournal(), null);
     }
 
-    public ExecCommand(CommandRegistry registry,
-                       ExecJournal journal) {
+    public ExecCommand(CommandRegistry registry, AclPolicy aclPolicy) {
+        this(registry, new ExecJournal(), aclPolicy);
+    }
+
+    public ExecCommand(CommandRegistry registry, ExecJournal journal) {
+        this(registry, journal, null);
+    }
+
+    public ExecCommand(CommandRegistry registry, ExecJournal journal, AclPolicy aclPolicy) {
         this.registry = registry;
         this.journal = journal;
+        this.aclPolicy = aclPolicy;
     }
 
     @Override
@@ -59,7 +69,7 @@ public final class ExecCommand implements Command {
         }
         context.clearTxnQueue();
         context.unwatchAll();
-        CommandEngine engine = new CommandEngine(registry, storage);
+        CommandEngine engine = new CommandEngine(registry, storage, aclPolicy);
         List<RespValue> results = new ArrayList<>();
         Map<ByteArrayKey, SnapshotEntry> oldValues = snapshot(queue, storage);
         boolean failed = false;

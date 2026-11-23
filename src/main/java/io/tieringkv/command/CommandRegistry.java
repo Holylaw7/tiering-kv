@@ -3,6 +3,7 @@ package io.tieringkv.command;
 import io.tieringkv.pubsub.PubSubBroker;
 import io.tieringkv.observability.MultiModelMetricsRegistry;
 import io.tieringkv.observability.VectorMetricsRegistry;
+import io.tieringkv.security.AclPolicy;
 import io.tieringkv.session.ConnectionContext;
 import io.tieringkv.vector.collection.VectorCollectionRegistry;
 import io.tieringkv.vector.indexfile.VectorIndexStore;
@@ -76,40 +77,67 @@ public final class CommandRegistry {
             VectorCollectionRegistry registry,
             MultiModelMetricsRegistry metrics,
             VectorMetricsRegistry vectorMetrics) {
-        return build(infoProvider, sections, List.of(
-                new VectorCommand("vector.add", registry, vectorMetrics),
-                new VectorCommand("vector.search", registry, vectorMetrics),
-                new VectorCommand("vector.del", registry, vectorMetrics),
-                new VectorCommand("vector.len", registry, vectorMetrics),
-                new VectorCommand("vector.list", registry, vectorMetrics),
-                new VectorCommand("vector.drop", registry, vectorMetrics),
-                new VectorCommand("vector.checkpoint", registry,
-                        vectorMetrics),
-                new JsonCommand("json.set", metrics),
-                new JsonCommand("json.get", metrics),
-                new JsonCommand("json.del", metrics),
-                new JsonCommand("json.type", metrics),
-                new JsonCommand("json.arrappend", metrics),
-                new JsonCommand("json.arrlen", metrics),
-                new JsonCommand("json.objkeys", metrics),
-                new JsonCommand("json.objlen", metrics),
-                new JsonCommand("json.strlen", metrics),
-                new JsonCommand("json.numincrby", metrics),
-                new MultiModelCommand("ts.add", metrics),
-                new MultiModelCommand("ts.get", metrics),
-                new MultiModelCommand("ts.len", metrics),
-                new TimeSeriesCommand("ts.range", metrics),
-                new TimeSeriesCommand("ts.mrange", metrics),
-                new TimeSeriesCommand("ts.incrby", metrics),
-                new TimeSeriesCommand("ts.reduce", metrics),
-                new MultiModelCommand("vector.set", metrics),
-                new MultiModelCommand("vector.get", metrics)));
+        return createDefaultWithRuntime(infoProvider, sections, registry,
+                metrics, vectorMetrics, null, null);
+    }
+
+    /** 完整运行时接线：多模型命令 + AUTH/ACL 安全策略 + CONFIG 运行期参数桥接。 */
+    public static CommandRegistry createDefaultWithRuntime(
+            Supplier<String> infoProvider,
+            Map<String, Supplier<String>> sections,
+            VectorCollectionRegistry registry,
+            MultiModelMetricsRegistry metrics,
+            VectorMetricsRegistry vectorMetrics,
+            AclPolicy aclPolicy,
+            RuntimeConfigBridge runtimeConfig) {
+        List<Command> extra = new java.util.ArrayList<>();
+        if (registry != null) {
+            extra.addAll(List.of(
+                    new VectorCommand("vector.add", registry, vectorMetrics),
+                    new VectorCommand("vector.search", registry, vectorMetrics),
+                    new VectorCommand("vector.del", registry, vectorMetrics),
+                    new VectorCommand("vector.len", registry, vectorMetrics),
+                    new VectorCommand("vector.list", registry, vectorMetrics),
+                    new VectorCommand("vector.drop", registry, vectorMetrics),
+                    new VectorCommand("vector.checkpoint", registry, vectorMetrics),
+                    new JsonCommand("json.set", metrics),
+                    new JsonCommand("json.get", metrics),
+                    new JsonCommand("json.del", metrics),
+                    new JsonCommand("json.type", metrics),
+                    new JsonCommand("json.arrappend", metrics),
+                    new JsonCommand("json.arrlen", metrics),
+                    new JsonCommand("json.objkeys", metrics),
+                    new JsonCommand("json.objlen", metrics),
+                    new JsonCommand("json.strlen", metrics),
+                    new JsonCommand("json.numincrby", metrics),
+                    new MultiModelCommand("ts.add", metrics),
+                    new MultiModelCommand("ts.get", metrics),
+                    new MultiModelCommand("ts.len", metrics),
+                    new TimeSeriesCommand("ts.range", metrics),
+                    new TimeSeriesCommand("ts.mrange", metrics),
+                    new TimeSeriesCommand("ts.incrby", metrics),
+                    new TimeSeriesCommand("ts.reduce", metrics),
+                    new MultiModelCommand("vector.set", metrics),
+                    new MultiModelCommand("vector.get", metrics)));
+        }
+        if (runtimeConfig != null) {
+            extra.add(new ConfigCommand(runtimeConfig));
+        }
+        return build(infoProvider, sections, extra, aclPolicy);
     }
 
     private static CommandRegistry build(
             Supplier<String> infoProvider,
             Map<String, Supplier<String>> sections,
             List<Command> extra) {
+        return build(infoProvider, sections, extra, null);
+    }
+
+    private static CommandRegistry build(
+            Supplier<String> infoProvider,
+            Map<String, Supplier<String>> sections,
+            List<Command> extra,
+            AclPolicy aclPolicy) {
         Map<String, Command> map = new HashMap<>();
         for (Command command : CommandCatalog.defaults()) {
             map.put(command.name(), command);
@@ -118,9 +146,17 @@ public final class CommandRegistry {
         for (Command command : extra) {
             map.put(command.name(), command);
         }
-        map.put("exec", new ExecCommand(new CommandRegistry(map)));
-        map.put("command", new CommandCommand(
-                new CommandRegistry(map)));
+        if (aclPolicy != null) {
+            map.put("auth", new AuthCommand(aclPolicy));
+            map.put("hello", new HelloCommand(aclPolicy));
+            List<String> namesSnapshot = new java.util.ArrayList<>(map.keySet());
+            namesSnapshot.add("exec");
+            namesSnapshot.add("command");
+            List<String> immutableNames = List.copyOf(namesSnapshot);
+            map.put("acl", new AclCommand(aclPolicy, () -> immutableNames));
+        }
+        map.put("exec", new ExecCommand(new CommandRegistry(map), aclPolicy));
+        map.put("command", new CommandCommand(new CommandRegistry(map)));
         return new CommandRegistry(map);
     }
 

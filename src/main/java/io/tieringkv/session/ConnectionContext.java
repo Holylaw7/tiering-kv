@@ -23,6 +23,7 @@ public final class ConnectionContext {
             new PubSubBroker();
 
     private volatile RespVersion version = RespVersion.RESP2;
+    private volatile String authenticatedUser;
     private final ConnectionSubscriber subscriber =
             new ConnectionSubscriber();
     private volatile boolean inMulti;
@@ -80,6 +81,14 @@ public final class ConnectionContext {
                     "version required");
         }
         this.version = version;
+    }
+
+    public String authenticatedUser() {
+        return authenticatedUser;
+    }
+
+    public void setAuthenticatedUser(String authenticatedUser) {
+        this.authenticatedUser = authenticatedUser;
     }
 
     public ConnectionSubscriber subscriber() {
@@ -142,6 +151,7 @@ public final class ConnectionContext {
         clearTxnQueue();
         unwatchAll();
         version = RespVersion.RESP2;
+        authenticatedUser = null;
         subscriber.clear();
     }
 }
