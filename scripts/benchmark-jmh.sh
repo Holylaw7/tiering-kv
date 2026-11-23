@@ -6,6 +6,6 @@ cd "$(dirname "$0")/.."
 # 用法：./scripts/benchmark-jmh.sh [includes-pattern]
 INCLUDES="${1:-MemTableGetBenchmark|WalAppendBenchmark|SstableRandomReadBenchmark}"
 echo "jmh includes: ${INCLUDES}"
-mvn -q test-compile
-mvn -q jmh:benchmark -Dincludes="${INCLUDES}"
+mvn -q -pl tiering-storage -am test-compile
+mvn -q -pl tiering-storage jmh:benchmark -Dincludes="${INCLUDES}"
 echo "jmh: results under target/jmh-results/"

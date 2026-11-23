@@ -27,7 +27,7 @@ jobs:
       # 性能断言（@Tag("benchmark")）从功能门禁排除，由 release Benchmark 步骤
       # 显式执行；失败用例重跑一次，重跑仍失败则门禁照常失败，不掩盖真实缺陷。
       - name: Compile tests
-        run: mvn -B -q test-compile
+        run: mvn -B -q process-test-classes
       - name: Build shard test list
         run: |
           scripts/shard-tests.sh ${{ matrix.shard }} 3 > /tmp/shard-tests.txt
@@ -42,7 +42,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: surefire-reports
-          path: target/surefire-reports
+          path: "*/target/surefire-reports"
           if-no-files-found: ignore
           retention-days: 7
   jfr-smoke:

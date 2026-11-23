@@ -1,4 +1,4 @@
-# 本地一键拉起：MySQL(3307) + 内核(6379) + 控制面(8080) + 前端(5173)
+﻿# 本地一键拉起：MySQL(3307) + 内核(6379) + 控制面(8080) + 前端(5173)
 # 用法：. .\scripts\dev-up.ps1        （dot-source 以继承环境变量）
 #       .\scripts\dev-up.ps1 -SkipFrontend
 param(
@@ -44,13 +44,15 @@ if (Test-Port 6379) {
         $mirror = Join-Path $repo 'console-server\maven-settings.xml'
         $settings = @()
         if (Test-Path $mirror) { $settings = @('-s', $mirror) }
-        mvn $settings -o -B -q -DskipTests package
+        mvn $settings -pl tiering-server -am -o -B -q -DskipTests package
         Pop-Location
     }
-    # 不写死版本号：排除 original-* 后取最大的 jar（即 shade 后的可执行包）
-    $jar = Get-ChildItem (Join-Path $repo 'target') -Filter 'tiering-kv-*.jar' |
-        Where-Object { $_.Name -notlike 'original-*' } |
-        Sort-Object Length -Descending | Select-Object -First 1
+    # 不写死版本号：优先单机轻量 shaded 包，兜底集群包或历史单模块 target
+    $jar = @(
+        (Get-ChildItem (Join-Path $repo 'tiering-server\target') -Filter 'tiering-server-*-shaded.jar' -ErrorAction SilentlyContinue),
+        (Get-ChildItem (Join-Path $repo 'tiering-cluster\target') -Filter 'tiering-cluster-*-shaded.jar' -ErrorAction SilentlyContinue),
+        (Get-ChildItem (Join-Path $repo 'target') -Filter 'tiering-kv-*-shaded.jar' -ErrorAction SilentlyContinue)
+    ) | Where-Object { $_ -ne $null } | Select-Object -First 1
     if (-not $jar) { throw '未找到内核构件（先执行 mvn package）' }
     $jar = $jar.FullName
     Start-Process -FilePath $java -WorkingDirectory $repo -WindowStyle Hidden `

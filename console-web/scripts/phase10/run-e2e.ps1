@@ -1,8 +1,13 @@
-# Phase 10 全量 E2E 复跑（业务闭环 + 故障注入）
+﻿# Phase 10 全量 E2E 复跑（业务闭环 + 故障注入）
 $ErrorActionPreference = 'Stop'
 $scripts = $PSScriptRoot
 $repo = Resolve-Path (Join-Path $scripts '..\..\..') | Select-Object -ExpandProperty Path
-$coreJar = Join-Path $repo 'target\tiering-kv-5.1.0.jar'
+$coreJar = @(
+  (Join-Path $repo 'tiering-server\target\tiering-server-5.1.0-shaded.jar'),
+  (Join-Path $repo 'tiering-cluster\target\tiering-cluster-5.1.0-shaded.jar'),
+  (Join-Path $repo 'target\tiering-kv-5.1.0-shaded.jar')
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $coreJar) { $coreJar = Join-Path $repo 'tiering-server\target\tiering-server-5.1.0-shaded.jar' }
 $java = Join-Path $env:JAVA_HOME 'bin\java.exe'
 if (-not (Test-Path $java)) { $java = 'java' }
 

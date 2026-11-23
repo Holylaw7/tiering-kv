@@ -22,8 +22,8 @@ if [ "$TOTAL" -ne 3 ]; then
   exit 1
 fi
 
-ALL=$(find target/test-classes -name '*Test.class' \
-  | sed -e 's|^target/test-classes/||' -e 's|/|.|g' -e 's|\.class$||' \
+ALL=$(find tiering-*/target/test-classes -name '*Test.class' \
+  | sed -e 's|^[^/]*/target/test-classes/||' -e 's|/|.|g' -e 's|\.class$||' \
   | sort)
 
 case "$INDEX" in
