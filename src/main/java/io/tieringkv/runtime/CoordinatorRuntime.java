@@ -3,6 +3,7 @@ package io.tieringkv.runtime;
 import io.tieringkv.cluster.rpc.MultiRaftEndpoint;
 import io.tieringkv.cluster.rpc.RpcFrame;
 import io.tieringkv.cluster.rpc.RpcMessageType;
+import io.tieringkv.cluster.sharding.HashSlotRouter;
 import io.tieringkv.mvcc.TimestampOracle;
 import io.tieringkv.mvcc.TransactionMetricsRegistry;
 import io.tieringkv.transaction.lifecycle.TransactionLifecycleManager;
@@ -92,20 +93,25 @@ public final class CoordinatorRuntime {
                                     .thenApply(
                                             CoordinatorRuntime
                                                     ::decodeMetadataDecision));
-            List<RegionTxnClient> regions = new ArrayList<>();
-            for (String spec : regionsSpec.split(",")) {
+            String[] specs = regionsSpec.split(",");
+            int regionCount = specs.length;
+            List<RegionTxnClient> regions = new ArrayList<>(regionCount);
+            for (int i = 0; i < regionCount; i++) {
+                String spec = specs[i];
                 String[] parts = spec.split("@");
                 String regionId = parts[0];
                 String[] hostPort = parts[1].split(":");
+                int regionIndex = i;
                 RegionTxnClient region = new RegionTxnClient(regionId,
-                        new TxnParticipantClient(hostPort[0], regionId,
-                                transport), key -> true);
+                        new TxnParticipantClient(hostPort[0], regionId, transport),
+                        key -> HashSlotRouter.slot(key.key()) % regionCount == regionIndex);
                 regions.add(region);
             }
             TransactionLifecycleManager lifecycle =
                     new TransactionLifecycleManager(metadata);
             DistributedTxnRouter router = new DistributedTxnRouter(oracle,
-                    key -> regions.get(0), regions, metadata, metrics,
+                    key -> regions.get(HashSlotRouter.slot(key.key()) % regions.size()),
+                    regions, metadata, metrics,
                     lifecycle, 60_000, 300_000);
             TxnTimeoutScheduler scheduler = new TxnTimeoutScheduler(
                     lifecycle, router, metrics);
@@ -124,6 +130,11 @@ public final class CoordinatorRuntime {
 
         public List<RegionTxnClient> regions() {
             return regions;
+        }
+
+        /** 按 CRC16 HashSlot 定位键归属的 Region 客户端。 */
+        public RegionTxnClient regionFor(byte[] key) {
+            return regions.get(HashSlotRouter.slot(key) % regions.size());
         }
 
         public DistributedTxnRouter router() {

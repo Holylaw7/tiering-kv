@@ -1,28 +1,30 @@
 package io.tieringkv.runtime;
 
-import io.tieringkv.mvcc.SnapshotReader;
-import io.tieringkv.mvcc.Transaction;
+import io.tieringkv.ServerVersion;
+import io.tieringkv.command.CommandEngine;
+import io.tieringkv.command.CommandRegistry;
+import io.tieringkv.command.RuntimeConfigBridge;
+import io.tieringkv.config.ServerConfig;
+import io.tieringkv.execution.KeyShardExecutor;
+import io.tieringkv.monitor.MetricsRegistry;
+import io.tieringkv.network.tcp.TieringKvServer;
+import io.tieringkv.observability.ServerInfoProvider;
 import io.tieringkv.observability.tracing.Tracer;
 import io.tieringkv.runtime.CoordinatorRuntime.RuntimeCoordinator;
+import io.tieringkv.security.AclPolicy;
 
 import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.net.ServerSocket;
-import java.net.Socket;
 import java.nio.charset.StandardCharsets;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Redis RESP 网关运行时（ADR-0093）：SET/GET 自动事务（最小实现）。
- *
- * <p>P3 真实 Runner 门禁发现：此网关原先按行解析命令，无法处理
- * RESP 数组（RespClient 的 {@code *3\r\n$3\r\nSET...} 被当成未知
- * 命令）；现改为 RESP2 数组解析 + 标准响应编码（ADR-0343 修正）。
+ * Redis RESP 网关运行时（ADR-0093 + M2-A1）：
+ * 复用 Netty {@link TieringKvServer} 与全量 {@link CommandEngine}，
+ * 经 {@link CoordinatorStorageEngine} 将请求路由至多 Region 分布式事务协调器。
  */
 public final class GatewayRuntime {
 
@@ -33,20 +35,79 @@ public final class GatewayRuntime {
         start(options, null);
     }
 
-    /** 命令 span 记录（ADR-0345）：可选 Tracer（additive）。 */
+    /** 启动 Netty RESP 网关并阻塞至进程退出。 */
     public static void start(Map<String, String> options,
                              Tracer tracer) throws Exception {
         RuntimeCoordinator coordinator = RuntimeCoordinator.start(options);
         int port = TxnRuntimeMain.port(options, "gateway-port", 6379);
-        boolean virtualThreads = "true".equals(options.get(
-                "virtual-threads"));
-        ExecutorService workers = createWorkerExecutor(virtualThreads);
-        try (ServerSocket server = new ServerSocket(port)) {
-            System.out.printf("GatewayRuntime %s ready on %d%n",
-                    coordinator.nodeId(), port);
-            while (true) {
-                Socket socket = server.accept();
-                workers.submit(() -> serve(coordinator, socket, tracer));
+        String password = options.get("password");
+        RunningGateway gateway = startServer(coordinator, port, password);
+        System.out.printf("GatewayRuntime %s ready on %d%n",
+                coordinator.nodeId(), gateway.port());
+        Runtime.getRuntime().addShutdownHook(new Thread(gateway::close));
+        gateway.awaitTermination();
+    }
+
+    /** 可测试启停句柄：直接绑定已启动的 RuntimeCoordinator。 */
+    public static RunningGateway startServer(RuntimeCoordinator coordinator,
+                                             int port,
+                                             String password) throws InterruptedException {
+        CoordinatorStorageEngine storage = new CoordinatorStorageEngine(coordinator);
+        AclPolicy aclPolicy = new AclPolicy();
+        if (password != null && !password.isBlank()) {
+            aclPolicy.configureRequirePass(password);
+        }
+        MetricsRegistry metrics = new MetricsRegistry();
+        ServerConfig config = new ServerConfig("0.0.0.0", port, 10_000, 0, password,
+                ServerConfig.TlsConfig.disabled());
+        TieringKvServer.RuntimeOptions options =
+                new TieringKvServer.RuntimeOptions(config.maxClients(), config.idleTimeoutSeconds());
+        RuntimeConfigBridge runtimeConfig = RuntimeConfigBridge.builder()
+                .maxClients(options::maxClients, options::setMaxClients)
+                .timeout(options::idleTimeoutSeconds, options::setIdleTimeoutSeconds)
+                .requirePass(aclPolicy::requiresAuthForAnonymous, aclPolicy::configureRequirePass)
+                .build();
+        ServerInfoProvider info = new ServerInfoProvider(
+                metrics, null, storage::size, port, ServerVersion.current());
+        KeyShardExecutor executor = new KeyShardExecutor(
+                Math.max(2, Math.min(8, Runtime.getRuntime().availableProcessors())),
+                "gateway-resp-" + coordinator.nodeId());
+        CommandEngine engine = new CommandEngine(
+                CommandRegistry.createDefaultWithRuntime(
+                        info::render, info.sections(), null, null, null, aclPolicy, runtimeConfig),
+                storage, executor, null, aclPolicy);
+        TieringKvServer server = new TieringKvServer(config, engine, metrics, options);
+        server.start();
+        return new RunningGateway(coordinator, executor, server);
+    }
+
+    public static final class RunningGateway implements AutoCloseable {
+        private final RuntimeCoordinator coordinator;
+        private final KeyShardExecutor executor;
+        private final TieringKvServer server;
+
+        RunningGateway(RuntimeCoordinator coordinator, KeyShardExecutor executor, TieringKvServer server) {
+            this.coordinator = coordinator;
+            this.executor = executor;
+            this.server = server;
+        }
+
+        public int port() {
+            return server.boundPort();
+        }
+
+        public void awaitTermination() throws InterruptedException {
+            server.awaitTermination();
+        }
+
+        @Override
+        public void close() {
+            server.shutdown();
+            executor.close();
+            try {
+                coordinator.close();
+            } catch (Exception ignored) {
+                // 停机路径尽力清理
             }
         }
     }
@@ -65,59 +126,6 @@ public final class GatewayRuntime {
                     .invoke(null);
         } catch (ReflectiveOperationException e) {
             return Executors.newCachedThreadPool();
-        }
-    }
-
-    private static void serve(RuntimeCoordinator coordinator, Socket socket,
-                              Tracer tracer) {
-        try (socket; BufferedReader in = new BufferedReader(
-                new InputStreamReader(socket.getInputStream(),
-                        StandardCharsets.UTF_8));
-             OutputStream out = socket.getOutputStream()) {
-            String[] parts;
-            while ((parts = parseCommand(in)) != null) {
-                String command = parts[0].toLowerCase(Locale.ROOT);
-                Tracer.Context trace = tracer == null ? null
-                        : tracer.startW3c("gateway:" + command, null);
-                try {
-                    if ("set".equals(command) && parts.length >= 3) {
-                        Transaction txn = coordinator.router().begin();
-                        txn.put(parts[1].getBytes(StandardCharsets.UTF_8),
-                                parts[2].getBytes(
-                                        StandardCharsets.UTF_8));
-                        coordinator.router().commit(txn);
-                        writeSimple(out, "OK");
-                    } else if ("get".equals(command) && parts.length == 2) {
-                        io.tieringkv.transaction.rpc.TxnMessages.Response
-                                response = coordinator.regions().get(0).get(
-                                parts[1].getBytes(
-                                        StandardCharsets.UTF_8)).join();
-                        if (response.succeeded()
-                                && response.message() != null
-                                && !response.message().isEmpty()) {
-                            writeBulk(out, response.message().getBytes(
-                                    StandardCharsets.UTF_8));
-                        } else {
-                            writeNullBulk(out);
-                        }
-                    } else if ("ping".equals(command)
-                            && parts.length == 1) {
-                        writeSimple(out, "PONG");
-                    } else {
-                        writeError(out, "ERR unknown command");
-                    }
-                    out.flush();
-                } finally {
-                    if (trace != null) {
-                        tracer.end(trace);
-                    }
-                }
-            }
-        } catch (Exception e) {
-            // 单连接错误不影响网关，但必须输出证据（ADR-0343 教训：
-            // 静默吞错导致 CI 无法定位根因）。
-            System.err.println("[gateway] connection error: " + e);
-            e.printStackTrace();
         }
     }
 

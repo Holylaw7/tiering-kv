@@ -20,6 +20,7 @@ import io.tieringkv.protocol.RespProtocolException;
 import io.tieringkv.protocol.RespValue;
 import io.tieringkv.pubsub.ConnectionSubscriber;
 import io.tieringkv.session.ConnectionContext;
+import io.tieringkv.storage.StorageRedirectException;
 import io.tieringkv.storage.wal.WalWriteException;
 import io.tieringkv.storage.tiering.BackpressureException;
 import io.tieringkv.monitor.MetricsRegistry;
@@ -150,6 +151,8 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
                 writeError(ctx, "ERR " + e.getMessage());
             } catch (BackpressureException e) {
                 writeError(ctx, "ERR " + e.getMessage());
+            } catch (StorageRedirectException e) {
+                writeError(ctx, e.respMessage());
             } catch (OutOfMemoryError oom) {
                 // TD-083：堆耗尽时不能让事件循环线程静默死亡（进程还在、
                 // 连接全被重置）。此处关闭连接并记录，交由上层观测/重启。
@@ -273,6 +276,9 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
         }
         if (root instanceof BackpressureException e) {
             return new Outcome(new RespError("ERR " + e.getMessage()), false);
+        }
+        if (root instanceof StorageRedirectException e) {
+            return new Outcome(new RespError(e.respMessage()), false);
         }
         return new Outcome(new RespError("ERR internal error"), true);
     }

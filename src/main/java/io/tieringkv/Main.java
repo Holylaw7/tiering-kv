@@ -23,6 +23,8 @@ import io.tieringkv.observability.SstableInfoRenderer;
 import io.tieringkv.observability.ReplicationMetricsRegistry;
 import io.tieringkv.observability.VectorMetricsRegistry;
 import io.tieringkv.network.tcp.TieringKvServer;
+import io.tieringkv.runtime.GatewayRuntime;
+import io.tieringkv.runtime.TxnRuntimeMain;
 import io.tieringkv.security.AclPolicy;
 import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.storage.VectorIndexSyncStorageEngine;
@@ -59,7 +61,22 @@ public final class Main {
     }
 
     public static void main(String[] args) throws Exception {
-        TieringConfig config = TieringConfig.load(Path.of("config/application.yaml"));
+        Map<String, String> cli = parseArgs(args);
+        String mode = cli.getOrDefault("mode", "standalone");
+        if ("cluster-node".equals(mode)) {
+            ClusterMain.main(args);
+            return;
+        }
+        if ("gateway".equals(mode)) {
+            GatewayRuntime.start(TxnRuntimeMain.parse(args));
+            return;
+        }
+        if (!"standalone".equals(mode)) {
+            throw new IllegalArgumentException("unsupported --mode: " + mode
+                    + " (expected standalone | cluster-node | gateway)");
+        }
+        Path configPath = Path.of(cli.getOrDefault("config", "config/application.yaml"));
+        TieringConfig config = TieringConfig.load(configPath);
         System.out.println("effective configuration: " + config.describe());
         TieringConfig.Server srv = config.server();
         ServerConfig.TlsConfig tlsConfig = srv.tls() != null && srv.tls().enabled()
@@ -188,5 +205,18 @@ public final class Main {
         System.out.println("Tiering-KV listening on " + server.boundPort());
         Runtime.getRuntime().addShutdownHook(new Thread(shutdownManager::shutdown));
         server.awaitTermination();
+    }
+
+    private static Map<String, String> parseArgs(String[] args) {
+        Map<String, String> options = new HashMap<>();
+        if (args == null) {
+            return options;
+        }
+        for (int i = 0; i + 1 < args.length; i += 2) {
+            if (args[i].startsWith("--")) {
+                options.put(args[i].substring(2), args[i + 1]);
+            }
+        }
+        return options;
     }
 }
