@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+cd "$(dirname "$0")/.."
 
 # Kubernetes 集群内验证（ADR-0102）：kind 拉起 → 应用清单 → 演练 → cleanup。
 # 用法：TIERINGKV_KIND_CLUSTER=true scripts/kind-e2e.sh run
@@ -27,6 +28,7 @@ case "${1:-run}" in
       --timeout=180s
     kubectl -n tiering-kv rollout status deployment/tiering-kv-gateway \
       --timeout=120s
+    mkdir -p target
     touch target/kind-cluster-ready
     # 冒烟：gateway Service 端口转发 + RESP SET/GET
     kubectl -n tiering-kv port-forward svc/tiering-kv-gateway 6379:6379 &
