@@ -53,5 +53,13 @@ console-web/coverage/
 console-web/playwright-report/
 console-web/test-results/
 .playwright/
-# 学校模板转换产物（本地留存，不入库）
-docs/thesis/_school/
+# ---- 毕业论文及个人资料（仅本地留存，禁止入库上传） ----
+docs/thesis/
+docs/thesis/**
+*.doc
+*.docx
+~$*.doc
+~$*.docx
+*开题报告*.pdf
+*任务书*.pdf
+*毕业论文*.pdf
