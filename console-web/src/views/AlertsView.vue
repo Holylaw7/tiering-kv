@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import { alertApi } from '@/api'
 import type { AlertEvent, AlertRule } from '@/api/types'
 import { useInstanceStore } from '@/stores/instance'
 import { useAuthStore } from '@/stores/auth'
 import EmptyState from '@/components/EmptyState.vue'
+import StatCard from '@/components/StatCard.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 
 const store = useInstanceStore()
 const auth = useAuthStore()
@@ -39,6 +41,10 @@ const form = reactive({
   level: 'WARN',
   enabled: true
 })
+
+const enabledRuleCount = computed(() => rules.value.filter((r) => r.enabled).length)
+const firingInPage = computed(() => events.value.filter((e) => e.status === 'FIRING').length)
+const critInPage = computed(() => events.value.filter((e) => e.level === 'CRIT').length)
 
 async function loadRules() {
   rules.value = await alertApi.rules()
@@ -117,6 +123,23 @@ onMounted(async () => {
       </el-button>
     </div>
 
+    <div class="kpi-grid">
+      <StatCard label="规则总数" :value="rules.length" :hint="`已启用 ${enabledRuleCount} 条`" />
+      <StatCard label="累计告警事件" :value="total" hint="按时间倒序分页" />
+      <StatCard
+        label="当前页触发中"
+        :value="firingInPage"
+        :tone="firingInPage > 0 ? 'danger' : 'default'"
+        hint="FIRING 状态事件"
+      />
+      <StatCard
+        label="当前页严重级别"
+        :value="critInPage"
+        :tone="critInPage > 0 ? 'warn' : 'default'"
+        hint="CRIT 级告警"
+      />
+    </div>
+
     <div class="panel">
       <el-tabs v-model="tab">
         <el-tab-pane label="告警事件" name="events">
@@ -136,7 +159,7 @@ onMounted(async () => {
         </el-table-column>
             <el-table-column label="级别" width="90">
               <template #default="{ row }">
-                <el-tag :type="levelType(row.level)" size="small">{{ row.level }}</el-tag>
+                <StatusBadge :label="row.level" :tone="levelType(row.level) === 'danger' ? 'danger' : 'warn'" mono />
               </template>
             </el-table-column>
             <el-table-column prop="metric" label="指标" width="130" />
@@ -147,11 +170,13 @@ onMounted(async () => {
             </el-table-column>
             <el-table-column prop="message" label="描述" min-width="200" show-overflow-tooltip />
             <el-table-column prop="firedAt" label="触发时间" width="170" />
-            <el-table-column label="状态" width="100">
+            <el-table-column label="状态" width="106">
               <template #default="{ row }">
-                <el-tag :type="row.status === 'FIRING' ? 'danger' : 'success'" size="small">
-                  {{ row.status === 'FIRING' ? '触发中' : '已恢复' }}
-                </el-tag>
+                <StatusBadge
+                  :label="row.status === 'FIRING' ? '触发中' : '已恢复'"
+                  :tone="row.status === 'FIRING' ? 'danger' : 'success'"
+                  dot
+                />
               </template>
             </el-table-column>
             <el-table-column label="操作" width="110">

@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { useInstanceStore } from '@/stores/instance'
-import { authApi } from '@/api'
+import { alertApi, authApi } from '@/api'
+import StatusBadge from '@/components/StatusBadge.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -12,6 +13,8 @@ const auth = useAuthStore()
 const instanceStore = useInstanceStore()
 
 const collapsed = ref(false)
+const mobileDrawer = ref(false)
+const firingAlertCount = ref(0)
 
 const GROUP_ORDER = ['概览', '数据', '运维', '系统'] as const
 const GROUP_OF: Record<string, string> = {
@@ -44,7 +47,17 @@ const navGroups = computed(() => {
 })
 
 const currentTitle = computed(() => String(route.meta?.title ?? ''))
+const currentGroup = computed(() => GROUP_OF[route.path] ?? '控制台')
 const currentInstance = computed(() => instanceStore.selected)
+
+async function loadAlertSummary() {
+  try {
+    const page = await alertApi.events({ status: 'FIRING', page: 1, size: 1 })
+    firingAlertCount.value = page.total
+  } catch {
+    // 顶栏徽标为非阻塞辅助提示，网络或权限受限时静默忽略
+  }
+}
 
 // 自助修改口令
 const passwordVisible = ref(false)
@@ -82,8 +95,19 @@ async function submitPassword() {
 }
 
 onMounted(async () => {
-  await instanceStore.load()
+  await Promise.all([instanceStore.load(), loadAlertSummary()])
 })
+
+watch(
+  () => route.path,
+  () => {
+    mobileDrawer.value = false
+    loadAlertSummary()
+    if (instanceStore.list.some((item) => item.status === 'UNKNOWN')) {
+      instanceStore.load().catch(() => {})
+    }
+  }
+)
 
 async function handleCommand(command: string) {
   if (command === 'password') {
@@ -99,6 +123,10 @@ async function handleCommand(command: string) {
 function onInstanceChange(value: number) {
   instanceStore.select(value)
 }
+
+function goAlerts() {
+  router.push('/alerts')
+}
 </script>
 
 <template>
@@ -109,7 +137,10 @@ function onInstanceChange(value: number) {
           <path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z" stroke="currentColor" stroke-width="1.5" />
           <path d="M4 7.5 12 12l8-4.5M12 12v9" stroke="currentColor" stroke-width="1.5" />
         </svg>
-        <span v-if="!collapsed" class="wordmark">Tiering-KV</span>
+        <div v-if="!collapsed" class="brand-text">
+          <span class="wordmark">Tiering-KV</span>
+          <span class="brand-sub">Ops Console</span>
+        </div>
       </div>
 
       <nav class="nav">
@@ -135,7 +166,19 @@ function onInstanceChange(value: number) {
     <div class="content">
       <header class="topbar">
         <div class="topbar-left">
-          <span class="crumb">{{ currentTitle }}</span>
+          <button
+            class="mobile-trigger"
+            type="button"
+            aria-label="打开导航菜单"
+            @click="mobileDrawer = true"
+          >
+            <el-icon><Operation /></el-icon>
+          </button>
+          <div class="breadcrumbs">
+            <span class="crumb-group">{{ currentGroup }}</span>
+            <span class="crumb-slash">/</span>
+            <span class="crumb">{{ currentTitle }}</span>
+          </div>
           <span class="sep"></span>
           <el-select
             :model-value="instanceStore.selectedId"
@@ -162,10 +205,20 @@ function onInstanceChange(value: number) {
         </div>
 
         <div class="topbar-right">
-          <span class="health" :class="currentInstance?.status === 'UP' ? 'is-up' : 'is-down'">
-            <span class="dot" :class="(currentInstance?.status ?? 'unknown').toLowerCase()"></span>
-            {{ currentInstance?.status === 'UP' ? '运行中' : currentInstance?.status === 'DOWN' ? '连接失败' : '未知' }}
-          </span>
+          <button
+            type="button"
+            class="alert-pill"
+            :class="{ 'is-firing': firingAlertCount > 0 }"
+            @click="goAlerts"
+          >
+            <span class="dot" :class="firingAlertCount > 0 ? 'down' : 'up'"></span>
+            <span>{{ firingAlertCount > 0 ? `${firingAlertCount} 条活跃告警` : '告警正常' }}</span>
+          </button>
+          <StatusBadge
+            :label="currentInstance?.status === 'UP' ? '运行中' : currentInstance?.status === 'DOWN' ? '连接失败' : '未知'"
+            :tone="currentInstance?.status === 'UP' ? 'success' : currentInstance?.status === 'DOWN' ? 'danger' : 'neutral'"
+            dot
+          />
           <span class="online">{{ instanceStore.upCount }}/{{ instanceStore.list.length }} 实例在线</span>
           <span class="sep"></span>
           <el-dropdown trigger="click" @command="handleCommand">
@@ -209,6 +262,18 @@ function onInstanceChange(value: number) {
         <el-button type="primary" :loading="passwordLoading" @click="submitPassword">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-drawer v-if="mobileDrawer" v-model="mobileDrawer" direction="ltr" size="252px" title="导航菜单" class="mobile-nav-drawer">
+      <div v-for="group in navGroups" :key="group.name" class="nav-group">
+        <p class="nav-label">{{ group.name }}</p>
+        <el-menu :default-active="route.path" router class="menu">
+          <el-menu-item v-for="item in group.items" :key="item.path" :index="item.path">
+            <el-icon><component :is="item.icon" /></el-icon>
+            <template #title>{{ item.title }}</template>
+          </el-menu-item>
+        </el-menu>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -237,17 +302,24 @@ function onInstanceChange(value: number) {
 .brand {
   display: flex;
   align-items: center;
-  gap: 9px;
-  height: 52px;
+  gap: 10px;
+  height: 54px;
   padding: 0 16px;
+  border-bottom: 1px solid var(--line-soft);
   flex: none;
 }
 
 .mark {
-  width: 19px;
-  height: 19px;
+  width: 20px;
+  height: 20px;
   color: var(--accent);
   flex: none;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
 }
 
 .wordmark {
@@ -256,6 +328,12 @@ function onInstanceChange(value: number) {
   letter-spacing: -0.015em;
   color: var(--text);
   white-space: nowrap;
+}
+
+.brand-sub {
+  font-size: 10.5px;
+  color: var(--text-3);
+  letter-spacing: 0.03em;
 }
 
 .nav {
@@ -352,12 +430,68 @@ function onInstanceChange(value: number) {
   flex: none;
 }
 
+.breadcrumbs {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.crumb-group {
+  font-size: var(--text-sm);
+  color: var(--text-3);
+}
+
+.crumb-slash {
+  font-size: var(--text-xs);
+  color: var(--line-strong);
+}
+
 .crumb {
   font-size: var(--text-base);
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--text);
-  white-space: nowrap;
+}
+
+.mobile-trigger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.alert-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: border-color 0.14s var(--ease), background-color 0.14s var(--ease);
+}
+
+.alert-pill:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-3);
+}
+
+.alert-pill.is-firing {
+  background: var(--danger-soft);
+  border-color: var(--danger-line);
+  color: var(--danger);
+  font-weight: 500;
 }
 
 .sep {
@@ -401,22 +535,6 @@ function onInstanceChange(value: number) {
 .endpoint {
   font-size: 11.5px;
   color: var(--text-3);
-}
-
-.health {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--text-sm);
-  color: var(--text-2);
-}
-
-.health.is-up {
-  color: var(--success);
-}
-
-.health.is-down {
-  color: var(--danger);
 }
 
 .dot {
@@ -503,6 +621,49 @@ function onInstanceChange(value: number) {
 @media (max-width: 1380px) {
   .endpoint {
     display: none;
+  }
+}
+
+@media (max-width: 960px) {
+  .shell,
+  .shell.collapsed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .mobile-trigger {
+    display: inline-flex;
+  }
+
+  .online,
+  .crumb-group,
+  .crumb-slash,
+  .crumb,
+  .sep {
+    display: none;
+  }
+
+  .instance-select {
+    width: 132px;
+  }
+
+  .topbar {
+    padding: 0 14px;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 640px) {
+  .alert-pill,
+  .who {
+    display: none;
+  }
+
+  .topbar-right {
+    gap: 8px;
   }
 }
 

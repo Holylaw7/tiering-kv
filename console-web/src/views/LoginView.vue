@@ -30,6 +30,10 @@ async function submit() {
     loading.value = false
   }
 }
+function fillDemo() {
+  form.username = 'admin'
+  form.password = 'admin123'
+}
 </script>
 
 <template>
@@ -41,38 +45,43 @@ async function submit() {
           <path d="M4 7.5 12 12l8-4.5M12 12v9" stroke="currentColor" stroke-width="1.5" />
         </svg>
         <span>Tiering-KV</span>
+        <span class="brand-badge">管理系统</span>
       </div>
-      <span class="tagline">Redis 协议兼容 · 冷热分层存储</span>
+      <span class="tagline">Spring Boot · Vue 3 · 面向自研键值存储引擎</span>
     </header>
 
     <main class="stage">
       <section class="intro">
-        <h1>把热数据留在内存，<br />把冷数据交给磁盘。</h1>
+        <div class="eyebrow">控制平面 · 统一纳管平台</div>
+        <h1>键值存储实例的<br />统一监控、运维与安全治理。</h1>
         <p class="lede">
-          内存层与 SSTable 冷层协同工作：写满水位自动迁移，读路径回退冷层。
-          控制台负责实例、键空间、终端、告警与备份的日常运维。
+          基于 RESP 协议无侵入纳管多节点键值存储实例，集成运行指标观测、键空间维护、双端备份恢复与独立事务审计。
         </p>
 
         <dl class="facts">
           <div>
-            <dt>存储引擎</dt>
-            <dd>LSM-Tree · WAL · BlockCache</dd>
+            <dt>多实例观测</dt>
+            <dd>指标采集三态区分 · 慢查询日志分析</dd>
           </div>
           <div>
-            <dt>协议</dt>
-            <dd>RESP2 / RESP3 · 157 条命令</dd>
+            <dt>安全访问</dt>
+            <dd>JWT 无状态鉴权 · 三级 RBAC · 终端凭据脱敏</dd>
           </div>
           <div>
-            <dt>运行时</dt>
-            <dd>Java 21 · Netty</dd>
+            <dt>备份与快照</dt>
+            <dd>本地 / S3 对象存储 · BGSAVE 物理 Checkpoint</dd>
+          </div>
+          <div>
+            <dt>审计与告警</dt>
+            <dd>规则阈值评估 · 独立事务审计 · RFC 4180 导出</dd>
           </div>
         </dl>
       </section>
 
-      <section class="auth">
+      <section class="auth-card">
         <div class="auth-head">
           <h2>登录控制台</h2>
-          <p>使用管理员分配的账号继续。</p>
+          <p>请使用管理员分配的角色账号认证接入。</p>
         </div>
 
         <el-form ref="formRef" :model="form" :rules="rules" label-position="top" @keyup.enter="submit">
@@ -101,15 +110,16 @@ async function submit() {
           </el-button>
         </el-form>
 
-        <p class="hint">
-          默认账号 <span class="mono">admin / admin123</span>；首次登录后请在右上角修改口令。
-        </p>
+        <div class="demo-bar">
+          <span class="hint">首次登录后请于右上角及时更新默认口令</span>
+          <button type="button" class="demo-fill" @click="fillDemo">填入演示凭据</button>
+        </div>
       </section>
     </main>
 
     <footer class="foot">
-      <span>Tiering-KV Console</span>
-      <span class="mono">v5.1.0</span>
+      <span>Tiering-KV Operations Console</span>
+      <span class="mono">Spring Boot 3 · Vue 3 · v5.1.0</span>
     </footer>
   </div>
 </template>
@@ -119,7 +129,8 @@ async function submit() {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  background: var(--surface);
+  background: radial-gradient(circle at 12% 14%, rgba(59, 91, 219, 0.05), transparent 40%),
+    var(--bg);
   color: var(--text-1);
 }
 
@@ -129,8 +140,9 @@ async function submit() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 64px;
+  height: 60px;
   padding: 0 48px;
+  background: var(--surface);
   border-bottom: 1px solid var(--line-soft);
   flex: none;
 }
@@ -142,6 +154,15 @@ async function submit() {
   font-size: var(--text-md);
   font-weight: 600;
   letter-spacing: -0.015em;
+}
+
+.brand-badge {
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--text-xs);
+  font-weight: 500;
 }
 
 .mark {
@@ -162,43 +183,55 @@ async function submit() {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(360px, 0.85fr);
   align-items: center;
-  gap: 80px;
+  gap: 64px;
   max-width: 1180px;
   width: 100%;
   margin: 0 auto;
-  padding: 64px 48px 72px;
+  padding: 48px 48px 64px;
+}
+
+.eyebrow {
+  display: inline-block;
+  margin-bottom: 12px;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--text-2);
 }
 
 .intro h1 {
   margin: 0;
-  font-size: 34px;
-  line-height: 1.28;
+  font-size: 32px;
+  line-height: 1.3;
   font-weight: 600;
   letter-spacing: -0.03em;
   color: var(--text);
 }
 
 .lede {
-  margin: 18px 0 0;
-  max-width: 40ch;
+  margin: 16px 0 0;
+  max-width: 44ch;
   font-size: var(--text-md);
   line-height: 1.75;
   color: var(--text-2);
 }
 
 .facts {
-  margin: 44px 0 0;
+  margin: 36px 0 0;
   display: grid;
   gap: 0;
-  max-width: 460px;
+  max-width: 500px;
 }
 
 .facts > div {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-columns: 108px minmax(0, 1fr);
   gap: 16px;
   align-items: baseline;
-  padding: 12px 0;
+  padding: 11px 0;
   border-top: 1px solid var(--line-soft);
 }
 
@@ -209,8 +242,7 @@ async function submit() {
 .facts dt {
   font-size: var(--text-xs);
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.05em;
   color: var(--text-3);
 }
 
@@ -222,10 +254,15 @@ async function submit() {
 
 /* ---------- 表单 ---------- */
 
-.auth {
+.auth-card {
   width: 100%;
-  max-width: 352px;
+  max-width: 392px;
   justify-self: end;
+  padding: 28px 30px 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
 }
 
 .auth-head h2 {
@@ -237,7 +274,7 @@ async function submit() {
 }
 
 .auth-head p {
-  margin: 6px 0 26px;
+  margin: 6px 0 22px;
   font-size: var(--text-sm);
   color: var(--text-2);
 }
@@ -248,11 +285,37 @@ async function submit() {
   height: 40px;
 }
 
+.demo-bar {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .hint {
-  margin: 22px 0 0;
-  font-size: var(--text-sm);
-  line-height: 1.7;
+  font-size: var(--text-xs);
+  line-height: 1.5;
   color: var(--text-3);
+}
+
+.demo-fill {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.demo-fill:hover {
+  background: var(--surface-3);
+  color: var(--accent);
+  border-color: var(--accent-line);
 }
 
 :deep(.el-form-item) {
@@ -295,7 +358,7 @@ async function submit() {
     padding: 40px 28px 48px;
   }
 
-  .auth {
+  .auth-card {
     justify-self: start;
     max-width: 420px;
   }

@@ -7,6 +7,9 @@ import { useInstanceStore } from '@/stores/instance'
 import { useAuthStore } from '@/stores/auth'
 import { formatBytes } from '@/utils/format'
 import EmptyState from '@/components/EmptyState.vue'
+import StatCard from '@/components/StatCard.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
+import PageToolbar from '@/components/PageToolbar.vue'
 
 const store = useInstanceStore()
 const auth = useAuthStore()
@@ -16,6 +19,17 @@ const creating = ref(false)
 const checkpointing = ref(false)
 const checkpointStatus = ref<CheckpointStatusView | null>(null)
 const checkpointError = ref('')
+const statusFilter = ref('')
+
+const filteredRows = computed(() => {
+  if (!statusFilter.value) return rows.value
+  return rows.value.filter((item) => item.status === statusFilter.value)
+})
+const successCount = computed(() => rows.value.filter((item) => item.status === 'SUCCESS').length)
+const failedCount = computed(() => rows.value.filter((item) => item.status === 'FAILED').length)
+const totalBackupBytes = computed(() =>
+  rows.value.reduce((acc, item) => acc + (item.sizeBytes || 0), 0)
+)
 
 const lastSaveLabel = computed(() => {
   const status = checkpointStatus.value
@@ -192,7 +206,7 @@ onUnmounted(stopPolling)
     <div class="page-header">
       <div>
         <h2 class="page-title">备份与恢复</h2>
-        <p class="page-subtitle">逻辑备份：SCAN 全量导出为 JSONL，后台异步执行（同实例并发提交返回 409），按类型回放恢复</p>
+        <p class="page-subtitle">逻辑备份经 SCAN 流式压缩导出（支持本地或 S3 对象存储，同实例并发返回 409），配合内核 BGSAVE 物理快照。</p>
       </div>
       <div class="header-actions">
         <el-button
@@ -209,32 +223,64 @@ onUnmounted(stopPolling)
       </div>
     </div>
 
+    <div class="kpi-grid">
+      <StatCard label="备份记录" :value="rows.length" :hint="`成功 ${successCount} 份`" />
+      <StatCard
+        label="异常 / 运行"
+        :value="failedCount"
+        :tone="failedCount > 0 ? 'danger' : 'default'"
+        :hint="rows.some((r) => r.status === 'RUNNING') ? '存在执行中导出任务' : '当前无失败阻塞'"
+      />
+      <StatCard label="累计备份体积" :value="formatBytes(totalBackupBytes)" hint="Gzip / JSONL 导出文件" />
+      <StatCard
+        label="物理快照状态"
+        :value="
+          checkpointStatus?.inProgress
+            ? '落盘中'
+            : checkpointStatus?.supported === false
+              ? '不支持'
+              : checkpointStatus?.lastStatus === 'err'
+                ? '失败'
+                : '就绪'
+        "
+        :tone="checkpointStatus?.inProgress ? 'warn' : checkpointStatus?.lastStatus === 'err' ? 'danger' : 'success'"
+        :hint="lastSaveLabel"
+      />
+    </div>
+
     <div class="panel checkpoint-strip" v-if="store.selectedId">
       <div class="checkpoint-meta">
-        <span class="meta-label">实例 #{{ store.selectedId }} 物理快照（BGSAVE / LASTSAVE）：</span>
-        <span class="mono">{{ lastSaveLabel }}</span>
-        <el-tag
+        <StatusBadge label="BGSAVE / LASTSAVE" tone="accent" mono />
+        <span class="meta-label">实例 #{{ store.selectedId }} 最近物理 Checkpoint：</span>
+        <span class="mono meta-value">{{ lastSaveLabel }}</span>
+        <StatusBadge
           v-if="checkpointStatus?.supported"
-          size="small"
-          :type="checkpointStatus.inProgress ? 'warning' : checkpointStatus.lastStatus === 'err' ? 'danger' : 'success'"
-        >
-          {{
-            checkpointStatus.inProgress
-              ? '落盘中'
-              : checkpointStatus.lastStatus === 'err'
-                ? '上次失败'
-                : '就绪'
-          }}
-        </el-tag>
-        <span v-if="checkpointStatus?.lastDurationMillis && checkpointStatus.lastSaveTime > 0" class="muted">
+          :label="checkpointStatus.inProgress ? '落盘中' : checkpointStatus.lastStatus === 'err' ? '上次失败' : '就绪'"
+          :tone="checkpointStatus.inProgress ? 'warn' : checkpointStatus.lastStatus === 'err' ? 'danger' : 'success'"
+          dot
+        />
+        <span v-if="checkpointStatus?.lastDurationMillis && checkpointStatus.lastSaveTime > 0" class="muted mono">
           耗时 {{ checkpointStatus.lastDurationMillis }} ms
         </span>
       </div>
-      <el-button size="small" text @click="loadCheckpointStatus">刷新快照状态</el-button>
+      <el-button size="small" @click="loadCheckpointStatus">
+        <el-icon><Refresh /></el-icon> 刷新快照状态
+      </el-button>
     </div>
 
     <div class="panel">
-      <el-table :data="rows" size="small">
+      <PageToolbar :meta="`展示 ${filteredRows.length} / ${rows.length} 条 · 恢复采用合并式幂等回放`">
+        <el-select v-model="statusFilter" placeholder="全部状态" clearable style="width: 140px">
+          <el-option value="SUCCESS" label="SUCCESS（成功）" />
+          <el-option value="RUNNING" label="RUNNING（进行中）" />
+          <el-option value="FAILED" label="FAILED（失败）" />
+        </el-select>
+        <el-button @click="load">
+          <el-icon><Refresh /></el-icon> 刷新列表
+        </el-button>
+      </PageToolbar>
+
+      <el-table :data="filteredRows" size="small">
         <template #empty>
           <EmptyState title="还没有备份" description="点击右上角「立即备份」为该实例创建第一份快照。" />
         </template>
@@ -243,27 +289,36 @@ onUnmounted(stopPolling)
             <span class="mono">{{ row.fileName }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="实例" width="100">
-          <template #default="{ row }">#{{ row.instanceId }}</template>
-        </el-table-column>
-        <el-table-column label="键数" width="100">
-          <template #default="{ row }">{{ row.keyCount }}</template>
-        </el-table-column>
-        <el-table-column label="大小" width="110">
-          <template #default="{ row }">{{ formatBytes(row.sizeBytes) }}</template>
-        </el-table-column>
-        <el-table-column label="状态" width="110">
+        <el-table-column label="格式" width="90">
           <template #default="{ row }">
-            <el-tag
-              size="small"
-              :type="row.status === 'SUCCESS' ? 'success' : row.status === 'FAILED' ? 'danger' : 'warning'"
-            >
-              {{ row.status }}
-            </el-tag>
+            <StatusBadge
+              :label="row.fileName.endsWith('.gz') ? 'GZIP' : 'JSONL'"
+              :tone="row.fileName.endsWith('.gz') ? 'accent' : 'neutral'"
+              mono
+            />
+          </template>
+        </el-table-column>
+        <el-table-column label="实例" width="84">
+          <template #default="{ row }"><span class="mono">#{{ row.instanceId }}</span></template>
+        </el-table-column>
+        <el-table-column label="键数" width="96" align="right">
+          <template #default="{ row }"><span class="num">{{ row.keyCount }}</span></template>
+        </el-table-column>
+        <el-table-column label="大小" width="108" align="right">
+          <template #default="{ row }"><span class="num">{{ formatBytes(row.sizeBytes) }}</span></template>
+        </el-table-column>
+        <el-table-column label="状态" width="118">
+          <template #default="{ row }">
+            <StatusBadge
+              :label="row.status"
+              :tone="row.status === 'SUCCESS' ? 'success' : row.status === 'FAILED' ? 'danger' : 'warn'"
+              dot
+              mono
+            />
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="180" />
-        <el-table-column label="操作" width="230">
+        <el-table-column label="操作" width="210">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="download(row)">下载</el-button>
             <el-button v-if="auth.isAdmin" link type="warning" size="small" :disabled="row.status !== 'SUCCESS'" @click="restore(row)">
@@ -282,14 +337,17 @@ onUnmounted(stopPolling)
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .checkpoint-strip {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
   padding: 12px 16px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .checkpoint-meta {
@@ -300,12 +358,17 @@ onUnmounted(stopPolling)
 }
 
 .meta-label {
-  font-size: 13px;
-  color: var(--tk-text-2);
+  font-size: var(--text-sm);
+  color: var(--text-2);
+}
+
+.meta-value {
+  font-size: var(--text-sm);
+  color: var(--text-1);
 }
 
 .muted {
-  font-size: 12px;
-  color: var(--tk-text-3);
+  font-size: var(--text-xs);
+  color: var(--text-3);
 }
 </style>

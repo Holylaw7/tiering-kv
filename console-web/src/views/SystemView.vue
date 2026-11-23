@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { systemApi } from '@/api'
 import type { SystemInfo } from '@/api/types'
 import { useInstanceStore } from '@/stores/instance'
@@ -8,6 +8,14 @@ import { formatBytes } from '@/utils/format'
 const store = useInstanceStore()
 const info = ref<SystemInfo>()
 const loading = ref(false)
+const configFilter = ref('')
+
+const configEntries = computed(() => {
+  const entries = Object.entries(info.value?.config ?? {}).map(([key, value]) => ({ key, value }))
+  const q = configFilter.value.trim().toLowerCase()
+  if (!q) return entries
+  return entries.filter((item) => item.key.toLowerCase().includes(q) || item.value.toLowerCase().includes(q))
+})
 
 async function load() {
   if (!store.selectedId) return
@@ -124,9 +132,17 @@ onMounted(load)
     </div>
 
     <div class="panel">
-      <div class="card-title">配置（只读）</div>
+      <div class="config-head">
+        <div class="card-title" style="margin-bottom: 0">配置（只读）</div>
+        <el-input
+          v-model="configFilter"
+          placeholder="过滤配置项，如 slowlog"
+          clearable
+          style="width: 220px"
+        />
+      </div>
       <el-table
-        :data="Object.entries(info?.config ?? {}).map(([key, value]) => ({ key, value }))"
+        :data="configEntries"
         size="small"
         empty-text="内核未返回配置"
       >
@@ -178,9 +194,23 @@ onMounted(load)
 }
 
 .card-title {
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text);
   margin-bottom: 10px;
+}
+
+.config-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.panel + .panel {
+  margin-top: 14px;
 }
 
 .warn {

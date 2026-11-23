@@ -5,6 +5,9 @@ import { instanceApi } from '@/api'
 import type { InstanceView } from '@/api/types'
 import { useInstanceStore } from '@/stores/instance'
 import { useAuthStore } from '@/stores/auth'
+import StatCard from '@/components/StatCard.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
+import PageToolbar from '@/components/PageToolbar.vue'
 
 const store = useInstanceStore()
 const auth = useAuthStore()
@@ -94,16 +97,25 @@ onMounted(load)
       </el-button>
     </div>
 
-    <div class="summary-strip">
-      <span class="summary-item">纳管实例 <strong class="num">{{ rows.length }}</strong></span>
-      <span class="summary-item">在线 <strong class="num">{{ onlineCount }}</strong></span>
-      <span class="summary-item">离线 <strong class="num">{{ rows.length - onlineCount }}</strong></span>
-      <span class="summary-item">已配置口令 <strong class="num">{{ passwordCount }}</strong></span>
-      <span class="summary-item grow"></span>
-      <span class="summary-item dim">协议 RESP · 控制面直连，不经内核进程内 API</span>
+    <div class="kpi-grid">
+      <StatCard label="纳管实例总数" :value="rows.length" hint="RESP 协议直连" />
+      <StatCard label="在线 (UP)" :value="onlineCount" tone="success" hint="最近探测可达" />
+      <StatCard
+        label="离线 / 异常"
+        :value="rows.length - onlineCount"
+        :tone="rows.length - onlineCount > 0 ? 'danger' : 'default'"
+        hint="请检查网络或口令"
+      />
+      <StatCard label="已配置认证口令" :value="passwordCount" hint="控制台加密托管" />
     </div>
 
     <div class="panel">
+      <PageToolbar meta="控制面通过独立 RESP 连接池访问，不共享存储引擎进程">
+        <el-button @click="load">
+          <el-icon><Refresh /></el-icon> 刷新列表
+        </el-button>
+      </PageToolbar>
+
       <el-table :data="rows" size="default">
         <el-table-column prop="name" label="名称" min-width="140" />
         <el-table-column label="地址" min-width="180">
@@ -113,9 +125,12 @@ onMounted(load)
         </el-table-column>
         <el-table-column label="状态" width="110">
           <template #default="{ row }">
-            <el-tag :type="row.status === 'UP' ? 'success' : row.status === 'DOWN' ? 'danger' : 'info'" size="small">
-              {{ row.status }}
-            </el-tag>
+            <StatusBadge
+              :label="row.status"
+              :tone="row.status === 'UP' ? 'success' : row.status === 'DOWN' ? 'danger' : 'neutral'"
+              dot
+              mono
+            />
           </template>
         </el-table-column>
         <el-table-column label="版本" width="110">
@@ -125,7 +140,7 @@ onMounted(load)
         </el-table-column>
         <el-table-column label="口令" width="90">
           <template #default="{ row }">
-            <el-tag v-if="row.hasPassword" size="small" type="info">已配置</el-tag>
+            <StatusBadge v-if="row.hasPassword" label="已配置" tone="accent" />
             <span v-else class="muted">无</span>
           </template>
         </el-table-column>
@@ -171,32 +186,7 @@ onMounted(load)
 </template>
 
 <style scoped>
-.summary-strip {
-  display: flex;
-  align-items: center;
-  gap: 22px;
-  padding: 0 0 14px;
-  font-size: var(--text-sm);
-  color: var(--text-2);
-  flex-wrap: wrap;
-}
-
-.summary-item strong {
-  margin-left: 4px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.summary-item.dim {
-  font-size: var(--text-xs);
-  color: var(--text-3);
-}
-
-.grow {
-  flex: 1;
-}
-
 .muted {
-  color: var(--el-text-color-secondary);
+  color: var(--text-3);
 }
 </style>

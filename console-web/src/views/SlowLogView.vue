@@ -1,12 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { slowLogApi } from '@/api'
 import type { SlowLogEntryView, SlowLogView } from '@/api/types'
 import { useInstanceStore } from '@/stores/instance'
 import { useAuthStore } from '@/stores/auth'
 import EmptyState from '@/components/EmptyState.vue'
+import StatCard from '@/components/StatCard.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
+import PageToolbar from '@/components/PageToolbar.vue'
 
+const router = useRouter()
 const store = useInstanceStore()
 const auth = useAuthStore()
 
@@ -31,6 +36,15 @@ const filteredRows = computed<SlowLogEntryView[]>(() => {
   return filtered
 })
 
+const maxDurationMicros = computed(() =>
+  filteredRows.value.reduce((max, item) => Math.max(max, item.durationMicros), 0)
+)
+const avgDurationMicros = computed(() => {
+  if (!filteredRows.value.length) return 0
+  const sum = filteredRows.value.reduce((acc, item) => acc + item.durationMicros, 0)
+  return Math.round(sum / filteredRows.value.length)
+})
+
 function formatTimestamp(seconds: number): string {
   if (!seconds || seconds <= 0) return '—'
   return new Date(seconds * 1000).toLocaleString('zh-CN', { hour12: false })
@@ -40,6 +54,17 @@ function formatDuration(micros: number): string {
   if (micros >= 1_000_000) return `${(micros / 1_000_000).toFixed(2)} s`
   if (micros >= 1_000) return `${(micros / 1_000).toFixed(2)} ms`
   return `${micros} us`
+}
+
+function durationTone(micros: number): 'danger' | 'warn' | 'success' {
+  if (micros >= 50_000) return 'danger'
+  if (micros >= 10_000) return 'warn'
+  return 'success'
+}
+
+function openInTerminal(row: SlowLogEntryView) {
+  const full = [row.command, ...row.args].filter(Boolean).join(' ')
+  router.push({ path: '/terminal', query: { cmd: full } })
 }
 
 async function load() {
@@ -84,22 +109,6 @@ onMounted(load)
         <p class="page-subtitle">实时读取数据面 SLOWLOG GET / LEN，敏感认证参数已自动脱敏</p>
       </div>
       <div class="header-actions">
-        <el-select v-model="limit" style="width: 112px" @change="load">
-          <el-option :value="20" label="最近 20 条" />
-          <el-option :value="50" label="最近 50 条" />
-          <el-option :value="100" label="最近 100 条" />
-          <el-option :value="200" label="最近 200 条" />
-        </el-select>
-        <el-select v-model="sortBy" style="width: 140px">
-          <el-option value="time" label="按时间倒序" />
-          <el-option value="duration" label="按耗时降序" />
-        </el-select>
-        <el-input
-          v-model="commandFilter"
-          placeholder="过滤命令，如 SET"
-          clearable
-          style="width: 180px"
-        />
         <el-button @click="load">
           <el-icon><Refresh /></el-icon> 刷新
         </el-button>
@@ -122,15 +131,44 @@ onMounted(load)
       type="warning"
       show-icon
       :closable="false"
-      style="margin-bottom: 12px"
+      style="margin-bottom: 14px"
     />
 
+    <div class="kpi-grid">
+      <StatCard label="环形缓冲总计" :value="view?.totalLen ?? 0" hint="内核 SLOWLOG LEN" />
+      <StatCard label="当前检索展示" :value="filteredRows.length" :hint="`拉取上限 ${limit} 条`" />
+      <StatCard
+        label="当前最慢耗时"
+        :value="filteredRows.length ? formatDuration(maxDurationMicros) : '—'"
+        :tone="maxDurationMicros >= 50000 ? 'danger' : maxDurationMicros >= 10000 ? 'warn' : 'default'"
+        hint="≥ 50 ms 标记高延迟"
+      />
+      <StatCard
+        label="筛选样本均耗"
+        :value="filteredRows.length ? formatDuration(avgDurationMicros) : '—'"
+        hint="仅统计已展示条目"
+      />
+    </div>
+
     <div class="panel">
-      <div class="summary-bar" v-if="store.selectedId && view?.supported">
-        <span class="meta-label">实例 #{{ store.selectedId }} 环形缓冲总计：</span>
-        <el-tag size="small" type="info">{{ view.totalLen }} 条</el-tag>
-        <span class="meta-label">当前展示：{{ filteredRows.length }} 条</span>
-      </div>
+      <PageToolbar :meta="`实例 #${store.selectedId ?? '-'} · 按 ${sortBy === 'duration' ? '耗时降序' : '时间倒序'}`">
+        <el-select v-model="limit" style="width: 118px" @change="load">
+          <el-option :value="20" label="最近 20 条" />
+          <el-option :value="50" label="最近 50 条" />
+          <el-option :value="100" label="最近 100 条" />
+          <el-option :value="200" label="最近 200 条" />
+        </el-select>
+        <el-select v-model="sortBy" style="width: 134px">
+          <el-option value="time" label="按时间倒序" />
+          <el-option value="duration" label="按耗时降序" />
+        </el-select>
+        <el-input
+          v-model="commandFilter"
+          placeholder="过滤命令，如 SET"
+          clearable
+          style="width: 180px"
+        />
+      </PageToolbar>
 
       <el-table :data="filteredRows" size="small">
         <template #empty>
@@ -144,24 +182,29 @@ onMounted(load)
         <el-table-column label="时间" width="180">
           <template #default="{ row }">{{ formatTimestamp(row.timestampSeconds) }}</template>
         </el-table-column>
-        <el-table-column label="耗时" width="120">
+        <el-table-column label="耗时" width="128">
           <template #default="{ row }">
-            <el-tag
-              size="small"
-              :type="row.durationMicros >= 50000 ? 'danger' : row.durationMicros >= 10000 ? 'warning' : 'success'"
-            >
-              {{ formatDuration(row.durationMicros) }}
-            </el-tag>
+            <StatusBadge
+              :label="formatDuration(row.durationMicros)"
+              :tone="durationTone(row.durationMicros)"
+              dot
+              mono
+            />
           </template>
         </el-table-column>
         <el-table-column label="命令" width="140">
           <template #default="{ row }">
-            <el-tag size="small" effect="plain">{{ row.command || '—' }}</el-tag>
+            <StatusBadge :label="row.command || '—'" tone="accent" mono />
           </template>
         </el-table-column>
-        <el-table-column label="命令参数（已脱敏）" min-width="280">
+        <el-table-column label="命令参数（已脱敏）" min-width="260">
           <template #default="{ row }">
             <span class="mono">{{ row.args.join(' ') }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="120" align="right">
+          <template #default="{ row }">
+            <el-button link type="primary" size="small" @click="openInTerminal(row)">带入终端</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -175,18 +218,5 @@ onMounted(load)
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-}
-
-.summary-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--tk-border);
-}
-
-.meta-label {
-  font-size: 13px;
-  color: var(--tk-text-2);
 }
 </style>
