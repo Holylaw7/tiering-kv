@@ -1,5 +1,6 @@
 import axios, { type AxiosInstance } from 'axios'
 import { ElMessage } from 'element-plus'
+import { useAuthStore } from '../stores/auth'
 
 export const TOKEN_KEY = 'tk_console_token'
 export const USER_KEY = 'tk_console_user'
@@ -34,8 +35,12 @@ http.interceptors.response.use(
     const status = error?.response?.status
     const message = error?.response?.data?.message || error.message || '网络异常'
     if (status === 401) {
-      localStorage.removeItem(TOKEN_KEY)
-      localStorage.removeItem(USER_KEY)
+      try {
+        useAuthStore().logout()
+      } catch {
+        localStorage.removeItem(TOKEN_KEY)
+        localStorage.removeItem(USER_KEY)
+      }
       if (location.hash !== '#/login') {
         location.hash = '#/login'
       }

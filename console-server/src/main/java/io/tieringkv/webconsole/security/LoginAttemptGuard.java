@@ -20,6 +20,7 @@ public class LoginAttemptGuard {
     private static final int MAX_FAILURES = 5;
     private static final Duration WINDOW = Duration.ofMinutes(5);
 
+    private static final int MAX_TRACKED_ACCOUNTS = 10_000;
     private final Map<String, Deque<Instant>> failures = new ConcurrentHashMap<>();
 
     public boolean blocked(String username) {
@@ -34,12 +35,33 @@ public class LoginAttemptGuard {
     }
 
     public void recordFailure(String username) {
-        Deque<Instant> attempts = failures.computeIfAbsent(key(username),
+        String normalized = key(username);
+        if (failures.size() >= MAX_TRACKED_ACCOUNTS && !failures.containsKey(normalized)) {
+            pruneMap();
+            if (failures.size() >= MAX_TRACKED_ACCOUNTS) {
+                java.util.Iterator<String> it = failures.keySet().iterator();
+                while (failures.size() >= MAX_TRACKED_ACCOUNTS && it.hasNext()) {
+                    it.next();
+                    it.remove();
+                }
+            }
+        }
+        Deque<Instant> attempts = failures.computeIfAbsent(normalized,
                 ignored -> new ArrayDeque<>());
         synchronized (attempts) {
             prune(attempts);
             attempts.addLast(Instant.now());
         }
+    }
+
+    private void pruneMap() {
+        failures.entrySet().removeIf(entry -> {
+            Deque<Instant> deque = entry.getValue();
+            synchronized (deque) {
+                prune(deque);
+                return deque.isEmpty();
+            }
+        });
     }
 
     public void recordSuccess(String username) {

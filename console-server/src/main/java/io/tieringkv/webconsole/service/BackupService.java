@@ -138,7 +138,8 @@ public class BackupService {
 
             BackupRecord record = new BackupRecord();
             record.setInstanceId(instanceId);
-            record.setFileName("backup-" + instanceId + "-" + LocalDateTime.now().format(STAMP) + ".jsonl");
+            String unique = java.util.UUID.randomUUID().toString().substring(0, 8);
+            record.setFileName("backup-" + instanceId + "-" + LocalDateTime.now().format(STAMP) + "-" + unique + ".jsonl");
             record.setStatus(BackupStatus.RUNNING);
             record.setCreatedAt(LocalDateTime.now());
             created = repository.save(record);
@@ -236,8 +237,7 @@ public class BackupService {
                         writer.newLine();
                         count++;
                         if (count >= MAX_KEYS) {
-                            log.warn("备份键数达到上限 {}，提前结束", MAX_KEYS);
-                            return count;
+                            throw new IllegalStateException("备份键数超过单次上限 " + MAX_KEYS + "，已中止以避免生成不完整备份");
                         }
                     }
                 }
@@ -273,7 +273,11 @@ public class BackupService {
             throw BusinessException.badRequest("仅成功的备份可恢复");
         }
         DbInstance instance = instanceService.require(record.getInstanceId());
-        Path file = directory.resolve(record.getFileName());
+        Path base = directory.toAbsolutePath().normalize();
+        Path file = base.resolve(record.getFileName()).normalize();
+        if (!file.startsWith(base)) {
+            throw BusinessException.badRequest("非法备份路径");
+        }
         if (!Files.exists(file)) {
             throw BusinessException.notFound("备份文件已丢失：" + record.getFileName());
         }
@@ -312,8 +316,9 @@ public class BackupService {
         }
 
         long restored = 0;
-        try {
-            for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+        try (java.io.BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
                 if (line.isBlank()) {
                     continue;
                 }
@@ -354,9 +359,9 @@ public class BackupService {
         if (key == null || entry.value() == null) {
             return;
         }
-        gateway.execute(instance, "DEL", key);
+        requireOk(gateway.execute(instance, "DEL", key), "DEL");
         switch (entry.type()) {
-            case "string" -> gateway.execute(instance, "SET", key, String.valueOf(entry.value()));
+            case "string" -> requireOk(gateway.execute(instance, "SET", key, String.valueOf(entry.value())), "SET");
             case "hash" -> {
                 Map<String, String> hash = (Map<String, String>) entry.value();
                 List<String> args = new ArrayList<>();
@@ -367,35 +372,45 @@ public class BackupService {
                     args.add(value);
                 });
                 if (args.size() > 2) {
-                    gateway.execute(instance, args.stream()
-                            .map(item -> item.getBytes(StandardCharsets.UTF_8)).toList());
+                    requireOk(gateway.execute(instance, args.stream()
+                            .map(item -> item.getBytes(StandardCharsets.UTF_8)).toList()), "HSET");
                 }
             }
             case "list" -> {
                 List<String> list = (List<String>) entry.value();
                 for (String item : list) {
-                    gateway.execute(instance, "RPUSH", key, item);
+                    requireOk(gateway.execute(instance, "RPUSH", key, item), "RPUSH");
                 }
             }
             case "set" -> {
                 List<String> set = (List<String>) entry.value();
                 for (String item : set) {
-                    gateway.execute(instance, "SADD", key, item);
+                    requireOk(gateway.execute(instance, "SADD", key, item), "SADD");
                 }
             }
             case "zset" -> {
                 List<Map<String, String>> scored = (List<Map<String, String>>) entry.value();
                 for (Map<String, String> pair : scored) {
-                    gateway.execute(instance, "ZADD", key,
-                            pair.getOrDefault("score", "0"), pair.getOrDefault("member", ""));
+                    requireOk(gateway.execute(instance, "ZADD", key,
+                            pair.getOrDefault("score", "0"), pair.getOrDefault("member", "")), "ZADD");
                 }
             }
-            case "json" -> gateway.execute(instance, "JSON.SET", key, "$",
-                    String.valueOf(entry.value()));
+            case "json" -> {
+                String json = entry.value() instanceof String raw
+                        ? raw
+                        : objectMapper.writeValueAsString(entry.value());
+                requireOk(gateway.execute(instance, "JSON.SET", key, "$", json), "JSON.SET");
+            }
             default -> log.debug("跳过不支持的类型恢复：{} ({})", key, entry.type());
         }
         if (entry.ttl() > 0) {
-            gateway.execute(instance, "EXPIRE", key, String.valueOf(entry.ttl()));
+            requireOk(gateway.execute(instance, "EXPIRE", key, String.valueOf(entry.ttl())), "EXPIRE");
+        }
+    }
+
+    private static void requireOk(RespReply reply, String op) throws IOException {
+        if (reply instanceof RespReply.Error error) {
+            throw new IOException(op + " 失败：" + error.message());
         }
     }
 
@@ -416,8 +431,9 @@ public class BackupService {
     public Path fileOf(Long recordId) {
         BackupRecord record = repository.findById(recordId)
                 .orElseThrow(() -> BusinessException.notFound("备份记录不存在：" + recordId));
-        Path file = directory.resolve(record.getFileName()).normalize();
-        if (!file.startsWith(directory)) {
+        Path base = directory.toAbsolutePath().normalize();
+        Path file = base.resolve(record.getFileName()).normalize();
+        if (!file.startsWith(base)) {
             throw BusinessException.badRequest("非法备份路径");
         }
         if (!Files.exists(file)) {

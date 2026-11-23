@@ -7,6 +7,7 @@ import io.tieringkv.webconsole.service.TerminalService;
 import io.tieringkv.webconsole.web.dto.TerminalRequest;
 import io.tieringkv.webconsole.web.dto.TerminalResult;
 import jakarta.validation.Valid;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -26,6 +27,7 @@ public class TerminalController {
     }
 
     @PostMapping("/execute")
+    @PreAuthorize("hasAnyRole('ADMIN','OPS')")
     public ApiResponse<TerminalResult> execute(@Valid @RequestBody TerminalRequest request) {
         return ApiResponse.ok(terminalService.execute(request.instanceId(), request.command()));
     }

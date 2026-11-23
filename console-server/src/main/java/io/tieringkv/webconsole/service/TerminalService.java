@@ -44,7 +44,6 @@ public class TerminalService {
         this.auditService = auditService;
     }
 
-    @Transactional
     public TerminalResult execute(Long instanceId, String rawCommand) {
         DbInstance instance = instanceService.require(instanceId);
         List<String> args = tokenize(rawCommand);

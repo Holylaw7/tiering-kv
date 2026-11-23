@@ -64,34 +64,44 @@ public class TieringTableService {
         return new SstableTable.View(keyOrder, tables.size(), totalBytes, totalEntries, tables);
     }
 
+    private static final String[] ROW_MARKERS = {
+            "|keys=", "|bytes=", "|first_b64=", "|last_b64=", "|first_text=", "|last_text="
+    };
+
     private static SstableTable parseRow(String line) {
-        // 形如 sstable:3|keys=100|bytes=2048|first_b64=...|last_b64=...
-        String[] parts = line.split("\\|");
-        long id = parseLong(parts[0].substring("sstable:".length()));
+        // 形如 sstable:3|keys=100|bytes=2048|first_b64=...|last_b64=...|first_text=...|last_text=...
+        // 按已知字段标记边界分段，避免键文本中包含 '|' 导致错位切分
+        int firstMarker = nextMarkerStart(line, "sstable:".length());
+        long id = firstMarker < 0
+                ? parseLong(line.substring("sstable:".length()))
+                : parseLong(line.substring("sstable:".length(), firstMarker));
         long keys = 0;
         long bytes = 0;
         String first = "";
         String last = "";
         String firstB64 = "";
         String lastB64 = "";
-        for (int i = 1; i < parts.length; i++) {
-            String part = parts[i];
-            int eq = part.indexOf('=');
-            if (eq <= 0) {
-                continue;
+        int pos = firstMarker;
+        while (pos >= 0 && pos < line.length()) {
+            String marker = matchMarker(line, pos);
+            if (marker == null) {
+                break;
             }
-            String name = part.substring(0, eq);
-            String value = part.substring(eq + 1);
-            switch (name) {
-                case "keys" -> keys = parseLong(value);
-                case "bytes" -> bytes = parseLong(value);
-                case "first_b64" -> firstB64 = value;
-                case "last_b64" -> lastB64 = value;
-                case "first_text" -> first = value;
-                case "last_text" -> last = value;
+            int valueStart = pos + marker.length();
+            int next = nextMarkerStart(line, valueStart);
+            int valueEnd = next < 0 ? line.length() : next;
+            String value = line.substring(valueStart, valueEnd);
+            switch (marker) {
+                case "|keys=" -> keys = parseLong(value);
+                case "|bytes=" -> bytes = parseLong(value);
+                case "|first_b64=" -> firstB64 = value;
+                case "|last_b64=" -> lastB64 = value;
+                case "|first_text=" -> first = value;
+                case "|last_text=" -> last = value;
                 default -> {
                 }
             }
+            pos = next;
         }
         // 兼容没有 *_text 字段的旧内核：回退到 Base64 解码
         if (first.isEmpty() && !firstB64.isEmpty()) {
@@ -101,6 +111,26 @@ public class TieringTableService {
             last = decode(lastB64);
         }
         return new SstableTable(id, keys, bytes, first, last, firstB64, lastB64);
+    }
+
+    private static int nextMarkerStart(String line, int fromIndex) {
+        int earliest = -1;
+        for (String marker : ROW_MARKERS) {
+            int idx = line.indexOf(marker, fromIndex);
+            if (idx >= 0 && (earliest < 0 || idx < earliest)) {
+                earliest = idx;
+            }
+        }
+        return earliest;
+    }
+
+    private static String matchMarker(String line, int pos) {
+        for (String marker : ROW_MARKERS) {
+            if (line.startsWith(marker, pos)) {
+                return marker;
+            }
+        }
+        return null;
     }
 
     private static String decode(String base64) {

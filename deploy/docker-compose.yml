@@ -1,6 +1,8 @@
 services:
   node1:
-    build: .
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
     container_name: tiering-node1
     command:
       - --nodeId
@@ -17,7 +19,9 @@ services:
       - tiering-net
 
   node2:
-    build: .
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
     container_name: tiering-node2
     command:
       - --nodeId
@@ -34,7 +38,9 @@ services:
       - tiering-net
 
   node3:
-    build: .
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
     container_name: tiering-node3
     command:
       - --nodeId

@@ -39,19 +39,32 @@ public final class RespClient implements AutoCloseable {
 
     /** 执行命令并返回应答（错误应答也正常返回，由调用方判定）。 */
     public synchronized RespReply execute(List<byte[]> args) throws IOException {
-        out.write(RespCodec.encodeCommand(args));
-        out.flush();
-        return RespCodec.read(in);
+        try {
+            out.write(RespCodec.encodeCommand(args));
+            out.flush();
+            return RespCodec.read(in);
+        } catch (IOException | RuntimeException ex) {
+            broken = true;
+            throw ex;
+        }
     }
 
     public synchronized RespReply execute(String... args) throws IOException {
-        out.write(RespCodec.encodeCommand(args));
-        out.flush();
-        return RespCodec.read(in);
+        try {
+            out.write(RespCodec.encodeCommand(args));
+            out.flush();
+            return RespCodec.read(in);
+        } catch (IOException | RuntimeException ex) {
+            broken = true;
+            throw ex;
+        }
     }
 
+    private volatile boolean broken;
+
     public boolean isUsable() {
-        return socket.isConnected() && !socket.isClosed();
+        return !broken && socket.isConnected() && !socket.isClosed()
+                && !socket.isInputShutdown() && !socket.isOutputShutdown();
     }
 
     @Override

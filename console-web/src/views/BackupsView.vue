@@ -95,7 +95,12 @@ function download(row: BackupRecord) {
   const token = localStorage.getItem('tk_console_token')
   const url = `/api/v1/backups/${row.id}/download`
   fetch(url, { headers: token ? { Authorization: 'Bearer ' + token } : {} })
-    .then((resp) => resp.blob())
+    .then(async (resp) => {
+      if (!resp.ok) {
+        throw new Error(`HTTP ${resp.status}`)
+      }
+      return resp.blob()
+    })
     .then((blob) => {
       const link = document.createElement('a')
       link.href = URL.createObjectURL(blob)

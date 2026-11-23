@@ -25,35 +25,31 @@ public class RespGateway {
         this.properties = properties;
     }
 
+    @FunctionalInterface
+    private interface ClientAction {
+        RespReply run(RespClient client) throws IOException;
+    }
+
     public RespReply execute(DbInstance instance, String... args) throws IOException {
-        RespClientPool pool = pool(instance);
-        RespClient client = pool.borrow();
-        boolean healthy = true;
-        try {
-            return client.execute(args);
-        } catch (IOException ex) {
-            healthy = false;
-            throw ex;
-        } finally {
-            if (healthy) {
-                pool.release(client);
-            } else {
-                client.close();
-            }
-        }
+        return withClient(instance, client -> client.execute(args));
     }
 
     public RespReply execute(DbInstance instance, List<byte[]> args) throws IOException {
+        return withClient(instance, client -> client.execute(args));
+    }
+
+    private RespReply withClient(DbInstance instance, ClientAction action) throws IOException {
         RespClientPool pool = pool(instance);
         RespClient client = pool.borrow();
         boolean healthy = true;
         try {
-            return client.execute(args);
-        } catch (IOException ex) {
+            return action.run(client);
+        } catch (IOException | RuntimeException ex) {
+            // 无论 IO 还是 RESP 解析异常（流可能半读），一律销毁连接避免归还脏连接
             healthy = false;
             throw ex;
         } finally {
-            if (healthy) {
+            if (healthy && client.isUsable()) {
                 pool.release(client);
             } else {
                 client.close();
@@ -96,22 +92,37 @@ public class RespGateway {
     }
 
     private RespClient open(DbInstance instance) {
+        RespClient client = null;
         try {
-            RespClient client = RespClient.open(instance.getHost(), instance.getPort(),
+            client = RespClient.open(instance.getHost(), instance.getPort(),
                     properties.getMetrics().getConnectTimeoutMs(),
                     properties.getMetrics().getReadTimeoutMs());
             String password = instance.getPassword();
             if (password != null && !password.isBlank()) {
                 RespReply reply = client.execute("AUTH", password);
                 if (reply instanceof RespReply.Error error) {
-                    client.close();
+                    String msg = error.message() == null ? "" : error.message().toLowerCase();
+                    if (msg.contains("unknown command")) {
+                        throw new IOException("目标内核暂不支持 AUTH 命令，请确认实例未启用控制台密码或配置匹配："
+                                + error.message());
+                    }
                     throw new IOException("AUTH 失败：" + error.message());
                 }
             }
             return client;
         } catch (IOException ex) {
+            if (client != null) {
+                client.close();
+            }
             throw new BusinessException(502, 50201,
                     "无法连接实例 " + instance.getHost() + ":" + instance.getPort()
+                            + "（" + ex.getMessage() + "）");
+        } catch (RuntimeException ex) {
+            if (client != null) {
+                client.close();
+            }
+            throw new BusinessException(502, 50201,
+                    "连接实例协议异常 " + instance.getHost() + ":" + instance.getPort()
                             + "（" + ex.getMessage() + "）");
         }
     }
