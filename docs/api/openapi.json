@@ -183,6 +183,36 @@
         },
         "type" : "object"
       },
+      "ApiResponseCheckpointResult" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/CheckpointResult"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiResponseCheckpointStatusView" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/CheckpointStatusView"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseInstanceView" : {
         "properties" : {
           "code" : {
@@ -616,6 +646,50 @@
           }
         },
         "required" : [ "newPassword", "oldPassword" ],
+        "type" : "object"
+      },
+      "CheckpointResult" : {
+        "properties" : {
+          "lastSaveTime" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "triggered" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "CheckpointStatusView" : {
+        "properties" : {
+          "inProgress" : {
+            "type" : "boolean"
+          },
+          "lastDurationMillis" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "lastDurationSeconds" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "lastError" : {
+            "type" : "string"
+          },
+          "lastSaveTime" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "lastStatus" : {
+            "type" : "string"
+          },
+          "supported" : {
+            "type" : "boolean"
+          }
+        },
         "type" : "object"
       },
       "Clients" : {
@@ -2088,6 +2162,60 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/ApiResponseCapacityView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "backup-controller" ]
+      }
+    },
+    "/api/v1/backups/checkpoint" : {
+      "post" : {
+        "operationId" : "checkpoint",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "instanceId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseCheckpointResult"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "backup-controller" ]
+      }
+    },
+    "/api/v1/backups/checkpoint/status" : {
+      "get" : {
+        "operationId" : "checkpointStatus",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "instanceId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseCheckpointStatusView"
                 }
               }
             },

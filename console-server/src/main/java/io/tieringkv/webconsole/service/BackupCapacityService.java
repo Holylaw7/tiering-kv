@@ -11,14 +11,11 @@ import io.tieringkv.webconsole.repository.BackupRecordRepository;
 import io.tieringkv.webconsole.repository.BackupReservationRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
-import java.nio.file.FileStore;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -43,17 +40,27 @@ public class BackupCapacityService {
     private final BackupCapacityRepository capacityRepository;
     private final BackupRecordRepository recordRepository;
     private final ConsoleProperties properties;
-    private final Path directory;
+    private final BackupStorageBackend storageBackend;
 
     public BackupCapacityService(BackupReservationRepository reservationRepository,
                                  BackupCapacityRepository capacityRepository,
                                  BackupRecordRepository recordRepository,
                                  ConsoleProperties properties) {
+        this(reservationRepository, capacityRepository, recordRepository, properties,
+                new LocalBackupStorageBackend(properties));
+    }
+
+    @Autowired
+    public BackupCapacityService(BackupReservationRepository reservationRepository,
+                                 BackupCapacityRepository capacityRepository,
+                                 BackupRecordRepository recordRepository,
+                                 ConsoleProperties properties,
+                                 BackupStorageBackend storageBackend) {
         this.reservationRepository = reservationRepository;
         this.capacityRepository = capacityRepository;
         this.recordRepository = recordRepository;
         this.properties = properties;
-        this.directory = Paths.get(properties.getBackup().getDir()).toAbsolutePath().normalize();
+        this.storageBackend = storageBackend;
     }
 
     public record CapacityView(long usableBytes, long reservedBytes, long minFreeBytes,
@@ -67,31 +74,24 @@ public class BackupCapacityService {
                 c.getMinFreeBytes(), c.getEstimateFloorBytes(),
                 reservationRepository.findByStatusAndExpiresAtBefore("RESERVED",
                         LocalDateTime.now().plusYears(100)).size(),
-                directory.toString());
+                storageBackend.storageKey());
     }
 
     private long usableBytes() {
-        try {
-            Files.createDirectories(directory);
-            FileStore store = Files.getFileStore(directory);
-            return store.getUsableSpace();
-        } catch (IOException ex) {
-            log.warn("读取备份目录可用空间失败：{}", directory, ex);
-            return 0L;
-        }
+        return storageBackend.usableSpaceBytes().orElse(0L);
     }
 
     /**
      * 预检并预留容量；空间不足抛 507。
      *
-     * <p>悲观锁锚点保证同一存储路径的"读可用空间 + 累加预留 + 插入预留"是一个串行区间，
+     * <p>悲观锁锚点保证同一存储标识的"读可用空间 + 累加预留 + 插入预留"是一个串行区间，
      * 两个控制面实例不会同时通过判定。
      */
     @Transactional
     public BackupReservation reserve(Long instanceId, Long recordId, long estimateBytes) {
         ConsoleProperties.Capacity cfg = properties.getBackup().getCapacity();
         long estimate = Math.max(estimateBytes, cfg.getEstimateFloorBytes());
-        String key = directory.toString();
+        String key = storageBackend.storageKey();
 
         reservationRepository.expireStale(LocalDateTime.now());
 
@@ -114,6 +114,8 @@ public class BackupCapacityService {
                     cfg.getMinFreeBytes() / 1024 / 1024, estimate / 1024 / 1024));
         }
 
+        storageBackend.remoteQuotaBytes().ifPresent(quota -> checkRemoteQuota(quota, reserved, estimate));
+
         BackupReservation r = new BackupReservation();
         r.setInstanceId(instanceId);
         r.setBackupRecordId(recordId);
@@ -124,6 +126,25 @@ public class BackupCapacityService {
         r.setCreatedAt(LocalDateTime.now());
         r.setExpiresAt(LocalDateTime.now().plusMinutes(RESERVATION_TTL_MINUTES));
         return reservationRepository.save(r);
+    }
+
+    private void checkRemoteQuota(long quotaBytes, long reservedBytes, long estimateBytes) {
+        long remoteUsed;
+        try {
+            remoteUsed = storageBackend.listObjects().stream()
+                    .mapToLong(BackupStorageBackend.StoredObject::sizeBytes)
+                    .sum();
+        } catch (IOException | RuntimeException ex) {
+            log.warn("读取远端对象存储已用容量失败：{}", storageBackend.storageKey(), ex);
+            throw BusinessException.upstream("读取对象存储容量失败：" + ex.getMessage());
+        }
+        long available = quotaBytes - remoteUsed - reservedBytes;
+        if (available < estimateBytes) {
+            throw BusinessException.insufficientStorage(String.format(
+                    "对象存储配额不足：配额 %d MB，已用 %d MB，已预留 %d MB，本次需要 %d MB",
+                    quotaBytes / 1024 / 1024, remoteUsed / 1024 / 1024,
+                    reservedBytes / 1024 / 1024, estimateBytes / 1024 / 1024));
+        }
     }
 
     /** 释放预留；usedBytes 为真实写入字节数（失败时可为 0）。幂等。 */

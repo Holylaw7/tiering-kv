@@ -1,6 +1,7 @@
 package io.tieringkv.observability;
 
 import io.tieringkv.cache.block.CacheStatistics;
+import io.tieringkv.lifecycle.PhysicalSnapshotCoordinator;
 import io.tieringkv.monitor.MetricsRegistry;
 import io.tieringkv.storage.memory.MemoryManager;
 import io.tieringkv.storage.tiering.StorageMetrics;
@@ -33,13 +34,14 @@ public final class ServerInfoProvider {
     private final StorageMetrics storageMetrics;
     private final Supplier<CacheStatistics.Snapshot> cacheStats;
     private final Runnable refreshGauges;
+    private final PhysicalSnapshotCoordinator snapshotCoordinator;
 
     public ServerInfoProvider(MetricsRegistry metrics,
                               MemoryManager memory,
                               Supplier<Long> keyCount,
                               int port,
                               String version) {
-        this(metrics, memory, keyCount, port, version, null, null, null);
+        this(metrics, memory, keyCount, port, version, null, null, null, null);
     }
 
     /**
@@ -54,6 +56,19 @@ public final class ServerInfoProvider {
                               StorageMetrics storageMetrics,
                               Supplier<CacheStatistics.Snapshot> cacheStats,
                               Runnable refreshGauges) {
+        this(metrics, memory, keyCount, port, version, storageMetrics, cacheStats, refreshGauges, null);
+    }
+
+    /** 完整构造（N1-B）：可额外输出 `# Persistence` 物理快照状态段。 */
+    public ServerInfoProvider(MetricsRegistry metrics,
+                              MemoryManager memory,
+                              Supplier<Long> keyCount,
+                              int port,
+                              String version,
+                              StorageMetrics storageMetrics,
+                              Supplier<CacheStatistics.Snapshot> cacheStats,
+                              Runnable refreshGauges,
+                              PhysicalSnapshotCoordinator snapshotCoordinator) {
         if (metrics == null) {
             throw new IllegalArgumentException("metrics required");
         }
@@ -68,6 +83,7 @@ public final class ServerInfoProvider {
         this.storageMetrics = storageMetrics;
         this.cacheStats = cacheStats;
         this.refreshGauges = refreshGauges;
+        this.snapshotCoordinator = snapshotCoordinator;
     }
 
     /** 单个 section 的提供者（INFO &lt;section&gt; 使用）。 */
@@ -80,6 +96,9 @@ public final class ServerInfoProvider {
         sections.put("keyspace", this::keyspace);
         if (storageMetrics != null) {
             sections.put("tiering", () -> tiering(prepareSnapshotOrNull()));
+        }
+        if (snapshotCoordinator != null) {
+            sections.put("persistence", this::persistence);
         }
         return Map.copyOf(sections);
     }
@@ -94,7 +113,8 @@ public final class ServerInfoProvider {
                 memorySection(snapshot),
                 stats(),
                 keyspace(),
-                storageMetrics == null ? "" : tiering(snapshot));
+                storageMetrics == null ? "" : tiering(snapshot),
+                snapshotCoordinator == null ? "" : persistence());
     }
 
     private StorageMetrics.Snapshot prepareSnapshotOrNull() {
@@ -237,6 +257,24 @@ public final class ServerInfoProvider {
         }
         return "# Keyspace\r\n"
                 + "db0:keys=" + keys + ",expires=0,avg_ttl=0\r\n";
+    }
+
+    private String persistence() {
+        PhysicalSnapshotCoordinator.StatusSnapshot s = snapshotCoordinator.status();
+        long durationSeconds = s.lastDurationMillis() / 1000L;
+        long timeSec = s.totalSuccess() == 0 && "ok".equals(s.lastStatus()) ? -1L : durationSeconds;
+        StringBuilder sb = new StringBuilder("# Persistence\r\n")
+                .append("loading:0\r\n")
+                .append("rdb_bgsave_in_progress:").append(s.inProgress() ? 1 : 0).append("\r\n")
+                .append("rdb_last_save_time:").append(s.lastSaveEpochSeconds()).append("\r\n")
+                .append("rdb_last_bgsave_status:").append(s.lastStatus() == null ? "ok" : s.lastStatus()).append("\r\n")
+                .append("rdb_last_bgsave_time_sec:").append(timeSec).append("\r\n")
+                .append("rdb_last_bgsave_duration_ms:").append(s.lastDurationMillis()).append("\r\n");
+        if (s.lastError() != null && !s.lastError().isBlank()) {
+            String safeErr = s.lastError().replace('\r', ' ').replace('\n', ' ');
+            sb.append("rdb_last_bgsave_error:").append(safeErr).append("\r\n");
+        }
+        return sb.toString();
     }
 
     private long keys() {

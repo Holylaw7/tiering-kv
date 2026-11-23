@@ -166,6 +166,7 @@ public class ConsoleProperties {
         /** SCAN 每批次键数。 */
         private int scanCount = 500;
         private Retention retention = new Retention();
+        private S3 s3 = new S3();
 
         public String getDir() {
             return dir;
@@ -223,6 +224,57 @@ public class ConsoleProperties {
 
         public void setRetention(Retention retention) {
             this.retention = retention;
+        }
+
+        public S3 getS3() {
+            return s3;
+        }
+
+        public void setS3(S3 s3) {
+            this.s3 = s3;
+        }
+    }
+
+    /** S3 / MinIO 共享对象存储备份配置（N1-A）。 */
+    public static class S3 {
+        private String endpoint;
+        private String region = "us-east-1";
+        private String bucket;
+        private String prefix = "backups/";
+        private String accessKey;
+        private String secretKey;
+        private boolean pathStyleAccess = true;
+        /** 远端对象存储软配额（字节），0 表示不限额，仅校验本地暂存盘空间。 */
+        private long quotaBytes = 0;
+        private boolean autoCreateBucket = true;
+        private String stagingDir = System.getProperty("java.io.tmpdir", "/tmp") + "/tiering-console-staging";
+
+        public String getEndpoint() { return endpoint; }
+        public void setEndpoint(String endpoint) { this.endpoint = endpoint; }
+        public String getRegion() { return region; }
+        public void setRegion(String region) { this.region = region; }
+        public String getBucket() { return bucket; }
+        public void setBucket(String bucket) { this.bucket = bucket; }
+        public String getPrefix() { return prefix; }
+        public void setPrefix(String prefix) { this.prefix = prefix; }
+        public String getAccessKey() { return accessKey; }
+        public void setAccessKey(String accessKey) { this.accessKey = accessKey; }
+        public String getSecretKey() { return secretKey; }
+        public void setSecretKey(String secretKey) { this.secretKey = secretKey; }
+        public boolean isPathStyleAccess() { return pathStyleAccess; }
+        public void setPathStyleAccess(boolean pathStyleAccess) { this.pathStyleAccess = pathStyleAccess; }
+        public long getQuotaBytes() { return quotaBytes; }
+        public void setQuotaBytes(long quotaBytes) { this.quotaBytes = quotaBytes; }
+        public boolean isAutoCreateBucket() { return autoCreateBucket; }
+        public void setAutoCreateBucket(boolean autoCreateBucket) { this.autoCreateBucket = autoCreateBucket; }
+        public String getStagingDir() { return stagingDir; }
+        public void setStagingDir(String stagingDir) { this.stagingDir = stagingDir; }
+
+        @Override
+        public String toString() {
+            return "S3{endpoint=" + endpoint + ", region=" + region
+                    + ", bucket=" + bucket + ", prefix=" + prefix
+                    + ", pathStyleAccess=" + pathStyleAccess + "}";
         }
     }
 

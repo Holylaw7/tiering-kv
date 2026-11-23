@@ -35,6 +35,7 @@ public final class AclPolicy {
 
     private static final Set<String> ADMIN_COMMANDS = Set.of(
             "acl", "config", "client", "command", "info", "slowlog",
+            "bgsave", "lastsave",
             "flushdb", "flushall", "shutdown",
             "script", "eval", "evalsha", "vector.checkpoint");
 
@@ -51,7 +52,8 @@ public final class AclPolicy {
     private static final Set<String> KEYLESS_COMMANDS = Set.of(
             "ping", "echo", "auth", "hello", "quit", "reset",
             "info", "dbsize", "flushdb", "flushall", "scan", "keys",
-            "config", "client", "command", "acl", "script",
+            "config", "client", "command", "acl", "slowlog",
+            "bgsave", "lastsave", "script",
             "eval", "evalsha", "multi", "exec", "discard", "unwatch",
             "publish", "subscribe", "unsubscribe", "psubscribe", "punsubscribe",
             "vector.list", "vector.checkpoint");

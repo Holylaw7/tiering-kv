@@ -5,7 +5,7 @@ import io.tieringkv.webconsole.domain.BackupRecord;
 import io.tieringkv.webconsole.service.BackupCapacityService;
 import io.tieringkv.webconsole.service.BackupRetentionService;
 import io.tieringkv.webconsole.service.BackupService;
-import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.nio.file.Path;
 import java.util.List;
 
 /** 备份与恢复接口。 */
@@ -57,12 +56,12 @@ public class BackupController {
 
     @GetMapping("/{id}/download")
     public ResponseEntity<Resource> download(@PathVariable Long id) {
-        Path file = backupService.download(id);
+        BackupService.DownloadStream stream = backupService.openDownload(id);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=\"" + file.getFileName() + "\"")
+                        "attachment; filename=\"" + stream.fileName() + "\"")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .body(new FileSystemResource(file));
+                .body(new InputStreamResource(stream.inputStream()));
     }
 
     /** 手工触发一次保留清理（ADR-0367）。 */
@@ -91,5 +90,18 @@ public class BackupController {
     public ApiResponse<Void> delete(@PathVariable Long id) {
         retentionService.delete(id);
         return ApiResponse.ok();
+    }
+
+    /** 手工触发数据面物理快照 BGSAVE（N1-B）。 */
+    @PostMapping("/checkpoint")
+    @PreAuthorize("hasAnyRole('ADMIN','OPS')")
+    public ApiResponse<BackupService.CheckpointResult> checkpoint(@RequestParam Long instanceId) {
+        return ApiResponse.ok(backupService.triggerCheckpoint(instanceId));
+    }
+
+    /** 查询最近一次物理快照状态（N1-B）。 */
+    @GetMapping("/checkpoint/status")
+    public ApiResponse<BackupService.CheckpointStatusView> checkpointStatus(@RequestParam Long instanceId) {
+        return ApiResponse.ok(backupService.checkpointStatus(instanceId));
     }
 }

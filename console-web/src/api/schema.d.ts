@@ -180,6 +180,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/backups/checkpoint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["checkpoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backups/checkpoint/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["checkpointStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/backups/purge": {
         parameters: {
             query?: never;
@@ -611,6 +643,18 @@ export interface components {
             data?: components["schemas"]["CapacityView"];
             message?: string;
         };
+        ApiResponseCheckpointResult: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["CheckpointResult"];
+            message?: string;
+        };
+        ApiResponseCheckpointStatusView: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["CheckpointStatusView"];
+            message?: string;
+        };
         ApiResponseInstanceView: {
             /** Format: int32 */
             code?: number;
@@ -784,6 +828,24 @@ export interface components {
         ChangePasswordRequest: {
             newPassword: string;
             oldPassword: string;
+        };
+        CheckpointResult: {
+            /** Format: int64 */
+            lastSaveTime?: number;
+            message?: string;
+            triggered?: boolean;
+        };
+        CheckpointStatusView: {
+            inProgress?: boolean;
+            /** Format: int64 */
+            lastDurationMillis?: number;
+            /** Format: int64 */
+            lastDurationSeconds?: number;
+            lastError?: string;
+            /** Format: int64 */
+            lastSaveTime?: number;
+            lastStatus?: string;
+            supported?: boolean;
         };
         Clients: {
             /** Format: int32 */
@@ -1528,6 +1590,50 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseCapacityView"];
+                };
+            };
+        };
+    };
+    checkpoint: {
+        parameters: {
+            query: {
+                instanceId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseCheckpointResult"];
+                };
+            };
+        };
+    };
+    checkpointStatus: {
+        parameters: {
+            query: {
+                instanceId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseCheckpointStatusView"];
                 };
             };
         };
