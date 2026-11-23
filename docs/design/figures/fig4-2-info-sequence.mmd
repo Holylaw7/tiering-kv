@@ -1,0 +1,39 @@
+%%{init: {'theme':'base','themeVariables':{'fontFamily':"'Segoe UI','Microsoft YaHei',sans-serif",'fontSize':'13px','primaryColor':'#FFFFFF','primaryBorderColor':'#CBD2D9','primaryTextColor':'#202124','lineColor':'#626B78','secondaryColor':'#F7F8FA','tertiaryColor':'#FBFCFE','noteBkgColor':'#F8FAFC','noteBorderColor':'#CBD5E1','noteTextColor':'#334155','actorBkg':'#FFFFFF','actorBorder':'#CBD2D9','actorTextColor':'#0F172A','signalColor':'#475569','signalTextColor':'#0F172A','labelBoxBkgColor':'#EEF2FF','labelBoxBorderColor':'#C7D2F5','labelTextColor':'#1D4ED8'}}}%%
+sequenceDiagram
+    participant UI as Vue 运行总览页
+    participant DC as DashboardController
+    participant MS as MonitorService
+    participant GW as RespGateway / RespClientPool
+    participant KV as 数据面内核 (RESP)
+    participant DB as MySQL (metric_point)
+    participant AS as AlertService
+
+    rect rgb(239,246,241)
+    Note over MS,AS: 定时闭环：fixedDelay = 5,000 ms 采集已启用实例
+    MS->>GW: info(instance) 借用有界 RESP 连接
+    GW->>KV: TCP 发送 RESP 命令 INFO
+    alt 通信超时或拒绝连接
+        KV--xGW: IOException
+        MS->>DB: markStatus(DOWN) 节流落库状态
+    else 返回 INFO 多段文本
+        KV-->>GW: BulkString (Server / Clients / Memory / Stats / Keyspace / Tiering)
+        GW-->>MS: 归还连接至空闲队列并释放 Semaphore 许可
+        MS->>MS: InfoParser + MetricMapper 构造 MetricPoint
+        MS->>DB: save(MetricPoint) 持久化采样点
+        MS->>AS: evaluate(instanceId, metricDictionary, now)
+        Note over AS: 比对启用的 AlertRule 阈值与 durationSeconds
+    end
+    end
+
+    rect rgb(238,242,255)
+    Note over UI,DB: 首屏聚合查询与按需冷表清单读取
+    UI->>DC: GET /api/v1/dashboard/overview?instanceId
+    DC->>MS: live(instance) 现场拉取实时快照（不落库）
+    MS->>GW: INFO（200ms 内核指标节流刷新）
+    GW-->>MS: LiveMetrics（含 MemTable 水位、BlockCache 命中率）
+    DC->>DB: 查询近期趋势点与 FIRING 告警计数
+    DC-->>UI: 返回实时概览 + 三态标记（离线/未上报/零值）
+    UI->>DC: GET /api/v1/system/tables?instanceId
+    DC->>GW: 按需下发 INFO sstables（隔离体量）
+    GW-->>UI: 返回 SSTable 表清单及键范围（Base64 边界安全解析）
+    end

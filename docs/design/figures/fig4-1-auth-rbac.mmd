@@ -1,0 +1,50 @@
+%%{init: {'theme':'base','themeVariables':{'fontFamily':"'Segoe UI','Microsoft YaHei',sans-serif",'fontSize':'13px','primaryColor':'#FFFFFF','primaryBorderColor':'#CBD2D9','primaryTextColor':'#202124','lineColor':'#626B78','secondaryColor':'#F7F8FA','tertiaryColor':'#FBFCFE','noteBkgColor':'#F8FAFC','noteBorderColor':'#CBD5E1','noteTextColor':'#334155','actorBkg':'#FFFFFF','actorBorder':'#CBD2D9','actorTextColor':'#0F172A','signalColor':'#475569','signalTextColor':'#0F172A','labelBoxBkgColor':'#EEF2FF','labelBoxBorderColor':'#C7D2F5','labelTextColor':'#1D4ED8'}}}%%
+sequenceDiagram
+    participant C as 前端客户端
+    participant F as JwtAuthenticationFilter
+    participant AC as AuthController / AuthService
+    participant LG as LoginAttemptGuard
+    participant JWT as JwtService (HS256)
+    participant SEC as PreAuthorize RBAC 代理
+    participant AUD as AuditService (REQUIRES_NEW)
+
+    rect rgb(238,242,255)
+    Note over C,AUD: 阶段一：账号口令登录与失败限流
+    C->>AC: POST /api/v1/auth/login (username, password)
+    AC->>LG: blocked(username) 校验 5 分钟失败窗口
+    alt 连续失败 >= 5 次
+        LG-->>AC: 触发限流锁定
+        AC->>AUD: record(LOGIN, success=false)
+        AC-->>C: HTTP 429 Too Many Requests
+    else 允许尝试认证
+        AC->>AC: UserRepository 查询 + BCrypt 校验
+        alt 凭据无效或账号禁用
+            AC->>LG: recordFailure(username)
+            AC->>AUD: record(LOGIN, success=false)
+            AC-->>C: HTTP 401 (code=40100)
+        else 认证通过
+            AC->>LG: recordSuccess(username) 清零计数
+            AC->>JWT: issue(user) 签发含 uid/role 的 HS256 JWT
+            JWT-->>AC: Bearer Token
+            AC->>AUD: record(LOGIN, success=true)
+            AC-->>C: HTTP 200 (token, expiresIn, user)
+        end
+    end
+    end
+
+    rect rgb(239,246,241)
+    Note over C,AUD: 阶段二：无状态请求鉴权与三级权限拦截
+    C->>F: 受保护 REST 请求 + Authorization Bearer JWT
+    F->>JWT: parse(token) 验签并提取 UserPrincipal
+    alt 令牌缺失、伪造或过期
+        F-->>C: AuthenticationEntryPoint -> HTTP 401 (code=40100)
+    else 身份上下文写入 SecurityContext
+        F->>SEC: 放行进入方法级安全代理
+        alt 角色不满足 hasRole / hasAnyRole
+            SEC-->>C: AccessDeniedHandler -> HTTP 403 (code=40300)
+        else 角色校验通过（ADMIN / OPS / VIEWER）
+            SEC->>AUD: 业务执行并独立事务写入审计日志
+            SEC-->>C: HTTP 200 ApiResponse(code=0)
+        end
+    end
+    end

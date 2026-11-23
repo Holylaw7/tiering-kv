@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="580" viewBox="0 0 900 580">
+  <rect width="900" height="580" fill="#FFFFFF"/>
+  <defs>
+    <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+      <path d="M0,0 L7,3.5 L0,7 z" fill="#64748B"/>
+    </marker>
+  </defs>
+
+  <rect x="110" y="28" width="680" height="74" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.3"/>
+  <text x="450" y="57" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="15" font-weight="600" fill="#0F172A" text-anchor="middle">内存键值存储与 LSM-Tree 分层演进</text>
+  <text x="450" y="81" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="12" fill="#475569" text-anchor="middle">内存容量受限 · 热写缓冲与冷盘合并（MemTable / SSTable / 水位与背压可观测性需求）</text>
+  <line x1="450" y1="102" x2="450" y2="132" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="110" y="138" width="680" height="74" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.3"/>
+  <text x="450" y="167" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="15" font-weight="600" fill="#0F172A" text-anchor="middle">协议兼容层与数据面诊断原语</text>
+  <text x="450" y="191" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="12" fill="#475569" text-anchor="middle">RESP2 协议接入 · INFO / INFO sstables / SCAN 游标 / SLOWLOG / BGSAVE 运维通道</text>
+  <line x1="450" y1="212" x2="450" y2="242" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="110" y="248" width="680" height="74" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.3"/>
+  <text x="450" y="277" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="15" font-weight="600" fill="#0F172A" text-anchor="middle">控制面与数据面进程解耦架构</text>
+  <text x="450" y="301" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="12" fill="#475569" text-anchor="middle">零侵入多实例纳管 · 有界 RESP 连接池隔离 · 高延迟与离线故障容错</text>
+  <line x1="450" y1="322" x2="450" y2="352" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="110" y="358" width="680" height="74" rx="10" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.3"/>
+  <text x="450" y="387" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="15" font-weight="600" fill="#0F172A" text-anchor="middle">企业级 Web 运维安全与可靠性治理</text>
+  <text x="450" y="411" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="12" fill="#475569" text-anchor="middle">无状态 JWT + 三级 RBAC · 本地/S3 Gzip 双后端备份与配额预留 · 独立事务审计留痕</text>
+  <line x1="450" y1="432" x2="450" y2="462" stroke="#64748B" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <rect x="110" y="468" width="680" height="84" rx="10" fill="#EFF6F1" stroke="#6FA88A" stroke-width="1.6"/>
+  <text x="450" y="499" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="15.5" font-weight="700" fill="#2F6B4F" text-anchor="middle">本文研究定位：基于 Spring Boot 与 Vue 的键值存储管理系统</text>
+  <text x="450" y="527" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="12.5" fill="#334155" text-anchor="middle">构建集实时观测、键空间维护、终端风控、阈值告警、双端备份恢复与全链路审计于一体的轻量级控制平台</text>
+</svg>

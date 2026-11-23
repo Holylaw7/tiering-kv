@@ -1,0 +1,182 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="790" viewBox="0 0 1180 790">
+  <rect width="1180" height="790" fill="#FFFFFF"/>
+  <defs>
+    <marker id="rel" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L6,3 L0,6 z" fill="#64748B"/>
+    </marker>
+  </defs>
+
+  <!-- Helper style classes via attributes -->
+  <!-- 1. sys_user (left top) -->
+  <rect x="30" y="34" width="235" height="198" rx="8" fill="#FFFFFF" stroke="#6FA88A" stroke-width="1.4"/>
+  <rect x="30" y="34" width="235" height="32" rx="8" fill="#EFF6F1"/>
+  <rect x="30" y="54" width="235" height="12" fill="#EFF6F1"/>
+  <text x="147" y="55" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="12.5" font-weight="700" fill="#2F6B4F" text-anchor="middle">sys_user (用户账号)</text>
+  <text x="42" y="84" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" font-weight="700" fill="#0F172A">PK  id : BIGINT</text>
+  <text x="42" y="102" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">UK  username : VARCHAR(64)</text>
+  <text x="42" y="120" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    password : VARCHAR(100)</text>
+  <text x="42" y="138" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    nickname / email</text>
+  <text x="42" y="156" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    role : ADMIN | OPS | VIEWER</text>
+  <text x="42" y="174" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    status : INT (1 启用 / 0 禁用)</text>
+  <text x="42" y="192" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    last_login_at : DATETIME</text>
+  <text x="42" y="210" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#64748B">    created_at / updated_at</text>
+
+  <!-- 2. op_log (left middle) -->
+  <rect x="30" y="280" width="235" height="202" rx="8" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.3"/>
+  <rect x="30" y="280" width="235" height="32" rx="8" fill="#F8FAFC"/>
+  <rect x="30" y="300" width="235" height="12" fill="#F8FAFC"/>
+  <text x="147" y="301" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="12.5" font-weight="700" fill="#0F172A" text-anchor="middle">op_log (操作审计日志)</text>
+  <text x="42" y="330" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" font-weight="700" fill="#0F172A">PK  id : BIGINT</text>
+  <text x="42" y="348" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#1D4ED8">    user_id : BIGINT (逻辑关联)</text>
+  <text x="42" y="366" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    username : VARCHAR(64)</text>
+  <text x="42" y="384" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">IDX action : VARCHAR(64)</text>
+  <text x="42" y="402" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    target : VARCHAR(255)</text>
+  <text x="42" y="420" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    detail : TEXT</text>
+  <text x="42" y="438" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    ip / success : BOOLEAN</text>
+  <text x="42" y="456" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#64748B">IDX created_at : DATETIME</text>
+
+  <!-- 3. terminal_history (left bottom) -->
+  <rect x="30" y="534" width="235" height="202" rx="8" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.3"/>
+  <rect x="30" y="534" width="235" height="32" rx="8" fill="#F8FAFC"/>
+  <rect x="30" y="554" width="235" height="12" fill="#F8FAFC"/>
+  <text x="147" y="555" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="12.5" font-weight="700" fill="#0F172A" text-anchor="middle">terminal_history (终端历史)</text>
+  <text x="42" y="584" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" font-weight="700" fill="#0F172A">PK  id : BIGINT</text>
+  <text x="42" y="602" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#1D4ED8">    user_id : BIGINT</text>
+  <text x="42" y="620" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#1D4ED8">    instance_id : BIGINT</text>
+  <text x="42" y="638" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    username : VARCHAR(64)</text>
+  <text x="42" y="656" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    command : VARCHAR(512, 脱敏)</text>
+  <text x="42" y="674" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    success / cost_ms : BIGINT</text>
+  <text x="42" y="692" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    reply_type : VARCHAR(16)</text>
+  <text x="42" y="710" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#64748B">IDX created_at : DATETIME</text>
+
+  <!-- 4. db_instance (CENTER HUB) -->
+  <rect x="405" y="255" width="275" height="260" rx="10" fill="#FFFFFF" stroke="#3B5BDB" stroke-width="1.8"/>
+  <rect x="405" y="255" width="275" height="34" rx="10" fill="#EEF2FF"/>
+  <rect x="405" y="275" width="275" height="14" fill="#EEF2FF"/>
+  <text x="542" y="277" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="13" font-weight="700" fill="#1D4ED8" text-anchor="middle">db_instance (纳管实例 · 核心实体)</text>
+  <text x="418" y="308" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" font-weight="700" fill="#0F172A">PK  id : BIGINT</text>
+  <text x="418" y="326" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">UK  name : VARCHAR(64)</text>
+  <text x="418" y="344" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">UK  (host, port) 组合唯一约束</text>
+  <text x="418" y="362" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    password : VARCHAR(512, AES-GCM)</text>
+  <text x="418" y="380" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    status : UP | DOWN | UNKNOWN</text>
+  <text x="418" y="398" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    version : VARCHAR(32)</text>
+  <text x="418" y="416" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    last_probe_at : DATETIME</text>
+  <text x="418" y="434" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    backup_retention : INT (V4)</text>
+  <text x="418" y="452" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    enabled / remark</text>
+  <text x="418" y="470" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#64748B">    created_at / updated_at</text>
+
+  <!-- 5. metric_point (TOP CENTER) -->
+  <rect x="405" y="24" width="275" height="190" rx="8" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.3"/>
+  <rect x="405" y="24" width="275" height="32" rx="8" fill="#F8FAFC"/>
+  <rect x="405" y="44" width="275" height="12" fill="#F8FAFC"/>
+  <text x="542" y="45" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="12.5" font-weight="700" fill="#0F172A" text-anchor="middle">metric_point (时序指标点)</text>
+  <text x="418" y="74" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" font-weight="700" fill="#0F172A">PK  id : BIGINT</text>
+  <text x="418" y="92" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#1D4ED8">IDX instance_id : BIGINT</text>
+  <text x="418" y="110" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">IDX collected_at : DATETIME</text>
+  <text x="418" y="128" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    qps / ops_per_sec / avg_latency_ms</text>
+  <text x="418" y="146" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    connections / active_requests / errors</text>
+  <text x="418" y="164" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    used_memory / max_memory</text>
+  <text x="418" y="182" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#64748B">    total_keys / uptime_seconds</text>
+
+  <!-- 6. alert_rule (TOP RIGHT) -->
+  <rect x="835" y="24" width="315" height="190" rx="8" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.3"/>
+  <rect x="835" y="24" width="315" height="32" rx="8" fill="#F8FAFC"/>
+  <rect x="835" y="44" width="315" height="12" fill="#F8FAFC"/>
+  <text x="992" y="45" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="12.5" font-weight="700" fill="#0F172A" text-anchor="middle">alert_rule (告警阈值规则)</text>
+  <text x="848" y="74" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" font-weight="700" fill="#0F172A">PK  id : BIGINT</text>
+  <text x="848" y="92" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">UK  name : VARCHAR(64)</text>
+  <text x="848" y="110" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#1D4ED8">    instance_id : BIGINT (NULL=全局)</text>
+  <text x="848" y="128" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    metric / operator (GT/LT) / threshold</text>
+  <text x="848" y="146" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    duration_seconds : INT</text>
+  <text x="848" y="164" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    level (INFO|WARN|CRITICAL) / enabled</text>
+  <text x="848" y="182" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#64748B">    created_at / updated_at</text>
+
+  <!-- 7. alert_event (MIDDLE RIGHT) -->
+  <rect x="835" y="255" width="315" height="190" rx="8" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.3"/>
+  <rect x="835" y="255" width="315" height="32" rx="8" fill="#F8FAFC"/>
+  <rect x="835" y="275" width="315" height="12" fill="#F8FAFC"/>
+  <text x="992" y="276" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="12.5" font-weight="700" fill="#0F172A" text-anchor="middle">alert_event (告警事件)</text>
+  <text x="848" y="305" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" font-weight="700" fill="#0F172A">PK  id : BIGINT</text>
+  <text x="848" y="323" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#1D4ED8">    rule_id : BIGINT / instance_id : BIGINT</text>
+  <text x="848" y="341" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    rule_name / metric</text>
+  <text x="848" y="359" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    metric_value / threshold</text>
+  <text x="848" y="377" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    level / message</text>
+  <text x="848" y="395" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">IDX status : FIRING | RESOLVED</text>
+  <text x="848" y="413" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#64748B">    fired_at / resolved_at</text>
+
+  <!-- 8. backup_record (BOTTOM CENTER) -->
+  <rect x="395" y="556" width="295" height="212" rx="8" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.3"/>
+  <rect x="395" y="556" width="295" height="32" rx="8" fill="#F8FAFC"/>
+  <rect x="395" y="576" width="295" height="12" fill="#F8FAFC"/>
+  <text x="542" y="577" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="12.5" font-weight="700" fill="#0F172A" text-anchor="middle">backup_record (逻辑备份与恢复记录)</text>
+  <text x="408" y="606" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" font-weight="700" fill="#0F172A">PK  id : BIGINT</text>
+  <text x="408" y="624" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#1D4ED8">    instance_id : BIGINT</text>
+  <text x="408" y="642" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    file_name / size_bytes / key_count</text>
+  <text x="408" y="660" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    status : RUNNING | SUCCESS | FAILED</text>
+  <text x="408" y="678" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    restore_status : NONE|RESTORING|RESTORED</text>
+  <text x="408" y="696" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    restored_keys / restore_message (V3)</text>
+  <text x="408" y="714" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    delete_state (NULL|RETIRING) (V4)</text>
+  <text x="408" y="732" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#64748B">    created_at / finished_at / restore_*</text>
+
+  <!-- 9. backup_reservation (BOTTOM RIGHT) -->
+  <rect x="835" y="485" width="315" height="165" rx="8" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.3"/>
+  <rect x="835" y="485" width="315" height="32" rx="8" fill="#F8FAFC"/>
+  <rect x="835" y="505" width="315" height="12" fill="#F8FAFC"/>
+  <text x="992" y="506" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="12.5" font-weight="700" fill="#0F172A" text-anchor="middle">backup_reservation (容量预留 · V5)</text>
+  <text x="848" y="535" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" font-weight="700" fill="#0F172A">PK  id : BIGINT</text>
+  <text x="848" y="553" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#1D4ED8">    instance_id / backup_record_id</text>
+  <text x="848" y="571" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#1D4ED8">FK  storage_key : VARCHAR(512)</text>
+  <text x="848" y="589" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    reserved_bytes / used_bytes</text>
+  <text x="848" y="607" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#334155">    status : RESERVED | COMMITTED | ...</text>
+  <text x="848" y="625" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#64748B">    created_at / expires_at</text>
+
+  <!-- 10. backup_capacity (BOTTOM FAR RIGHT) -->
+  <rect x="835" y="676" width="315" height="92" rx="8" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.3"/>
+  <rect x="835" y="676" width="315" height="32" rx="8" fill="#F8FAFC"/>
+  <rect x="835" y="696" width="315" height="12" fill="#F8FAFC"/>
+  <text x="992" y="697" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="12.5" font-weight="700" fill="#0F172A" text-anchor="middle">backup_capacity (行锁锚点 · V5)</text>
+  <text x="848" y="726" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" font-weight="700" fill="#0F172A">PK  storage_key : VARCHAR(512)</text>
+  <text x="848" y="746" font-family="'Consolas','Microsoft YaHei',monospace" font-size="11" fill="#64748B">    updated_at : DATETIME (并发串行化行锁)</text>
+
+  <!-- Relationships & Cardinality -->
+  <!-- sys_user -> op_log (1:N) -->
+  <line x1="147" y1="232" x2="147" y2="278" stroke="#64748B" stroke-width="1.3" marker-end="url(#rel)"/>
+  <text x="157" y="261" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="11" fill="#475569">1 : N (user_id)</text>
+
+  <!-- sys_user -> terminal_history (1:N) -->
+  <path d="M 30 160 L 14 160 L 14 630 L 28 630" fill="none" stroke="#64748B" stroke-width="1.2" marker-end="url(#rel)"/>
+  <rect x="4" y="486" width="22" height="16" fill="#FFFFFF"/>
+  <text x="15" y="498" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="10.5" fill="#475569" text-anchor="middle">1:N</text>
+
+  <!-- db_instance -> terminal_history (1:N) -->
+  <path d="M 405 460 L 325 460 L 325 635 L 267 635" fill="none" stroke="#3B5BDB" stroke-width="1.3" marker-end="url(#rel)"/>
+  <text x="333" y="595" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="11" fill="#3B5BDB">1 : N</text>
+
+  <!-- db_instance -> metric_point (1:N) -->
+  <line x1="542" y1="255" x2="542" y2="216" stroke="#3B5BDB" stroke-width="1.3" marker-end="url(#rel)"/>
+  <text x="550" y="240" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="11" fill="#3B5BDB">1 : N (instance_id)</text>
+
+  <!-- db_instance -> alert_rule (1:N optional) -->
+  <path d="M 680 310 L 755 310 L 755 120 L 833 120" fill="none" stroke="#64748B" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#rel)"/>
+  <text x="760" y="205" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="10.5" fill="#475569">1:N (可空全局)</text>
+
+  <!-- alert_rule -> alert_event (1:N) -->
+  <line x1="992" y1="214" x2="992" y2="253" stroke="#64748B" stroke-width="1.3" marker-end="url(#rel)"/>
+  <text x="1000" y="240" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="11" fill="#475569">1 : N (rule_id)</text>
+
+  <!-- db_instance -> alert_event (1:N) -->
+  <line x1="680" y1="365" x2="833" y2="365" stroke="#3B5BDB" stroke-width="1.3" marker-end="url(#rel)"/>
+  <text x="756" y="357" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="11" fill="#3B5BDB" text-anchor="middle">1 : N</text>
+
+  <!-- db_instance -> backup_record (1:N) -->
+  <line x1="542" y1="515" x2="542" y2="554" stroke="#3B5BDB" stroke-width="1.3" marker-end="url(#rel)"/>
+  <text x="550" y="540" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="11" fill="#3B5BDB">1 : N (instance_id)</text>
+
+  <!-- backup_record -> backup_reservation (1:1/N) -->
+  <line x1="690" y1="600" x2="833" y2="575" stroke="#64748B" stroke-width="1.2" marker-end="url(#rel)"/>
+  <text x="762" y="575" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="10.5" fill="#475569" text-anchor="middle">backup_record_id</text>
+
+  <!-- backup_capacity -> backup_reservation (1:N) -->
+  <line x1="992" y1="676" x2="992" y2="652" stroke="#64748B" stroke-width="1.3" marker-end="url(#rel)"/>
+  <text x="1002" y="668" font-family="'Microsoft YaHei','Segoe UI',sans-serif" font-size="11" fill="#475569">1 : N (storage_key)</text>
+</svg>

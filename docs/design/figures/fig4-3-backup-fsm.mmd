@@ -1,0 +1,22 @@
+%%{init: {'theme':'base','themeVariables':{'fontFamily':"'Segoe UI','Microsoft YaHei',sans-serif",'fontSize':'13px','primaryColor':'#FFFFFF','primaryBorderColor':'#CBD2D9','primaryTextColor':'#202124','lineColor':'#475569','secondaryColor':'#F8FAFC','tertiaryColor':'#FFFFFF','labelTextColor':'#0F172A'}}}%%
+stateDiagram-v2
+    direction LR
+    [*] --> 并发互斥与容量预留 : 提交备份请求
+    并发互斥与容量预留 --> RUNNING : 加锁通过且预留成功
+    并发互斥与容量预留 --> 拒绝请求409 : 已有 RUNNING / RESTORING (409)
+    并发互斥与容量预留 --> 拒绝请求507 : 可用配额或磁盘空间不足 (507)
+    拒绝请求409 --> [*]
+    拒绝请求507 --> [*]
+
+    RUNNING --> SUCCESS : SCAN 流式导出 + Gzip + 释放预留
+    RUNNING --> FAILED : 导出异常或超 30 分钟超时
+
+    SUCCESS --> RESTORING : ADMIN 触发合并式恢复
+    RESTORING --> RESTORED : 逐行 DEL + 写入 + EXPIRE 完成
+    RESTORING --> RESTORE_FAILED : 中途失败(保留已写键，非原子)
+    RESTORED --> RESTORING : 再次恢复(幂等)
+    RESTORE_FAILED --> RESTORING : 重试恢复
+
+    SUCCESS --> RETIRING : 保留策略清理(保留最新成功)
+    FAILED --> RETIRING : 超期失败记录清理
+    RETIRING --> [*] : CAS 认领 -> 删文件 -> 删数据库记录
