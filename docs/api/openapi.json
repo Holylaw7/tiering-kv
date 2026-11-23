@@ -466,6 +466,21 @@
         },
         "type" : "object"
       },
+      "ApiResponseSlowLogView" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/SlowLogView"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseSystemInfoView" : {
         "properties" : {
           "code" : {
@@ -1396,6 +1411,53 @@
           },
           "version" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "SlowLogEntryView" : {
+        "properties" : {
+          "args" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "command" : {
+            "type" : "string"
+          },
+          "durationMicros" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "id" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "timestampSeconds" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "SlowLogView" : {
+        "properties" : {
+          "entries" : {
+            "items" : {
+              "$ref" : "#/components/schemas/SlowLogEntryView"
+            },
+            "type" : "array"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "supported" : {
+            "type" : "boolean"
+          },
+          "totalLen" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -2803,6 +2865,69 @@
           }
         },
         "tags" : [ "keyspace-controller" ]
+      }
+    },
+    "/api/v1/slowlog" : {
+      "get" : {
+        "operationId" : "list_2",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "instanceId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 50,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseSlowLogView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "slow-log-controller" ]
+      }
+    },
+    "/api/v1/slowlog/reset" : {
+      "post" : {
+        "operationId" : "reset",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "instanceId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseVoid"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "slow-log-controller" ]
       }
     },
     "/api/v1/system/info" : {

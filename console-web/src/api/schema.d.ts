@@ -452,6 +452,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/slowlog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/slowlog/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/info": {
         parameters: {
             query?: never;
@@ -750,6 +782,12 @@ export interface components {
             /** Format: int32 */
             code?: number;
             data?: components["schemas"]["RetentionView"];
+            message?: string;
+        };
+        ApiResponseSlowLogView: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["SlowLogView"];
             message?: string;
         };
         ApiResponseSystemInfoView: {
@@ -1138,6 +1176,23 @@ export interface components {
             /** Format: int64 */
             uptimeSeconds?: number;
             version?: string;
+        };
+        SlowLogEntryView: {
+            args?: string[];
+            command?: string;
+            /** Format: int64 */
+            durationMicros?: number;
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            timestampSeconds?: number;
+        };
+        SlowLogView: {
+            entries?: components["schemas"]["SlowLogEntryView"][];
+            message?: string;
+            supported?: boolean;
+            /** Format: int64 */
+            totalLen?: number;
         };
         SstableTable: {
             /** Format: int64 */
@@ -2064,6 +2119,51 @@ export interface operations {
                 "application/json": components["schemas"]["KeyTtlRequest"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    list_2: {
+        parameters: {
+            query: {
+                instanceId: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSlowLogView"];
+                };
+            };
+        };
+    };
+    reset: {
+        parameters: {
+            query: {
+                instanceId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
