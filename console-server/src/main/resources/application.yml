@@ -66,6 +66,19 @@ console:
   backup:
     # 逻辑备份落盘目录（相对工作目录）
     dir: ${CONSOLE_BACKUP_DIR:./backups}
+    storage-type: ${CONSOLE_BACKUP_STORAGE:local}
+    compress: ${CONSOLE_BACKUP_COMPRESS:true}
+    # 0 表示流式导出不设键数硬上限
+    max-keys: ${CONSOLE_BACKUP_MAX_KEYS:0}
+    scan-count: ${CONSOLE_BACKUP_SCAN_COUNT:500}
+  pool:
+    max-idle: ${CONSOLE_POOL_MAX_IDLE:4}
+    max-total: ${CONSOLE_POOL_MAX_TOTAL:16}
+    borrow-timeout-ms: ${CONSOLE_POOL_BORROW_TIMEOUT_MS:5000}
+    max-idle-time-ms: ${CONSOLE_POOL_MAX_IDLE_TIME_MS:60000}
+  security:
+    # 配置后以 AES-256-GCM 静态加密实例口令；留空兼容明文
+    encryption-key: ${CONSOLE_ENCRYPTION_KEY:}
   terminal:
     # 危险命令黑名单（逗号分隔，命中直接拒绝）
     blocked-commands: ${CONSOLE_BLOCKED_COMMANDS:FLUSHALL,FLUSHDB,SHUTDOWN,DEBUG}
@@ -74,7 +87,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: when_authorized

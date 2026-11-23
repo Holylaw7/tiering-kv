@@ -12,7 +12,8 @@ RUN --mount=type=cache,target=/root/.m2 \
 # 产物同时存在 tiering-kv-<ver>.jar 与 tiering-kv-<ver>-shaded.jar，
 # glob 会匹配多个文件，因此在构建阶段先挑出主构件并固定路径
 RUN set -e; \
-    jar=$(ls target/tiering-kv-*.jar | grep -v shaded | head -n1); \
+    jar=$(ls target/tiering-kv-*-shaded.jar 2>/dev/null | head -n1); \
+    test -n "$jar" || jar=$(ls target/tiering-kv-*.jar | grep -v shaded | head -n1); \
     test -n "$jar"; \
     cp "$jar" /tmp/tiering-kv.jar
 

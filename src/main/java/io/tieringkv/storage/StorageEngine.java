@@ -61,6 +61,11 @@ public interface StorageEngine {
     /** 存活 entry 数量（不含 tombstone；过期但未清扫的键仍计数，与 Redis 语义一致）。 */
     long size();
 
+    /** 键在当前存储层是否存在未清理的删除墓碑或已过期条目（防止分层回退复活旧值）。 */
+    default boolean hasTombstone(byte[] key) {
+        return false;
+    }
+
     /** 键版本（ADR-0328，TD-018）：热缓存新鲜度校验；
      *  默认 0 = 无版本语义（缓存回退 TTL 兜底）。 */
     default long versionOf(byte[] key) {

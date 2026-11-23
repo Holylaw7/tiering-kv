@@ -74,6 +74,16 @@ public abstract class AbstractStorageDecorator
         return delegate.versionOf(key);
     }
 
+    @Override
+    public boolean hasTombstone(byte[] key) {
+        return delegate.hasTombstone(key);
+    }
+
+    @Override
+    public void clear() {
+        delegate.clear();
+    }
+
     // ---------- AtomicStringOps 委托（ADR-0351） ----------
 
     @Override

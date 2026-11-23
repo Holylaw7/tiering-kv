@@ -18,26 +18,29 @@ public final class ShutdownManager implements AutoCloseable {
     private final WALManager wal;
     private final MemTable memTable;
     private final long drainTimeoutMillis;
-    private volatile boolean shutdown;
+    private final AutoCloseable[] extraCloseables;
+    private final java.util.concurrent.atomic.AtomicBoolean shutdown =
+            new java.util.concurrent.atomic.AtomicBoolean();
 
     public ShutdownManager(
             TieringKvServer server,
             MetricsRegistry metrics,
             WALManager wal,
             MemTable memTable,
-            long drainTimeoutMillis) {
+            long drainTimeoutMillis,
+            AutoCloseable... extraCloseables) {
         this.server = server;
         this.metrics = metrics;
         this.wal = wal;
         this.memTable = memTable;
         this.drainTimeoutMillis = drainTimeoutMillis;
+        this.extraCloseables = extraCloseables == null ? new AutoCloseable[0] : extraCloseables.clone();
     }
 
     public void shutdown() {
-        if (shutdown) {
+        if (!shutdown.compareAndSet(false, true)) {
             return;
         }
-        shutdown = true;
         metrics.stopAccepting();
         server.stopAccepting();
         long deadline = System.currentTimeMillis() + drainTimeoutMillis;
@@ -49,13 +52,22 @@ public final class ShutdownManager implements AutoCloseable {
                 break;
             }
         }
+        server.shutdown();
         try {
             wal.flushAndForce();
             wal.checkpoint(memTable);
         } catch (IOException e) {
             // 停机路径不抛：尽力持久化
         }
-        server.shutdown();
+        for (AutoCloseable resource : extraCloseables) {
+            if (resource != null) {
+                try {
+                    resource.close();
+                } catch (Exception ignored) {
+                    // 停机路径逐个关闭后台组件（TieringController/ColdStorageEngine/Executor 等）
+                }
+            }
+        }
     }
 
     @Override

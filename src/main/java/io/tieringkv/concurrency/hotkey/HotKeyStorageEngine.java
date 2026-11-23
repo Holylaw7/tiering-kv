@@ -108,4 +108,10 @@ public final class HotKeyStorageEngine extends AbstractStorageDecorator {
         cache.invalidate(key);
         return updated;
     }
+
+    @Override
+    public void clear() {
+        cache.clear();
+        super.clear();
+    }
 }

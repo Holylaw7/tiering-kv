@@ -75,14 +75,16 @@ public final class RecoveryManager {
                 long expireAt = entry.timestamp() + entry.ttlMillis();
                 long remaining = expireAt - now;
                 if (remaining <= 0) {
-                    return; // 宕机期间已过期，不复活
+                    // 宕机期间已过期：显式写 tombstone 避免冷层或检查点旧值复活
+                    memTable.putTombstone(entry.key());
+                    return;
                 }
                 memTable.put(entry.key(), entry.value(), remaining);
             } else {
                 memTable.put(entry.key(), entry.value());
             }
         } else {
-            memTable.delete(entry.key());
+            memTable.putTombstone(entry.key());
         }
     }
 

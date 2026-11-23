@@ -22,10 +22,11 @@ public final class ConnectionContext {
     private static final PubSubBroker SHARED_BROKER =
             new PubSubBroker();
 
-    private RespVersion version = RespVersion.RESP2;
+    private volatile RespVersion version = RespVersion.RESP2;
+    private volatile String authenticatedUser;
     private final ConnectionSubscriber subscriber =
             new ConnectionSubscriber();
-    private boolean inMulti;
+    private volatile boolean inMulti;
     private final List<RespCommand> txnQueue = new ArrayList<>();
     private final Map<ByteArrayKey, Long> watched = new HashMap<>();
 
@@ -58,6 +59,14 @@ public final class ConnectionContext {
         CURRENT.remove();
     }
 
+    public static void restore(ConnectionContext previous) {
+        if (previous == null) {
+            CURRENT.remove();
+        } else {
+            CURRENT.set(previous);
+        }
+    }
+
     public static PubSubBroker sharedBroker() {
         return SHARED_BROKER;
     }
@@ -74,6 +83,14 @@ public final class ConnectionContext {
         this.version = version;
     }
 
+    public String authenticatedUser() {
+        return authenticatedUser;
+    }
+
+    public void setAuthenticatedUser(String authenticatedUser) {
+        this.authenticatedUser = authenticatedUser;
+    }
+
     public ConnectionSubscriber subscriber() {
         return subscriber;
     }
@@ -86,7 +103,7 @@ public final class ConnectionContext {
         this.inMulti = inMulti;
     }
 
-    public void enqueue(RespCommand command) {
+    public synchronized void enqueue(RespCommand command) {
         if (command == null) {
             throw new IllegalArgumentException(
                     "command required");
@@ -94,29 +111,29 @@ public final class ConnectionContext {
         txnQueue.add(command);
     }
 
-    public List<RespCommand> txnQueue() {
+    public synchronized List<RespCommand> txnQueue() {
         return List.copyOf(txnQueue);
     }
 
-    public void clearTxnQueue() {
+    public synchronized void clearTxnQueue() {
         txnQueue.clear();
         inMulti = false;
     }
 
-    public void watch(ByteArrayKey key, long version) {
+    public synchronized void watch(ByteArrayKey key, long version) {
         watched.put(key, version);
     }
 
-    public Map<ByteArrayKey, Long> watched() {
+    public synchronized Map<ByteArrayKey, Long> watched() {
         return Map.copyOf(watched);
     }
 
-    public void unwatchAll() {
+    public synchronized void unwatchAll() {
         watched.clear();
     }
 
     /** EXEC 前校验：全部被观察键版本一致。 */
-    public boolean versionsMatch(
+    public synchronized boolean versionsMatch(
             java.util.function.Function<byte[], Long> versionOf) {
         for (Map.Entry<ByteArrayKey, Long> entry
                 : watched.entrySet()) {
@@ -134,6 +151,7 @@ public final class ConnectionContext {
         clearTxnQueue();
         unwatchAll();
         version = RespVersion.RESP2;
+        authenticatedUser = null;
         subscriber.clear();
     }
 }

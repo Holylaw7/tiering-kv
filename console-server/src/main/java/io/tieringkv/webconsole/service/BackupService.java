@@ -13,15 +13,20 @@ import io.tieringkv.webconsole.resp.RespReply;
 import io.tieringkv.webconsole.support.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
-import java.util.concurrent.Executor;
-
+import java.io.BufferedInputStream;
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.PushbackInputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
@@ -29,14 +34,15 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executor;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
-/** 逻辑备份：SCAN 全量导出为 JSONL，可按类型回放恢复。 */
+/** 逻辑备份：SCAN 流式导出（支持 .jsonl.gz 压缩与可配置键数），按类型幂等回放恢复。 */
 @Service
 public class BackupService {
 
     private static final Logger log = LoggerFactory.getLogger(BackupService.class);
-    private static final int SCAN_COUNT = 200;
-    private static final int MAX_KEYS = 200_000;
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
     private final BackupRecordRepository repository;
@@ -44,7 +50,8 @@ public class BackupService {
     private final KeyspaceService keyspaceService;
     private final RespGateway gateway;
     private final ObjectMapper objectMapper;
-    private final Path directory;
+    private final ConsoleProperties properties;
+    private final BackupStorageBackend storageBackend;
     private final Executor executor;
     private final AuditService auditService;
     private final BackupCapacityService capacityService;
@@ -55,12 +62,26 @@ public class BackupService {
                          @Qualifier("backupExecutor") Executor executor,
                          AuditService auditService,
                          BackupCapacityService capacityService) {
+        this(repository, instanceService, keyspaceService, gateway, objectMapper, properties,
+                new LocalBackupStorageBackend(Paths.get(properties.getBackup().getDir())),
+                executor, auditService, capacityService);
+    }
+
+    @Autowired
+    public BackupService(BackupRecordRepository repository, InstanceService instanceService,
+                         KeyspaceService keyspaceService, RespGateway gateway,
+                         ObjectMapper objectMapper, ConsoleProperties properties,
+                         BackupStorageBackend storageBackend,
+                         @Qualifier("backupExecutor") Executor executor,
+                         AuditService auditService,
+                         BackupCapacityService capacityService) {
         this.repository = repository;
         this.instanceService = instanceService;
         this.keyspaceService = keyspaceService;
         this.gateway = gateway;
         this.objectMapper = objectMapper;
-        this.directory = Paths.get(properties.getBackup().getDir()).toAbsolutePath().normalize();
+        this.properties = properties;
+        this.storageBackend = storageBackend;
         this.executor = executor;
         this.auditService = auditService;
         this.capacityService = capacityService;
@@ -71,7 +92,7 @@ public class BackupService {
     }
 
     public Path directory() {
-        return directory;
+        return storageBackend.rootDirectory();
     }
 
     public List<BackupRecord> list(Long instanceId) {
@@ -138,7 +159,9 @@ public class BackupService {
 
             BackupRecord record = new BackupRecord();
             record.setInstanceId(instanceId);
-            record.setFileName("backup-" + instanceId + "-" + LocalDateTime.now().format(STAMP) + ".jsonl");
+            String unique = java.util.UUID.randomUUID().toString().substring(0, 8);
+            String ext = properties.getBackup().isCompress() ? ".jsonl.gz" : ".jsonl";
+            record.setFileName("backup-" + instanceId + "-" + LocalDateTime.now().format(STAMP) + "-" + unique + ext);
             record.setStatus(BackupStatus.RUNNING);
             record.setCreatedAt(LocalDateTime.now());
             created = repository.save(record);
@@ -167,25 +190,18 @@ public class BackupService {
             return;
         }
         DbInstance instance = instanceService.require(record.getInstanceId());
-        Path file = directory.resolve(record.getFileName());
-        Path temp = directory.resolve(record.getFileName() + ".tmp");
+        String fileName = record.getFileName();
         long written = 0;
         try {
-            Files.createDirectories(directory);
-            long keys = writeSnapshot(instance, temp);
-            written = Files.size(temp);
-            publish(temp, file);
+            long keys = writeSnapshot(instance, fileName);
+            written = storageBackend.publish(fileName);
             record.setKeyCount(keys);
             record.setSizeBytes(written);
             record.setStatus(BackupStatus.SUCCESS);
             record.setMessage("导出 " + keys + " 个键");
         } catch (IOException | RuntimeException ex) {
             // 磁盘写满、只读、进程级异常：临时文件必须清掉，记录必须失败
-            try {
-                Files.deleteIfExists(temp);
-            } catch (IOException cleanup) {
-                log.warn("删除临时备份文件失败：{}", temp, cleanup);
-            }
+            storageBackend.deleteTempQuietly(fileName);
             record.setStatus(BackupStatus.FAILED);
             record.setMessage(truncate(ex.getMessage()));
             log.error("备份失败 instance={}", instance.getName(), ex);
@@ -196,24 +212,18 @@ public class BackupService {
         repository.save(record);
     }
 
-    /** 原子发布：同目录 ATOMIC_MOVE；不支持时降级并告警。 */
-    private void publish(Path temp, Path target) throws IOException {
-        try {
-            Files.move(temp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
-                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
-        } catch (java.nio.file.AtomicMoveNotSupportedException ex) {
-            log.warn("文件系统不支持 ATOMIC_MOVE，降级为普通移动：{}", target);
-            Files.move(temp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-        }
-    }
-
-    private long writeSnapshot(DbInstance instance, Path file) throws IOException {
+    private long writeSnapshot(DbInstance instance, String fileName) throws IOException {
         long count = 0;
         String cursor = "0";
-        try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+        int scanCount = Math.max(50, properties.getBackup().getScanCount());
+        long maxKeys = properties.getBackup().getMaxKeys();
+        boolean compress = fileName.endsWith(".gz");
+        try (OutputStream rawOut = storageBackend.openTempOutput(fileName);
+             OutputStream dataOut = compress ? new GZIPOutputStream(rawOut, 8192) : rawOut;
+             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(dataOut, StandardCharsets.UTF_8))) {
             do {
                 RespReply reply = gateway.execute(instance, "SCAN", cursor, "MATCH", "*",
-                        "COUNT", String.valueOf(SCAN_COUNT));
+                        "COUNT", String.valueOf(scanCount));
                 if (reply instanceof RespReply.Error error) {
                     throw new IOException("SCAN 失败：" + error.message());
                 }
@@ -235,9 +245,8 @@ public class BackupService {
                                 new SnapshotEntry(key, type, ttl, value)));
                         writer.newLine();
                         count++;
-                        if (count >= MAX_KEYS) {
-                            log.warn("备份键数达到上限 {}，提前结束", MAX_KEYS);
-                            return count;
+                        if (maxKeys > 0 && count >= maxKeys) {
+                            throw new IllegalStateException("备份键数超过配置上限 " + maxKeys + "，已中止以避免生成不完整备份");
                         }
                     }
                 }
@@ -273,8 +282,8 @@ public class BackupService {
             throw BusinessException.badRequest("仅成功的备份可恢复");
         }
         DbInstance instance = instanceService.require(record.getInstanceId());
-        Path file = directory.resolve(record.getFileName());
-        if (!Files.exists(file)) {
+        storageBackend.resolvePath(record.getFileName());
+        if (!storageBackend.exists(record.getFileName())) {
             throw BusinessException.notFound("备份文件已丢失：" + record.getFileName());
         }
 
@@ -312,8 +321,9 @@ public class BackupService {
         }
 
         long restored = 0;
-        try {
-            for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+        try (BufferedReader reader = openSnapshotReader(record.getFileName())) {
+            String line;
+            while ((line = reader.readLine()) != null) {
                 if (line.isBlank()) {
                     continue;
                 }
@@ -354,9 +364,9 @@ public class BackupService {
         if (key == null || entry.value() == null) {
             return;
         }
-        gateway.execute(instance, "DEL", key);
+        requireOk(gateway.execute(instance, "DEL", key), "DEL");
         switch (entry.type()) {
-            case "string" -> gateway.execute(instance, "SET", key, String.valueOf(entry.value()));
+            case "string" -> requireOk(gateway.execute(instance, "SET", key, String.valueOf(entry.value())), "SET");
             case "hash" -> {
                 Map<String, String> hash = (Map<String, String>) entry.value();
                 List<String> args = new ArrayList<>();
@@ -367,35 +377,45 @@ public class BackupService {
                     args.add(value);
                 });
                 if (args.size() > 2) {
-                    gateway.execute(instance, args.stream()
-                            .map(item -> item.getBytes(StandardCharsets.UTF_8)).toList());
+                    requireOk(gateway.execute(instance, args.stream()
+                            .map(item -> item.getBytes(StandardCharsets.UTF_8)).toList()), "HSET");
                 }
             }
             case "list" -> {
                 List<String> list = (List<String>) entry.value();
                 for (String item : list) {
-                    gateway.execute(instance, "RPUSH", key, item);
+                    requireOk(gateway.execute(instance, "RPUSH", key, item), "RPUSH");
                 }
             }
             case "set" -> {
                 List<String> set = (List<String>) entry.value();
                 for (String item : set) {
-                    gateway.execute(instance, "SADD", key, item);
+                    requireOk(gateway.execute(instance, "SADD", key, item), "SADD");
                 }
             }
             case "zset" -> {
                 List<Map<String, String>> scored = (List<Map<String, String>>) entry.value();
                 for (Map<String, String> pair : scored) {
-                    gateway.execute(instance, "ZADD", key,
-                            pair.getOrDefault("score", "0"), pair.getOrDefault("member", ""));
+                    requireOk(gateway.execute(instance, "ZADD", key,
+                            pair.getOrDefault("score", "0"), pair.getOrDefault("member", "")), "ZADD");
                 }
             }
-            case "json" -> gateway.execute(instance, "JSON.SET", key, "$",
-                    String.valueOf(entry.value()));
+            case "json" -> {
+                String json = entry.value() instanceof String raw
+                        ? raw
+                        : objectMapper.writeValueAsString(entry.value());
+                requireOk(gateway.execute(instance, "JSON.SET", key, "$", json), "JSON.SET");
+            }
             default -> log.debug("跳过不支持的类型恢复：{} ({})", key, entry.type());
         }
         if (entry.ttl() > 0) {
-            gateway.execute(instance, "EXPIRE", key, String.valueOf(entry.ttl()));
+            requireOk(gateway.execute(instance, "EXPIRE", key, String.valueOf(entry.ttl())), "EXPIRE");
+        }
+    }
+
+    private static void requireOk(RespReply reply, String op) throws IOException {
+        if (reply instanceof RespReply.Error error) {
+            throw new IOException(op + " 失败：" + error.message());
         }
     }
 
@@ -416,14 +436,25 @@ public class BackupService {
     public Path fileOf(Long recordId) {
         BackupRecord record = repository.findById(recordId)
                 .orElseThrow(() -> BusinessException.notFound("备份记录不存在：" + recordId));
-        Path file = directory.resolve(record.getFileName()).normalize();
-        if (!file.startsWith(directory)) {
-            throw BusinessException.badRequest("非法备份路径");
-        }
-        if (!Files.exists(file)) {
+        Path file = storageBackend.resolvePath(record.getFileName());
+        if (!storageBackend.exists(record.getFileName())) {
             throw BusinessException.notFound("备份文件不存在：" + record.getFileName());
         }
         return file;
+    }
+
+    /** 自动识别 GZIP 魔数（0x1F 0x8B），兼容明文 .jsonl 与压缩 .jsonl.gz。 */
+    private BufferedReader openSnapshotReader(String fileName) throws IOException {
+        InputStream raw = new BufferedInputStream(storageBackend.openInput(fileName));
+        PushbackInputStream pb = new PushbackInputStream(raw, 2);
+        byte[] header = new byte[2];
+        int read = pb.read(header);
+        if (read > 0) {
+            pb.unread(header, 0, read);
+        }
+        boolean gzip = read == 2 && (header[0] & 0xff) == 0x1f && (header[1] & 0xff) == 0x8b;
+        InputStream decoded = gzip ? new GZIPInputStream(pb, 8192) : pb;
+        return new BufferedReader(new InputStreamReader(decoded, StandardCharsets.UTF_8));
     }
 
     private static String text(RespReply reply) {

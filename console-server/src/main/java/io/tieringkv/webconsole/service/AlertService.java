@@ -82,10 +82,7 @@ public class AlertService {
         } else {
             try {
                 AlertStatus parsed = AlertStatus.valueOf(status.toUpperCase());
-                List<AlertEvent> list = eventRepository.findByStatusOrderByFiredAtDesc(parsed);
-                int from = Math.min(list.size(), (page - 1) * size);
-                int to = Math.min(list.size(), from + size);
-                return PageResult.of(list.subList(from, to), list.size(), page, size);
+                result = eventRepository.findByStatusOrderByFiredAtDesc(parsed, request);
             } catch (IllegalArgumentException ex) {
                 throw BusinessException.badRequest("非法状态：" + status);
             }

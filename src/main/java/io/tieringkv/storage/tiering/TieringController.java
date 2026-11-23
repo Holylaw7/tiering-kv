@@ -59,17 +59,29 @@ public final class TieringController implements AutoCloseable {
         this.flushPool = new TierWorkerPool(config.flushWorkers(), "tiering-flush");
         this.migrationPool = new TierWorkerPool(config.migrationWorkers(), "tiering-migration");
         this.watermark = new WatermarkManager(config.watermarks());
-        this.flushScheduler = new FlushScheduler(flushPool, memTable, wal, cold, metrics);
+        this.flushScheduler = new FlushScheduler(
+                flushPool, memTable, wal, cold, metrics, null,
+                this::notifyStorageStateChanged);
         this.migrationScheduler = new MigrationScheduler(
                 migrationPool,
                 new MigrationLog(config.migrationDirectory()),
                 cold, wal, memTable, metrics,
-                config.maxMigrationRetries(), config.retryBackoffMillis());
+                config.maxMigrationRetries(), config.retryBackoffMillis(),
+                0, -1, -1, this::notifyStorageStateChanged);
         cold.setCompactionListener(this::onCompaction);
         this.backpressure = new BackPressureController(
                 watermark, memory, memTable::size, metrics::pendingMigrationCount);
-        this.gaugeRefresher = new StorageGaugeRefresher(cold, metrics, flushScheduler::inProgress);
+        this.gaugeRefresher = new StorageGaugeRefresher(
+                cold, metrics, flushScheduler::inProgress,
+                () -> metrics.setMemoryGauges(memory.usedBytes(), memory.maxBytes(), memTable.size()),
+                500L);
         this.gaugeRefresher.start();
+    }
+
+    /** 后台 Flush / 迁移状态变化：立即刷新内存计数并请求冷层 Gauge 异步刷新（修复 G0-5C 指标停滞）。 */
+    private void notifyStorageStateChanged() {
+        metrics.setMemoryGauges(memory.usedBytes(), memory.maxBytes(), memTable.size());
+        gaugeRefresher.requestRefresh();
     }
 
     /** Compaction 事件 → StorageMetrics（TD-096）。 */

@@ -41,13 +41,34 @@ public final class HotKeyReadCache {
                 return cached.value();
             }
         }
+        long preVersion = storage.versionOf(key);
         byte[] value = coalescer.coalesce(wrapped, () -> storage.get(key));
         if (value != null) {
+            evictIfNeeded(nowMillis);
             cache.put(wrapped, new CachedValue(value,
                     nowMillis + policy.cacheTtlMillis(),
-                    storage.versionOf(key)));
+                    preVersion));
         }
         return value;
+    }
+
+    private void evictIfNeeded(long nowMillis) {
+        int maxEntries = Math.max(1, policy.maxHotKeys());
+        if (cache.size() < maxEntries) {
+            return;
+        }
+        cache.entrySet().removeIf(e -> e.getValue().expireAt() < nowMillis);
+        if (cache.size() >= maxEntries) {
+            java.util.Iterator<ByteBuffer> it = cache.keySet().iterator();
+            while (cache.size() >= maxEntries && it.hasNext()) {
+                it.next();
+                it.remove();
+            }
+        }
+    }
+
+    public void clear() {
+        cache.clear();
     }
 
     public void invalidate(byte[] key) {

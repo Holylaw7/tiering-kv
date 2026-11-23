@@ -74,7 +74,7 @@ public final class FileRaftLog implements RaftLog {
     }
 
     @Override
-    public void append(LogEntry entry) {
+    public synchronized void append(LogEntry entry) {
         checkWritable();
         long expected = lastIndex() + 1;
         if (entry.index() != expected) {
@@ -97,7 +97,7 @@ public final class FileRaftLog implements RaftLog {
     }
 
     @Override
-    public LogEntry entryAt(long index) {
+    public synchronized LogEntry entryAt(long index) {
         LogSegment segment = findSegment(index);
         if (segment == null) {
             throw new IllegalArgumentException("entry not found: " + index);
@@ -110,7 +110,7 @@ public final class FileRaftLog implements RaftLog {
     }
 
     @Override
-    public List<LogEntry> entriesFrom(long from) {
+    public synchronized List<LogEntry> entriesFrom(long from) {
         long start = Math.max(from, firstIndex());
         if (start > lastIndex()) {
             return List.of();
@@ -129,27 +129,27 @@ public final class FileRaftLog implements RaftLog {
     }
 
     @Override
-    public long firstIndex() {
+    public synchronized long firstIndex() {
         return segments.isEmpty() ? baseIndex : segments.get(0).firstIndex();
     }
 
     @Override
-    public long lastIndex() {
+    public synchronized long lastIndex() {
         return segments.isEmpty() ? baseIndex - 1 : segments.get(segments.size() - 1).lastIndex();
     }
 
     @Override
-    public long lastTerm() {
+    public synchronized long lastTerm() {
         return segments.isEmpty() ? 0 : entryAt(lastIndex()).term();
     }
 
     @Override
-    public long termAt(long index) {
+    public synchronized long termAt(long index) {
         return entryAt(index).term();
     }
 
     @Override
-    public int size() {
+    public synchronized int size() {
         int total = 0;
         for (LogSegment segment : segments) {
             total += segment.size();
@@ -158,7 +158,7 @@ public final class FileRaftLog implements RaftLog {
     }
 
     @Override
-    public void truncateFrom(long index) {
+    public synchronized void truncateFrom(long index) {
         checkWritable();
         try {
             if (index <= firstIndex()) {
@@ -199,13 +199,47 @@ public final class FileRaftLog implements RaftLog {
     }
 
     @Override
-    public void installSnapshot(long lastIncludedIndex) {
+    public synchronized void installSnapshot(long lastIncludedIndex) {
         if (lastIncludedIndex < firstIndex() - 1) {
             return;
         }
-        // 保留 (lastIncludedIndex, last] 后缀，删除前缀与旧段
+        // 先把 (lastIncludedIndex, last] 后缀写入暂存文件并刷盘，确认成功后再切换 baseIndex 与清理旧段
         List<LogEntry> remaining = entriesFrom(lastIncludedIndex + 1);
+        List<Path> stagedPaths = new ArrayList<>();
+        List<Long> stagedFirstIndices = new ArrayList<>();
         try {
+            if (!remaining.isEmpty()) {
+                LogSegment staging = null;
+                try {
+                    for (LogEntry entry : remaining) {
+                        if (staging == null || staging.sizeBytes() >= maxSegmentBytes
+                                || staging.size() >= maxSegmentEntries) {
+                            if (staging != null) {
+                                staging.force();
+                                staging.close();
+                            }
+                            Path tmp = dir.resolve(String.format(".snapshot-%020d.tmp", entry.index()));
+                            Files.deleteIfExists(tmp);
+                            staging = LogSegment.create(tmp, entry.index());
+                            stagedPaths.add(tmp);
+                            stagedFirstIndices.add(entry.index());
+                        }
+                        staging.append(entry);
+                    }
+                    if (staging != null) {
+                        staging.force();
+                        staging.close();
+                        staging = null;
+                    }
+                } finally {
+                    if (staging != null) {
+                        try {
+                            staging.close();
+                        } catch (IOException ignored) {
+                        }
+                    }
+                }
+            }
             for (LogSegment segment : segments) {
                 segment.close();
                 Files.deleteIfExists(segment.file());
@@ -213,16 +247,32 @@ public final class FileRaftLog implements RaftLog {
             segments.clear();
             baseIndex = lastIncludedIndex + 1;
             saveBaseIndex();
+            for (int i = 0; i < stagedPaths.size(); i++) {
+                Path target = dir.resolve(String.format("%s%020d%s",
+                        SEGMENT_PREFIX, stagedFirstIndices.get(i), SEGMENT_SUFFIX));
+                try {
+                    Files.move(stagedPaths.get(i), target,
+                            java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                            java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+                } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                    Files.move(stagedPaths.get(i), target,
+                            java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                }
+                segments.add(LogSegment.open(target).segment());
+            }
         } catch (IOException e) {
+            for (Path tmp : stagedPaths) {
+                try {
+                    Files.deleteIfExists(tmp);
+                } catch (IOException ignored) {
+                }
+            }
             throw new IllegalStateException("raft log snapshot compact failed", e);
-        }
-        for (LogEntry entry : remaining) {
-            append(entry);
         }
     }
 
     @Override
-    public void sync() {
+    public synchronized void sync() {
         forceAll();
     }
 
@@ -235,8 +285,15 @@ public final class FileRaftLog implements RaftLog {
         if (flusher != null) {
             flusher.shutdownNow();
         }
-        forceAll();
+        closeSegmentsLocked();
+    }
+
+    private synchronized void closeSegmentsLocked() {
         for (LogSegment segment : segments) {
+            try {
+                segment.force();
+            } catch (IOException ignored) {
+            }
             try {
                 segment.close();
             } catch (IOException ignored) {
@@ -265,7 +322,7 @@ public final class FileRaftLog implements RaftLog {
         return null;
     }
 
-    private void forceAll() {
+    private synchronized void forceAll() {
         if (closed) {
             return;
         }
@@ -301,13 +358,22 @@ public final class FileRaftLog implements RaftLog {
 
     private void saveBaseIndex() throws IOException {
         Path file = dir.resolve(BASE_FILE);
+        Path tmp = dir.resolve(BASE_FILE + ".tmp");
         ByteBuffer buffer = ByteBuffer.allocate(16).order(ByteOrder.BIG_ENDIAN);
         buffer.putInt(BASE_MAGIC);
         buffer.putLong(baseIndex);
         CRC32C crc = new CRC32C();
         crc.update(buffer.array(), 4, 8);
         buffer.putInt((int) crc.getValue());
-        Files.write(file, buffer.array());
+        Files.write(tmp, buffer.array());
+        try {
+            Files.move(tmp, file,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                    java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+            Files.move(tmp, file,
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }
     }
 
     private void checkWritable() {

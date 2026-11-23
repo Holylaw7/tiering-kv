@@ -15,6 +15,8 @@ public class ConsoleProperties {
     private final Backup backup = new Backup();
     private final Terminal terminal = new Terminal();
     private final Bootstrap bootstrap = new Bootstrap();
+    private final Pool pool = new Pool();
+    private final Security security = new Security();
 
     public Jwt getJwt() {
         return jwt;
@@ -38,6 +40,14 @@ public class ConsoleProperties {
 
     public Bootstrap getBootstrap() {
         return bootstrap;
+    }
+
+    public Pool getPool() {
+        return pool;
+    }
+
+    public Security getSecurity() {
+        return security;
     }
 
     /** 启动引导：{@code name@host:port}，为空则沿用数据库中的实例。 */
@@ -147,6 +157,14 @@ public class ConsoleProperties {
 
     public static class Backup {
         private String dir = "./backups";
+        /** 存储类型：local（默认本地/共享卷），预留 s3 扩展。 */
+        private String storageType = "local";
+        /** 是否使用 GZIP 流式压缩导出（.jsonl.gz）；恢复自动识别压缩与明文。 */
+        private boolean compress = true;
+        /** 单次导出最大键数；0 表示不设硬上限，流式导出全库。 */
+        private long maxKeys = 0;
+        /** SCAN 每批次键数。 */
+        private int scanCount = 500;
         private Retention retention = new Retention();
 
         public String getDir() {
@@ -155,6 +173,38 @@ public class ConsoleProperties {
 
         public void setDir(String dir) {
             this.dir = dir;
+        }
+
+        public String getStorageType() {
+            return storageType;
+        }
+
+        public void setStorageType(String storageType) {
+            this.storageType = storageType;
+        }
+
+        public boolean isCompress() {
+            return compress;
+        }
+
+        public void setCompress(boolean compress) {
+            this.compress = compress;
+        }
+
+        public long getMaxKeys() {
+            return maxKeys;
+        }
+
+        public void setMaxKeys(long maxKeys) {
+            this.maxKeys = maxKeys;
+        }
+
+        public int getScanCount() {
+            return scanCount;
+        }
+
+        public void setScanCount(int scanCount) {
+            this.scanCount = scanCount;
         }
 
         private Capacity capacity = new Capacity();
@@ -237,5 +287,30 @@ public class ConsoleProperties {
         public void setBlockedCommands(List<String> blockedCommands) {
             this.blockedCommands = blockedCommands;
         }
+    }
+
+    /** RESP 连接池配额配置（M3-B3）。 */
+    public static class Pool {
+        private int maxIdle = 4;
+        private int maxTotal = 16;
+        private long borrowTimeoutMs = 5000;
+        private long maxIdleTimeMs = 60_000;
+
+        public int getMaxIdle() { return maxIdle; }
+        public void setMaxIdle(int maxIdle) { this.maxIdle = maxIdle; }
+        public int getMaxTotal() { return maxTotal; }
+        public void setMaxTotal(int maxTotal) { this.maxTotal = maxTotal; }
+        public long getBorrowTimeoutMs() { return borrowTimeoutMs; }
+        public void setBorrowTimeoutMs(long borrowTimeoutMs) { this.borrowTimeoutMs = borrowTimeoutMs; }
+        public long getMaxIdleTimeMs() { return maxIdleTimeMs; }
+        public void setMaxIdleTimeMs(long maxIdleTimeMs) { this.maxIdleTimeMs = maxIdleTimeMs; }
+    }
+
+    /** 敏感凭据加密主密钥配置（M3-B3）。 */
+    public static class Security {
+        private String encryptionKey;
+
+        public String getEncryptionKey() { return encryptionKey; }
+        public void setEncryptionKey(String encryptionKey) { this.encryptionKey = encryptionKey; }
     }
 }

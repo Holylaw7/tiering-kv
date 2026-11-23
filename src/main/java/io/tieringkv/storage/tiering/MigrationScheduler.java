@@ -36,6 +36,7 @@ public final class MigrationScheduler implements AutoCloseable {
     private final int maxWorkers;
     private final Set<ByteBuffer> inFlight = ConcurrentHashMap.newKeySet();
     private final Object stateMonitor = new Object();
+    private final Runnable onStateChanged;
     private volatile Consumer<MigrationTask> completionListener;
 
     public MigrationScheduler(
@@ -48,7 +49,7 @@ public final class MigrationScheduler implements AutoCloseable {
             int maxRetries,
             long retryBackoffMillis) {
         this(pool, log, cold, wal, memTable, metrics, maxRetries,
-                retryBackoffMillis, 0, -1, -1);
+                retryBackoffMillis, 0, -1, -1, null);
     }
 
     /** 增强构造（ADR-0325）：maxPending<=0 表示无限制；maxWorkers<=0
@@ -65,6 +66,23 @@ public final class MigrationScheduler implements AutoCloseable {
             int maxPending,
             int minWorkers,
             int maxWorkers) {
+        this(pool, log, cold, wal, memTable, metrics, maxRetries,
+                retryBackoffMillis, maxPending, minWorkers, maxWorkers, null);
+    }
+
+    public MigrationScheduler(
+            TierWorkerPool pool,
+            MigrationLog log,
+            ColdStorageEngine cold,
+            WALManager wal,
+            MemTable memTable,
+            StorageMetrics metrics,
+            int maxRetries,
+            long retryBackoffMillis,
+            int maxPending,
+            int minWorkers,
+            int maxWorkers,
+            Runnable onStateChanged) {
         this.pool = pool;
         this.log = log;
         this.cold = cold;
@@ -76,6 +94,7 @@ public final class MigrationScheduler implements AutoCloseable {
         this.maxPending = maxPending;
         this.minWorkers = minWorkers;
         this.maxWorkers = maxWorkers;
+        this.onStateChanged = onStateChanged;
     }
 
     /** 入队迁移任务；同键已排队返回 false；日志失败抛 IllegalStateException。 */
@@ -117,13 +136,19 @@ public final class MigrationScheduler implements AutoCloseable {
         if (accepted.isEmpty()) {
             return 0;
         }
+        int loggedCount = 0;
         for (MigrationTask task : accepted) {
             metrics.migrationSubmitted();
             try {
                 log.append(task.withStatus(MigrationTask.Status.PENDING));
+                loggedCount++;
             } catch (IOException e) {
-                inFlight.remove(ByteBuffer.wrap(task.key()));
-                metrics.migrationCompleted(false, 0);
+                for (int i = 0; i < accepted.size(); i++) {
+                    inFlight.remove(ByteBuffer.wrap(accepted.get(i).key()));
+                    if (i <= loggedCount) {
+                        metrics.migrationCompleted(false, 0);
+                    }
+                }
                 throw new IllegalStateException(
                         "migration log append failed", e);
             }
@@ -174,12 +199,16 @@ public final class MigrationScheduler implements AutoCloseable {
             while (true) {
                 try {
                     log.append(current.withStatus(MigrationTask.Status.RUNNING));
-                    cold.put(current.entry());
-                    wal.append(WALEntry.delete(System.currentTimeMillis(), current.key(), 0));
-                    memTable.removePhysicalIfVersion(current.key(), current.version());
-                    finalTask = current.withStatus(MigrationTask.Status.SUCCESS);
-                    log.append(finalTask);
-                    success = true;
+                    boolean migrated = executeVersionGuarded(current);
+                    if (migrated) {
+                        finalTask = current.withStatus(MigrationTask.Status.SUCCESS);
+                        log.append(finalTask);
+                        success = true;
+                    } else {
+                        // 键在迁移排队期间已被并发覆盖或删除：不覆盖冷层，也不写错序 WAL DELETE
+                        finalTask = current.withStatus(MigrationTask.Status.SUCCESS);
+                        log.append(finalTask);
+                    }
                     break;
                 } catch (Exception e) {
                     attempts++;
@@ -213,6 +242,7 @@ public final class MigrationScheduler implements AutoCloseable {
             synchronized (stateMonitor) {
                 stateMonitor.notifyAll();
             }
+            notifyStateChanged();
             Consumer<MigrationTask> listener = completionListener;
             if (listener != null) {
                 listener.accept(finalTask);
@@ -220,34 +250,89 @@ public final class MigrationScheduler implements AutoCloseable {
         }
     }
 
+    private boolean executeVersionGuarded(MigrationTask task) {
+        if (wal == null) {
+            KeyValueEntry latest = memTable.getEntry(task.key());
+            if (latest == null || latest.version() != task.version()
+                    || !latest.isLive(System.currentTimeMillis())) {
+                return false;
+            }
+            cold.put(latest);
+            memTable.removePhysicalIfVersion(task.key(), task.version());
+            return true;
+        }
+        return wal.withKeyLock(task.key(), () -> {
+            long now = System.currentTimeMillis();
+            KeyValueEntry latest = memTable.getEntry(task.key());
+            if (latest == null || latest.version() != task.version() || !latest.isLive(now)) {
+                return false;
+            }
+            cold.put(latest);
+            wal.append(WALEntry.delete(now, task.key(), 0));
+            memTable.removePhysicalIfVersion(task.key(), task.version());
+            return true;
+        });
+    }
+
     private void runBatch(List<MigrationTask> tasks) {
         long startNanos = System.nanoTime();
+        List<MigrationTask> activeTasks = new ArrayList<>(tasks.size());
+        int processed = 0;
         try {
-            // SSTable 要求 key 有序：按字典序排序后一次写表
-            List<KeyValueEntry> entries = tasks.stream()
-                    .map(MigrationTask::entry)
-                    .sorted(Comparator.comparing(
-                            KeyValueEntry::key, Arrays::compare))
-                    .collect(Collectors.toList());
-            cold.writeTable(entries);
             long now = System.currentTimeMillis();
-            long elapsed = (System.nanoTime() - startNanos)
-                    / Math.max(1, tasks.size());
+            List<KeyValueEntry> entries = new ArrayList<>(tasks.size());
             for (MigrationTask task : tasks) {
-                wal.append(WALEntry.delete(now, task.key(), 0));
-                memTable.removePhysicalIfVersion(task.key(),
-                        task.version());
-                log.append(task.withStatus(MigrationTask.Status.SUCCESS));
-                inFlight.remove(ByteBuffer.wrap(task.key()));
-                metrics.migrationCompleted(true, elapsed);
+                KeyValueEntry latest = memTable.getEntry(task.key());
+                if (latest != null && latest.version() == task.version() && latest.isLive(now)) {
+                    activeTasks.add(task);
+                    entries.add(latest);
+                } else {
+                    inFlight.remove(ByteBuffer.wrap(task.key()));
+                    metrics.migrationCompleted(false, 0);
+                }
+            }
+            if (!entries.isEmpty()) {
+                // SSTable 要求 key 有序：按字典序排序后一次写表
+                entries.sort(Comparator.comparing(KeyValueEntry::key, Arrays::compare));
+                cold.writeTable(entries);
+                long elapsed = (System.nanoTime() - startNanos)
+                        / Math.max(1, activeTasks.size());
+                for (int i = 0; i < activeTasks.size(); i++) {
+                    MigrationTask task = activeTasks.get(i);
+                    if (wal != null) {
+                        wal.withKeyLock(task.key(), () -> {
+                            long ts = System.currentTimeMillis();
+                            KeyValueEntry latest = memTable.getEntry(task.key());
+                            if (latest != null && latest.version() == task.version()
+                                    && latest.isLive(ts)) {
+                                wal.append(WALEntry.delete(ts, task.key(), 0));
+                                memTable.removePhysicalIfVersion(task.key(), task.version());
+                            }
+                        });
+                    } else {
+                        memTable.removePhysicalIfVersion(task.key(), task.version());
+                    }
+                    log.append(task.withStatus(MigrationTask.Status.SUCCESS));
+                    inFlight.remove(ByteBuffer.wrap(task.key()));
+                    metrics.migrationCompleted(true, elapsed);
+                    processed = i + 1;
+                }
             }
         } catch (Exception e) {
-            // 批量冷层写失败：逐条回退到单任务重试路径（幂等可恢复）
-            for (MigrationTask task : tasks) {
+            // 批量冷层写失败：仅对未完成任务回退到单任务重试路径（幂等可恢复）
+            for (int i = processed; i < activeTasks.size(); i++) {
+                MigrationTask task = activeTasks.get(i);
                 pool.execute(() -> run(task));
             }
         } finally {
+            notifyStateChanged();
             adjustWorkers();
+        }
+    }
+
+    private void notifyStateChanged() {
+        if (onStateChanged != null) {
+            onStateChanged.run();
         }
     }
 

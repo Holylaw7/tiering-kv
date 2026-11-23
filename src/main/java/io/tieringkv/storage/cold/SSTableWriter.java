@@ -82,7 +82,13 @@ public final class SSTableWriter implements AutoCloseable {
         out.flush();
         out.close();
         finished = true;
-        return new SSTableMeta(id, path.getFileName().toString(), entryCount, offset, firstKey, lastKey);
+        return new SSTableMeta(
+                id,
+                path.getFileName().toString(),
+                entryCount,
+                offset,
+                firstKey == null ? new byte[0] : firstKey,
+                lastKey == null ? new byte[0] : lastKey);
     }
 
     @Override

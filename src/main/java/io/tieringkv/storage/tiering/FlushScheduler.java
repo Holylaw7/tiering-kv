@@ -21,6 +21,7 @@ public final class FlushScheduler {
     private final ColdStorageEngine cold;
     private final StorageMetrics metrics;
     private final AdaptiveFlushController controller;
+    private final Runnable onStateChanged;
     private final ScheduledExecutorService autoFlusher;
     private final AtomicBoolean flushInProgress = new AtomicBoolean();
 
@@ -30,7 +31,7 @@ public final class FlushScheduler {
             WALManager wal,
             ColdStorageEngine cold,
             StorageMetrics metrics) {
-        this(pool, memTable, wal, cold, metrics, null);
+        this(pool, memTable, wal, cold, metrics, null, null);
     }
 
     public FlushScheduler(
@@ -40,6 +41,17 @@ public final class FlushScheduler {
             ColdStorageEngine cold,
             StorageMetrics metrics,
             AdaptiveFlushController controller) {
+        this(pool, memTable, wal, cold, metrics, controller, null);
+    }
+
+    public FlushScheduler(
+            TierWorkerPool pool,
+            MemTable memTable,
+            WALManager wal,
+            ColdStorageEngine cold,
+            StorageMetrics metrics,
+            AdaptiveFlushController controller,
+            Runnable onStateChanged) {
         this.pool = pool;
         this.memTable = memTable;
         this.manager = null;
@@ -47,6 +59,7 @@ public final class FlushScheduler {
         this.cold = cold;
         this.metrics = metrics;
         this.controller = controller;
+        this.onStateChanged = onStateChanged;
         this.autoFlusher = Executors.newSingleThreadScheduledExecutor(runnable -> {
             Thread thread = new Thread(runnable, "adaptive-flush");
             thread.setDaemon(true);
@@ -61,7 +74,7 @@ public final class FlushScheduler {
             WALManager wal,
             ColdStorageEngine cold,
             StorageMetrics metrics) {
-        this(pool, manager, wal, cold, metrics, null);
+        this(pool, manager, wal, cold, metrics, null, null);
     }
 
     public FlushScheduler(
@@ -71,6 +84,17 @@ public final class FlushScheduler {
             ColdStorageEngine cold,
             StorageMetrics metrics,
             AdaptiveFlushController controller) {
+        this(pool, manager, wal, cold, metrics, controller, null);
+    }
+
+    public FlushScheduler(
+            TierWorkerPool pool,
+            MemTableManager manager,
+            WALManager wal,
+            ColdStorageEngine cold,
+            StorageMetrics metrics,
+            AdaptiveFlushController controller,
+            Runnable onStateChanged) {
         this.pool = pool;
         this.memTable = null;
         this.manager = manager;
@@ -78,6 +102,7 @@ public final class FlushScheduler {
         this.cold = cold;
         this.metrics = metrics;
         this.controller = controller;
+        this.onStateChanged = onStateChanged;
         this.autoFlusher = Executors.newSingleThreadScheduledExecutor(
                 runnable -> {
                     Thread thread = new Thread(runnable,
@@ -131,6 +156,7 @@ public final class FlushScheduler {
         if (!flushInProgress.compareAndSet(false, true)) {
             return false;
         }
+        notifyStateChanged();
         pool.execute(() -> {
             try {
                 long start = System.nanoTime();
@@ -155,8 +181,15 @@ public final class FlushScheduler {
                 // Flush 失败：内存数据保留（immutable 语义），下次触发重试
             } finally {
                 flushInProgress.set(false);
+                notifyStateChanged();
             }
         });
         return true;
+    }
+
+    private void notifyStateChanged() {
+        if (onStateChanged != null) {
+            onStateChanged.run();
+        }
     }
 }

@@ -2,6 +2,15 @@
 server:
   host: 0.0.0.0
   port: 6379
+  max-clients: 10000
+  timeout-seconds: 0
+  # password: "" # 留空则默认 default 用户免密；亦可通过环境变量 TIERING_PASSWORD 设置
+  tls:
+    enabled: false
+    # cert-path: /etc/tiering-kv/tls/server.crt
+    # key-path: /etc/tiering-kv/tls/server.key
+    # ca-path: /etc/tiering-kv/tls/ca.crt
+    # require-client-auth: false
 
 worker:
   shard-count: 16
@@ -19,11 +28,29 @@ cache:
   block-size: 1024
   hotkey-window-ms: 1000
   hotkey-threshold: 1000
+  max-hot-keys: 1024
+  hotkey-cache-ttl-ms: 500
+  eviction-decay-interval-ms: 60000
+  max-evictions-per-cycle: 1024
+
+storage:
+  data-dir: ./data
+  # wal-dir: ./data/wal
+  # cold-dir: ./data/cold
+  # migration-dir: ./data/migration
+
+vector:
+  # index-dir: ./data/vector
+  max-level: 6
+  checkpoint-interval-ms: 60000
 
 tiering:
   low-watermark: 0.70
   high-watermark: 0.85
   critical-watermark: 0.95
+  max-entry-count: 1000000
+  warning-queue-tasks: 5000
+  critical-queue-tasks: 10000
   backpressure-timeout-ms: 1000
   drain-timeout-ms: 5000
 
@@ -35,3 +62,9 @@ gc:
 txn:
   ttl-seconds: 60
   max-duration-seconds: 300
+
+observability:
+  # 数据面轻量管理端口（/healthz /readyz /metrics）；<=0 时关闭
+  management-port: 9100
+  slowlog-threshold-micros: 10000
+  slowlog-max-len: 128

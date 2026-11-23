@@ -227,25 +227,32 @@ public final class MvccStorageEngine {
     public Map<byte[], byte[]> scan(byte[] startKey, byte[] endKey, long readTS) {
         Map<byte[], byte[]> result = new TreeMap<>(
                 (a, b) -> java.util.Arrays.compareUnsigned(a, b));
-        List<ByteKey> keys = new ArrayList<>(index.keySet());
-        keys.sort((a, b) -> java.util.Arrays.compareUnsigned(a.key(), b.key()));
-        for (ByteKey key : keys) {
-            byte[] userKey = key.key();
-            if (endKey != null
-                    && java.util.Arrays.compareUnsigned(userKey, endKey) >= 0) {
-                break;
-            }
-            if (java.util.Arrays.compareUnsigned(userKey, startKey) < 0) {
-                continue;
-            }
-            MvccEntry visible = null;
-            for (MvccEntry version : index.get(key)) {
-                if (version.commitTS() <= readTS && version.isVisible()) {
-                    visible = version;
+        synchronized (index) {
+            List<ByteKey> keys = new ArrayList<>(index.keySet());
+            keys.sort((a, b) -> java.util.Arrays.compareUnsigned(a.key(), b.key()));
+            for (ByteKey key : keys) {
+                byte[] userKey = key.key();
+                if (endKey != null
+                        && java.util.Arrays.compareUnsigned(userKey, endKey) >= 0) {
+                    break;
                 }
-            }
-            if (visible != null && !visible.isDelete()) {
-                result.put(userKey, visible.value());
+                if (startKey != null
+                        && java.util.Arrays.compareUnsigned(userKey, startKey) < 0) {
+                    continue;
+                }
+                List<MvccEntry> chain = index.get(key);
+                if (chain == null) {
+                    continue;
+                }
+                MvccEntry visible = null;
+                for (MvccEntry version : chain) {
+                    if (version.commitTS() <= readTS && version.isVisible()) {
+                        visible = version;
+                    }
+                }
+                if (visible != null && !visible.isDelete()) {
+                    result.put(userKey, visible.value());
+                }
             }
         }
         return result;

@@ -4,6 +4,8 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
+import io.netty.handler.timeout.IdleState;
+import io.netty.handler.timeout.IdleStateEvent;
 import io.tieringkv.command.CommandEngine;
 import io.tieringkv.command.RespCommand;
 import io.tieringkv.command.RespRequestParser;
@@ -18,6 +20,7 @@ import io.tieringkv.protocol.RespProtocolException;
 import io.tieringkv.protocol.RespValue;
 import io.tieringkv.pubsub.ConnectionSubscriber;
 import io.tieringkv.session.ConnectionContext;
+import io.tieringkv.storage.StorageRedirectException;
 import io.tieringkv.storage.wal.WalWriteException;
 import io.tieringkv.storage.tiering.BackpressureException;
 import io.tieringkv.monitor.MetricsRegistry;
@@ -26,6 +29,8 @@ import io.tieringkv.network.response.ResponseBuffer;
 
 import java.util.List;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.IntSupplier;
 
 /** 命令入站处理器：解析请求 → 执行 → 写回；协议错误写入后关闭连接。 */
 public final class CommandHandler extends ChannelInboundHandlerAdapter {
@@ -35,20 +40,46 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
 
     private final CommandEngine engine;
     private final MetricsRegistry metrics;
+    private final AtomicInteger activeConnections;
+    private final IntSupplier maxClients;
     private final ResponseSequencer sequencer = new ResponseSequencer();
     private long nextSequence = 1;
-    private final long[] startTimes = new long[4096];
+    private final java.util.Map<Long, Long> startTimes = new java.util.HashMap<>();
+    private final java.util.Deque<PendingCommand> deferred = new java.util.ArrayDeque<>();
+    private boolean barrierRunning;
     private int inflight;
+    private boolean accepted;
+
+    private record PendingCommand(long sequence, io.tieringkv.command.RespCommand command) { }
     private ResponseBatcher batcher;
     private ConnectionContext context;
 
     public CommandHandler(CommandEngine engine, MetricsRegistry metrics) {
+        this(engine, metrics, null, null);
+    }
+
+    public CommandHandler(CommandEngine engine, MetricsRegistry metrics,
+                          AtomicInteger activeConnections, IntSupplier maxClients) {
         this.engine = engine;
         this.metrics = metrics;
+        this.activeConnections = activeConnections;
+        this.maxClients = maxClients;
     }
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) {
+        if (activeConnections != null && maxClients != null) {
+            int current = activeConnections.incrementAndGet();
+            int limit = maxClients.getAsInt();
+            if (limit > 0 && current > limit) {
+                activeConnections.decrementAndGet();
+                ByteBuf buf = ctx.alloc().buffer();
+                RespEncoder.write(buf, new RespError("ERR max number of clients reached"));
+                ctx.writeAndFlush(buf).addListener(ChannelFutureListener.CLOSE);
+                return;
+            }
+        }
+        accepted = true;
         metrics.connectionOpened();
         context = new ConnectionContext();
         batcher = new ResponseBatcher(
@@ -58,6 +89,14 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
 
     @Override
     public void channelInactive(ChannelHandlerContext ctx) {
+        if (!accepted) {
+            return;
+        }
+        if (activeConnections != null) {
+            activeConnections.decrementAndGet();
+        }
+        deferred.clear();
+        startTimes.clear();
         if (context != null) {
             context.cleanup();
         }
@@ -68,31 +107,52 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
     }
 
     @Override
+    public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
+        if (evt instanceof IdleStateEvent event && event.state() == IdleState.READER_IDLE) {
+            ctx.close();
+            return;
+        }
+        super.userEventTriggered(ctx, evt);
+    }
+
+    @Override
     public void channelRead(ChannelHandlerContext ctx, Object msg) {
+        if (!accepted) {
+            return;
+        }
         if (msg instanceof RespValue value) {
             try {
+                RespCommand command;
+                ConnectionContext previous = ConnectionContext.current();
                 ConnectionContext.attach(context);
-                RespCommand command = RespRequestParser.parse(value);
-                ConnectionContext.detach();
+                try {
+                    command = RespRequestParser.parse(value);
+                } finally {
+                    ConnectionContext.restore(previous);
+                }
                 long sequence = nextSequence++;
-                startTimes[(int) (sequence & 4095)] = System.nanoTime();
-                metrics.requestStarted();
-                inflight++;
                 if (!metrics.accepting()) {
                     metrics.error();
+                    metrics.requestStarted();
                     metrics.requestCompleted(0);
                     sequencer.complete(sequence, new RespError("ERR server shutting down"),
                             ready -> offerOnEventLoop(ctx, ready));
                     return;
                 }
-                engine.executeAsync(command, (response, error) ->
-                        ctx.executor().execute(() -> complete(ctx, sequence, response, error)));
+                PendingCommand pending = new PendingCommand(sequence, command);
+                if (!deferred.isEmpty() || barrierRunning || (needsSerialBarrier(command) && inflight > 0)) {
+                    deferred.addLast(pending);
+                    return;
+                }
+                dispatchCommand(ctx, pending);
             } catch (RespProtocolException e) {
                 writeProtocolErrorAndClose(ctx, e.getMessage());
             } catch (WalWriteException e) {
                 writeError(ctx, "ERR " + e.getMessage());
             } catch (BackpressureException e) {
                 writeError(ctx, "ERR " + e.getMessage());
+            } catch (StorageRedirectException e) {
+                writeError(ctx, e.respMessage());
             } catch (OutOfMemoryError oom) {
                 // TD-083：堆耗尽时不能让事件循环线程静默死亡（进程还在、
                 // 连接全被重置）。此处关闭连接并记录，交由上层观测/重启。
@@ -103,21 +163,77 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
+    private boolean needsSerialBarrier(RespCommand command) {
+        if (context != null && context.inMulti()) {
+            return true;
+        }
+        return switch (command.name()) {
+            case "auth", "acl", "config",
+                 "multi", "exec", "discard", "watch", "unwatch",
+                 "hello", "flushdb", "flushall", "dbsize", "scan",
+                 "mget", "mset", "msetnx", "blpop", "brpop", "keys", "client",
+                 "subscribe", "unsubscribe", "psubscribe", "punsubscribe" -> true;
+            case "del", "exists" -> command.args().size() > 1;
+            default -> false;
+        };
+    }
+
+    private void dispatchCommand(ChannelHandlerContext ctx, PendingCommand pending) {
+        if (needsSerialBarrier(pending.command())) {
+            barrierRunning = true;
+        }
+        startTimes.put(pending.sequence(), System.nanoTime());
+        metrics.requestStarted();
+        inflight++;
+        ConnectionContext previous = ConnectionContext.current();
+        ConnectionContext.attach(context);
+        try {
+            engine.executeAsync(pending.command(), (response, error) ->
+                    ctx.executor().execute(() -> complete(ctx, pending.sequence(), response, error)));
+        } finally {
+            ConnectionContext.restore(previous);
+        }
+    }
+
+    private void drainDeferred(ChannelHandlerContext ctx) {
+        while (!deferred.isEmpty() && !barrierRunning) {
+            PendingCommand next = deferred.peekFirst();
+            boolean barrier = needsSerialBarrier(next.command());
+            if (barrier && inflight > 0) {
+                return;
+            }
+            deferred.pollFirst();
+            dispatchCommand(ctx, next);
+            if (barrierRunning) {
+                return;
+            }
+        }
+    }
+
     /** 事件循环内完成：更新指标 → 保序 → 批处理写出。 */
     private void complete(ChannelHandlerContext ctx, long sequence, RespValue response, Throwable error) {
-        metrics.requestCompleted(System.nanoTime() - startTimes[(int) (sequence & 4095)]);
+        Long startedAt = startTimes.remove(sequence);
+        long latencyNanos = startedAt == null ? 0L : System.nanoTime() - startedAt;
+        metrics.requestCompleted(latencyNanos);
+        barrierRunning = false;
+        boolean last = --inflight == 0;
+        if (!ctx.channel().isActive()) {
+            deferred.clear();
+            return;
+        }
         Outcome outcome = error == null ? new Outcome(response, false) : mapFailure(error);
         if (outcome.close()) {
             metrics.error();
         }
         batcher.setVersion(context.version());
         drainPubSub(batcher);
-        boolean last = --inflight == 0;
         sequencer.complete(sequence, outcome.value(), ready -> batcher.offer(ready, last));
         if (outcome.close()) {
             batcher.flush();
             ctx.close();
+            return;
         }
+        drainDeferred(ctx);
     }
 
     /** 事件循环内：把连接订阅队列编码为 Push（RESP3）/数组（RESP2）。 */
@@ -160,6 +276,9 @@ public final class CommandHandler extends ChannelInboundHandlerAdapter {
         }
         if (root instanceof BackpressureException e) {
             return new Outcome(new RespError("ERR " + e.getMessage()), false);
+        }
+        if (root instanceof StorageRedirectException e) {
+            return new Outcome(new RespError(e.respMessage()), false);
         }
         return new Outcome(new RespError("ERR internal error"), true);
     }

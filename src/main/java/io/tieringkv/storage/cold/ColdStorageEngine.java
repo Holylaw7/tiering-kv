@@ -40,6 +40,8 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
     private final TreeMap<ByteBuffer, KeyValueEntry> pending = new TreeMap<>();
     private final List<SSTableMeta> tables = new ArrayList<>(); // 旧 → 新
     private final Map<Long, SSTableReader> readers = new HashMap<>();
+    private final Map<Long, Integer> readerPins = new HashMap<>();
+    private final List<RetiredReader> retiredReaders = new ArrayList<>();
     private final CompactionManager compactionManager;
     private final BlockCache blockCache;
     private final IOStatistics ioStats;
@@ -239,6 +241,7 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
         synchronized (lock) {
             List<KeyValueEntry> pendingSnapshot = new ArrayList<>(pending.values());
             List<MergingIterator.Source> sources = new ArrayList<>();
+            List<Long> pinnedIds = new ArrayList<>(tables.size());
             int priority = tables.size() + 1;
             sources.add(new MergingIterator.Source(
                     new MergingIterator.ListIterator(pendingSnapshot), priority));
@@ -246,13 +249,16 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
                 SSTableMeta meta = tables.get(i);
                 try {
                     sources.add(new MergingIterator.Source(readerFor(meta).iterator(), i));
+                    readerPins.merge(meta.id(), 1, Integer::sum);
+                    pinnedIds.add(meta.id());
                 } catch (IOException e) {
+                    releasePinsLocked(pinnedIds);
                     throw new ColdCorruptionException(
                             "iterate " + meta.fileName() + " failed: " + e.getMessage());
                 }
             }
             MergingIterator merged = new MergingIterator(sources);
-            return new FilteringIterator(merged, now);
+            return new FilteringIterator(merged, now, () -> releasePins(pinnedIds));
         }
     }
 
@@ -309,13 +315,18 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
                 return null;
             }
             long startedAt = System.nanoTime();
-            SSTableMeta output = new CompactionTask(
-                    config, inputs, nextTableId).run();
-            nextTableId++;
-            installCompaction(output, inputs);
-            leveled.promote(from, output);
-            notifyCompaction(inputs, output, System.nanoTime() - startedAt);
-            return output;
+            compacting.set(true);
+            try {
+                SSTableMeta output = new CompactionTask(
+                        config, inputs, nextTableId).run();
+                nextTableId++;
+                installCompaction(output, inputs);
+                leveled.promote(from, output);
+                notifyCompaction(inputs, output, System.nanoTime() - startedAt);
+                return output;
+            } finally {
+                compacting.set(false);
+            }
         }
     }
 
@@ -361,20 +372,48 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
     }
 
     void installCompaction(SSTableMeta output, List<SSTableMeta> inputs) throws IOException {
+        java.util.Set<Long> inputIds = new java.util.HashSet<>(inputs.size());
+        for (SSTableMeta input : inputs) {
+            inputIds.add(input.id());
+        }
+        int maxInputIndex = -1;
+        for (int i = 0; i < tables.size(); i++) {
+            if (inputIds.contains(tables.get(i).id())) {
+                maxInputIndex = i;
+            }
+        }
+        List<SSTableMeta> nextTables = new ArrayList<>(tables.size() - inputIds.size() + 1);
+        boolean inserted = false;
+        for (int i = 0; i < tables.size(); i++) {
+            SSTableMeta existing = tables.get(i);
+            if (!inputIds.contains(existing.id())) {
+                if (!inserted && i > maxInputIndex) {
+                    nextTables.add(output);
+                    inserted = true;
+                }
+                nextTables.add(existing);
+            }
+        }
+        if (!inserted) {
+            nextTables.add(output);
+        }
+        tables.clear();
+        tables.addAll(nextTables);
+        nextTableId = Math.max(nextTableId, output.id() + 1);
+        Manifest.write(config.directory(), tables);
         for (SSTableMeta input : inputs) {
             if (blockCache != null) {
                 blockCache.invalidate(input.id());
             }
             SSTableReader reader = readers.remove(input.id());
-            if (reader != null) {
-                reader.close();
+            Path path = input.path(config.directory());
+            if (readerPins.getOrDefault(input.id(), 0) > 0) {
+                retiredReaders.add(new RetiredReader(input.id(), reader, path));
+            } else {
+                closeAndDeleteQuietly(reader, path, input.id());
             }
-            Files.deleteIfExists(input.path(config.directory()));
         }
-        tables.clear();
-        tables.add(output);
-        nextTableId = Math.max(nextTableId, output.id() + 1);
-        Manifest.write(config.directory(), tables);
+        cleanupRetiredLocked();
     }
 
     private void notifyCompaction(List<SSTableMeta> inputs, SSTableMeta output, long latencyNanos) {
@@ -493,6 +532,90 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
         });
     }
 
+    private void releasePins(List<Long> pinnedIds) {
+        if (pinnedIds.isEmpty()) {
+            return;
+        }
+        synchronized (lock) {
+            releasePinsLocked(pinnedIds);
+            cleanupRetiredLocked();
+        }
+    }
+
+    private void releasePinsLocked(List<Long> pinnedIds) {
+        for (Long id : pinnedIds) {
+            Integer count = readerPins.get(id);
+            if (count == null || count <= 1) {
+                readerPins.remove(id);
+            } else {
+                readerPins.put(id, count - 1);
+            }
+        }
+    }
+
+    private void cleanupRetiredLocked() {
+        if (retiredReaders.isEmpty()) {
+            return;
+        }
+        java.util.Iterator<RetiredReader> it = retiredReaders.iterator();
+        while (it.hasNext()) {
+            RetiredReader retired = it.next();
+            if (readerPins.getOrDefault(retired.id(), 0) > 0) {
+                continue;
+            }
+            if (closeAndDeleteQuietly(retired.reader(), retired.path(), retired.id())) {
+                it.remove();
+            }
+        }
+    }
+
+    private boolean closeAndDeleteQuietly(SSTableReader reader, Path path, long id) {
+        if (reader != null) {
+            try {
+                reader.close();
+            } catch (IOException ignored) {
+            }
+        }
+        try {
+            Files.deleteIfExists(path);
+            return true;
+        } catch (IOException e) {
+            // Windows 下 mmap 文件可能尚未被 GC 解除映射；暂存列表待后续周期重试删除
+            retiredReaders.add(new RetiredReader(id, null, path));
+            return false;
+        }
+    }
+
+    public void clear() {
+        synchronized (lock) {
+            ensureOpen();
+            pending.clear();
+            pendingBytes = 0;
+            for (SSTableMeta table : tables) {
+                if (blockCache != null) {
+                    blockCache.invalidate(table.id());
+                }
+                SSTableReader reader = readers.remove(table.id());
+                Path path = table.path(config.directory());
+                if (readerPins.getOrDefault(table.id(), 0) > 0) {
+                    retiredReaders.add(new RetiredReader(table.id(), reader, path));
+                } else {
+                    closeAndDeleteQuietly(reader, path, table.id());
+                }
+            }
+            tables.clear();
+            try {
+                Manifest.write(config.directory(), tables);
+            } catch (IOException e) {
+                throw new ColdCorruptionException("clear manifest failed: " + e.getMessage());
+            }
+            liveCountCache = 0;
+            liveCountDirty = false;
+            liveCountKnown = true;
+            cleanupRetiredLocked();
+        }
+    }
+
     private void ensureOpen() {
         if (closed) {
             throw new IllegalStateException("cold storage is closed");
@@ -505,23 +628,36 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
             liveCountRefresher.interrupt();
         }
         synchronized (lock) {
-            for (SSTableReader reader : readers.values()) {
-                reader.close();
+            try {
+                if (!closed && !pending.isEmpty()) {
+                    flushPendingLocked();
+                }
+            } finally {
+                for (SSTableReader reader : readers.values()) {
+                    reader.close();
+                }
+                readers.clear();
+                cleanupRetiredLocked();
+                closed = true;
             }
-            readers.clear();
-            closed = true;
         }
+    }
+
+    private record RetiredReader(long id, SSTableReader reader, Path path) {
     }
 
     /** 过滤 tombstone / 过期条目的迭代包装。 */
     private static final class FilteringIterator implements StorageIterator {
         private final StorageIterator delegate;
         private final long now;
+        private final Runnable onClose;
         private KeyValueEntry next;
+        private boolean closed;
 
-        private FilteringIterator(StorageIterator delegate, long now) {
+        private FilteringIterator(StorageIterator delegate, long now, Runnable onClose) {
             this.delegate = delegate;
             this.now = now;
+            this.onClose = onClose;
             advance();
         }
 
@@ -550,6 +686,17 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
 
         @Override
         public void close() {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            try {
+                delegate.close();
+            } finally {
+                if (onClose != null) {
+                    onClose.run();
+                }
+            }
         }
     }
 }

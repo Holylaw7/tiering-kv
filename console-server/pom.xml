@@ -53,6 +53,10 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
         <!-- OpenAPI 契约（TD-088）：/v3/api-docs 作为前后端契约的唯一来源 -->
         <dependency>
             <groupId>org.springdoc</groupId>

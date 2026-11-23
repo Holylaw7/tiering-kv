@@ -49,10 +49,10 @@ public final class TransactionCoordinator {
             }
             long commitTS = oracle.nextTimestamp();
             txn.markPrepared(commitTS);
-            // COMMIT 决定先持久化：此后即使参与者失败也不回滚，交给恢复补完
+            // COMMIT 决定先提议共识再写本地恢复日志，避免 Raft 提案失败后残留未达成共识的 COMMIT 记录
+            journalPropose(TxnStateRecord.State.COMMIT, txn, commitTS);
             commitJournaled = journalAppend(
                     TxnStateRecord.State.COMMIT, txn, commitTS);
-            journalPropose(TxnStateRecord.State.COMMIT, txn, commitTS);
             for (Participant participant : prepared) {
                 commitOn(participant, txn, commitTS);
             }

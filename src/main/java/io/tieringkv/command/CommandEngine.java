@@ -1,9 +1,11 @@
 package io.tieringkv.command;
 
 import io.tieringkv.execution.KeyShardExecutor;
+import io.tieringkv.observability.SlowLog;
 import io.tieringkv.protocol.RespError;
 import io.tieringkv.protocol.RespValue;
 import io.tieringkv.protocol.RespSimpleString;
+import io.tieringkv.security.AclPolicy;
 import io.tieringkv.session.ConnectionContext;
 import io.tieringkv.storage.StorageEngine;
 
@@ -33,13 +35,19 @@ public final class CommandEngine {
     private final StorageEngine storage;
     private final KeyShardExecutor executor;
     private final java.util.function.BooleanSupplier memoryPressure;
+    private final AclPolicy aclPolicy;
+    private final SlowLog slowLog;
 
     public CommandEngine(CommandRegistry registry, StorageEngine storage) {
-        this(registry, storage, null, null);
+        this(registry, storage, null, null, null, null);
+    }
+
+    public CommandEngine(CommandRegistry registry, StorageEngine storage, AclPolicy aclPolicy) {
+        this(registry, storage, null, null, aclPolicy, null);
     }
 
     public CommandEngine(CommandRegistry registry, StorageEngine storage, KeyShardExecutor executor) {
-        this(registry, storage, executor, null);
+        this(registry, storage, executor, null, null, null);
     }
 
     /**
@@ -48,13 +56,34 @@ public final class CommandEngine {
     public CommandEngine(CommandRegistry registry, StorageEngine storage,
                          KeyShardExecutor executor,
                          java.util.function.BooleanSupplier memoryPressure) {
+        this(registry, storage, executor, memoryPressure, null, null);
+    }
+
+    public CommandEngine(CommandRegistry registry, StorageEngine storage,
+                         KeyShardExecutor executor,
+                         java.util.function.BooleanSupplier memoryPressure,
+                         AclPolicy aclPolicy) {
+        this(registry, storage, executor, memoryPressure, aclPolicy, null);
+    }
+
+    public CommandEngine(CommandRegistry registry, StorageEngine storage,
+                         KeyShardExecutor executor,
+                         java.util.function.BooleanSupplier memoryPressure,
+                         AclPolicy aclPolicy,
+                         SlowLog slowLog) {
         this.registry = registry;
         this.storage = storage;
         this.executor = executor;
         this.memoryPressure = memoryPressure;
+        this.aclPolicy = aclPolicy;
+        this.slowLog = slowLog;
     }
 
     public RespValue execute(RespCommand command) {
+        RespError accessError = checkAccess(command);
+        if (accessError != null) {
+            return accessError;
+        }
         ConnectionContext context = ConnectionContext.current();
         if (context != null && context.inMulti()
                 && !isTxnControl(command.name())) {
@@ -71,7 +100,25 @@ public final class CommandEngine {
                 && memoryPressure.getAsBoolean()) {
             return new RespError(OOM_ERROR);
         }
-        return handler.execute(command.args(), storage);
+        if (slowLog == null) {
+            return handler.execute(command.args(), storage);
+        }
+        long startNanos = System.nanoTime();
+        try {
+            return handler.execute(command.args(), storage);
+        } finally {
+            slowLog.record(name, command.args(), System.nanoTime() - startNanos);
+        }
+    }
+
+    private RespError checkAccess(RespCommand command) {
+        if (aclPolicy == null) {
+            return null;
+        }
+        ConnectionContext context = ConnectionContext.current();
+        String user = context == null ? null : context.authenticatedUser();
+        String denied = aclPolicy.authorize(user, command.name(), command.args());
+        return denied == null ? null : new RespError(denied);
     }
 
     private static boolean isTxnControl(String name) {
@@ -130,25 +177,144 @@ public final class CommandEngine {
             return;
         }
         ConnectionContext captured = ConnectionContext.current();
+        if ((captured == null || !captured.inMulti())
+                && ("blpop".equals(command.name()) || "brpop".equals(command.name()))) {
+            executeBlockingPopAsync(command, captured, callback);
+            return;
+        }
         byte[] key = command.args().isEmpty()
                 ? command.name().getBytes(StandardCharsets.UTF_8)
                 : command.args().get(0);
-        executor.submit(key, () -> {
+        boolean submitted = executor.submit(key, () -> {
+            ConnectionContext previous = ConnectionContext.current();
             try {
-                boolean attached = captured != null;
-                if (attached) {
+                if (captured != null) {
                     ConnectionContext.attach(captured);
+                } else {
+                    ConnectionContext.detach();
                 }
-                try {
-                    callback.accept(execute(command), null);
-                } finally {
-                    if (attached) {
-                        ConnectionContext.detach();
-                    }
-                }
+                callback.accept(execute(command), null);
             } catch (Throwable t) {
                 callback.accept(null, t);
+            } finally {
+                ConnectionContext.restore(previous);
             }
         });
+        if (!submitted) {
+            callback.accept(new RespError("ERR server busy or shutting down"), null);
+        }
+    }
+
+    private void executeBlockingPopAsync(RespCommand command,
+                                         ConnectionContext captured,
+                                         BiConsumer<RespValue, Throwable> callback) {
+        Command resolved = registry.find(command.name());
+        if (!(resolved instanceof ListCommand listCommand)) {
+            callback.accept(new RespError("ERR unknown command '" + command.name() + "'"), null);
+            return;
+        }
+        ListCommand.BlockingPopSpec spec = ListCommand.parseBlockingSpec(
+                command.name(), command.args());
+        if (spec.error() != null) {
+            callback.accept(spec.error(), null);
+            return;
+        }
+        byte[] routingKey = spec.keys().get(0);
+        long deadline = spec.timeoutMillis() == 0
+                ? Long.MAX_VALUE
+                : System.currentTimeMillis() + spec.timeoutMillis();
+        boolean submitted = executor.submit(routingKey, () -> {
+            ConnectionContext previous = ConnectionContext.current();
+            try {
+                if (captured != null) {
+                    ConnectionContext.attach(captured);
+                } else {
+                    ConnectionContext.detach();
+                }
+                RespError accessError = checkAccess(command);
+                if (accessError != null) {
+                    callback.accept(accessError, null);
+                    return;
+                }
+                if (memoryPressure != null
+                        && WriteCommands.isRejectedUnderPressure(command.name())
+                        && memoryPressure.getAsBoolean()) {
+                    callback.accept(new RespError(OOM_ERROR), null);
+                    return;
+                }
+                RespValue immediate = listCommand.tryBlockingPopNow(spec, storage);
+                if (immediate != null) {
+                    callback.accept(immediate, null);
+                    return;
+                }
+                if (spec.timeoutMillis() > 0 && System.currentTimeMillis() >= deadline) {
+                    callback.accept(io.tieringkv.protocol.RespNull.ARRAY, null);
+                    return;
+                }
+                Thread.startVirtualThread(() -> awaitAndPopAsync(
+                        listCommand, spec, deadline, captured, routingKey, callback));
+            } catch (Throwable t) {
+                callback.accept(null, t);
+            } finally {
+                ConnectionContext.restore(previous);
+            }
+        });
+        if (!submitted) {
+            callback.accept(new RespError("ERR server busy or shutting down"), null);
+        }
+    }
+
+    private void awaitAndPopAsync(ListCommand listCommand,
+                                  ListCommand.BlockingPopSpec spec,
+                                  long deadline,
+                                  ConnectionContext captured,
+                                  byte[] routingKey,
+                                  BiConsumer<RespValue, Throwable> callback) {
+        try {
+            while (!Thread.currentThread().isInterrupted()) {
+                long remaining = deadline == Long.MAX_VALUE
+                        ? 50L
+                        : deadline - System.currentTimeMillis();
+                if (remaining > 0) {
+                    io.tieringkv.operations.BlockingListNotifier.awaitAnyPush(
+                            spec.keys(), Math.min(remaining, 50L));
+                }
+                boolean timedOut = deadline != Long.MAX_VALUE
+                        && System.currentTimeMillis() >= deadline;
+                java.util.concurrent.CompletableFuture<RespValue> attempt =
+                        new java.util.concurrent.CompletableFuture<>();
+                boolean submitted = executor.submit(routingKey, () -> {
+                    ConnectionContext previous = ConnectionContext.current();
+                    try {
+                        if (captured != null) {
+                            ConnectionContext.attach(captured);
+                        } else {
+                            ConnectionContext.detach();
+                        }
+                        attempt.complete(listCommand.tryBlockingPopNow(spec, storage));
+                    } catch (Throwable t) {
+                        attempt.completeExceptionally(t);
+                    } finally {
+                        ConnectionContext.restore(previous);
+                    }
+                });
+                if (!submitted) {
+                    callback.accept(new RespError("ERR server shutting down"), null);
+                    return;
+                }
+                RespValue popped = attempt.get();
+                if (popped != null) {
+                    callback.accept(popped, null);
+                    return;
+                }
+                if (timedOut) {
+                    callback.accept(io.tieringkv.protocol.RespNull.ARRAY, null);
+                    return;
+                }
+            }
+            callback.accept(new RespError("ERR interrupted"), null);
+        } catch (Throwable t) {
+            callback.accept(null, t);
+        }
     }
 }

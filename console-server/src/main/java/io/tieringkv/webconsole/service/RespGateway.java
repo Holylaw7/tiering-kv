@@ -6,7 +6,9 @@ import io.tieringkv.webconsole.domain.DbInstance;
 import io.tieringkv.webconsole.resp.RespClient;
 import io.tieringkv.webconsole.resp.RespClientPool;
 import io.tieringkv.webconsole.resp.RespReply;
+import io.tieringkv.webconsole.security.InstanceCredentialCipher;
 import jakarta.annotation.PreDestroy;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -19,44 +21,47 @@ import java.util.concurrent.ConcurrentHashMap;
 public class RespGateway {
 
     private final ConsoleProperties properties;
+    private final InstanceCredentialCipher cipher;
     private final Map<Long, RespClientPool> pools = new ConcurrentHashMap<>();
 
     public RespGateway(ConsoleProperties properties) {
+        this(properties, new InstanceCredentialCipher((String) null));
+    }
+
+    @Autowired
+    public RespGateway(ConsoleProperties properties, InstanceCredentialCipher cipher) {
         this.properties = properties;
+        this.cipher = cipher;
+    }
+
+    @FunctionalInterface
+    private interface ClientAction {
+        RespReply run(RespClient client) throws IOException;
     }
 
     public RespReply execute(DbInstance instance, String... args) throws IOException {
-        RespClientPool pool = pool(instance);
-        RespClient client = pool.borrow();
-        boolean healthy = true;
-        try {
-            return client.execute(args);
-        } catch (IOException ex) {
-            healthy = false;
-            throw ex;
-        } finally {
-            if (healthy) {
-                pool.release(client);
-            } else {
-                client.close();
-            }
-        }
+        return withClient(instance, client -> client.execute(args));
     }
 
     public RespReply execute(DbInstance instance, List<byte[]> args) throws IOException {
+        return withClient(instance, client -> client.execute(args));
+    }
+
+    private RespReply withClient(DbInstance instance, ClientAction action) throws IOException {
         RespClientPool pool = pool(instance);
         RespClient client = pool.borrow();
         boolean healthy = true;
         try {
-            return client.execute(args);
-        } catch (IOException ex) {
+            return action.run(client);
+        } catch (IOException | RuntimeException ex) {
+            // 无论 IO 还是 RESP 解析异常（流可能半读），一律销毁连接避免归还脏连接
             healthy = false;
             throw ex;
         } finally {
-            if (healthy) {
+            if (healthy && client.isUsable()) {
                 pool.release(client);
             } else {
-                client.close();
+                pool.discard(client);
             }
         }
     }
@@ -91,27 +96,47 @@ public class RespGateway {
     }
 
     private RespClientPool pool(DbInstance instance) {
+        ConsoleProperties.Pool cfg = properties.getPool();
         return pools.computeIfAbsent(instance.getId(), key -> new RespClientPool(
-                () -> open(instance), 4));
+                () -> open(instance),
+                cfg.getMaxIdle(),
+                cfg.getMaxTotal(),
+                cfg.getBorrowTimeoutMs(),
+                cfg.getMaxIdleTimeMs()));
     }
 
     private RespClient open(DbInstance instance) {
+        RespClient client = null;
         try {
-            RespClient client = RespClient.open(instance.getHost(), instance.getPort(),
+            client = RespClient.open(instance.getHost(), instance.getPort(),
                     properties.getMetrics().getConnectTimeoutMs(),
                     properties.getMetrics().getReadTimeoutMs());
-            String password = instance.getPassword();
+            String password = cipher.decrypt(instance.getPassword());
             if (password != null && !password.isBlank()) {
                 RespReply reply = client.execute("AUTH", password);
                 if (reply instanceof RespReply.Error error) {
-                    client.close();
+                    String msg = error.message() == null ? "" : error.message().toLowerCase();
+                    if (msg.contains("unknown command")) {
+                        throw new IOException("目标内核暂不支持 AUTH 命令，请确认实例未启用控制台密码或配置匹配："
+                                + error.message());
+                    }
                     throw new IOException("AUTH 失败：" + error.message());
                 }
             }
             return client;
         } catch (IOException ex) {
+            if (client != null) {
+                client.close();
+            }
             throw new BusinessException(502, 50201,
                     "无法连接实例 " + instance.getHost() + ":" + instance.getPort()
+                            + "（" + ex.getMessage() + "）");
+        } catch (RuntimeException ex) {
+            if (client != null) {
+                client.close();
+            }
+            throw new BusinessException(502, 50201,
+                    "连接实例协议异常 " + instance.getHost() + ":" + instance.getPort()
                             + "（" + ex.getMessage() + "）");
         }
     }
