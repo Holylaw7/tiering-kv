@@ -10,6 +10,7 @@ import io.tieringkv.webconsole.domain.RestoreStatus;
 import io.tieringkv.webconsole.repository.BackupRecordRepository;
 import io.tieringkv.webconsole.repository.BackupReservationRepository;
 import io.tieringkv.webconsole.resp.RespReply;
+import io.tieringkv.webconsole.support.InfoParser;
 import io.tieringkv.webconsole.support.Text;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,12 +28,11 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PushbackInputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.zip.GZIPInputStream;
@@ -63,7 +63,7 @@ public class BackupService {
                          AuditService auditService,
                          BackupCapacityService capacityService) {
         this(repository, instanceService, keyspaceService, gateway, objectMapper, properties,
-                new LocalBackupStorageBackend(Paths.get(properties.getBackup().getDir())),
+                new LocalBackupStorageBackend(properties),
                 executor, auditService, capacityService);
     }
 
@@ -91,8 +91,23 @@ public class BackupService {
     public record SnapshotEntry(String key, String type, long ttl, Object value) {
     }
 
-    public Path directory() {
-        return storageBackend.rootDirectory();
+    /** 流式下载句柄（兼容本地磁盘与 S3/MinIO 对象存储）。 */
+    public record DownloadStream(String fileName, InputStream inputStream) {
+    }
+
+    /** 物理快照触发响应（N1-B）。 */
+    public record CheckpointResult(boolean triggered, String message, long lastSaveTime) {
+    }
+
+    /** 物理快照状态视图（N1-B：来自 LASTSAVE 与 INFO persistence）。 */
+    public record CheckpointStatusView(
+            boolean supported,
+            boolean inProgress,
+            long lastSaveTime,
+            String lastStatus,
+            long lastDurationSeconds,
+            long lastDurationMillis,
+            String lastError) {
     }
 
     public List<BackupRecord> list(Long instanceId) {
@@ -282,7 +297,7 @@ public class BackupService {
             throw BusinessException.badRequest("仅成功的备份可恢复");
         }
         DbInstance instance = instanceService.require(record.getInstanceId());
-        storageBackend.resolvePath(record.getFileName());
+        storageBackend.validateFileName(record.getFileName());
         if (!storageBackend.exists(record.getFileName())) {
             throw BusinessException.notFound("备份文件已丢失：" + record.getFileName());
         }
@@ -420,27 +435,125 @@ public class BackupService {
     }
 
     /**
-     * 下载入口（Phase 11 P1）：先审计再取文件。
-     *
-     * <p>审计在此处完成，避免控制器直接调 {@link #fileOf} 绕过留痕。
+     * 流式下载入口（Phase 11 P1 + N1-A）：先校验并打开输入流，再写审计留痕。
      */
-    public Path download(Long recordId) {
-        Path file = fileOf(recordId);
-        BackupRecord record = repository.findById(recordId).orElse(null);
-        String target = record == null ? "backup#" + recordId : instanceName(record.getInstanceId());
-        auditService.record("DOWNLOAD_BACKUP", target,
-                record == null ? "-" : record.getFileName(), true);
-        return file;
-    }
-
-    public Path fileOf(Long recordId) {
+    public DownloadStream openDownload(Long recordId) {
         BackupRecord record = repository.findById(recordId)
                 .orElseThrow(() -> BusinessException.notFound("备份记录不存在：" + recordId));
-        Path file = storageBackend.resolvePath(record.getFileName());
+        storageBackend.validateFileName(record.getFileName());
         if (!storageBackend.exists(record.getFileName())) {
             throw BusinessException.notFound("备份文件不存在：" + record.getFileName());
         }
-        return file;
+        InputStream stream;
+        try {
+            stream = storageBackend.openInput(record.getFileName());
+        } catch (IOException ex) {
+            throw BusinessException.upstream("读取备份文件失败：" + ex.getMessage());
+        }
+        String target = instanceName(record.getInstanceId());
+        auditService.record("DOWNLOAD_BACKUP", target, record.getFileName(), true);
+        return new DownloadStream(record.getFileName(), stream);
+    }
+
+    /** 触发数据面异步物理快照 BGSAVE（WAL + Cold SSTable + 向量索引），结果记入审计。 */
+    public CheckpointResult triggerCheckpoint(Long instanceId) {
+        DbInstance instance = instanceService.require(instanceId);
+        try {
+            RespReply reply = gateway.execute(instance, "BGSAVE");
+            if (reply instanceof RespReply.Simple simple) {
+                long lastSave = queryLastSaveQuietly(instance);
+                auditService.record("BACKUP_CHECKPOINT", instance.getName(), simple.value(), true);
+                return new CheckpointResult(true, simple.value(), lastSave);
+            }
+            if (reply instanceof RespReply.Error error) {
+                String msg = error.message() == null ? "" : error.message();
+                String lower = msg.toLowerCase(Locale.ROOT);
+                auditService.record("BACKUP_CHECKPOINT", instance.getName(), truncate(msg), false);
+                if (lower.contains("already in progress")) {
+                    return new CheckpointResult(false, msg, queryLastSaveQuietly(instance));
+                }
+                if (lower.contains("unknown command")) {
+                    throw BusinessException.badRequest("目标实例不支持 BGSAVE 命令：" + msg);
+                }
+                throw BusinessException.upstream("触发物理快照失败：" + msg);
+            }
+            auditService.record("BACKUP_CHECKPOINT", instance.getName(), "BGSAVE 返回异常响应类型", false);
+            throw BusinessException.upstream("BGSAVE 返回异常响应类型");
+        } catch (BusinessException ex) {
+            throw ex;
+        } catch (IOException | RuntimeException ex) {
+            auditService.record("BACKUP_CHECKPOINT", instance.getName(), truncate(ex.getMessage()), false);
+            throw BusinessException.upstream("触发 BGSAVE 失败：" + ex.getMessage());
+        }
+    }
+
+    /** 查询实例最近一次物理快照状态（LASTSAVE + INFO persistence），兼容旧版数据面降级。 */
+    public CheckpointStatusView checkpointStatus(Long instanceId) {
+        DbInstance instance = instanceService.require(instanceId);
+        long lastSave = 0L;
+        try {
+            RespReply lastReply = gateway.execute(instance, "LASTSAVE");
+            if (lastReply instanceof RespReply.Integer integer) {
+                lastSave = integer.value();
+            } else if (lastReply instanceof RespReply.Error err) {
+                String msg = err.message() == null ? "" : err.message();
+                if (msg.toLowerCase(Locale.ROOT).contains("unknown command")) {
+                    return new CheckpointStatusView(false, false, 0L, "unsupported", -1L, 0L, null);
+                }
+                throw BusinessException.upstream("查询 LASTSAVE 失败：" + msg);
+            }
+        } catch (IOException ex) {
+            throw BusinessException.upstream("查询 LASTSAVE 失败：" + ex.getMessage());
+        }
+
+        boolean inProgress = false;
+        String lastStatus = "ok";
+        long lastDurationSeconds = -1L;
+        long lastDurationMillis = 0L;
+        String lastError = null;
+        try {
+            RespReply infoReply = gateway.execute(instance, "INFO", "persistence");
+            if (infoReply instanceof RespReply.Bulk bulk) {
+                Map<String, String> section = InfoParser.parse(bulk.utf8())
+                        .getOrDefault("Persistence", Map.of());
+                if (!section.isEmpty()) {
+                    inProgress = "1".equals(section.get("rdb_bgsave_in_progress"));
+                    long infoLastSave = parseLongOrDefault(section.get("rdb_last_save_time"), 0L);
+                    if (infoLastSave > lastSave) {
+                        lastSave = infoLastSave;
+                    }
+                    lastStatus = section.getOrDefault("rdb_last_bgsave_status", "ok");
+                    lastDurationSeconds = parseLongOrDefault(section.get("rdb_last_bgsave_time_sec"), -1L);
+                    lastDurationMillis = parseLongOrDefault(section.get("rdb_last_bgsave_duration_ms"), 0L);
+                    lastError = section.get("rdb_last_bgsave_error");
+                }
+            }
+        } catch (IOException | RuntimeException ex) {
+            log.debug("读取 INFO persistence 失败，保留 LASTSAVE={}", lastSave, ex);
+        }
+
+        return new CheckpointStatusView(true, inProgress, lastSave, lastStatus,
+                lastDurationSeconds, lastDurationMillis, lastError);
+    }
+
+    private long queryLastSaveQuietly(DbInstance instance) {
+        try {
+            RespReply reply = gateway.execute(instance, "LASTSAVE");
+            return reply instanceof RespReply.Integer integer ? integer.value() : 0L;
+        } catch (IOException | RuntimeException ex) {
+            return 0L;
+        }
+    }
+
+    private static long parseLongOrDefault(String raw, long fallback) {
+        if (raw == null || raw.isBlank()) {
+            return fallback;
+        }
+        try {
+            return Long.parseLong(raw.trim());
+        } catch (NumberFormatException ex) {
+            return fallback;
+        }
     }
 
     /** 自动识别 GZIP 魔数（0x1F 0x8B），兼容明文 .jsonl 与压缩 .jsonl.gz。 */

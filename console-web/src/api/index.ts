@@ -1,6 +1,7 @@
 import http from './http'
 import type {
-  AlertEvent, AlertRule, BackupRecord, InstanceView, KeyDetail, KeyScanPage,
+  AlertEvent, AlertRule, BackupRecord, CheckpointResult, CheckpointStatusView,
+  InstanceView, KeyDetail, KeyScanPage,
   LoginResponse, OpLog, OverviewView, PageResult, SstableTableView, SystemInfo, TerminalHistory,
   TerminalResult, TrendPoint, UserView
 } from './types'
@@ -84,7 +85,11 @@ export const backupApi = {
   create: (instanceId: number) =>
     http.post<unknown, BackupRecord>('/backups', null, { params: { instanceId } }),
   restore: (id: number) => http.post<unknown, number>(`/backups/${id}/restore`),
-  remove: (id: number) => http.delete<unknown, void>(`/backups/${id}`)
+  remove: (id: number) => http.delete<unknown, void>(`/backups/${id}`),
+  checkpoint: (instanceId: number) =>
+    http.post<unknown, CheckpointResult>('/backups/checkpoint', null, { params: { instanceId } }),
+  checkpointStatus: (instanceId: number) =>
+    http.get<unknown, CheckpointStatusView>('/backups/checkpoint/status', { params: { instanceId } })
 }
 
 export interface AuditQuery {

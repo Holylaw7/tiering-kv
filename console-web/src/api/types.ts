@@ -177,6 +177,22 @@ export interface BackupRecord {
   finishedAt?: string
 }
 
+export interface CheckpointResult {
+  triggered: boolean
+  message: string
+  lastSaveTime: number
+}
+
+export interface CheckpointStatusView {
+  supported: boolean
+  inProgress: boolean
+  lastSaveTime: number
+  lastStatus: string
+  lastDurationSeconds: number
+  lastDurationMillis: number
+  lastError?: string
+}
+
 export interface OpLog {
   id: number
   userId?: number

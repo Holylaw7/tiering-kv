@@ -12,6 +12,7 @@ import io.tieringkv.concurrency.hotkey.HotKeyReadCache;
 import io.tieringkv.concurrency.hotkey.HotKeyStorageEngine;
 import io.tieringkv.config.ServerConfig;
 import io.tieringkv.execution.KeyShardExecutor;
+import io.tieringkv.lifecycle.PhysicalSnapshotCoordinator;
 import io.tieringkv.lifecycle.ShutdownManager;
 import io.tieringkv.memory.MemoryPool;
 import io.tieringkv.monitor.MetricsRegistry;
@@ -172,13 +173,15 @@ public final class Main {
         }
         java.util.concurrent.ScheduledExecutorService vectorCheckpointer = startVectorCheckpointer(
                 vectorStore, vectorDir, vectorCheckpointFile, config.vector().checkpointIntervalMillis());
+        PhysicalSnapshotCoordinator snapshotCoordinator = new PhysicalSnapshotCoordinator(
+                walManager, memTable, cold, vectorStore, vectorCheckpointFile, observability.vector());
         // 可观测性收敛（ADR-0355）：INFO 输出 Redis 兼容标准 section，
         // 供 Web 控制台解析真实运行态
         ServerInfoProvider serverInfo = new ServerInfoProvider(
                 metrics, memoryManager, syncStorage::size,
                 config.server().port(), ServerVersion.current(),
                 tiering.metrics(), blockCache.statistics()::snapshot,
-                null); // F3：INFO 不触发刷新、不等待刷新，只读最近一次快照
+                null, snapshotCoordinator); // F3：INFO 不触发刷新、不等待刷新，只读最近一次快照
         Map<String, Supplier<String>> infoSections =
                 new HashMap<>(observability.infoSections());
         infoSections.putAll(serverInfo.sections());
@@ -206,7 +209,7 @@ public final class Main {
                         serverInfo::render, Map.copyOf(infoSections),
                         VectorCollectionRegistry.ofDefault(vectorStore),
                         observability.multimodel(), observability.vector(),
-                        aclPolicy, runtimeConfig, slowLog),
+                        aclPolicy, runtimeConfig, slowLog, snapshotCoordinator),
                 syncStorage, executor, memoryManager::isOverLimit, aclPolicy, slowLog);
         // 必须复用同一个 MetricsRegistry：否则 INFO 读取的实例与服务端
         // 实际埋点的实例不是同一个，qps/连接数会恒为 0（TD-082）
@@ -240,7 +243,7 @@ public final class Main {
         };
         ShutdownManager shutdownManager = new ShutdownManager(
                 server, metrics, walManager, memTable, config.tiering().drainTimeoutMillis(),
-                managementHttp, vectorCloser, executor, tiering, cold, walManager);
+                managementHttp, snapshotCoordinator, vectorCloser, executor, tiering, cold, walManager);
         server.start();
         System.out.println("Tiering-KV listening on " + server.boundPort());
         Runtime.getRuntime().addShutdownHook(new Thread(shutdownManager::shutdown));

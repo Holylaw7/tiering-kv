@@ -16,17 +16,11 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
-import java.util.stream.Stream;
 
 /**
  * 备份保留策略与安全删除（ADR-0367）。
@@ -47,30 +41,44 @@ public class BackupRetentionService {
     private final BackupRecordRepository repository;
     private final DbInstanceRepository instanceRepository;
     private final ConsoleProperties properties;
+    private final BackupStorageBackend storageBackend;
     private final TransactionTemplate transactionTemplate;
-    private final Path directory;
     private final Object lock = new Object();
     private volatile PurgeReport lastReport;
 
     public BackupRetentionService(BackupRecordRepository repository, DbInstanceRepository instanceRepository,
                                   ConsoleProperties properties) {
-        this(repository, instanceRepository, properties, (TransactionTemplate) null);
+        this(repository, instanceRepository, properties,
+                new LocalBackupStorageBackend(properties), (TransactionTemplate) null);
+    }
+
+    public BackupRetentionService(BackupRecordRepository repository, DbInstanceRepository instanceRepository,
+                                  ConsoleProperties properties, PlatformTransactionManager transactionManager) {
+        this(repository, instanceRepository, properties,
+                new LocalBackupStorageBackend(properties), transactionManager);
+    }
+
+    public BackupRetentionService(BackupRecordRepository repository, DbInstanceRepository instanceRepository,
+                                  ConsoleProperties properties, BackupStorageBackend storageBackend) {
+        this(repository, instanceRepository, properties, storageBackend, (TransactionTemplate) null);
     }
 
     @Autowired
     public BackupRetentionService(BackupRecordRepository repository, DbInstanceRepository instanceRepository,
-                                  ConsoleProperties properties, PlatformTransactionManager transactionManager) {
-        this(repository, instanceRepository, properties,
+                                  ConsoleProperties properties, BackupStorageBackend storageBackend,
+                                  PlatformTransactionManager transactionManager) {
+        this(repository, instanceRepository, properties, storageBackend,
                 transactionManager != null ? new TransactionTemplate(transactionManager) : null);
     }
 
     private BackupRetentionService(BackupRecordRepository repository, DbInstanceRepository instanceRepository,
-                                   ConsoleProperties properties, TransactionTemplate transactionTemplate) {
+                                   ConsoleProperties properties, BackupStorageBackend storageBackend,
+                                   TransactionTemplate transactionTemplate) {
         this.repository = repository;
         this.instanceRepository = instanceRepository;
         this.properties = properties;
+        this.storageBackend = storageBackend;
         this.transactionTemplate = transactionTemplate;
-        this.directory = Paths.get(properties.getBackup().getDir()).toAbsolutePath().normalize();
     }
 
     /** 一次清理的结果，用于接口与审计。 */
@@ -169,7 +177,13 @@ public class BackupRetentionService {
         for (BackupRecord record : repository.findByDeleteState(RETIRING)) {
             boolean stale = record.getDeleteClaimedAt() == null
                     || record.getDeleteClaimedAt().isBefore(staleBefore);
-            boolean fileGone = !Files.exists(directory.resolve(record.getFileName()).normalize());
+            boolean fileGone;
+            try {
+                storageBackend.validateFileName(record.getFileName());
+                fileGone = !storageBackend.exists(record.getFileName());
+            } catch (RuntimeException ex) {
+                fileGone = true;
+            }
             if (!stale && !fileGone) {
                 skipped++;
                 continue;
@@ -206,12 +220,12 @@ public class BackupRetentionService {
     }
 
     private Outcome finishRetire(BackupRecord record) {
-        Path file = directory.resolve(record.getFileName()).normalize();
         try {
-            if (file.startsWith(directory)) {
-                Files.deleteIfExists(file);
-            }
-        } catch (IOException ex) {
+            storageBackend.validateFileName(record.getFileName());
+            storageBackend.deleteIfExists(record.getFileName());
+        } catch (BusinessException ex) {
+            log.warn("备份路径非法，跳过物理删除：{}", record.getFileName());
+        } catch (IOException | RuntimeException ex) {
             log.warn("删除备份文件失败，保留记录等待重试：{}", record.getFileName(), ex);
             return Outcome.FAILED;
         }
@@ -229,33 +243,28 @@ public class BackupRetentionService {
 
     /** 回收没有记录引用的备份文件；只删超过 grace 的，避免误删正在写入的备份。 */
     private int removeOrphanFiles(LocalDateTime now) {
-        if (!Files.isDirectory(directory)) {
+        List<BackupStorageBackend.StoredObject> objects;
+        try {
+            objects = storageBackend.listObjects();
+        } catch (IOException | RuntimeException ex) {
+            log.warn("扫描备份存储失败：{}", storageBackend.storageKey(), ex);
             return 0;
         }
         long graceMillis = properties.getBackup().getRetention().getOrphanGraceMinutes() * 60_000L;
+        long nowMillis = now.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
         int removed = 0;
-        try (Stream<Path> files = Files.list(directory)) {
-            for (Path file : files.toList()) {
-                if (!Files.isRegularFile(file)) {
-                    continue;
-                }
-                String name = file.getFileName().toString();
-                if (repository.existsByFileName(name)) {
-                    continue;
-                }
-                try {
-                    long age = now.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                            - Files.getLastModifiedTime(file).toMillis();
-                    if (age > graceMillis) {
-                        Files.deleteIfExists(file);
-                        removed++;
-                    }
-                } catch (IOException ex) {
-                    log.warn("删除孤儿备份文件失败：{}", name, ex);
-                }
+        for (BackupStorageBackend.StoredObject object : objects) {
+            if (repository.existsByFileName(object.name())) {
+                continue;
             }
-        } catch (IOException ex) {
-            log.warn("扫描备份目录失败：{}", directory, ex);
+            try {
+                long age = nowMillis - object.lastModifiedMillis();
+                if (age > graceMillis && storageBackend.deleteIfExists(object.name())) {
+                    removed++;
+                }
+            } catch (IOException | RuntimeException ex) {
+                log.warn("删除孤儿备份对象失败：{}", object.name(), ex);
+            }
         }
         return removed;
     }

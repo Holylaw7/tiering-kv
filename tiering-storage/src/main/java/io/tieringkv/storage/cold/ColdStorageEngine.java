@@ -457,6 +457,14 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
         }
     }
 
+    /** 同步将内存中暂存缓冲刷盘为持久化 SSTable 与 Manifest（N1-B 物理快照使用）。 */
+    public void flushPending() {
+        synchronized (lock) {
+            ensureOpen();
+            flushPendingLocked();
+        }
+    }
+
     private void flushPendingLocked() {
         if (pending.isEmpty()) {
             return;

@@ -92,7 +92,7 @@ public final class CommandRegistry {
             AclPolicy aclPolicy,
             RuntimeConfigBridge runtimeConfig) {
         return createDefaultWithRuntime(infoProvider, sections, registry,
-                metrics, vectorMetrics, aclPolicy, runtimeConfig, null);
+                metrics, vectorMetrics, aclPolicy, runtimeConfig, null, null);
     }
 
     /** 完整运行时接线：附带 SLOWLOG 慢查询命令。 */
@@ -105,6 +105,21 @@ public final class CommandRegistry {
             AclPolicy aclPolicy,
             RuntimeConfigBridge runtimeConfig,
             SlowLog slowLog) {
+        return createDefaultWithRuntime(infoProvider, sections, registry,
+                metrics, vectorMetrics, aclPolicy, runtimeConfig, slowLog, null);
+    }
+
+    /** 完整运行时接线：附带 SLOWLOG 与 BGSAVE/LASTSAVE 物理快照命令（N1-B）。 */
+    public static CommandRegistry createDefaultWithRuntime(
+            Supplier<String> infoProvider,
+            Map<String, Supplier<String>> sections,
+            VectorCollectionRegistry registry,
+            MultiModelMetricsRegistry metrics,
+            VectorMetricsRegistry vectorMetrics,
+            AclPolicy aclPolicy,
+            RuntimeConfigBridge runtimeConfig,
+            SlowLog slowLog,
+            io.tieringkv.lifecycle.PhysicalSnapshotCoordinator snapshotCoordinator) {
         List<Command> extra = new java.util.ArrayList<>();
         if (registry != null) {
             extra.addAll(List.of(
@@ -140,6 +155,10 @@ public final class CommandRegistry {
         }
         if (slowLog != null) {
             extra.add(new SlowLogCommand(slowLog));
+        }
+        if (snapshotCoordinator != null) {
+            extra.add(new BgsaveCommand(snapshotCoordinator));
+            extra.add(new LastSaveCommand(snapshotCoordinator));
         }
         return build(infoProvider, sections, extra, aclPolicy);
     }

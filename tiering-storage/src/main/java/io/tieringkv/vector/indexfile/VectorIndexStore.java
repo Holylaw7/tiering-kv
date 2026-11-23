@@ -57,7 +57,7 @@ public final class VectorIndexStore {
         return store.embeddings();
     }
 
-    public void checkpoint(Path file) throws IOException {
+    public synchronized void checkpoint(Path file) throws IOException {
         VectorIndexFile.write(file, new VectorIndexFile.IndexData(
                 maxLevel, dim, snapshot()));
     }
