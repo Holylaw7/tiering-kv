@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { dashboardApi, instanceApi, systemApi } from '@/api'
 import type { OverviewView, SstableTable, TrendPoint } from '@/api/types'
@@ -8,7 +9,9 @@ import { useInstanceStore } from '@/stores/instance'
 import { formatBytes, formatNumber, formatPercent, formatUptime } from '@/utils/format'
 import ChartPanel from '@/components/ChartPanel.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
 
+const router = useRouter()
 const instanceStore = useInstanceStore()
 const overview = ref<OverviewView>()
 const trends = ref<TrendPoint[]>([])
@@ -65,6 +68,17 @@ const memoryRatio = computed(() => {
   if (!current || !current.maxMemory) return 0
   return current.usedMemory / current.maxMemory
 })
+const memtableRatio = computed(() => {
+  const current = live.value
+  if (!current || !current.memtableMaxBytes) return 0
+  return Math.min(1, Math.max(0, current.memtableUsedBytes / current.memtableMaxBytes))
+})
+const memtableRatioTone = computed<'normal' | 'warn' | 'danger'>(() => {
+  const pct = memtableRatio.value * 100
+  if (pct >= 95) return 'danger'
+  if (pct >= 70) return 'warn'
+  return 'normal'
+})
 
 async function load(silent = false) {
   if (!silent) loading.value = true
@@ -82,6 +96,11 @@ async function load(silent = false) {
     ])
     overview.value = ov
     trends.value = tr
+    if (ov.selected) {
+      instanceStore.syncInstance(
+        ov.live && ov.selected.status === 'UNKNOWN' ? { ...ov.selected, status: 'UP' } : ov.selected
+      )
+    }
   } catch {
     // 全局拦截器已提示
   } finally {
@@ -320,6 +339,63 @@ const memoryOption = computed<Record<string, unknown>>(() => ({
     }
   ]
 }))
+
+const activityOption = computed<Record<string, unknown>>(() => ({
+  backgroundColor: 'transparent',
+  grid: { left: 48, right: 44, top: 16, bottom: 24 },
+  tooltip: TOOLTIP,
+  legend: {
+    top: 0,
+    right: 8,
+    textStyle: { color: '#626b78', fontSize: 11 }
+  },
+  xAxis: {
+    type: 'category', data: times.value, boundaryGap: false,
+    axisLabel: AXIS_LABEL, axisLine: AXIS_LINE, axisTick: { show: false }
+  },
+  yAxis: [
+    {
+      type: 'value',
+      name: '连接',
+      nameTextStyle: { color: '#9299a3', fontSize: 10 },
+      minInterval: 1,
+      axisLabel: AXIS_LABEL,
+      splitLine: SPLIT_LINE,
+      axisLine: { show: false }
+    },
+    {
+      type: 'value',
+      name: '错误',
+      nameTextStyle: { color: '#9299a3', fontSize: 10 },
+      minInterval: 1,
+      axisLabel: AXIS_LABEL,
+      splitLine: { show: false },
+      axisLine: { show: false }
+    }
+  ],
+  series: [
+    {
+      name: '活跃连接',
+      type: 'line',
+      smooth: true,
+      showSymbol: false,
+      data: trends.value.map((item) => item.connections),
+      lineStyle: { width: 1.5, color: '#0f766e' },
+      itemStyle: { color: '#0f766e' },
+      areaStyle: { color: areaGradient('rgba(15,118,110,1)') }
+    },
+    {
+      name: '累计错误',
+      type: 'line',
+      yAxisIndex: 1,
+      smooth: false,
+      showSymbol: false,
+      data: trends.value.map((item) => item.errors),
+      lineStyle: { width: 1.5, color: '#c62828' },
+      itemStyle: { color: '#c62828' }
+    }
+  ]
+}))
 </script>
 <template>
   <div class="page" v-loading="loading">
@@ -357,6 +433,15 @@ const memoryOption = computed<Record<string, unknown>>(() => ({
         <span class="dot" :class="(overview?.firingAlerts ?? 0) > 0 ? 'down' : 'up'"></span>
         未恢复告警 {{ overview?.firingAlerts ?? 0 }} 条
       </span>
+    </div>
+
+    <div class="quick-nav">
+      <span class="quick-label">快速直达</span>
+      <button type="button" class="quick-chip" @click="router.push('/keyspace')">键空间维护</button>
+      <button type="button" class="quick-chip" @click="router.push('/terminal')">在线终端</button>
+      <button type="button" class="quick-chip" @click="router.push('/slowlog')">慢查询诊断</button>
+      <button type="button" class="quick-chip" @click="router.push('/backups')">备份与 Checkpoint</button>
+      <button type="button" class="quick-chip" @click="router.push('/alerts')">告警事件</button>
     </div>
 
     <div class="metrics">
@@ -465,9 +550,26 @@ const memoryOption = computed<Record<string, unknown>>(() => ({
 
         <div class="composition">
           <div class="comp-head">
-            <span class="comp-title">存储构成</span>
+            <span class="comp-title">热层内存水位与存储构成</span>
             <span class="comp-note">
               键分布取 SSTable 表条目累加（含历史版本），非去重精确值
+            </span>
+          </div>
+
+          <div class="comp-row watermark-row">
+            <span class="comp-label">热水位</span>
+            <div class="watermark-track">
+              <div
+                class="watermark-fill"
+                :class="'is-' + memtableRatioTone"
+                :style="{ width: (memtableRatio * 100).toFixed(1) + '%' }"
+              ></div>
+              <span class="wm-tick" style="left: 70%" title="70% 触发 Flush"><i>70%</i></span>
+              <span class="wm-tick" style="left: 85%" title="85% 异步迁移"><i>85%</i></span>
+              <span class="wm-tick is-crit" style="left: 95%" title="95% 写背压"><i>95%</i></span>
+            </div>
+            <span class="comp-value num">
+              {{ formatPercent(memtableRatio) }} · {{ formatBytes(tiering.hot) }} / {{ formatBytes(live?.memtableMaxBytes) }}
             </span>
           </div>
 
@@ -513,8 +615,13 @@ const memoryOption = computed<Record<string, unknown>>(() => ({
 
     <div class="charts">
       <ChartPanel title="吞吐" hint="QPS" :option="qpsOption" />
-      <ChartPanel title="延迟" hint="平均命令耗时 (ms)" :option="latencyOption" />
-      <ChartPanel title="内存与键空间" hint="已用内存 / 键总数" :option="memoryOption" class="span-2" height="220px" />
+      <ChartPanel
+        title="延迟"
+        :hint="offline ? '平均耗时 (ms)' : `P50 ${(live?.p50Millis ?? 0).toFixed(2)} · P95 ${(live?.p95Millis ?? 0).toFixed(2)} · Max ${(live?.latencyMaxMillis ?? 0).toFixed(2)} ms`"
+        :option="latencyOption"
+      />
+      <ChartPanel title="内存与键空间" hint="已用内存 / 键总数" :option="memoryOption" />
+      <ChartPanel title="连接与错误趋势" hint="活跃连接数 / 累计错误" :option="activityOption" />
     </div>
 
     <section class="panel list-panel">
@@ -532,11 +639,13 @@ const memoryOption = computed<Record<string, unknown>>(() => ({
             <span class="mono">{{ row.host }}:{{ row.port }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="100">
+        <el-table-column label="状态" width="110">
           <template #default="{ row }">
-            <span class="state" :class="row.status.toLowerCase()">
-              <span class="dot" :class="row.status.toLowerCase()"></span>{{ row.status }}
-            </span>
+            <StatusBadge
+              :label="row.status"
+              :tone="row.status === 'UP' ? 'success' : row.status === 'DOWN' ? 'danger' : 'neutral'"
+              dot
+            />
           </template>
         </el-table-column>
         <el-table-column label="版本" width="100">
@@ -836,18 +945,18 @@ const memoryOption = computed<Record<string, unknown>>(() => ({
 }
 
 .stage-tag.hot {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--tier-hot-soft);
+  color: var(--tier-hot);
 }
 
 .stage-tag.cold {
-  background: #eef6f1;
-  color: var(--success);
+  background: var(--tier-cold-soft);
+  color: var(--tier-cold);
 }
 
 .stage-tag.cache {
-  background: var(--surface-3);
-  color: var(--text-2);
+  background: var(--tier-cache-soft);
+  color: var(--tier-cache);
 }
 
 .stage-value {
@@ -964,11 +1073,11 @@ const memoryOption = computed<Record<string, unknown>>(() => ({
 }
 
 .comp-hot {
-  background: var(--accent);
+  background: var(--tier-hot);
 }
 
 .comp-cold {
-  background: #6fa88a;
+  background: var(--tier-cold);
 }
 
 .comp-value {
@@ -989,13 +1098,102 @@ const memoryOption = computed<Record<string, unknown>>(() => ({
 }
 
 .comp-value .dot.hot {
-  background: var(--accent);
+  background: var(--tier-hot);
   margin-left: 8px;
 }
 
 .comp-value .dot.cold {
-  background: #6fa88a;
+  background: var(--tier-cold);
   margin-left: 8px;
+}
+
+.quick-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.quick-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-3);
+  letter-spacing: 0.04em;
+  margin-right: 4px;
+}
+
+.quick-chip {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: border-color 0.14s var(--ease), color 0.14s var(--ease), background-color 0.14s var(--ease);
+}
+
+.quick-chip:hover {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.watermark-row {
+  margin-bottom: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed var(--line-soft);
+}
+
+.watermark-track {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--surface-3);
+}
+
+.watermark-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--tier-cold);
+  transition: width 0.25s var(--ease);
+}
+
+.watermark-fill.is-warn {
+  background: var(--tier-hot);
+}
+
+.watermark-fill.is-danger {
+  background: var(--danger);
+}
+
+.wm-tick {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 1px;
+  background: var(--text-3);
+}
+
+.wm-tick.is-crit {
+  background: var(--danger);
+}
+
+.wm-tick i {
+  position: absolute;
+  top: 13px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-style: normal;
+  font-size: 9.5px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+}
+
+.wm-tick.is-crit i {
+  color: var(--danger);
 }
 
 .comp-value .dot.hot:first-child {
@@ -1109,28 +1307,8 @@ const memoryOption = computed<Record<string, unknown>>(() => ({
   margin-bottom: 22px;
 }
 
-.span-2 {
-  grid-column: span 2;
-}
-
 .list-panel {
   padding-bottom: 8px;
-}
-
-.state {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--text-sm);
-  color: var(--text-2);
-}
-
-.state.up {
-  color: var(--success);
-}
-
-.state.down {
-  color: var(--danger);
 }
 
 @media (max-width: 1280px) {
@@ -1165,9 +1343,41 @@ const memoryOption = computed<Record<string, unknown>>(() => ({
   .charts {
     grid-template-columns: 1fr;
   }
+}
 
-  .span-2 {
-    grid-column: span 1;
+@media (max-width: 720px) {
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .metric:nth-child(odd) {
+    border-left: none;
+    padding-left: 2px;
+  }
+
+  .metric:nth-child(n + 3) {
+    border-top: 1px solid var(--line-soft);
+  }
+
+  .pipeline {
+    grid-template-columns: 1fr;
+  }
+
+  .stage-arrow {
+    display: none;
+  }
+
+  .stage + .stage {
+    border-top: 1px solid var(--line-soft);
+  }
+
+  .comp-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .comp-value {
+    justify-content: flex-start;
   }
 }
 </style>

@@ -43,10 +43,21 @@
 
   --success: #18794e;
   --success-soft: #eaf5ef;
+  --success-line: #cbe6d7;
   --warn: #b45309;
   --warn-soft: #fdf3e7;
+  --warn-line: #f0dcc3;
   --danger: #c62828;
   --danger-soft: #fdeeee;
+  --danger-line: #f3cfcf;
+
+  /* 冷热分层语义色（浅色调高对比度） */
+  --tier-hot: #d97706;
+  --tier-hot-soft: #fef3e7;
+  --tier-cold: #3b5bdb;
+  --tier-cold-soft: #eef1fb;
+  --tier-cache: #0f766e;
+  --tier-cache-soft: #e6f6f4;
 
   /* 终端（浅色页面中的深色工作区） */
   --term-bg: #0f1115;

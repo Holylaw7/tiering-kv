@@ -4,6 +4,35 @@ import { ElMessage } from 'element-plus'
 import { auditApi } from '@/api'
 import type { OpLog } from '@/api/types'
 import EmptyState from '@/components/EmptyState.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
+import PageToolbar from '@/components/PageToolbar.vue'
+
+const AUDIT_ACTIONS = [
+  'LOGIN',
+  'PASSWORD_CHANGE',
+  'INSTANCE_CREATE',
+  'KEY_SET',
+  'KEY_DELETE',
+  'KEY_EXPIRE',
+  'KEY_HSET',
+  'TERMINAL_BLOCKED',
+  'SLOWLOG_RESET',
+  'CREATE_BACKUP',
+  'RESTORE_BACKUP',
+  'DOWNLOAD_BACKUP',
+  'BACKUP_CHECKPOINT',
+  'ALERT_RULE_CREATE',
+  'ALERT_RESOLVE',
+  'USER_CREATE',
+  'USER_UPDATE',
+  'USER_DELETE'
+]
+
+function suggestActions(queryString: string, cb: (results: Array<{ value: string }>) => void) {
+  const q = queryString.trim().toUpperCase()
+  const matched = q ? AUDIT_ACTIONS.filter((a) => a.includes(q)) : AUDIT_ACTIONS
+  cb(matched.map((value) => ({ value })))
+}
 
 const rows = ref<OpLog[]>([])
 const total = ref(0)
@@ -81,8 +110,15 @@ onMounted(load)
     </div>
 
     <div class="panel">
-      <div class="filters">
-        <el-input v-model="action" placeholder="动作，如 KEY_DELETE" clearable class="f-action" @keyup.enter="load" />
+      <PageToolbar :meta="`共 ${total} 条审计记录`">
+        <el-autocomplete
+          v-model="action"
+          :fetch-suggestions="suggestActions"
+          placeholder="动作，如 KEY_DELETE"
+          clearable
+          style="width: 190px"
+          @keyup.enter="load"
+        />
         <el-input v-model="username" placeholder="操作人" clearable class="f-user" @keyup.enter="load" />
         <el-select v-model="result" placeholder="结果" clearable class="f-result">
           <el-option label="成功" value="true" />
@@ -98,24 +134,28 @@ onMounted(load)
         />
         <el-button type="primary" @click="page = 1; load()">查询</el-button>
         <el-button @click="reset">重置</el-button>
-      </div>
+      </PageToolbar>
       <el-table :data="rows" size="small">
         <template #empty>
           <EmptyState title="没有匹配的审计记录" description="调整筛选条件，或清空筛选查看全部操作。" />
         </template>
         <el-table-column prop="createdAt" label="时间" width="180" />
         <el-table-column prop="username" label="操作人" width="120" />
-        <el-table-column prop="action" label="动作" width="190">
+        <el-table-column label="动作" width="190">
           <template #default="{ row }">
-            <el-tag size="small" type="info" effect="plain">{{ row.action }}</el-tag>
+            <StatusBadge :label="row.action" tone="neutral" mono />
           </template>
         </el-table-column>
         <el-table-column prop="target" label="对象" min-width="200" show-overflow-tooltip />
         <el-table-column prop="detail" label="详情" min-width="180" show-overflow-tooltip />
         <el-table-column prop="ip" label="来源 IP" width="140" />
-        <el-table-column label="结果" width="90">
+        <el-table-column label="结果" width="94">
           <template #default="{ row }">
-            <el-tag :type="row.success ? 'success' : 'danger'" size="small">{{ row.success ? '成功' : '失败' }}</el-tag>
+            <StatusBadge
+              :label="row.success ? '成功' : '失败'"
+              :tone="row.success ? 'success' : 'danger'"
+              dot
+            />
           </template>
         </el-table-column>
       </el-table>
@@ -135,20 +175,6 @@ onMounted(load)
 .pager {
   margin-top: 14px;
   justify-content: flex-end;
-}
-
-.filters {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-  padding-bottom: 14px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid var(--line);
-}
-
-.f-action {
-  width: 190px;
 }
 
 .f-user {

@@ -7,6 +7,23 @@ import { useInstanceStore } from '@/stores/instance'
 import { useAuthStore } from '@/stores/auth'
 import { formatTtl } from '@/utils/format'
 import EmptyState from '@/components/EmptyState.vue'
+import StatusBadge, { type BadgeTone } from '@/components/StatusBadge.vue'
+import PageToolbar from '@/components/PageToolbar.vue'
+
+function typeTone(type: string): BadgeTone {
+  switch (type.toLowerCase()) {
+    case 'string':
+      return 'accent'
+    case 'hash':
+      return 'warn'
+    case 'list':
+    case 'set':
+    case 'zset':
+      return 'cache'
+    default:
+      return 'neutral'
+  }
+}
 
 const store = useInstanceStore()
 const auth = useAuthStore()
@@ -144,7 +161,7 @@ onMounted(() => scan(true))
     </div>
 
     <div class="panel" v-loading="loading">
-      <div class="filters">
+      <PageToolbar meta="SCAN 游标遍历，单次最多 200 条">
         <el-input v-model="pattern" class="f-pattern mono" placeholder="匹配模式，如 user:*" clearable @keyup.enter="scan(true)">
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
@@ -154,8 +171,7 @@ onMounted(() => scan(true))
           <el-option :value="100" label="100 条/页" />
         </el-select>
         <el-button type="primary" size="small" @click="scan(true)">扫描</el-button>
-        <span class="f-hint">SCAN 游标遍历，单次最多 200 条</span>
-      </div>
+      </PageToolbar>
       <el-table :data="rows" size="small">
         <template #empty>
           <EmptyState title="没有扫描到键" description="调整匹配模式后重新扫描。" />
@@ -167,7 +183,7 @@ onMounted(() => scan(true))
         </el-table-column>
         <el-table-column label="类型" width="110">
           <template #default="{ row }">
-            <el-tag size="small" type="info">{{ row.type }}</el-tag>
+            <StatusBadge :label="row.type.toUpperCase()" :tone="typeTone(row.type)" mono />
           </template>
         </el-table-column>
         <el-table-column label="过期" width="120">
@@ -345,28 +361,12 @@ onMounted(() => scan(true))
   width: 150px;
 }
 
-.filters {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-  padding-bottom: 14px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid var(--line-soft);
-}
-
 .f-pattern {
   width: 240px;
 }
 
 .f-count {
   width: 108px;
-}
-
-.f-hint {
-  margin-left: auto;
-  font-size: var(--text-xs);
-  color: var(--text-3);
 }
 
 .footer {
@@ -377,27 +377,15 @@ onMounted(() => scan(true))
 }
 
 .muted {
-  color: var(--el-text-color-secondary);
+  color: var(--text-2);
   font-size: 12px;
 }
 
-.section-title {
-  margin: 18px 0 8px;
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
-}
-
-.hash-add {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-top: 10px;
-}
-
 .value-box {
-  background: #10161d;
-  border: 1px solid var(--console-border);
-  border-radius: 8px;
+  background: var(--term-bg);
+  color: var(--term-text);
+  border: 1px solid var(--term-line);
+  border-radius: var(--radius);
   padding: 12px;
   max-height: 320px;
   overflow: auto;

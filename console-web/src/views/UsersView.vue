@@ -4,6 +4,8 @@ import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import { userApi } from '@/api'
 import type { UserView } from '@/api/types'
 import EmptyState from '@/components/EmptyState.vue'
+import StatusBadge from '@/components/StatusBadge.vue'
+import PageToolbar from '@/components/PageToolbar.vue'
 
 const rows = ref<UserView[]>([])
 const total = ref(0)
@@ -96,14 +98,39 @@ onMounted(load)
         <h2 class="page-title">用户管理</h2>
         <p class="page-subtitle">ADMIN 全权 / OPS 运维读写 / VIEWER 只读，删除与降级受"最后一个管理员"保护</p>
       </div>
-      <div style="display: flex; gap: 10px">
-        <el-input v-model="keyword" placeholder="搜索用户名" clearable style="width: 200px" @keyup.enter="load" />
-        <el-button @click="load">查询</el-button>
-        <el-button type="primary" @click="openCreate"><el-icon><Plus /></el-icon> 新建</el-button>
+      <el-button type="primary" @click="openCreate"><el-icon><Plus /></el-icon> 新建</el-button>
+    </div>
+
+    <div class="rbac-grid">
+      <div class="rbac-card">
+        <div class="rbac-head">
+          <StatusBadge label="ADMIN" tone="accent" mono />
+          <span class="rbac-title">系统管理员</span>
+        </div>
+        <p class="rbac-desc">全量权限：含用户账号、角色变更、审计检索导出与全量数据恢复。</p>
+      </div>
+      <div class="rbac-card">
+        <div class="rbac-head">
+          <StatusBadge label="OPS" tone="success" mono />
+          <span class="rbac-title">运维人员</span>
+        </div>
+        <p class="rbac-desc">业务写权限：实例维护、键值读写、终端执行、慢日志重置、物理快照与备份创建。</p>
+      </div>
+      <div class="rbac-card">
+        <div class="rbac-head">
+          <StatusBadge label="VIEWER" tone="neutral" mono />
+          <span class="rbac-title">只读成员</span>
+        </div>
+        <p class="rbac-desc">只读观察：浏览监控面板、键空间只读查看、慢日志与备份下载；审计与用户管理不可见。</p>
       </div>
     </div>
 
     <div class="panel">
+      <PageToolbar :meta="`共 ${total} 位账号`">
+        <el-input v-model="keyword" placeholder="搜索用户名" clearable style="width: 200px" @keyup.enter="load" />
+        <el-button @click="load">查询</el-button>
+      </PageToolbar>
+
       <el-table :data="rows" size="small">
         <template #empty>
           <EmptyState title="还没有用户" description="新建账号后，可以在这里分配角色与启用状态。" />
@@ -114,16 +141,20 @@ onMounted(load)
         <el-table-column prop="email" label="邮箱" min-width="180" />
         <el-table-column label="角色" width="110">
           <template #default="{ row }">
-            <el-tag size="small" :type="row.role === 'ADMIN' ? 'info' : row.role === 'OPS' ? 'success' : 'info'">
-              {{ row.role }}
-            </el-tag>
+            <StatusBadge
+              :label="row.role"
+              :tone="row.role === 'ADMIN' ? 'accent' : row.role === 'OPS' ? 'success' : 'neutral'"
+              mono
+            />
           </template>
         </el-table-column>
-        <el-table-column label="状态" width="90">
+        <el-table-column label="状态" width="94">
           <template #default="{ row }">
-            <el-tag size="small" :type="row.status === 1 ? 'success' : 'info'">
-              {{ row.status === 1 ? '启用' : '禁用' }}
-            </el-tag>
+            <StatusBadge
+              :label="row.status === 1 ? '启用' : '禁用'"
+              :tone="row.status === 1 ? 'success' : 'neutral'"
+              dot
+            />
           </template>
         </el-table-column>
         <el-table-column prop="lastLoginAt" label="最近登录" width="180" />
@@ -176,8 +207,49 @@ onMounted(load)
 </template>
 
 <style scoped>
+.rbac-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.rbac-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 13px 15px;
+  box-shadow: var(--shadow-card);
+}
+
+.rbac-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.rbac-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.rbac-desc {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--text-2);
+}
+
 .pager {
   margin-top: 14px;
   justify-content: flex-end;
+}
+
+@media (max-width: 900px) {
+  .rbac-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

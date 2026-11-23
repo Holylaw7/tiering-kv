@@ -32,6 +32,12 @@ export const useInstanceStore = defineStore('instance', {
     select(id: number) {
       this.selectedId = id
       localStorage.setItem('tk_selected_instance', String(id))
+    },
+    syncInstance(updated: InstanceView) {
+      const idx = this.list.findIndex((item) => item.id === updated.id)
+      if (idx >= 0) {
+        this.list[idx] = { ...this.list[idx], ...updated }
+      }
     }
   }
 })

@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue'
+import { nextTick, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { terminalApi } from '@/api'
 import type { TerminalHistory } from '@/api/types'
 import { useInstanceStore } from '@/stores/instance'
+import StatusBadge from '@/components/StatusBadge.vue'
 
 interface Entry {
   command: string
@@ -12,6 +14,7 @@ interface Entry {
   at: string
 }
 
+const route = useRoute()
 const store = useInstanceStore()
 const command = ref('')
 const entries = ref<Entry[]>([])
@@ -20,7 +23,21 @@ const busy = ref(false)
 const outputRef = ref<HTMLDivElement | null>(null)
 const expanded = ref(false)
 
-const quickCommands = ['PING', 'INFO', 'DBSIZE', 'SCAN 0 COUNT 20', 'TYPE demo', 'CLIENT LIST']
+const quickGroups = [
+  { label: '诊断与观测', items: ['PING', 'INFO', 'INFO persistence', 'SLOWLOG GET 10'] },
+  { label: '数据与快照', items: ['DBSIZE', 'SCAN 0 COUNT 20', 'BGSAVE', 'LASTSAVE'] }
+]
+
+function isRedacted(cmd: string): boolean {
+  return cmd.includes('<redacted>') || cmd.includes('***')
+}
+
+function applyQueryCommand() {
+  const incoming = route.query.cmd
+  if (typeof incoming === 'string' && incoming.trim()) {
+    command.value = incoming.trim()
+  }
+}
 
 async function execute(raw?: string) {
   const text = (raw ?? command.value).trim()
@@ -63,7 +80,11 @@ function useHistory(item: TerminalHistory) {
   command.value = item.command
 }
 
-onMounted(loadHistory)
+watch(() => route.query.cmd, applyQueryCommand)
+onMounted(() => {
+  applyQueryCommand()
+  loadHistory()
+})
 </script>
 
 <template>
@@ -128,29 +149,35 @@ onMounted(loadHistory)
             快捷命令
             <span class="hint">点击执行</span>
           </div>
-          <div class="chips">
-            <button
-              v-for="item in quickCommands"
-              :key="item"
-              type="button"
-              class="chip mono"
-              @click="execute(item)"
-            >
-              {{ item }}
-            </button>
+          <div v-for="group in quickGroups" :key="group.label" class="chip-group">
+            <span class="chip-group-label">{{ group.label }}</span>
+            <div class="chips">
+              <button
+                v-for="item in group.items"
+                :key="item"
+                type="button"
+                class="chip mono"
+                @click="execute(item)"
+              >
+                {{ item }}
+              </button>
+            </div>
           </div>
         </section>
 
         <section class="panel side-block">
           <div class="panel-title">
             最近命令
-            <span class="hint">点击填入输入框</span>
+            <span class="hint">敏感凭据已脱敏 · 点击填入</span>
           </div>
           <div v-if="!history.length" class="side-empty">暂无命令记录</div>
           <ul v-else class="history">
             <li v-for="item in history" :key="item.id" class="history-item" @click="useHistory(item)">
               <span class="status" :class="item.success ? 'ok' : 'err'"></span>
-              <span class="history-cmd mono">{{ item.command }}</span>
+              <span class="history-cmd mono">
+                {{ item.command }}
+                <StatusBadge v-if="isRedacted(item.command)" label="已脱敏" tone="accent" />
+              </span>
               <span class="history-meta">{{ item.costMs }} ms · {{ item.createdAt?.slice(11) }}</span>
             </li>
           </ul>
@@ -383,6 +410,18 @@ onMounted(loadHistory)
 
 .side-block {
   padding: 14px 16px;
+}
+
+.chip-group + .chip-group {
+  margin-top: 12px;
+}
+
+.chip-group-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3);
 }
 
 .chips {
