@@ -36,14 +36,35 @@ public final class TieringReadStorageEngine extends AbstractStorageDecorator {
     }
 
     @Override
+    public void put(byte[] key, byte[] value, long ttlMillis) {
+        // 带 TTL 覆盖写时若冷层存在旧版本，需同步写冷层墓碑，防止热层过期后旧值复活
+        if (ttlMillis != NO_TTL && cold.entry(key) != null) {
+            cold.delete(key);
+        }
+        delegate.put(key, value, ttlMillis);
+    }
+
+    @Override
     public byte[] get(byte[] key) {
         byte[] value = delegate.get(key);
-        return value != null ? value : cold.get(key);
+        if (value != null) {
+            return value;
+        }
+        if (delegate.hasTombstone(key)) {
+            return null;
+        }
+        return cold.get(key);
     }
 
     @Override
     public boolean exists(byte[] key) {
-        return delegate.exists(key) || cold.entry(key) != null;
+        if (delegate.exists(key)) {
+            return true;
+        }
+        if (delegate.hasTombstone(key)) {
+            return false;
+        }
+        return cold.entry(key) != null;
     }
 
     @Override
@@ -56,6 +77,12 @@ public final class TieringReadStorageEngine extends AbstractStorageDecorator {
             removedCold = true;
         }
         return removedHot || removedCold;
+    }
+
+    @Override
+    public void clear() {
+        delegate.clear();
+        cold.clear();
     }
 
     @Override
@@ -82,7 +109,7 @@ public final class TieringReadStorageEngine extends AbstractStorageDecorator {
      * @return 是否发生了回填
      */
     private boolean copyUp(byte[] key, long ttlOverride) {
-        if (delegate.get(key) != null) {
+        if (delegate.get(key) != null || delegate.hasTombstone(key)) {
             return false;
         }
         KeyValueEntry entry = cold.entry(key);
@@ -117,7 +144,8 @@ public final class TieringReadStorageEngine extends AbstractStorageDecorator {
 
     @Override
     public byte[] getSet(byte[] key, byte[] value) {
-        byte[] old = cold.get(key);
+        byte[] old = (delegate.get(key) == null && !delegate.hasTombstone(key))
+                ? cold.get(key) : null;
         copyUp(key, KEEP_TTL);
         byte[] hotOld = atomic().getSet(key, value);
         return hotOld != null ? hotOld : old;
@@ -125,7 +153,8 @@ public final class TieringReadStorageEngine extends AbstractStorageDecorator {
 
     @Override
     public byte[] getAndSetPreservingTtl(byte[] key, byte[] value) {
-        byte[] old = cold.get(key);
+        byte[] old = (delegate.get(key) == null && !delegate.hasTombstone(key))
+                ? cold.get(key) : null;
         copyUp(key, KEEP_TTL);
         byte[] hotOld = atomic().getAndSetPreservingTtl(key, value);
         return hotOld != null ? hotOld : old;
@@ -133,16 +162,28 @@ public final class TieringReadStorageEngine extends AbstractStorageDecorator {
 
     @Override
     public byte[] getDelete(byte[] key) {
-        byte[] old = cold.get(key);
-        boolean copied = copyUp(key, KEEP_TTL);
-        byte[] hotOld = atomic().getDelete(key);
-        return hotOld != null ? hotOld : (copied ? null : old);
+        if (delegate.get(key) != null) {
+            byte[] hotOld = atomic().getDelete(key);
+            if (cold.entry(key) != null) {
+                cold.delete(key);
+            }
+            return hotOld;
+        }
+        if (delegate.hasTombstone(key)) {
+            return null;
+        }
+        KeyValueEntry coldEntry = cold.entry(key);
+        if (coldEntry == null) {
+            return null;
+        }
+        cold.delete(key);
+        return coldEntry.value();
     }
 
     @Override
     public boolean putIfAbsent(byte[] key, byte[] value) {
         // SETNX 语义：冷层已存在即视为存在，不得覆盖
-        if (cold.entry(key) != null) {
+        if (!delegate.hasTombstone(key) && cold.entry(key) != null) {
             return false;
         }
         return atomic().putIfAbsent(key, value);
@@ -157,7 +198,7 @@ public final class TieringReadStorageEngine extends AbstractStorageDecorator {
     @Override
     public long ttlMillis(byte[] key) {
         long ttl = atomic().ttlMillis(key);
-        if (ttl != -2) {
+        if (ttl != -2 || delegate.hasTombstone(key)) {
             return ttl;
         }
         KeyValueEntry entry = cold.entry(key);
@@ -170,6 +211,9 @@ public final class TieringReadStorageEngine extends AbstractStorageDecorator {
     @Override
     public boolean persist(byte[] key) {
         if (delegate.get(key) == null) {
+            if (delegate.hasTombstone(key)) {
+                return false;
+            }
             KeyValueEntry entry = cold.entry(key);
             if (entry == null) {
                 return false;
@@ -186,13 +230,23 @@ public final class TieringReadStorageEngine extends AbstractStorageDecorator {
     @Override
     public boolean expireAt(byte[] key, long expireAtMillis) {
         if (delegate.get(key) == null) {
+            if (delegate.hasTombstone(key)) {
+                return false;
+            }
             KeyValueEntry entry = cold.entry(key);
             if (entry == null) {
                 return false;
             }
             long ttl = expireAtMillis - System.currentTimeMillis();
-            copyUp(key, ttl > 0 ? ttl : 1);
+            if (ttl <= 0) {
+                cold.delete(key);
+                return true;
+            }
+            copyUp(key, ttl);
             return true;
+        }
+        if (cold.entry(key) != null) {
+            cold.delete(key);
         }
         return atomic().expireAt(key, expireAtMillis);
     }

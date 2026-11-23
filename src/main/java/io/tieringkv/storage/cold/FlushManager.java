@@ -41,6 +41,12 @@ public final class FlushManager {
         for (KeyValueEntry entry : snapshot) {
             if (memTable.removePhysicalIfVersion(entry.key(), entry.version())) {
                 removed++;
+            } else {
+                // Flush 期间若该键被并发删除为 tombstone，需同步在冷层写入墓碑防止旧值复活
+                KeyValueEntry latest = memTable.getEntry(entry.key());
+                if (latest != null && latest.deleted()) {
+                    cold.delete(entry.key());
+                }
             }
         }
         wal.checkpoint(memTable);

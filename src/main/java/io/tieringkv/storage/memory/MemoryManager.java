@@ -16,10 +16,8 @@ public final class MemoryManager {
 
     private final long maxBytes;
     private final long heapLimitBytes;
-    private static final long GC_INTERVAL_NANOS = 1_000_000_000L;
 
     private final AtomicLong usedBytes = new AtomicLong();
-    private final AtomicLong lastGcNanos = new AtomicLong(0);
     private volatile EvictionCallback evictionCallback;
 
     public MemoryManager(long maxBytes) {
@@ -94,9 +92,8 @@ public final class MemoryManager {
     /**
      * 计量超限，或实际堆接近上限（TD-083）。
      *
-     * <p>堆判定前会先尝试一次全量 GC（限频 1 秒）：`totalMemory - freeMemory`
-     * 包含尚未回收的垃圾，突发写入后即使数据已删除，指标也会长期偏高，
-     * 若直接据此拒绝写会造成"永远无法恢复"的自锁。GC 后仍超阈值才判定超限。
+     * <p>不在业务请求热路径同步调用 {@code System.gc()}，避免 STW Full GC
+     * 引发长尾抖动；仅基于计量值与当前堆占用判定超限。
      */
     public boolean isOverLimit() {
         if (usedBytes.get() > maxBytes) {
@@ -104,14 +101,6 @@ public final class MemoryManager {
         }
         if (heapLimitBytes <= 0) {
             return false;
-        }
-        if (heapUsedBytes() <= heapLimitBytes) {
-            return false;
-        }
-        long now = System.nanoTime();
-        long last = lastGcNanos.get();
-        if (now - last > GC_INTERVAL_NANOS && lastGcNanos.compareAndSet(last, now)) {
-            System.gc();
         }
         return heapUsedBytes() > heapLimitBytes;
     }

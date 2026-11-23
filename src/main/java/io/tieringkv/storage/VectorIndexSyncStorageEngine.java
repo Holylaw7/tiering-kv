@@ -43,14 +43,33 @@ public final class VectorIndexSyncStorageEngine extends AbstractStorageDecorator
 
     @Override
     public void put(byte[] key, byte[] value) {
+        byte[] old = delegate.get(key);
         delegate.put(key, value);
-        indexIfVector(key, value);
+        syncValueChange(key, old, value);
     }
 
     @Override
     public void put(byte[] key, byte[] value, long ttlMillis) {
+        byte[] old = delegate.get(key);
         delegate.put(key, value, ttlMillis);
-        indexIfVector(key, value);
+        syncValueChange(key, old, value);
+    }
+
+    @Override
+    public void clear() {
+        java.util.List<String> vectorKeys = new java.util.ArrayList<>();
+        try (StorageIterator iterator = delegate.iterator()) {
+            while (iterator.hasNext()) {
+                io.tieringkv.storage.memory.KeyValueEntry entry = iterator.next();
+                if (isVector(entry.value())) {
+                    vectorKeys.add(new String(entry.key(), StandardCharsets.UTF_8));
+                }
+            }
+        }
+        delegate.clear();
+        for (String vectorKey : vectorKeys) {
+            vectorStore.delete(vectorKey);
+        }
     }
 
     @Override

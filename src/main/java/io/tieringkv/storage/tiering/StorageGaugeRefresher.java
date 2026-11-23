@@ -24,28 +24,38 @@ public final class StorageGaugeRefresher implements AutoCloseable {
     private final ColdStorageEngine cold;
     private final StorageMetrics metrics;
     private final BooleanSupplier flushInProgress;
+    private final Runnable memoryRefresher;
     private final long intervalMillis;
     private final AtomicBoolean running = new AtomicBoolean();
     private final AtomicLong refreshCount = new AtomicLong();
     private final AtomicLong failureCount = new AtomicLong();
     private final AtomicLong lastDurationNanos = new AtomicLong();
     private final AtomicBoolean refreshRequested = new AtomicBoolean(true);
+    private final Object wakeLock = new Object();
+    private boolean immediateWake;
     private volatile boolean closed;
     private Thread thread;
 
     public StorageGaugeRefresher(ColdStorageEngine cold, StorageMetrics metrics,
                                  BooleanSupplier flushInProgress) {
-        this(cold, metrics, flushInProgress, 500L);
+        this(cold, metrics, flushInProgress, null, 500L);
     }
 
     public StorageGaugeRefresher(ColdStorageEngine cold, StorageMetrics metrics,
                                  BooleanSupplier flushInProgress, long intervalMillis) {
+        this(cold, metrics, flushInProgress, null, intervalMillis);
+    }
+
+    public StorageGaugeRefresher(ColdStorageEngine cold, StorageMetrics metrics,
+                                 BooleanSupplier flushInProgress, Runnable memoryRefresher,
+                                 long intervalMillis) {
         if (cold == null || metrics == null) {
             throw new IllegalArgumentException("cold and metrics required");
         }
         this.cold = cold;
         this.metrics = metrics;
         this.flushInProgress = flushInProgress == null ? () -> false : flushInProgress;
+        this.memoryRefresher = memoryRefresher;
         this.intervalMillis = Math.max(50L, intervalMillis);
     }
 
@@ -62,11 +72,16 @@ public final class StorageGaugeRefresher implements AutoCloseable {
 
     private void loop() {
         while (!closed) {
-            try {
-                Thread.sleep(intervalMillis);
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-                return;
+            synchronized (wakeLock) {
+                if (!closed && !immediateWake) {
+                    try {
+                        wakeLock.wait(intervalMillis);
+                    } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                }
+                immediateWake = false;
             }
             if (closed) {
                 return;
@@ -78,9 +93,13 @@ public final class StorageGaugeRefresher implements AutoCloseable {
         }
     }
 
-    /** 请求一次刷新（下一个周期执行）；写路径/合并事件可安全调用。 */
+    /** 请求一次刷新（唤醒刷新线程尽快执行）；写路径/合并事件可安全调用。 */
     public void requestRefresh() {
         refreshRequested.set(true);
+        synchronized (wakeLock) {
+            immediateWake = true;
+            wakeLock.notifyAll();
+        }
     }
 
     /**
@@ -105,6 +124,9 @@ public final class StorageGaugeRefresher implements AutoCloseable {
             metrics.publishColdSnapshot(count, diskUsage, entries,
                     flushInProgress.getAsBoolean() ? 1 : 0, cold.isCompacting() ? 1 : 0,
                     cold.pendingCount(), cold.pendingByteSize());
+            if (memoryRefresher != null) {
+                memoryRefresher.run();
+            }
             refreshCount.incrementAndGet();
         } catch (RuntimeException ex) {
             // 失败保留上一份有效快照，并计数，不静默
@@ -132,6 +154,9 @@ public final class StorageGaugeRefresher implements AutoCloseable {
     @Override
     public void close() {
         closed = true;
+        synchronized (wakeLock) {
+            wakeLock.notifyAll();
+        }
         Thread worker;
         synchronized (this) {
             worker = thread;

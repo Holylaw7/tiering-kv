@@ -50,8 +50,13 @@ public final class CheckpointManager {
         }
         Path tmp = walDirectory.resolve("checkpoint.tmp");
         Files.write(tmp, buffer.array());
-        Files.move(tmp, walDirectory.resolve("checkpoint.bin"),
-                StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        Path target = walDirectory.resolve("checkpoint.bin");
+        try {
+            Files.move(tmp, target,
+                    StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+        }
     }
 
     /** 读取 checkpoint；缺失或损坏返回 null（触发全量重放）。 */
@@ -78,10 +83,8 @@ public final class CheckpointManager {
                 byte[] key = new byte[keyLength];
                 buffer.get(key);
                 int valueLength = buffer.getInt();
-                byte[] value = valueLength == 0 ? null : new byte[valueLength];
-                if (value != null) {
-                    buffer.get(value);
-                }
+                byte[] value = new byte[valueLength];
+                buffer.get(value);
                 long expire = buffer.getLong();
                 long create = buffer.getLong();
                 long update = buffer.getLong();

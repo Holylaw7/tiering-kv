@@ -66,6 +66,7 @@ public final class TrackingStorageEngine extends AbstractStorageDecorator {
     public long increment(byte[] key, long delta) {
         long result = atomic().increment(key, delta);
         record(AccessEvent.AccessOperation.PUT, key, 0);
+        evictionManager.maybeEvict();
         return result;
     }
 
@@ -73,6 +74,7 @@ public final class TrackingStorageEngine extends AbstractStorageDecorator {
     public int append(byte[] key, byte[] value) {
         int result = atomic().append(key, value);
         record(AccessEvent.AccessOperation.PUT, key, 0);
+        evictionManager.maybeEvict();
         return result;
     }
 
@@ -80,6 +82,7 @@ public final class TrackingStorageEngine extends AbstractStorageDecorator {
     public byte[] getSet(byte[] key, byte[] value) {
         byte[] old = atomic().getSet(key, value);
         record(AccessEvent.AccessOperation.PUT, key, 0);
+        evictionManager.maybeEvict();
         return old;
     }
 
@@ -87,6 +90,7 @@ public final class TrackingStorageEngine extends AbstractStorageDecorator {
     public byte[] getAndSetPreservingTtl(byte[] key, byte[] value) {
         byte[] old = atomic().getAndSetPreservingTtl(key, value);
         record(AccessEvent.AccessOperation.PUT, key, 0);
+        evictionManager.maybeEvict();
         return old;
     }
 
@@ -101,7 +105,8 @@ public final class TrackingStorageEngine extends AbstractStorageDecorator {
     public boolean putIfAbsent(byte[] key, byte[] value) {
         boolean wrote = atomic().putIfAbsent(key, value);
         if (wrote) {
-            record(AccessEvent.AccessOperation.PUT, key, 0);
+            record(AccessEvent.AccessOperation.PUT, key, KeyValueEntry.sizeOf(key, value));
+            evictionManager.maybeEvict();
         }
         return wrote;
     }
@@ -135,6 +140,7 @@ public final class TrackingStorageEngine extends AbstractStorageDecorator {
     public byte[] update(byte[] key, java.util.function.UnaryOperator<byte[]> transform) {
         byte[] updated = atomic().update(key, transform);
         record(AccessEvent.AccessOperation.PUT, key, 0);
+        evictionManager.maybeEvict();
         return updated;
     }
 

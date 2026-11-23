@@ -156,17 +156,45 @@ public final class EvictionManager {
                 policy.onAccess(new AccessEvent(key, AccessEvent.AccessOperation.DELETE, now, 0));
                 continue;
             }
+            if (wal != null) {
+                java.util.concurrent.atomic.AtomicBoolean abortCycle =
+                        new java.util.concurrent.atomic.AtomicBoolean();
+                java.util.concurrent.atomic.AtomicBoolean retryConsumed =
+                        new java.util.concurrent.atomic.AtomicBoolean();
+                wal.withKeyLock(key, () -> {
+                    KeyValueEntry latest = memTable.getEntry(key);
+                    if (latest == null || latest.version() != entry.version() || !latest.isLive(now)) {
+                        return;
+                    }
+                    MigrationResult result = migration.migrate(latest);
+                    switch (result) {
+                        case SUCCESS -> {
+                            try {
+                                wal.append(WALEntry.delete(now, key, 0));
+                            } catch (WalWriteException e) {
+                                abortCycle.set(true);
+                                return;
+                            }
+                            if (memTable.removePhysicalIfVersion(key, latest.version())) {
+                                policy.onAccess(new AccessEvent(key, AccessEvent.AccessOperation.EVICT, now, 0));
+                            }
+                        }
+                        case FAILED -> abortCycle.set(true);
+                        case RETRY -> retryConsumed.set(true);
+                    }
+                });
+                if (abortCycle.get()) {
+                    return;
+                }
+                if (retryConsumed.get() && --retryBudget <= 0) {
+                    return;
+                }
+                continue;
+            }
             MigrationResult result = migration.migrate(entry);
             switch (result) {
                 case SUCCESS -> {
-                    if (wal != null) {
-                        try {
-                            wal.append(WALEntry.delete(now, key, 0));
-                        } catch (WalWriteException e) {
-                            return; // 无法记录删除：保留数据，避免崩溃后复活
-                        }
-                    }
-                    if (memTable.removePhysical(key)) {
+                    if (memTable.removePhysicalIfVersion(key, entry.version())) {
                         policy.onAccess(new AccessEvent(key, AccessEvent.AccessOperation.EVICT, now, 0));
                     }
                 }

@@ -281,7 +281,42 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
         }
     }
 
+    @Override
+    public boolean hasTombstone(byte[] key) {
+        long now = timeSource.nowMillis();
+        Segment segment = segments[segmentIndex(key)];
+        segment.lock.readLock().lock();
+        try {
+            KeyValueEntry entry = segment.list.get(key);
+            return entry != null && (entry.deleted() || entry.isExpired(now));
+        } finally {
+            segment.lock.readLock().unlock();
+        }
+    }
+
     /** 返回当前条目（可能为 tombstone / 过期），供淘汰管理校验；不克隆。 */
+    /** 写入 tombstone（WAL 恢复 DELETE / 已过期 PUT 防冷层复活）。 */
+    public void putTombstone(byte[] key) {
+        long now = timeSource.nowMillis();
+        Segment segment = segments[segmentIndex(key)];
+        segment.lock.writeLock().lock();
+        try {
+            KeyValueEntry current = segment.list.get(key);
+            boolean wasLive = current != null && current.isLive(now);
+            KeyValueEntry tombstone = KeyValueEntry.tombstone(key, now, version.next());
+            segment.list.put(tombstone);
+            if (current != null) {
+                memoryManager.remove(current.size());
+            }
+            memoryManager.add(tombstone.size());
+            if (wasLive) {
+                liveSize.decrementAndGet();
+            }
+        } finally {
+            segment.lock.writeLock().unlock();
+        }
+    }
+
     public KeyValueEntry getEntry(byte[] key) {
         Segment segment = segments[segmentIndex(key)];
         segment.lock.readLock().lock();

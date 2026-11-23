@@ -19,6 +19,8 @@ public final class WALManager implements AutoCloseable {
     private final WALWriter writer;
     private final AtomicLong recordSequence = new AtomicLong();
     private final Object writeLock = new Object();
+    private final Object checkpointLock = new Object();
+    private final Object[] keyLocks = createKeyLocks();
     private boolean closed;
     /** EVERY_SEC 的后台落盘器（TD-103）：空闲时也必须把 buffer 刷出去。 */
     private final java.util.concurrent.ScheduledExecutorService flusher;
@@ -119,10 +121,13 @@ public final class WALManager implements AutoCloseable {
         return new RecoveryManager(config).recoverFrom(memTable, startSequence, startOffset);
     }
 
-    /** 先捕获 offset、后快照、再落盘（ADR-0016 防竞态顺序）。 */
+    /** 先捕获 offset、后快照、再落盘（ADR-0016 防竞态顺序）；快照遍历不持 writeLock，避免锁顺序反转。 */
     public void checkpoint(MemTable memTable) throws IOException {
-        synchronized (writeLock) {
-            WALPosition position = new WALPosition(writer.currentSequence(), writer.currentSize());
+        synchronized (checkpointLock) {
+            WALPosition position;
+            synchronized (writeLock) {
+                position = new WALPosition(writer.currentSequence(), writer.currentSize());
+            }
             List<KeyValueEntry> entries = new ArrayList<>();
             try (var iterator = memTable.iterator()) {
                 while (iterator.hasNext()) {
@@ -131,6 +136,38 @@ public final class WALManager implements AutoCloseable {
             }
             CheckpointManager.write(config.directory(), position, entries);
         }
+    }
+
+    /** 按键分片互斥（256 桶），用于协调热写路径与后台淘汰/迁移的 WAL 顺序。 */
+    public <T> T withKeyLock(byte[] key, java.util.function.Supplier<T> action) {
+        synchronized (stripeFor(key)) {
+            return action.get();
+        }
+    }
+
+    public void withKeyLock(byte[] key, Runnable action) {
+        synchronized (stripeFor(key)) {
+            action.run();
+        }
+    }
+
+    private Object stripeFor(byte[] key) {
+        int hash = 0x811c9dc5;
+        if (key != null) {
+            for (byte b : key) {
+                hash ^= (b & 0xff);
+                hash *= 0x01000193;
+            }
+        }
+        return keyLocks[hash & 255];
+    }
+
+    private static Object[] createKeyLocks() {
+        Object[] locks = new Object[256];
+        for (int i = 0; i < locks.length; i++) {
+            locks[i] = new Object();
+        }
+        return locks;
     }
 
     public CheckpointManager.Checkpoint loadCheckpoint() {
