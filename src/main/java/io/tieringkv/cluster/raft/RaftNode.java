@@ -226,17 +226,29 @@ public final class RaftNode implements AutoCloseable {
     }
 
     private void scheduleNextFlush() {
+        if (!running || flushScheduler.isShutdown()) {
+            return;
+        }
         long interval = replicationController != null
                 ? replicationController.flushIntervalMillis()
                 : replicationConfig.flushIntervalMillis();
-        flushScheduler.schedule(this::flushTick, interval, TimeUnit.MILLISECONDS);
+        try {
+            flushScheduler.schedule(this::flushTick, interval, TimeUnit.MILLISECONDS);
+        } catch (java.util.concurrent.RejectedExecutionException ignored) {
+            // 停机时调度器已关闭
+        }
     }
 
     private void flushTick() {
+        if (!running) {
+            return;
+        }
         try {
             flushReplication();
         } finally {
-            scheduleNextFlush();
+            if (running) {
+                scheduleNextFlush();
+            }
         }
     }
 
@@ -389,7 +401,7 @@ public final class RaftNode implements AutoCloseable {
         boolean batchReady;
         boolean solo;
         synchronized (lock) {
-            if (state != RaftState.LEADER) {
+            if (flushScheduler.isShutdown() || state != RaftState.LEADER) {
                 future.completeExceptionally(new IllegalStateException("not leader"));
                 return future;
             }
@@ -423,7 +435,7 @@ public final class RaftNode implements AutoCloseable {
         boolean batchReady;
         boolean solo;
         synchronized (lock) {
-            if (state != RaftState.LEADER) {
+            if (flushScheduler.isShutdown() || state != RaftState.LEADER) {
                 for (int i = 0; i < commands.size(); i++) {
                     CompletableFuture<Long> future = new CompletableFuture<>();
                     future.completeExceptionally(
@@ -560,36 +572,48 @@ public final class RaftNode implements AutoCloseable {
 
     private void startElection(long electionTerm, long lastIndex, long lastTerm) {
         VoteRequest request = new VoteRequest(electionTerm, id, lastIndex, lastTerm);
-        List<VoteResponse> responses = new ArrayList<>();
+        int quorum = transport.peerIds().size() / 2 + 1;
+        if (quorum <= 1) {
+            synchronized (lock) {
+                if (running && state == RaftState.CANDIDATE && currentTerm == electionTerm) {
+                    becomeLeaderLocked();
+                    persistStateLocked(true);
+                }
+            }
+            return;
+        }
+        java.util.concurrent.atomic.AtomicInteger votes = new java.util.concurrent.atomic.AtomicInteger(1);
         for (String peer : transport.peerIds()) {
             if (peer.equals(id)) {
                 continue;
             }
-            try {
-                responses.add(transport.requestVote(peer, request)
-                        .get(RPC_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS));
-            } catch (Exception ignored) {
-                // 网络失败视为未投票
-            }
-        }
-        synchronized (lock) {
-            int votes = 1;
-            for (VoteResponse response : responses) {
-                if (response.term() > currentTerm) {
-                    currentTerm = response.term();
-                    votedFor = null;
-                    state = RaftState.FOLLOWER;
-                    persistStateLocked(true);
-                    return;
-                }
-                if (response.granted() && response.term() == currentTerm) {
-                    votes++;
-                }
-            }
-            if (votes > transport.peerIds().size() / 2) {
-                becomeLeaderLocked();
-                persistStateLocked(true);
-            }
+            transport.requestVote(peer, request)
+                    .orTimeout(RPC_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+                    .whenComplete((response, error) -> {
+                        if (error != null || response == null) {
+                            return;
+                        }
+                        synchronized (lock) {
+                            if (!running) {
+                                return;
+                            }
+                            if (response.term() > currentTerm) {
+                                currentTerm = response.term();
+                                votedFor = null;
+                                state = RaftState.FOLLOWER;
+                                persistStateLocked(true);
+                                return;
+                            }
+                            if (state != RaftState.CANDIDATE || currentTerm != electionTerm) {
+                                return;
+                            }
+                            if (response.granted() && response.term() == electionTerm
+                                    && votes.incrementAndGet() >= quorum) {
+                                becomeLeaderLocked();
+                                persistStateLocked(true);
+                            }
+                        }
+                    });
         }
     }
 
@@ -733,18 +757,18 @@ public final class RaftNode implements AutoCloseable {
 
     private void onReplicationResponse(PeerCall call, AppendEntriesResponse response,
                                        Throwable error, long sentAt) {
-        if (replicationController != null) {
-            replicationController.recordRttNanos(System.nanoTime() - sentAt);
-            long maxMatch = replication.matchIndexSnapshot().values().stream()
-                    .mapToLong(Long::longValue).max().orElse(-1);
-            replicationController.setPendingEntries(Math.max(0, lastLogIndex() - maxMatch));
-        }
         AppendEntriesResponse result = response != null
                 ? response : new AppendEntriesResponse(0, false, 0);
         synchronized (lock) {
             replication.onResponse(call.peer());
             applyReplicationResultLocked(call, result);
             maybeCommitLocked();
+            if (replicationController != null) {
+                replicationController.recordRttNanos(System.nanoTime() - sentAt);
+                long maxMatch = replication.matchIndexSnapshot().values().stream()
+                        .mapToLong(Long::longValue).max().orElse(-1);
+                replicationController.setPendingEntries(Math.max(0, lastLogIndex() - maxMatch));
+            }
         }
         notifyCommit();
         // 不在此处同步 flush：本地传输的 future 立即完成会触发
@@ -890,21 +914,22 @@ public final class RaftNode implements AutoCloseable {
                     if (error != null || response == null) {
                         return;
                     }
-                    if (response.term() > currentTerm()) {
-                        synchronized (lock) {
-                            stepDownLocked(response.term());
+                    synchronized (lock) {
+                        if (!running) {
+                            return;
                         }
-                        return;
-                    }
-                    if (!response.success()) {
-                        // 日志不匹配：回退 nextIndex，使后续数据 flush 回填
-                        // （Phase 16 混沌发现：新 leader 以非空日志当选后，
-                        //  无新写入时滞后副本永远无法追平）
-                        synchronized (lock) {
-                            if (running && state == RaftState.LEADER) {
+                        if (response.term() > currentTerm) {
+                            stepDownLocked(response.term());
+                            return;
+                        }
+                        if (!response.success()) {
+                            // 日志不匹配：回退 nextIndex，使后续数据 flush 回填
+                            if (state == RaftState.LEADER) {
                                 replication.onFailure(call.peer());
                             }
                         }
+                    }
+                    if (!response.success()) {
                         flushReplication();
                     }
                 });
@@ -1022,6 +1047,7 @@ public final class RaftNode implements AutoCloseable {
             if (state == RaftState.LEADER) {
                 state = RaftState.FOLLOWER;
             }
+            pendingCommits.clear();
         }
         scheduler.shutdownNow();
         flushScheduler.shutdownNow();
