@@ -9,7 +9,9 @@ cd "$(dirname "$0")/.."
 COMPOSE="docker compose -f deploy/docker-compose.transaction.yml"
 
 run_harness() {
-  java -cp target/classes \
+  local jar
+  jar=$(ls tiering-cluster/target/tiering-cluster-*-shaded.jar | head -n1)
+  java -cp "$jar" \
     io.tieringkv.distributed.harness.VerificationHarness \
     "$1" "$2" resp 127.0.0.1 6379
 }
@@ -19,7 +21,7 @@ case "${1:-run}" in
     mkdir -p target
     REPORT=target/multi-cluster-failover-report.txt
     : > "$REPORT"
-    mvn -q -DskipTests compile
+    mvn -pl tiering-cluster -am -q -DskipTests package
 
     echo "== primary cluster up ==" | tee -a "$REPORT"
     $COMPOSE up -d --wait >> "$REPORT" 2>&1
