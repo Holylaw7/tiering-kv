@@ -34,6 +34,7 @@ services:
     working_dir: /app
     ports:
       - "6379:6379"
+      - "9100:9100"
     volumes:
       - ../../config:/app/config:ro
       - core-data:/app/data

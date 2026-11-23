@@ -20,7 +20,8 @@ public record TieringConfig(
         Gc gc,
         Txn txn,
         Storage storage,
-        Vector vector) {
+        Vector vector,
+        Observability observability) {
 
     public TieringConfig(
             Server server,
@@ -32,7 +33,22 @@ public record TieringConfig(
             Gc gc,
             Txn txn) {
         this(server, workers, memory, wal, cache, tiering, gc, txn,
-                Storage.defaults(), Vector.defaults());
+                Storage.defaults(), Vector.defaults(), Observability.defaults());
+    }
+
+    public TieringConfig(
+            Server server,
+            Workers workers,
+            Memory memory,
+            Wal wal,
+            Cache cache,
+            Tiering tiering,
+            Gc gc,
+            Txn txn,
+            Storage storage,
+            Vector vector) {
+        this(server, workers, memory, wal, cache, tiering, gc, txn,
+                storage, vector, Observability.defaults());
     }
 
     public record Server(
@@ -130,6 +146,12 @@ public record TieringConfig(
         }
     }
 
+    public record Observability(int managementPort, long slowLogThresholdMicros, int slowLogMaxLen) {
+        public static Observability defaults() {
+            return new Observability(9100, 10_000L, 128);
+        }
+    }
+
     public static TieringConfig defaults() {
         return new TieringConfig(
                 new Server("0.0.0.0", 6379),
@@ -141,7 +163,8 @@ public record TieringConfig(
                 new Gc(4096, 4, 64L << 20),
                 new Txn(60, 300),
                 Storage.defaults(),
-                Vector.defaults());
+                Vector.defaults(),
+                Observability.defaults());
     }
 
     /** 启动前置校验：拒绝明显非法的水位、内存、WAL 与向量层级配置。 */
@@ -193,6 +216,7 @@ public record TieringConfig(
             Map<String, Object> txn = map(root.get("txn"));
             Map<String, Object> storage = map(root.get("storage"));
             Map<String, Object> vector = map(root.get("vector"));
+            Map<String, Object> obs = map(root.get("observability"));
 
             String password = str(server.get("password"), null);
             if (password == null || password.isBlank()) {
@@ -254,7 +278,11 @@ public record TieringConfig(
                     new Txn(num(txn.get("ttl-seconds"), base.txn().ttlSeconds()),
                             num(txn.get("max-duration-seconds"), base.txn().maxDurationSeconds())),
                     resolvedStorage,
-                    resolvedVector);
+                    resolvedVector,
+                    new Observability(
+                            num(obs.get("management-port"), base.observability().managementPort()),
+                            num(obs.get("slowlog-threshold-micros"), base.observability().slowLogThresholdMicros()),
+                            num(obs.get("slowlog-max-len"), base.observability().slowLogMaxLen())));
         } catch (IOException | RuntimeException e) {
             return defaults();
         }

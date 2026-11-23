@@ -16,9 +16,11 @@ import io.tieringkv.lifecycle.ShutdownManager;
 import io.tieringkv.memory.MemoryPool;
 import io.tieringkv.monitor.MetricsRegistry;
 import io.tieringkv.observability.BackupMetricsRegistry;
+import io.tieringkv.observability.ManagementHttpServer;
 import io.tieringkv.observability.MultiModelMetricsRegistry;
 import io.tieringkv.observability.ObservabilityRegistry;
 import io.tieringkv.observability.ServerInfoProvider;
+import io.tieringkv.observability.SlowLog;
 import io.tieringkv.observability.SstableInfoRenderer;
 import io.tieringkv.observability.ReplicationMetricsRegistry;
 import io.tieringkv.observability.VectorMetricsRegistry;
@@ -200,13 +202,16 @@ public final class Main {
                 .timeout(serverOptions::idleTimeoutSeconds, serverOptions::setIdleTimeoutSeconds)
                 .requirePass(aclPolicy::requiresAuthForAnonymous, aclPolicy::configureRequirePass)
                 .build();
+        SlowLog slowLog = new SlowLog(
+                config.observability().slowLogThresholdMicros(),
+                config.observability().slowLogMaxLen());
         CommandEngine commandEngine = new CommandEngine(
                 CommandRegistry.createDefaultWithRuntime(
                         serverInfo::render, Map.copyOf(infoSections),
                         VectorCollectionRegistry.ofDefault(vectorStore),
                         observability.multimodel(), observability.vector(),
-                        aclPolicy, runtimeConfig),
-                syncStorage, executor, memoryManager::isOverLimit, aclPolicy);
+                        aclPolicy, runtimeConfig, slowLog),
+                syncStorage, executor, memoryManager::isOverLimit, aclPolicy, slowLog);
         // 必须复用同一个 MetricsRegistry：否则 INFO 读取的实例与服务端
         // 实际埋点的实例不是同一个，qps/连接数会恒为 0（TD-082）
         TieringKvServer server = new TieringKvServer(
@@ -214,6 +219,20 @@ public final class Main {
                 commandEngine,
                 metrics,
                 serverOptions);
+        ManagementHttpServer managementHttp = null;
+        if (config.observability().managementPort() > 0) {
+            managementHttp = new ManagementHttpServer(
+                    srv.host(),
+                    config.observability().managementPort(),
+                    metrics,
+                    tiering.metrics(),
+                    blockCache.statistics()::snapshot,
+                    observability,
+                    slowLog);
+            managementHttp.start();
+            System.out.println("Tiering-KV management HTTP listening on " + managementHttp.boundPort()
+                    + " (/healthz, /readyz, /metrics)");
+        }
         AutoCloseable vectorCloser = () -> {
             if (vectorCheckpointer != null) {
                 vectorCheckpointer.shutdownNow();
@@ -225,7 +244,7 @@ public final class Main {
         };
         ShutdownManager shutdownManager = new ShutdownManager(
                 server, metrics, walManager, memTable, config.tiering().drainTimeoutMillis(),
-                vectorCloser, executor, tiering, cold, walManager);
+                managementHttp, vectorCloser, executor, tiering, cold, walManager);
         server.start();
         System.out.println("Tiering-KV listening on " + server.boundPort());
         Runtime.getRuntime().addShutdownHook(new Thread(shutdownManager::shutdown));

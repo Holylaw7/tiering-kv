@@ -34,7 +34,7 @@ public final class AclPolicy {
             "publish", "subscribe", "unsubscribe", "psubscribe", "punsubscribe");
 
     private static final Set<String> ADMIN_COMMANDS = Set.of(
-            "acl", "config", "client", "command", "info",
+            "acl", "config", "client", "command", "info", "slowlog",
             "flushdb", "flushall", "shutdown",
             "script", "eval", "evalsha", "vector.checkpoint");
 

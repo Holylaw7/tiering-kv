@@ -164,6 +164,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/backups/capacity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["capacity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backups/purge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["purge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backups/retention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["retention"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/backups/{id}": {
         parameters: {
             query?: never;
@@ -557,6 +605,12 @@ export interface components {
             data?: components["schemas"]["BackupRecord"];
             message?: string;
         };
+        ApiResponseCapacityView: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["CapacityView"];
+            message?: string;
+        };
         ApiResponseInstanceView: {
             /** Format: int32 */
             code?: number;
@@ -642,6 +696,18 @@ export interface components {
             data?: components["schemas"]["PageResultUserView"];
             message?: string;
         };
+        ApiResponsePurgeReport: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["PurgeReport"];
+            message?: string;
+        };
+        ApiResponseRetentionView: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["RetentionView"];
+            message?: string;
+        };
         ApiResponseSystemInfoView: {
             /** Format: int32 */
             code?: number;
@@ -675,6 +741,9 @@ export interface components {
         BackupRecord: {
             /** Format: date-time */
             createdAt?: string;
+            /** Format: date-time */
+            deleteClaimedAt?: string;
+            deleteState?: string;
             fileName?: string;
             /** Format: date-time */
             finishedAt?: string;
@@ -685,10 +754,32 @@ export interface components {
             /** Format: int64 */
             keyCount?: number;
             message?: string;
+            /** Format: date-time */
+            restoreFinishedAt?: string;
+            restoreMessage?: string;
+            /** Format: date-time */
+            restoreStartedAt?: string;
+            /** @enum {string} */
+            restoreStatus?: "NONE" | "RESTORING" | "SUCCEEDED" | "FAILED";
+            /** Format: int64 */
+            restoredKeys?: number;
             /** Format: int64 */
             sizeBytes?: number;
             /** @enum {string} */
             status?: "RUNNING" | "SUCCESS" | "FAILED";
+        };
+        CapacityView: {
+            /** Format: int32 */
+            activeReservations?: number;
+            /** Format: int64 */
+            estimateFloorBytes?: number;
+            /** Format: int64 */
+            minFreeBytes?: number;
+            /** Format: int64 */
+            reservedBytes?: number;
+            storageKey?: string;
+            /** Format: int64 */
+            usableBytes?: number;
         };
         ChangePasswordRequest: {
             newPassword: string;
@@ -941,6 +1032,38 @@ export interface components {
         };
         PasswordResetRequest: {
             password: string;
+        };
+        PurgeReport: {
+            /** Format: int32 */
+            candidates?: number;
+            /** Format: int32 */
+            deleted?: number;
+            /** Format: int32 */
+            failed?: number;
+            /** Format: date-time */
+            finishedAt?: string;
+            /** Format: int32 */
+            instances?: number;
+            /** Format: int32 */
+            orphanRemoved?: number;
+            /** Format: int32 */
+            skipped?: number;
+            /** Format: date-time */
+            startedAt?: string;
+        };
+        RetentionView: {
+            /** Format: int32 */
+            claimTimeoutMinutes?: number;
+            /** Format: int32 */
+            defaultCount?: number;
+            enabled?: boolean;
+            /** Format: int32 */
+            failedDays?: number;
+            /** Format: int64 */
+            intervalMs?: number;
+            lastReport?: components["schemas"]["PurgeReport"];
+            /** Format: int32 */
+            orphanGraceMinutes?: number;
         };
         Server: {
             arch?: string;
@@ -1385,6 +1508,66 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseBackupRecord"];
+                };
+            };
+        };
+    };
+    capacity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseCapacityView"];
+                };
+            };
+        };
+    };
+    purge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePurgeReport"];
+                };
+            };
+        };
+    };
+    retention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseRetentionView"];
                 };
             };
         };

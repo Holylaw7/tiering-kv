@@ -1,6 +1,7 @@
 package io.tieringkv.command;
 
 import io.tieringkv.execution.KeyShardExecutor;
+import io.tieringkv.observability.SlowLog;
 import io.tieringkv.protocol.RespError;
 import io.tieringkv.protocol.RespValue;
 import io.tieringkv.protocol.RespSimpleString;
@@ -35,17 +36,18 @@ public final class CommandEngine {
     private final KeyShardExecutor executor;
     private final java.util.function.BooleanSupplier memoryPressure;
     private final AclPolicy aclPolicy;
+    private final SlowLog slowLog;
 
     public CommandEngine(CommandRegistry registry, StorageEngine storage) {
-        this(registry, storage, null, null, null);
+        this(registry, storage, null, null, null, null);
     }
 
     public CommandEngine(CommandRegistry registry, StorageEngine storage, AclPolicy aclPolicy) {
-        this(registry, storage, null, null, aclPolicy);
+        this(registry, storage, null, null, aclPolicy, null);
     }
 
     public CommandEngine(CommandRegistry registry, StorageEngine storage, KeyShardExecutor executor) {
-        this(registry, storage, executor, null, null);
+        this(registry, storage, executor, null, null, null);
     }
 
     /**
@@ -54,18 +56,27 @@ public final class CommandEngine {
     public CommandEngine(CommandRegistry registry, StorageEngine storage,
                          KeyShardExecutor executor,
                          java.util.function.BooleanSupplier memoryPressure) {
-        this(registry, storage, executor, memoryPressure, null);
+        this(registry, storage, executor, memoryPressure, null, null);
     }
 
     public CommandEngine(CommandRegistry registry, StorageEngine storage,
                          KeyShardExecutor executor,
                          java.util.function.BooleanSupplier memoryPressure,
                          AclPolicy aclPolicy) {
+        this(registry, storage, executor, memoryPressure, aclPolicy, null);
+    }
+
+    public CommandEngine(CommandRegistry registry, StorageEngine storage,
+                         KeyShardExecutor executor,
+                         java.util.function.BooleanSupplier memoryPressure,
+                         AclPolicy aclPolicy,
+                         SlowLog slowLog) {
         this.registry = registry;
         this.storage = storage;
         this.executor = executor;
         this.memoryPressure = memoryPressure;
         this.aclPolicy = aclPolicy;
+        this.slowLog = slowLog;
     }
 
     public RespValue execute(RespCommand command) {
@@ -89,7 +100,15 @@ public final class CommandEngine {
                 && memoryPressure.getAsBoolean()) {
             return new RespError(OOM_ERROR);
         }
-        return handler.execute(command.args(), storage);
+        if (slowLog == null) {
+            return handler.execute(command.args(), storage);
+        }
+        long startNanos = System.nanoTime();
+        try {
+            return handler.execute(command.args(), storage);
+        } finally {
+            slowLog.record(name, command.args(), System.nanoTime() - startNanos);
+        }
     }
 
     private RespError checkAccess(RespCommand command) {

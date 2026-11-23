@@ -68,3 +68,43 @@ jobs:
           path: "*.jfr"
           if-no-files-found: ignore
           retention-days: 7
+
+  console-and-web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Console server tests
+        working-directory: console-server
+        run: mvn -B -q test
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: console-web/package-lock.json
+      - name: Frontend typecheck, build and Vitest
+        working-directory: console-web
+        run: |
+          npm ci
+          npm run build
+          npm test
+      - name: OpenAPI contract drift check
+        working-directory: console-web
+        run: |
+          npm run gen:api
+          git diff --exit-code -- src/api/schema.d.ts ../docs/api/openapi.json
+
+  docker-compose-validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate compose manifests
+        run: |
+          docker compose -f deploy/docker-compose.yml config --quiet
+          docker compose -f deploy/console/docker-compose.yml config --quiet

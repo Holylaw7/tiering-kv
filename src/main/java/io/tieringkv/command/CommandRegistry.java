@@ -2,6 +2,7 @@ package io.tieringkv.command;
 
 import io.tieringkv.pubsub.PubSubBroker;
 import io.tieringkv.observability.MultiModelMetricsRegistry;
+import io.tieringkv.observability.SlowLog;
 import io.tieringkv.observability.VectorMetricsRegistry;
 import io.tieringkv.security.AclPolicy;
 import io.tieringkv.session.ConnectionContext;
@@ -90,6 +91,20 @@ public final class CommandRegistry {
             VectorMetricsRegistry vectorMetrics,
             AclPolicy aclPolicy,
             RuntimeConfigBridge runtimeConfig) {
+        return createDefaultWithRuntime(infoProvider, sections, registry,
+                metrics, vectorMetrics, aclPolicy, runtimeConfig, null);
+    }
+
+    /** 完整运行时接线：附带 SLOWLOG 慢查询命令。 */
+    public static CommandRegistry createDefaultWithRuntime(
+            Supplier<String> infoProvider,
+            Map<String, Supplier<String>> sections,
+            VectorCollectionRegistry registry,
+            MultiModelMetricsRegistry metrics,
+            VectorMetricsRegistry vectorMetrics,
+            AclPolicy aclPolicy,
+            RuntimeConfigBridge runtimeConfig,
+            SlowLog slowLog) {
         List<Command> extra = new java.util.ArrayList<>();
         if (registry != null) {
             extra.addAll(List.of(
@@ -122,6 +137,9 @@ public final class CommandRegistry {
         }
         if (runtimeConfig != null) {
             extra.add(new ConfigCommand(runtimeConfig));
+        }
+        if (slowLog != null) {
+            extra.add(new SlowLogCommand(slowLog));
         }
         return build(infoProvider, sections, extra, aclPolicy);
     }

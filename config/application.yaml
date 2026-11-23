@@ -62,3 +62,9 @@ gc:
 txn:
   ttl-seconds: 60
   max-duration-seconds: 300
+
+observability:
+  # 数据面轻量管理端口（/healthz /readyz /metrics）；<=0 时关闭
+  management-port: 9100
+  slowlog-threshold-micros: 10000
+  slowlog-max-len: 128
