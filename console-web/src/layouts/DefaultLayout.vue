@@ -20,6 +20,7 @@ const GROUP_OF: Record<string, string> = {
   '/terminal': '数据',
   '/instances': '运维',
   '/alerts': '运维',
+  '/slowlog': '运维',
   '/backups': '运维',
   '/audit': '运维',
   '/system': '系统',

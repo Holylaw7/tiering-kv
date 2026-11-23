@@ -89,7 +89,8 @@ public class TerminalService {
             history.setUsername("anonymous");
         }
         history.setInstanceId(instance.getId());
-        history.setCommand(command.length() > 500 ? command.substring(0, 500) : command);
+        String sanitized = redactCommand(command);
+        history.setCommand(sanitized.length() > 500 ? sanitized.substring(0, 500) : sanitized);
         history.setSuccess(success);
         history.setCostMs(costMs);
         history.setReplyType(replyType);
@@ -156,6 +157,92 @@ public class TerminalService {
             tokens.add(current.toString());
         }
         return tokens;
+    }
+
+    /**
+     * 对即将落入 terminal_history 的敏感命令参数脱敏（N2-B）：
+     * 与数据面 SlowLog 保持同一脱敏基线，覆盖 AUTH / HELLO ... AUTH / ACL SETUSER / CONFIG SET requirepass。
+     */
+    public static String redactCommand(String rawCommand) {
+        if (rawCommand == null || rawCommand.isBlank()) {
+            return rawCommand == null ? "" : rawCommand;
+        }
+        List<String> tokens = tokenize(rawCommand);
+        if (tokens.isEmpty()) {
+            return rawCommand;
+        }
+        String cmd = tokens.get(0).toLowerCase(Locale.ROOT);
+        List<String> out = new ArrayList<>(tokens.size());
+        boolean changed = false;
+        switch (cmd) {
+            case "auth" -> {
+                out.add(tokens.get(0));
+                for (int i = 1; i < tokens.size(); i++) {
+                    out.add("<redacted>");
+                    changed = true;
+                }
+            }
+            case "acl" -> {
+                if (tokens.size() >= 2 && "setuser".equalsIgnoreCase(tokens.get(1))) {
+                    out.add(tokens.get(0));
+                    out.add(tokens.get(1));
+                    for (int i = 2; i < tokens.size(); i++) {
+                        out.add("<redacted>");
+                        changed = true;
+                    }
+                } else {
+                    return rawCommand;
+                }
+            }
+            case "config" -> {
+                if (tokens.size() >= 3 && "set".equalsIgnoreCase(tokens.get(1))) {
+                    out.add(tokens.get(0));
+                    out.add(tokens.get(1));
+                    boolean expectValueForRequirePass = false;
+                    for (int i = 2; i < tokens.size(); i++) {
+                        String tok = tokens.get(i);
+                        if (expectValueForRequirePass) {
+                            out.add("<redacted>");
+                            expectValueForRequirePass = false;
+                            changed = true;
+                        } else {
+                            out.add(tok);
+                            if ((i % 2 == 0) && "requirepass".equalsIgnoreCase(tok)) {
+                                expectValueForRequirePass = true;
+                            }
+                        }
+                    }
+                    if (!changed) {
+                        return rawCommand;
+                    }
+                } else {
+                    return rawCommand;
+                }
+            }
+            case "hello" -> {
+                out.add(tokens.get(0));
+                boolean redactRest = false;
+                for (int i = 1; i < tokens.size(); i++) {
+                    String tok = tokens.get(i);
+                    if (redactRest) {
+                        out.add("<redacted>");
+                        changed = true;
+                    } else {
+                        out.add(tok);
+                        if ("auth".equalsIgnoreCase(tok)) {
+                            redactRest = true;
+                        }
+                    }
+                }
+                if (!changed) {
+                    return rawCommand;
+                }
+            }
+            default -> {
+                return rawCommand;
+            }
+        }
+        return String.join(" ", out);
     }
 
     private Object toPayload(RespReply reply) {

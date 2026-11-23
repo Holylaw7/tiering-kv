@@ -2,7 +2,8 @@ import http from './http'
 import type {
   AlertEvent, AlertRule, BackupRecord, CheckpointResult, CheckpointStatusView,
   InstanceView, KeyDetail, KeyScanPage,
-  LoginResponse, OpLog, OverviewView, PageResult, SstableTableView, SystemInfo, TerminalHistory,
+  LoginResponse, OpLog, OverviewView, PageResult, SlowLogView,
+  SstableTableView, SystemInfo, TerminalHistory,
   TerminalResult, TrendPoint, UserView
 } from './types'
 
@@ -115,4 +116,11 @@ export const auditApi = {
   /** 导出 CSV（返回 Blob，由调用方触发下载）。 */
   exportCsv: (params: AuditQuery) =>
     http.get<unknown, Blob>('/audit/export', { params, responseType: 'blob' })
+}
+
+export const slowLogApi = {
+  list: (instanceId: number, limit = 50) =>
+    http.get<unknown, SlowLogView>('/slowlog', { params: { instanceId, limit } }),
+  reset: (instanceId: number) =>
+    http.post<unknown, void>('/slowlog/reset', null, { params: { instanceId } })
 }

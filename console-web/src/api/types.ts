@@ -243,3 +243,18 @@ export interface PageResult<T> {
   page: number
   size: number
 }
+
+export interface SlowLogEntryView {
+  id: number
+  timestampSeconds: number
+  durationMicros: number
+  command: string
+  args: string[]
+}
+
+export interface SlowLogView {
+  supported: boolean
+  totalLen: number
+  entries: SlowLogEntryView[]
+  message?: string
+}

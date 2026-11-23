@@ -20,6 +20,7 @@ const router = createRouter({
         { path: 'keyspace', name: 'keyspace', component: () => import('@/views/KeyspaceView.vue'), meta: { title: '键空间', icon: 'Grid' } },
         { path: 'terminal', name: 'terminal', component: () => import('@/views/TerminalView.vue'), meta: { title: '在线终端', icon: 'Monitor' } },
         { path: 'alerts', name: 'alerts', component: () => import('@/views/AlertsView.vue'), meta: { title: '告警中心', icon: 'Bell' } },
+        { path: 'slowlog', name: 'slowlog', component: () => import('@/views/SlowLogView.vue'), meta: { title: '慢查询日志', icon: 'Timer' } },
         { path: 'backups', name: 'backups', component: () => import('@/views/BackupsView.vue'), meta: { title: '备份恢复', icon: 'Files' } },
         { path: 'audit', name: 'audit', component: () => import('@/views/AuditView.vue'), meta: { title: '审计日志', icon: 'Document' } },
         { path: 'system', name: 'system', component: () => import('@/views/SystemView.vue'), meta: { title: '系统信息', icon: 'Setting' } },
