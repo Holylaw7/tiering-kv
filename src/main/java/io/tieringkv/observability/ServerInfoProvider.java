@@ -75,42 +75,36 @@ public final class ServerInfoProvider {
         Map<String, Supplier<String>> sections = new LinkedHashMap<>();
         sections.put("server", this::server);
         sections.put("clients", this::clients);
-        sections.put("memory", this::memorySection);
+        sections.put("memory", () -> memorySection(prepareSnapshotOrNull()));
         sections.put("stats", this::stats);
         sections.put("keyspace", this::keyspace);
         if (storageMetrics != null) {
-            sections.put("tiering", this::tiering);
+            sections.put("tiering", () -> tiering(prepareSnapshotOrNull()));
         }
         return Map.copyOf(sections);
     }
 
     /** 全量 INFO 文本（CRLF 分隔，与 Redis 一致）。 */
     public String render() {
-        // TD-097：一次渲染只刷新一次 gauge、只取一次快照，避免新旧快照混排
-        storageSnapshot = storageMetrics == null ? null : prepareSnapshot();
-        try {
-            StringBuilder out = new StringBuilder(768);
-            for (Supplier<String> section : sections().values()) {
-                out.append(section.get());
-            }
-            return out.toString();
-        } finally {
-            storageSnapshot = null;
-        }
+        // TD-097：一次渲染只刷新一次 gauge、只取一次快照，避免并发请求互相覆盖共享字段
+        StorageMetrics.Snapshot snapshot = prepareSnapshotOrNull();
+        return String.join("",
+                server(),
+                clients(),
+                memorySection(snapshot),
+                stats(),
+                keyspace(),
+                storageMetrics == null ? "" : tiering(snapshot));
     }
 
-    /** 本次渲染的存储快照（render 期间有效）。 */
-    private StorageMetrics.Snapshot storageSnapshot;
-
-    private StorageMetrics.Snapshot prepareSnapshot() {
+    private StorageMetrics.Snapshot prepareSnapshotOrNull() {
+        if (storageMetrics == null) {
+            return null;
+        }
         if (refreshGauges != null) {
             refreshGauges.run();
         }
         return storageMetrics.snapshot();
-    }
-
-    private StorageMetrics.Snapshot currentSnapshot() {
-        return storageSnapshot != null ? storageSnapshot : storageMetrics.snapshot();
     }
 
     private long uptimeSeconds() {
@@ -141,13 +135,12 @@ public final class ServerInfoProvider {
                 + "active_requests:" + snapshot.activeRequests() + "\r\n";
     }
 
-    private String memorySection() {
+    private String memorySection(StorageMetrics.Snapshot snapshot) {
         Runtime runtime = Runtime.getRuntime();
         MemoryMXBean bean = ManagementFactory.getMemoryMXBean();
         long jvmUsed = bean.getHeapMemoryUsage().getUsed();
         long jvmMax = bean.getHeapMemoryUsage().getMax();
         // 与 # Tiering 取自同一快照，保证一次 INFO 内数值时间一致
-        StorageMetrics.Snapshot snapshot = storageSnapshot;
         long engineUsed = snapshot != null ? snapshot.memoryUsedBytes()
                 : (memory == null ? 0 : memory.usedBytes());
         long engineMax = memory == null ? 0 : memory.maxBytes();
@@ -186,58 +179,47 @@ public final class ServerInfoProvider {
      * 存储分层段落（TD-095）：全部来自 StorageMetrics / CacheStatistics，
      * 不推算、不估算，取不到就是 0。
      */
-    private String tiering() {
-        StorageMetrics.Snapshot snapshot = currentSnapshot();
+    private String tiering(StorageMetrics.Snapshot snapshot) {
+        StorageMetrics.Snapshot effective = snapshot != null ? snapshot : storageMetrics.snapshot();
         CacheStatistics.Snapshot cache = cacheStats == null
                 ? new CacheStatistics.Snapshot(0, 0, 0, 0)
                 : cacheStats.get();
-        long hot = snapshot.memoryUsedBytes();
-        long cold = snapshot.coldDiskUsage();
+        long hot = effective.memoryUsedBytes();
+        long cold = effective.coldDiskUsage();
         long total = hot + cold;
         double coldShare = total == 0 ? 0 : cold / (double) total;
-        long flushTotal = snapshot.flushCount();
+        long flushTotal = effective.flushCount();
         return "# Tiering\r\n"
                 + "tiering_memtable_used_bytes:" + hot + "\r\n"
-                + "tiering_memtable_max_bytes:" + snapshot.memoryMaxBytes() + "\r\n"
-                + "tiering_memtable_entries:" + snapshot.memoryEntryCount() + "\r\n"
-                + "tiering_cold_sstable_count:" + snapshot.coldSstableCount() + "\r\n"
+                + "tiering_memtable_max_bytes:" + effective.memoryMaxBytes() + "\r\n"
+                + "tiering_memtable_entries:" + effective.memoryEntryCount() + "\r\n"
+                + "tiering_cold_sstable_count:" + effective.coldSstableCount() + "\r\n"
                 + "tiering_cold_disk_usage_bytes:" + cold + "\r\n"
                 + "tiering_cold_share:" + String.format(Locale.ROOT, "%.4f", coldShare) + "\r\n"
-                + "tiering_hot_keys:" + snapshot.memoryEntryCount() + "\r\n"
-                + "tiering_cold_entries:" + snapshot.coldEntryCount() + "\r\n"
-                + "tiering_cold_pending_entries:" + coldPendingEntries() + "\r\n"
-                + "tiering_cold_pending_bytes:" + coldPendingBytes() + "\r\n"
-                + "tiering_hot_key_share:" + String.format(Locale.ROOT, "%.4f", hotKeyShare(snapshot)) + "\r\n"
+                + "tiering_hot_keys:" + effective.memoryEntryCount() + "\r\n"
+                + "tiering_cold_entries:" + effective.coldEntryCount() + "\r\n"
+                + "tiering_cold_pending_entries:" + effective.coldPendingEntries() + "\r\n"
+                + "tiering_cold_pending_bytes:" + effective.coldPendingBytes() + "\r\n"
+                + "tiering_hot_key_share:" + String.format(Locale.ROOT, "%.4f", hotKeyShare(effective)) + "\r\n"
                 + "tiering_flush_count:" + flushTotal + "\r\n"
-                + "tiering_flush_bytes:" + snapshot.flushBytes() + "\r\n"
-                + "tiering_migration_pending:" + snapshot.migrationPending() + "\r\n"
-                + "tiering_migration_success:" + snapshot.migrationSuccess() + "\r\n"
-                + "tiering_migration_failed:" + snapshot.migrationFailed() + "\r\n"
+                + "tiering_flush_bytes:" + effective.flushBytes() + "\r\n"
+                + "tiering_migration_pending:" + effective.migrationPending() + "\r\n"
+                + "tiering_migration_success:" + effective.migrationSuccess() + "\r\n"
+                + "tiering_migration_failed:" + effective.migrationFailed() + "\r\n"
                 + "tiering_block_cache_hits:" + cache.hits() + "\r\n"
                 + "tiering_block_cache_misses:" + cache.misses() + "\r\n"
                 + "tiering_block_cache_evictions:" + cache.evictions() + "\r\n"
-                + "tiering_compaction_count:" + snapshot.compactionCount() + "\r\n"
-                + "tiering_compaction_input_bytes:" + snapshot.compactionInputBytes() + "\r\n"
-                + "tiering_compaction_output_bytes:" + snapshot.compactionOutputBytes() + "\r\n"
+                + "tiering_compaction_count:" + effective.compactionCount() + "\r\n"
+                + "tiering_compaction_input_bytes:" + effective.compactionInputBytes() + "\r\n"
+                + "tiering_compaction_output_bytes:" + effective.compactionOutputBytes() + "\r\n"
                 + "tiering_compaction_latency_ms:"
-                + String.format(Locale.ROOT, "%.3f", snapshot.compactionCount() == 0 ? 0
-                        : snapshot.compactionLatencyNanos() / (double) snapshot.compactionCount() / 1_000_000.0)
+                + String.format(Locale.ROOT, "%.3f", effective.compactionCount() == 0 ? 0
+                        : effective.compactionLatencyNanos() / (double) effective.compactionCount() / 1_000_000.0)
                 + "\r\n"
-                + "tiering_flush_in_progress:" + snapshot.flushInProgress() + "\r\n"
-                + "tiering_compaction_in_progress:" + snapshot.compactionInProgress() + "\r\n"
+                + "tiering_flush_in_progress:" + effective.flushInProgress() + "\r\n"
+                + "tiering_compaction_in_progress:" + effective.compactionInProgress() + "\r\n"
                 + "tiering_block_cache_hit_rate:"
                 + String.format(Locale.ROOT, "%.4f", cache.hitRate()) + "\r\n";
-    }
-
-    /** 冷层 pending 条目数（F1/B1 观测盲区补充）；快照缺失时返回 0。 */
-    private long coldPendingEntries() {
-        StorageMetrics.Snapshot snapshot = storageSnapshot;
-        return snapshot == null ? 0 : snapshot.coldPendingEntries();
-    }
-
-    private long coldPendingBytes() {
-        StorageMetrics.Snapshot snapshot = storageSnapshot;
-        return snapshot == null ? 0 : snapshot.coldPendingBytes();
     }
 
     /** 热层键占（热 + 冷表条目）的比例，用于前端键分布条。 */

@@ -96,7 +96,7 @@ public final class RespDecoder extends ByteToMessageDecoder {
         if (length < -1 || length > MAX_ARRAY_LENGTH) {
             throw new RespProtocolException("invalid multibulk length");
         }
-        List<RespValue> values = new ArrayList<>((int) length);
+        List<RespValue> values = new ArrayList<>((int) Math.min(length, 64));
         for (int i = 0; i < length; i++) {
             values.add(parseValue(in));
         }

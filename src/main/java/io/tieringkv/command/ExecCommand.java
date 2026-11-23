@@ -6,7 +6,9 @@ import io.tieringkv.protocol.RespNull;
 import io.tieringkv.protocol.RespValue;
 import io.tieringkv.session.ConnectionContext;
 import io.tieringkv.storage.AtomicStringOps;
+import io.tieringkv.storage.AtomicStringOps;
 import io.tieringkv.storage.StorageEngine;
+import io.tieringkv.storage.types.ByteArrayKey;
 import io.tieringkv.transaction.ExecJournal;
 
 import java.util.ArrayDeque;
@@ -59,7 +61,7 @@ public final class ExecCommand implements Command {
         context.unwatchAll();
         CommandEngine engine = new CommandEngine(registry, storage);
         List<RespValue> results = new ArrayList<>();
-        Map<byte[], byte[]> oldValues = snapshot(queue, storage);
+        Map<ByteArrayKey, SnapshotEntry> oldValues = snapshot(queue, storage);
         boolean failed = false;
         for (RespCommand command : queue) {
             RespValue result = engine.execute(command);
@@ -80,32 +82,49 @@ public final class ExecCommand implements Command {
         return new RespArray(results);
     }
 
-    private static Map<byte[], byte[]> snapshot(
+    private record SnapshotEntry(byte[] value, long ttlMillis) { }
+
+    private static Map<ByteArrayKey, SnapshotEntry> snapshot(
             List<RespCommand> queue, StorageEngine storage) {
-        Map<byte[], byte[]> old = new LinkedHashMap<>();
+        Map<ByteArrayKey, SnapshotEntry> old = new LinkedHashMap<>();
         for (RespCommand command : queue) {
             if (command.name().equals("mset")
                     || command.name().equals("msetnx")) {
                 for (int i = 0; i < command.args().size();
                      i += 2) {
-                    byte[] key = command.args().get(i);
-                    old.putIfAbsent(key, storage.get(key));
+                    putSnapshotIfAbsent(old, command.args().get(i), storage);
                 }
             } else if (!command.args().isEmpty()) {
-                byte[] key = command.args().get(0);
-                old.putIfAbsent(key, storage.get(key));
+                putSnapshotIfAbsent(old, command.args().get(0), storage);
             }
         }
         return old;
     }
 
-    private static void rollback(Map<byte[], byte[]> old,
+    private static void putSnapshotIfAbsent(Map<ByteArrayKey, SnapshotEntry> old,
+                                            byte[] rawKey,
+                                            StorageEngine storage) {
+        ByteArrayKey key = new ByteArrayKey(rawKey);
+        if (!old.containsKey(key)) {
+            byte[] value = storage.get(key.data());
+            long ttl = (value != null && storage instanceof AtomicStringOps atomic)
+                    ? atomic.ttlMillis(key.data())
+                    : -1L;
+            old.put(key, new SnapshotEntry(value, ttl));
+        }
+    }
+
+    private static void rollback(Map<ByteArrayKey, SnapshotEntry> old,
                                  StorageEngine storage) {
-        for (Map.Entry<byte[], byte[]> entry : old.entrySet()) {
-            if (entry.getValue() == null) {
-                storage.delete(entry.getKey());
+        for (Map.Entry<ByteArrayKey, SnapshotEntry> entry : old.entrySet()) {
+            byte[] key = entry.getKey().data();
+            SnapshotEntry snap = entry.getValue();
+            if (snap.value() == null) {
+                storage.delete(key);
+            } else if (snap.ttlMillis() > 0) {
+                storage.put(key, snap.value(), snap.ttlMillis());
             } else {
-                storage.put(entry.getKey(), entry.getValue());
+                storage.put(key, snap.value());
             }
         }
     }

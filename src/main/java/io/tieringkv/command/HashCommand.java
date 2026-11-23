@@ -80,11 +80,19 @@ public final class HashCommand implements Command {
             }
             Map<ByteArrayKey, byte[]> fields =
                     loadHash(storage, args.get(0));
+            List<Map.Entry<ByteArrayKey, byte[]>> sorted =
+                    new ArrayList<>(fields.entrySet());
+            sorted.sort((a, b) -> java.util.Arrays.compareUnsigned(
+                    a.getKey().data(), b.getKey().data()));
+            int from = cursor <= 0 ? 0 : (int) Math.min(cursor, sorted.size());
+            int to = Math.min(sorted.size(), from + count);
+            java.util.regex.Pattern compiled = match == null
+                    ? null : ScanCommand.compileGlob(match);
             List<RespValue> flat = new ArrayList<>();
-            for (Map.Entry<ByteArrayKey, byte[]> entry
-                    : fields.entrySet()) {
-                boolean matches = match == null
-                        || ScanCommand.globMatches(match,
+            for (int i = from; i < to; i++) {
+                Map.Entry<ByteArrayKey, byte[]> entry = sorted.get(i);
+                boolean matches = compiled == null
+                        || ScanCommand.globMatches(compiled,
                         entry.getKey().data());
                 if (matches) {
                     flat.add(new RespBulkString(
@@ -93,8 +101,9 @@ public final class HashCommand implements Command {
                             entry.getValue()));
                 }
             }
+            long next = to < sorted.size() ? to : 0L;
             return new RespArray(List.of(
-                    new RespBulkString(CommandUtil.bytes(0)),
+                    new RespBulkString(CommandUtil.bytes(next)),
                     new RespArray(flat)));
         } catch (NumberFormatException e) {
             return new RespError(CommandUtil.NOT_INTEGER);
@@ -160,7 +169,13 @@ public final class HashCommand implements Command {
                     removed++;
                 }
             }
-            saveHash(storage, key, fields);
+            if (removed > 0) {
+                if (fields.isEmpty()) {
+                    storage.delete(key);
+                } else {
+                    saveHash(storage, key, fields);
+                }
+            }
             return new RespInteger(removed);
         } catch (TypeSupport.WrongTypeException e) {
             return TypeSupport.wrongType();

@@ -53,54 +53,69 @@ public final class ListCommand implements Command {
         };
     }
 
-    private RespValue blockingPop(List<byte[]> args,
-                                  StorageEngine storage,
-                                  boolean left) {
+    record BlockingPopSpec(List<byte[]> keys, long timeoutMillis, boolean left, RespError error) { }
+
+    static BlockingPopSpec parseBlockingSpec(String commandName, List<byte[]> args) {
         if (args.size() < 2) {
-            return RespError.wrongArity(name);
+            return new BlockingPopSpec(List.of(), 0, true, RespError.wrongArity(commandName));
         }
         try {
             long timeout = Math.multiplyExact(
-                    CommandUtil.parseLong(
-                            args.get(args.size() - 1)), 1000);
+                    CommandUtil.parseLong(args.get(args.size() - 1)), 1000L);
             if (timeout < 0) {
-                return new RespError("ERR timeout is negative");
+                return new BlockingPopSpec(List.of(), 0, true,
+                        new RespError("ERR timeout is negative"));
             }
-            List<byte[]> keys = args.subList(0,
-                    args.size() - 1);
-            for (byte[] key : keys) {
-                RespValue popped = popSingle(storage, key, left);
+            List<byte[]> keys = args.subList(0, args.size() - 1);
+            boolean left = "blpop".equals(commandName);
+            return new BlockingPopSpec(keys, timeout, left, null);
+        } catch (NumberFormatException | ArithmeticException e) {
+            return new BlockingPopSpec(List.of(), 0, true, new RespError(CommandUtil.NOT_INTEGER));
+        }
+    }
+
+    RespValue tryBlockingPopNow(BlockingPopSpec spec, StorageEngine storage) {
+        try {
+            for (byte[] key : spec.keys()) {
+                RespValue popped = popSingle(storage, key, spec.left());
                 if (popped != RespNull.BULK_STRING) {
                     return new RespArray(List.of(
                             new RespBulkString(key), popped));
                 }
             }
-            long deadline = timeout == 0
-                    ? Long.MAX_VALUE
-                    : System.currentTimeMillis() + timeout;
-            while (System.currentTimeMillis() < deadline) {
-                long remaining = deadline == Long.MAX_VALUE
-                        ? 50 : deadline - System.currentTimeMillis();
-                for (byte[] key : keys) {
-                    BlockingListNotifier.awaitPush(key,
-                            Math.min(remaining, 50));
-                    RespValue popped = popSingle(storage, key,
-                            left);
-                    if (popped != RespNull.BULK_STRING) {
-                        return new RespArray(List.of(
-                                new RespBulkString(key), popped));
-                    }
-                }
-                if (deadline == Long.MAX_VALUE) {
-                    continue;
-                }
-            }
-            return RespNull.ARRAY;
-        } catch (NumberFormatException e) {
-            return new RespError(CommandUtil.NOT_INTEGER);
+            return null;
         } catch (TypeSupport.WrongTypeException e) {
             return TypeSupport.wrongType();
         }
+    }
+
+    private RespValue blockingPop(List<byte[]> args,
+                                  StorageEngine storage,
+                                  boolean left) {
+        BlockingPopSpec spec = parseBlockingSpec(name, args);
+        if (spec.error() != null) {
+            return spec.error();
+        }
+        RespValue immediate = tryBlockingPopNow(spec, storage);
+        if (immediate != null) {
+            return immediate;
+        }
+        long deadline = spec.timeoutMillis() == 0
+                ? Long.MAX_VALUE
+                : System.currentTimeMillis() + spec.timeoutMillis();
+        while (System.currentTimeMillis() < deadline) {
+            long remaining = deadline == Long.MAX_VALUE
+                    ? 50 : deadline - System.currentTimeMillis();
+            if (remaining <= 0) {
+                break;
+            }
+            BlockingListNotifier.awaitAnyPush(spec.keys(), Math.min(remaining, 50));
+            RespValue popped = tryBlockingPopNow(spec, storage);
+            if (popped != null) {
+                return popped;
+            }
+        }
+        return RespNull.ARRAY;
     }
 
     private RespValue linsert(List<byte[]> args,

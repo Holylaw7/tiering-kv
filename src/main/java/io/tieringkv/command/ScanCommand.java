@@ -18,10 +18,12 @@ import java.util.regex.Pattern;
 /** SCAN cursor [COUNT n] [MATCH pattern]：快照游标遍历（ADR-0272）。 */
 public final class ScanCommand implements Command {
 
-    /** 游标状态：有序键快照 + 已返回偏移。 */
-    private record ScanState(List<byte[]> keys, int offset) {
+    /** 游标状态：有序键快照 + 已返回偏移 + 创建时间。 */
+    private record ScanState(List<byte[]> keys, int offset, long createdAtMillis) {
     }
 
+    private static final int MAX_STATES = 1024;
+    private static final long STATE_TTL_MILLIS = 60_000L;
     private static final Map<Long, ScanState> STATES =
             new ConcurrentHashMap<>();
     private static final AtomicLong CURSOR = new AtomicLong();
@@ -55,42 +57,66 @@ public final class ScanCommand implements Command {
             if (count <= 0) {
                 count = DEFAULT_COUNT;
             }
-            ScanState state;
+            long now = System.currentTimeMillis();
+            evictExpiredStates(now);
+            List<byte[]> allKeys;
+            int from;
             if (cursor == 0) {
-                long id = CURSOR.incrementAndGet();
-                state = new ScanState(snapshotKeys(storage), 0);
-                STATES.put(id, state);
-                cursor = id;
+                allKeys = snapshotKeys(storage);
+                from = 0;
             } else {
-                state = STATES.get(cursor);
-                if (state == null) {
+                ScanState state = STATES.remove(cursor);
+                if (state == null || now - state.createdAtMillis() > STATE_TTL_MILLIS) {
                     return new RespArray(List.of(
                             new RespBulkString(
                                     CommandUtil.bytes(0)),
                             new RespArray(List.of())));
                 }
+                allKeys = state.keys();
+                from = state.offset();
             }
+            Pattern compiled = match == null ? null : compileGlob(match);
             List<RespValue> keys = new ArrayList<>();
-            int from = state.offset();
-            int to = Math.min(state.keys().size(), from + count);
+            int to = Math.min(allKeys.size(), from + count);
             for (int i = from; i < to; i++) {
-                byte[] key = state.keys().get(i);
-                if (match == null || globMatches(match, key)) {
+                byte[] key = allKeys.get(i);
+                if (compiled == null || globMatches(compiled, key)) {
                     keys.add(new RespBulkString(key));
                 }
             }
-            long next = to < state.keys().size() ? cursor : 0;
-            if (next == 0) {
-                STATES.remove(cursor);
-            } else {
-                STATES.put(cursor, new ScanState(
-                        state.keys(), to));
+            long next = 0;
+            if (to < allKeys.size()) {
+                long id = cursor == 0 ? CURSOR.incrementAndGet() : cursor;
+                evictOldestIfFull();
+                STATES.put(id, new ScanState(allKeys, to, now));
+                next = id;
             }
             return new RespArray(List.of(
                     new RespBulkString(CommandUtil.bytes(next)),
                     new RespArray(keys)));
         } catch (NumberFormatException e) {
             return new RespError(CommandUtil.NOT_INTEGER);
+        }
+    }
+
+    private static void evictExpiredStates(long now) {
+        STATES.entrySet().removeIf(e -> now - e.getValue().createdAtMillis() > STATE_TTL_MILLIS);
+    }
+
+    private static void evictOldestIfFull() {
+        while (STATES.size() >= MAX_STATES) {
+            Long oldestKey = null;
+            long oldestTs = Long.MAX_VALUE;
+            for (Map.Entry<Long, ScanState> entry : STATES.entrySet()) {
+                if (entry.getValue().createdAtMillis() < oldestTs) {
+                    oldestTs = entry.getValue().createdAtMillis();
+                    oldestKey = entry.getKey();
+                }
+            }
+            if (oldestKey == null) {
+                break;
+            }
+            STATES.remove(oldestKey);
         }
     }
 
@@ -105,11 +131,18 @@ public final class ScanCommand implements Command {
         return keys;
     }
 
-    static boolean globMatches(String pattern, byte[] key) {
+    static Pattern compileGlob(String pattern) {
+        return Pattern.compile(globToRegex(pattern), Pattern.DOTALL);
+    }
+
+    static boolean globMatches(Pattern compiled, byte[] key) {
         String text = new String(key,
                 java.nio.charset.StandardCharsets.UTF_8);
-        return Pattern.compile(globToRegex(pattern))
-                .matcher(text).matches();
+        return compiled.matcher(text).matches();
+    }
+
+    static boolean globMatches(String pattern, byte[] key) {
+        return globMatches(compileGlob(pattern), key);
     }
 
     static String globToRegex(String pattern) {

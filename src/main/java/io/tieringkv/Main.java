@@ -35,6 +35,7 @@ import io.tieringkv.storage.tiering.TieringController;
 import io.tieringkv.storage.tiering.TieringReadStorageEngine;
 import io.tieringkv.storage.tiering.TieringStorageEngine;
 import io.tieringkv.storage.tiering.WatermarkManager;
+import io.tieringkv.storage.wal.CheckpointManager;
 import io.tieringkv.storage.wal.RecoveryManager;
 import io.tieringkv.storage.wal.WALConfig;
 import io.tieringkv.storage.wal.WALManager;
@@ -63,7 +64,14 @@ public final class Main {
         WALManager walManager = new WALManager(new WALConfig(
                 Path.of("./data/wal"), config.wal().maxSegmentBytes(),
                 WALConfig.FsyncPolicy.valueOf(config.wal().fsyncPolicy())));
-        RecoveryManager.RecoveryStats stats = walManager.recover(memTable);
+        CheckpointManager.Checkpoint checkpoint = walManager.loadCheckpoint();
+        RecoveryManager.RecoveryStats stats;
+        if (checkpoint != null) {
+            CheckpointManager.restore(memTable, checkpoint);
+            stats = walManager.recoverFrom(memTable, checkpoint.segmentSequence(), checkpoint.offset());
+        } else {
+            stats = walManager.recover(memTable);
+        }
         System.out.printf("WAL recovery: scanned=%d applied=%d segments=%d%n",
                 stats.recordsScanned(), stats.recordsApplied(), stats.segmentsReplayed());
         MemoryPool memoryPool = new MemoryPool();
@@ -145,7 +153,8 @@ public final class Main {
                 commandEngine,
                 metrics);
         ShutdownManager shutdownManager = new ShutdownManager(
-                server, metrics, walManager, memTable, config.tiering().drainTimeoutMillis());
+                server, metrics, walManager, memTable, config.tiering().drainTimeoutMillis(),
+                executor, tiering, cold, walManager);
         server.start();
         System.out.println("Tiering-KV listening on " + server.boundPort());
         Runtime.getRuntime().addShutdownHook(new Thread(shutdownManager::shutdown));
