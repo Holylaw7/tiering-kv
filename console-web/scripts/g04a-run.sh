@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 ROOT=/mnt/e/学习/Mini-redis项目/tiering-kv
-cp -f "$ROOT/target/tiering-kv-5.1.0-shaded.jar" /tmp/kernel.jar
+cp -f "$ROOT/tiering-cluster/target/tiering-cluster-5.1.0-shaded.jar" /tmp/kernel.jar
 cp -f "$ROOT/console-server/target/tiering-kv-console-5.1.0.jar" /tmp/console.jar
 mkdir -p /tmp/kdata /mnt/tiny/backups
 pkill -f "kernel.jar" 2>/dev/null || true

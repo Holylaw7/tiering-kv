@@ -110,7 +110,7 @@ jobs:
           name: container-e2e-evidence
           path: |
             docker-compose.log
-            target/surefire-reports
+            "*/target/surefire-reports"
           if-no-files-found: ignore
           retention-days: 7
       - name: Cleanup

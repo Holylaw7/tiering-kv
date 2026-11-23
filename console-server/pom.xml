@@ -125,6 +125,7 @@
                 <configuration>
                     <!-- 引用 @{argLine} 以接收 JaCoCo agent 参数（TD-104） -->
                     <argLine>@{argLine} -Dfile.encoding=UTF-8</argLine>
+                    <failIfNoSpecifiedTests>false</failIfNoSpecifiedTests>
                 </configuration>
             </plugin>
             <plugin>

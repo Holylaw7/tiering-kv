@@ -49,7 +49,7 @@ jobs:
           java-version: "21"
           cache: maven
       - name: Compile tests
-        run: mvn -B -q test-compile
+        run: mvn -B -q process-test-classes
       - name: Build shard test list
         run: |
           scripts/shard-tests.sh ${{ matrix.shard }} 3 > /tmp/shard-tests.txt
@@ -64,7 +64,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: surefire-reports-shard-${{ matrix.shard }}
-          path: target/surefire-reports
+          path: "*/target/surefire-reports"
           if-no-files-found: ignore
           retention-days: 7
 
@@ -137,7 +137,8 @@ jobs:
           docker push ghcr.io/holylaw7/tiering-kv:${GITHUB_REF_NAME}
       - name: Checksums
         run: |
-          find target -name '*.jar' -exec sha256sum {} + > target/checksums.sha256
+          find . -path '*/target/*.jar' ! -path './console-web/*' ! -name 'original-*' -exec sha256sum {} + > target-checksums.sha256
+          mkdir -p target && mv target-checksums.sha256 target/checksums.sha256
           cat target/checksums.sha256
       - name: Generate release notes
         run: |

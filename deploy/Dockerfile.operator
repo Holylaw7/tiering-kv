@@ -1,0 +1,28 @@
+FROM maven:3.9-eclipse-temurin-21 AS build
+WORKDIR /build
+COPY deploy/maven-settings.xml /tmp/maven-settings.xml
+COPY pom.xml .
+COPY tiering-protocol/pom.xml tiering-protocol/pom.xml
+COPY tiering-storage/pom.xml tiering-storage/pom.xml
+COPY tiering-server/pom.xml tiering-server/pom.xml
+COPY tiering-cluster/pom.xml tiering-cluster/pom.xml
+COPY tiering-operator/pom.xml tiering-operator/pom.xml
+COPY console-server/pom.xml console-server/pom.xml
+COPY tiering-protocol/src tiering-protocol/src
+COPY tiering-storage/src tiering-storage/src
+COPY tiering-server/src tiering-server/src
+COPY tiering-cluster/src tiering-cluster/src
+COPY tiering-operator/src tiering-operator/src
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn -s /tmp/maven-settings.xml -pl tiering-operator -am -q -DskipTests package
+RUN set -e; \
+    jar=$(ls tiering-operator/target/tiering-operator-*-shaded.jar 2>/dev/null | head -n1); \
+    test -n "$jar"; \
+    cp "$jar" /tmp/tiering-operator.jar
+
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+RUN groupadd -r tiering && useradd -r -g tiering tiering
+COPY --from=build /tmp/tiering-operator.jar /app/tiering-operator.jar
+USER tiering
+ENTRYPOINT ["java", "-Xmx512m", "-jar", "/app/tiering-operator.jar"]

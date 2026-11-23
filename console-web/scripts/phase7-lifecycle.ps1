@@ -1,11 +1,16 @@
-# Phase 7 生命周期验收：空实例 → 写入 → Flush → 冷读 → Compaction → 重启
+﻿# Phase 7 生命周期验收：空实例 → 写入 → Flush → 冷读 → Compaction → 重启
 # 用法：pwsh -File scripts/phase7-lifecycle.ps1
 $ErrorActionPreference = 'Stop'
 $repo = Resolve-Path (Join-Path $PSScriptRoot '..\..') | Select-Object -ExpandProperty Path
 . (Join-Path $repo 'scripts\env.ps1') | Out-Null
 $java = Join-Path $env:JAVA_HOME 'bin\java.exe'
 if (-not (Test-Path $java)) { throw "未找到 JDK 21：$java" }
-$jar = Join-Path $repo 'target\tiering-kv-5.1.0.jar'
+$jar = @(
+  (Join-Path $repo 'tiering-server\target\tiering-server-5.1.0-shaded.jar'),
+  (Join-Path $repo 'tiering-cluster\target\tiering-cluster-5.1.0-shaded.jar'),
+  (Join-Path $repo 'target\tiering-kv-5.1.0-shaded.jar')
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (-not $jar) { $jar = Join-Path $repo 'tiering-server\target\tiering-server-5.1.0-shaded.jar' }
 $work = Join-Path $env:TEMP 'tk-phase7'
 $port = 6381
 

@@ -29,8 +29,9 @@ case "${1:-run}" in
     REPORT=target/jepsen-report.txt
     : > "$REPORT"
     # GitHub runner 偶发 Maven Central 下载 / BuildKit 瞬时故障
-    # （如 jacoco 插件解析失败）；编译与镜像构建幂等，重试 3 次吸收。
-    retry_n 3 mvn -q -DskipTests compile
+    # （如 jacoco 插件解析失败）；构建幂等，重试 3 次吸收。
+    retry_n 3 mvn -pl tiering-cluster -am -q -DskipTests package
+    HARNESS_CP=$(ls tiering-cluster/target/tiering-cluster-*-shaded.jar | head -n1)
 
     echo "== compose build ==" | tee -a "$REPORT"
     retry_n 3 $COMPOSE build
@@ -42,7 +43,7 @@ case "${1:-run}" in
       echo "== fault injection: $fault ==" | tee -a "$REPORT"
       scripts/container-chaos.sh "$fault" >> "$REPORT" 2>&1 || true
       $COMPOSE up -d --wait >> "$REPORT" 2>&1 || true
-      if java -cp target/classes \
+      if java -cp "$HARNESS_CP" \
           io.tieringkv.distributed.harness.VerificationHarness \
           8 300 >> "$REPORT" 2>&1; then
         echo "linearizability: OK after $fault" | tee -a "$REPORT"
