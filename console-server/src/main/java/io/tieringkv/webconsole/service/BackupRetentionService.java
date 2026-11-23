@@ -9,9 +9,11 @@ import io.tieringkv.webconsole.repository.BackupRecordRepository;
 import io.tieringkv.webconsole.repository.DbInstanceRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -45,15 +47,29 @@ public class BackupRetentionService {
     private final BackupRecordRepository repository;
     private final DbInstanceRepository instanceRepository;
     private final ConsoleProperties properties;
+    private final TransactionTemplate transactionTemplate;
     private final Path directory;
     private final Object lock = new Object();
     private volatile PurgeReport lastReport;
 
     public BackupRetentionService(BackupRecordRepository repository, DbInstanceRepository instanceRepository,
                                   ConsoleProperties properties) {
+        this(repository, instanceRepository, properties, (TransactionTemplate) null);
+    }
+
+    @Autowired
+    public BackupRetentionService(BackupRecordRepository repository, DbInstanceRepository instanceRepository,
+                                  ConsoleProperties properties, PlatformTransactionManager transactionManager) {
+        this(repository, instanceRepository, properties,
+                transactionManager != null ? new TransactionTemplate(transactionManager) : null);
+    }
+
+    private BackupRetentionService(BackupRecordRepository repository, DbInstanceRepository instanceRepository,
+                                   ConsoleProperties properties, TransactionTemplate transactionTemplate) {
         this.repository = repository;
         this.instanceRepository = instanceRepository;
         this.properties = properties;
+        this.transactionTemplate = transactionTemplate;
         this.directory = Paths.get(properties.getBackup().getDir()).toAbsolutePath().normalize();
     }
 
@@ -88,49 +104,40 @@ public class BackupRetentionService {
     }
 
     /** 执行一次清理；同一进程内串行执行，避免定时任务与手工触发重叠。 */
-    @Transactional
     public PurgeReport purge() {
         synchronized (lock) {
-            LocalDateTime started = LocalDateTime.now();
-            int instances = 0;
-            int candidates = 0;
-            int deleted = 0;
-            int failed = 0;
-            int skipped = 0;
-
-            LocalDateTime staleBefore = started.minusMinutes(
-                    properties.getBackup().getRetention().getClaimTimeoutMinutes());
-            repository.releaseStaleClaims(staleBefore);
-
-            for (DbInstance instance : instanceRepository.findAll()) {
-                instances++;
-                List<BackupRecord> records = repository.findByInstanceId(instance.getId());
-                int keep = instance.getBackupRetention() != null
-                        ? instance.getBackupRetention()
-                        : properties.getBackup().getRetention().getDefaultCount();
-                List<BackupRecord> successes = records.stream()
-                        .filter(r -> r.getStatus() == BackupStatus.SUCCESS)
-                        .sorted(Comparator.comparing(BackupRecord::getCreatedAt).reversed())
-                        .toList();
-                // 下标 0 永远保留（最近一个可恢复点），其后按 keep 截断
-                List<BackupRecord> removable = successes.stream().skip(Math.max(keep, 1)).toList();
-                for (BackupRecord record : removable) {
-                    candidates++;
-                    Outcome outcome = retire(record, staleBefore);
-                    if (outcome == Outcome.DELETED) {
-                        deleted++;
-                    } else if (outcome == Outcome.SKIPPED) {
-                        skipped++;
-                    } else {
-                        failed++;
-                    }
-                }
+            if (transactionTemplate != null) {
+                return transactionTemplate.execute(status -> doPurge());
             }
+            return doPurge();
+        }
+    }
 
-            // 失败记录按时间清理（不占 SUCCESS 名额）
-            LocalDateTime failedBefore = started.minusDays(
-                    properties.getBackup().getRetention().getFailedDays());
-            for (BackupRecord record : repository.findByStatusAndCreatedAtBefore(BackupStatus.FAILED, failedBefore)) {
+    private PurgeReport doPurge() {
+        LocalDateTime started = LocalDateTime.now();
+        int instances = 0;
+        int candidates = 0;
+        int deleted = 0;
+        int failed = 0;
+        int skipped = 0;
+
+        LocalDateTime staleBefore = started.minusMinutes(
+                properties.getBackup().getRetention().getClaimTimeoutMinutes());
+        repository.releaseStaleClaims(staleBefore);
+
+        for (DbInstance instance : instanceRepository.findAll()) {
+            instances++;
+            List<BackupRecord> records = repository.findByInstanceId(instance.getId());
+            int keep = instance.getBackupRetention() != null
+                    ? instance.getBackupRetention()
+                    : properties.getBackup().getRetention().getDefaultCount();
+            List<BackupRecord> successes = records.stream()
+                    .filter(r -> r.getStatus() == BackupStatus.SUCCESS)
+                    .sorted(Comparator.comparing(BackupRecord::getCreatedAt).reversed())
+                    .toList();
+            // 下标 0 永远保留（最近一个可恢复点），其后按 keep 截断
+            List<BackupRecord> removable = successes.stream().skip(Math.max(keep, 1)).toList();
+            for (BackupRecord record : removable) {
                 candidates++;
                 Outcome outcome = retire(record, staleBefore);
                 if (outcome == Outcome.DELETED) {
@@ -141,34 +148,49 @@ public class BackupRetentionService {
                     failed++;
                 }
             }
-
-            // 认领后崩溃/删除失败的记录：只有认领超时或文件已消失时才接手，避免与在跑的实例抢删
-            for (BackupRecord record : repository.findByDeleteState(RETIRING)) {
-                boolean stale = record.getDeleteClaimedAt() == null
-                        || record.getDeleteClaimedAt().isBefore(staleBefore);
-                boolean fileGone = !Files.exists(directory.resolve(record.getFileName()).normalize());
-                if (!stale && !fileGone) {
-                    skipped++;
-                    continue;
-                }
-                Outcome outcome = finishRetire(record);
-                if (outcome == Outcome.DELETED) {
-                    deleted++;
-                } else if (outcome == Outcome.FAILED) {
-                    failed++;
-                }
-            }
-
-            int orphanRemoved = removeOrphanFiles(started);
-            PurgeReport report = new PurgeReport(started, LocalDateTime.now(), instances,
-                    candidates, deleted, failed, skipped, orphanRemoved);
-            lastReport = report;
-            if (deleted > 0 || failed > 0 || orphanRemoved > 0) {
-                log.info("备份清理完成：删除 {} 个，失败 {} 个，跳过 {} 个，孤儿文件 {} 个",
-                        deleted, failed, skipped, orphanRemoved);
-            }
-            return report;
         }
+
+        // 失败记录按时间清理（不占 SUCCESS 名额）
+        LocalDateTime failedBefore = started.minusDays(
+                properties.getBackup().getRetention().getFailedDays());
+        for (BackupRecord record : repository.findByStatusAndCreatedAtBefore(BackupStatus.FAILED, failedBefore)) {
+            candidates++;
+            Outcome outcome = retire(record, staleBefore);
+            if (outcome == Outcome.DELETED) {
+                deleted++;
+            } else if (outcome == Outcome.SKIPPED) {
+                skipped++;
+            } else {
+                failed++;
+            }
+        }
+
+        // 认领后崩溃/删除失败的记录：只有认领超时或文件已消失时才接手，避免与在跑的实例抢删
+        for (BackupRecord record : repository.findByDeleteState(RETIRING)) {
+            boolean stale = record.getDeleteClaimedAt() == null
+                    || record.getDeleteClaimedAt().isBefore(staleBefore);
+            boolean fileGone = !Files.exists(directory.resolve(record.getFileName()).normalize());
+            if (!stale && !fileGone) {
+                skipped++;
+                continue;
+            }
+            Outcome outcome = finishRetire(record);
+            if (outcome == Outcome.DELETED) {
+                deleted++;
+            } else if (outcome == Outcome.FAILED) {
+                failed++;
+            }
+        }
+
+        int orphanRemoved = removeOrphanFiles(started);
+        PurgeReport report = new PurgeReport(started, LocalDateTime.now(), instances,
+                candidates, deleted, failed, skipped, orphanRemoved);
+        lastReport = report;
+        if (deleted > 0 || failed > 0 || orphanRemoved > 0) {
+            log.info("备份清理完成：删除 {} 个，失败 {} 个，跳过 {} 个，孤儿文件 {} 个",
+                    deleted, failed, skipped, orphanRemoved);
+        }
+        return report;
     }
 
     private enum Outcome { DELETED, SKIPPED, FAILED }
@@ -239,8 +261,15 @@ public class BackupRetentionService {
     }
 
     /** 手工删除单个备份：走同一套保护与认领协议。 */
-    @Transactional
     public void delete(Long recordId) {
+        if (transactionTemplate != null) {
+            transactionTemplate.executeWithoutResult(status -> doDelete(recordId));
+            return;
+        }
+        doDelete(recordId);
+    }
+
+    private void doDelete(Long recordId) {
         BackupRecord record = repository.findById(recordId)
                 .orElseThrow(() -> BusinessException.notFound("备份记录不存在：" + recordId));
         if (record.getStatus() == BackupStatus.RUNNING) {
