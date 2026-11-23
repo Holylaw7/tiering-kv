@@ -1,0 +1,20 @@
+%%{init: {'theme':'base','sequence':{'actorMargin':40,'width':145,'height':42,'boxMargin':6,'messageMargin':28,'mirrorActors':false},'themeVariables':{'fontFamily':"'Microsoft YaHei','Segoe UI',sans-serif",'fontSize':'16px','primaryColor':'#FFFFFF','primaryBorderColor':'#94A3B8','primaryTextColor':'#0F172A','lineColor':'#475569','secondaryColor':'#F8FAFC','tertiaryColor':'#FFFFFF','noteBkgColor':'#F8FAFC','noteBorderColor':'#CBD5E1','noteTextColor':'#334155','actorBkg':'#FFFFFF','actorBorder':'#94A3B8','actorTextColor':'#0F172A','signalColor':'#334155','signalTextColor':'#0F172A','labelBoxBkgColor':'#EFF6F1','labelBoxBorderColor':'#A7F3D0','labelTextColor':'#14532D'}}}%%
+sequenceDiagram
+    participant C as 前端客户端
+    participant F as JwtAuthenticationFilter
+    participant JWT as JwtService (HS256)
+    participant SEC as RBAC 代理与业务层
+
+    C->>F: 受保护 API + Authorization Bearer JWT
+    F->>JWT: parse(token) 验签并解析 uid / role
+    alt 令牌缺失、伪造或已过期
+        F-->>C: EntryPoint -> HTTP 401 (code=40100)
+    else 验签通过，写入 SecurityContext
+        F->>SEC: 校验 @PreAuthorize("hasRole / hasAnyRole")
+        alt 角色越权（如 VIEWER 写操作 / OPS 读审计）
+            SEC-->>C: AccessDeniedHandler -> HTTP 403 (code=40300)
+        else 角色放行（ADMIN / OPS / VIEWER）
+            SEC->>SEC: 执行核心逻辑 + 独立事务记录 op_log
+            SEC-->>C: HTTP 200 ApiResponse(code=0)
+        end
+    end

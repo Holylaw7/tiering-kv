@@ -1,48 +1,37 @@
-%%{init: {'theme':'base','themeVariables':{'fontFamily':"'Segoe UI','Microsoft YaHei',sans-serif",'fontSize':'13px','primaryColor':'#FFFFFF','primaryBorderColor':'#CBD2D9','primaryTextColor':'#202124','lineColor':'#626B78','secondaryColor':'#F7F8FA','tertiaryColor':'#FBFCFE','noteBkgColor':'#F8FAFC','noteBorderColor':'#CBD5E1','noteTextColor':'#334155','actorBkg':'#FFFFFF','actorBorder':'#CBD2D9','actorTextColor':'#0F172A','signalColor':'#475569','signalTextColor':'#0F172A','labelBoxBkgColor':'#EEF2FF','labelBoxBorderColor':'#C7D2F5','labelTextColor':'#1D4ED8'}}}%%
+%%{init: {'theme':'base','sequence':{'actorMargin':30,'width':128,'height':42,'boxMargin':6,'messageMargin':26,'mirrorActors':false},'themeVariables':{'fontFamily':"'Microsoft YaHei','Segoe UI',sans-serif",'fontSize':'16px','primaryColor':'#FFFFFF','primaryBorderColor':'#94A3B8','primaryTextColor':'#0F172A','lineColor':'#475569','secondaryColor':'#F8FAFC','tertiaryColor':'#FFFFFF','noteBkgColor':'#F8FAFC','noteBorderColor':'#CBD5E1','noteTextColor':'#334155','actorBkg':'#FFFFFF','actorBorder':'#94A3B8','actorTextColor':'#0F172A','signalColor':'#334155','signalTextColor':'#0F172A','labelBoxBkgColor':'#EEF2FF','labelBoxBorderColor':'#C7D2F5','labelTextColor':'#1D4ED8'}}}%%
 sequenceDiagram
     participant UI as 前端控制台
     participant BS as BackupService
-    participant CAP as BackupCapacityService
-    participant EXE as backupExecutor 异步线程
-    participant GW as RespGateway
+    participant CAP as CapacityService
     participant KV as 数据面内核
-    participant ST as BackupStorageBackend (Local / S3)
+    participant ST as StorageBackend (Local/S3)
 
     rect rgb(238,242,255)
-    Note over UI,ST: 1. 逻辑备份：流式 SCAN 导出与双端存储
+    Note over UI,ST: 1. 异步流式 Gzip 导出与配额防超卖
     UI->>BS: POST /api/v1/backups?instanceId
-    BS->>BS: synchronized(instanceLock) 校验无 RUNNING / RESTORING
-    BS->>CAP: reserve(instanceId, recordId, estimateBytes)
-    alt 空间/配额校验失败
-        CAP-->>BS: 抛出 InsufficientStorage -> HTTP 507
-        BS-->>UI: 标记 FAILED 并返回错误码 50700
-    else 预留成功并创建 RUNNING 记录
-        BS->>EXE: 异步提交 runExport(recordId)
-        BS-->>UI: 立即返回 200 (status=RUNNING)
-        EXE->>ST: openWrite(fileName) + 可选 Gzip 压缩流
-        loop SCAN cursor MATCH * COUNT 200 直到 cursor == 0
-            EXE->>GW: 读取键列表及 TYPE / TTL / 值结构
-            GW->>KV: RESP 命令批处理
-            KV-->>GW: 键值响应
-            EXE->>ST: 按行写入 SnapshotEntry JSONL
+    BS->>BS: instanceLock 加锁判重(409)
+    BS->>CAP: reserve() 行锁锚点预留配额
+    alt 空间或配额不足
+        CAP-->>UI: 标记 FAILED 并返回 HTTP 507
+    else 预留成功，提交异步导出线程池
+        BS-->>UI: 立即返回 RUNNING 状态
+        loop SCAN cursor MATCH * COUNT 200
+            BS->>KV: 批量扫描键 + TYPE / TTL / 值读取
+            BS->>ST: 追加 JSONL 并写入 Gzip 流
         end
-        EXE->>ST: 刷盘落定（S3 分片直传或本地暂存重命名）
-        EXE->>CAP: commitReservation(usedBytes)
-        EXE-->>UI: 更新记录为 SUCCESS（客户端轮询感知）
+        BS->>ST: 完成落盘（本地原子替换 / S3 分片上传）
+        BS->>CAP: commitReservation() 核销实际占用
     end
     end
 
     rect rgb(239,246,241)
-    Note over UI,ST: 2. 合并式恢复与 BGSAVE 物理快照协同
-    UI->>BS: POST /api/v1/backups/{id}/restore (仅 ADMIN)
-    BS->>ST: openRead(fileName) 并按需解压 Gzip
-    loop 逐条 SnapshotEntry（幂等回放，保留未冲突旧键）
-        BS->>GW: DEL key -> SET/HSET/RPUSH/SADD/ZADD -> 可选 EXPIRE
-        GW->>KV: 写入目标实例
+    Note over UI,ST: 2. 合并式恢复与物理 Checkpoint 协同
+    UI->>BS: POST /backups/{id}/restore（仅 ADMIN）
+    BS->>ST: 读取解压 SnapshotEntry 流
+    loop 逐行回放（幂等、保留未冲突旧键）
+        BS->>KV: DEL -> TypedWrite -> 可选 EXPIRE
     end
-    BS-->>UI: 返回 RESTORED 及回放键计数
-    UI->>BS: POST /api/v1/backups/checkpoint?instanceId
-    BS->>GW: 下发 BGSAVE（及 GET /checkpoint/status 读取 LASTSAVE / INFO persistence）
-    GW->>KV: 异步触发内核 RDB/SSTable 检查点
-    KV-->>UI: 返回 CheckpointStatusView（支持态 / 进行中 / 耗时）
+    BS-->>UI: 返回 RESTORED 及已回放条数
+    UI->>BS: POST /backups/checkpoint
+    BS->>KV: 下发 BGSAVE 与查询 LASTSAVE 状态
     end

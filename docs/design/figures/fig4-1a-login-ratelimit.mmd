@@ -1,0 +1,26 @@
+%%{init: {'theme':'base','sequence':{'actorMargin':35,'width':135,'height':42,'boxMargin':6,'messageMargin':28,'mirrorActors':false},'themeVariables':{'fontFamily':"'Microsoft YaHei','Segoe UI',sans-serif",'fontSize':'16px','primaryColor':'#FFFFFF','primaryBorderColor':'#94A3B8','primaryTextColor':'#0F172A','lineColor':'#475569','secondaryColor':'#F8FAFC','tertiaryColor':'#FFFFFF','noteBkgColor':'#F8FAFC','noteBorderColor':'#CBD5E1','noteTextColor':'#334155','actorBkg':'#FFFFFF','actorBorder':'#94A3B8','actorTextColor':'#0F172A','signalColor':'#334155','signalTextColor':'#0F172A','labelBoxBkgColor':'#EEF2FF','labelBoxBorderColor':'#C7D2F5','labelTextColor':'#1D4ED8'}}}%%
+sequenceDiagram
+    participant C as 前端客户端
+    participant AC as AuthService
+    participant LG as LoginAttemptGuard
+    participant AUD as AuditService (独立事务)
+
+    C->>AC: POST /api/v1/auth/login (账号, 口令)
+    AC->>LG: blocked(username) 检查 5 分钟窗口
+    alt 窗口内连续失败 >= 5 次
+        LG-->>AC: 返回已锁定及剩余秒数
+        AC->>AUD: record("LOGIN", success=false)
+        AC-->>C: HTTP 429 (code=42900)
+    else 允许校验
+        AC->>AC: 查询 sys_user + BCrypt 校验口令
+        alt 用户禁用或口令错误
+            AC->>LG: recordFailure(username)
+            AC->>AUD: record("LOGIN", success=false)
+            AC-->>C: HTTP 401 (code=40100)
+        else 认证通过
+            AC->>LG: recordSuccess(username) 清零计数
+            AC->>AC: JwtService.issue(user) 签发 HS256 JWT
+            AC->>AUD: record("LOGIN", success=true)
+            AC-->>C: HTTP 200 (Bearer Token + UserView)
+        end
+    end
