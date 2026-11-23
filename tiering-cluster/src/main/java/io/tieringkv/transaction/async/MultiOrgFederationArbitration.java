@@ -3,6 +3,7 @@ package io.tieringkv.transaction.async;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 多组织联邦仲裁（ADR-0249）：cloud → organization 映射；组织内云多数 →
@@ -24,7 +25,7 @@ public final class MultiOrgFederationArbitration {
     private final Map<String, FederationResult> completed =
             new ConcurrentHashMap<>();
     private volatile ResolvedTimestampService resolvedTs;
-    private volatile long federationVersion;
+    private final AtomicLong federationVersion = new AtomicLong();
 
     public void registerOrganization(String cloud,
                                      String organization) {
@@ -35,7 +36,7 @@ public final class MultiOrgFederationArbitration {
                     "cloud and organization required");
         }
         cloudOrganization.put(cloud, organization);
-        federationVersion++;
+        federationVersion.incrementAndGet();
         completed.clear();
     }
 
@@ -44,7 +45,7 @@ public final class MultiOrgFederationArbitration {
         zoneEligibility.computeIfAbsent(cloud,
                 ignored -> new ConcurrentHashMap<>())
                 .put(zone, eligible);
-        federationVersion++;
+        federationVersion.incrementAndGet();
         completed.clear();
     }
 
@@ -73,7 +74,7 @@ public final class MultiOrgFederationArbitration {
             throw new IllegalArgumentException(
                     "clouds required");
         }
-        long version = federationVersion;
+        long version = federationVersion.get();
         String cacheKey = txnId + "|v" + version + "|"
                 + clouds.stream().sorted()
                 .reduce((a, b) -> a + "," + b).orElse("");
@@ -124,6 +125,6 @@ public final class MultiOrgFederationArbitration {
     }
 
     public long federationVersion() {
-        return federationVersion;
+        return federationVersion.get();
     }
 }

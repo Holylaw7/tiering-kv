@@ -464,7 +464,10 @@ public final class JsonCommand implements Command {
                 double displayed =
                         Math.abs(updated - Math.rint(updated)) < 1e-9
                                 ? Math.rint(updated) : updated;
-                JsonNode number = displayed == Math.rint(displayed)
+                boolean exactLong = Double.isFinite(displayed)
+                        && Math.abs(displayed) <= 9.0e18
+                        && Double.compare(displayed, Math.rint(displayed)) == 0;
+                JsonNode number = exactLong
                         ? MAPPER.getNodeFactory().numberNode(
                         (long) displayed)
                         : MAPPER.getNodeFactory().numberNode(displayed);

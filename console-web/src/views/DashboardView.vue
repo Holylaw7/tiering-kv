@@ -65,11 +65,6 @@ const memoryRatio = computed(() => {
   if (!current || !current.maxMemory) return 0
   return current.usedMemory / current.maxMemory
 })
-const heapRatio = computed(() => {
-  const current = live.value
-  if (!current || !current.maxJvmHeap) return 0
-  return current.usedMemoryJvm / current.maxJvmHeap
-})
 
 async function load(silent = false) {
   if (!silent) loading.value = true
@@ -166,8 +161,8 @@ async function openTables() {
       totalEntries: view.totalEntries,
       keyOrder: view.keyOrder ?? 'unknown',
     }
-  } catch (ex: any) {
-    tablesError.value = ex?.message ?? '读取失败'
+  } catch (ex: unknown) {
+    tablesError.value = ex instanceof Error ? ex.message : '读取失败'
   } finally {
     tablesLoading.value = false
   }
@@ -227,7 +222,7 @@ function areaGradient(color: string) {
   }
 }
 
-const qpsOption = computed<any>(() => ({
+const qpsOption = computed<Record<string, unknown>>(() => ({
   backgroundColor: 'transparent',
   grid: { left: 48, right: 18, top: 12, bottom: 24 },
   tooltip: TOOLTIP,
@@ -256,7 +251,7 @@ const qpsOption = computed<any>(() => ({
   ]
 }))
 
-const latencyOption = computed<any>(() => ({
+const latencyOption = computed<Record<string, unknown>>(() => ({
   backgroundColor: 'transparent',
   grid: { left: 48, right: 18, top: 12, bottom: 24 },
   tooltip: { ...TOOLTIP, valueFormatter: (value: number) => Number(value).toFixed(3) + ' ms' },
@@ -285,7 +280,7 @@ const latencyOption = computed<any>(() => ({
   ]
 }))
 
-const memoryOption = computed<any>(() => ({
+const memoryOption = computed<Record<string, unknown>>(() => ({
   backgroundColor: 'transparent',
   grid: { left: 62, right: 52, top: 12, bottom: 24 },
   tooltip: TOOLTIP,

@@ -50,6 +50,8 @@ console-web/node_modules/
 console-web/dist/
 console-web/.vite/
 console-web/coverage/
+console-web/playwright-report/
+console-web/test-results/
 .playwright/
 # 学校模板转换产物（本地留存，不入库）
 docs/thesis/_school/

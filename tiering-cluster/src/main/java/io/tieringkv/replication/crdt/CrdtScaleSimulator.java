@@ -1,5 +1,6 @@
 package io.tieringkv.replication.crdt;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -25,7 +26,7 @@ public final class CrdtScaleSimulator {
                             ignored -> new LwwRegister())
                             .set(round * nodes + node,
                                     "n" + node,
-                                    (id + "-v" + round).getBytes());
+                                    (id + "-v" + round).getBytes(StandardCharsets.UTF_8));
                 }
             }
         }

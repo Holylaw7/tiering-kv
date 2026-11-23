@@ -3,6 +3,7 @@ package io.tieringkv.transaction.async;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 跨云一阶段全球统一（ADR-0242）：任意云 × 区拓扑自动发现 + 动态仲裁
@@ -22,7 +23,7 @@ public final class GlobalUnifiedOnePhaseArbitration {
     private final Map<String, UnifiedResult> completed =
             new ConcurrentHashMap<>();
     private volatile ResolvedTimestampService resolvedTs;
-    private volatile long topologyVersion;
+    private final AtomicLong topologyVersion = new AtomicLong();
 
     public void registerZone(String cloud, String zone,
                              boolean eligible) {
@@ -34,7 +35,7 @@ public final class GlobalUnifiedOnePhaseArbitration {
         zoneEligibility.computeIfAbsent(cloud,
                 ignored -> new ConcurrentHashMap<>())
                 .put(zone, eligible);
-        topologyVersion++;
+        topologyVersion.incrementAndGet();
         completed.clear();
     }
 
@@ -43,7 +44,7 @@ public final class GlobalUnifiedOnePhaseArbitration {
         if (zones != null) {
             zones.replaceAll((zone, eligible) -> false);
         }
-        topologyVersion++;
+        topologyVersion.incrementAndGet();
         completed.clear();
     }
 
@@ -72,7 +73,7 @@ public final class GlobalUnifiedOnePhaseArbitration {
             throw new IllegalArgumentException(
                     "clouds required");
         }
-        long version = topologyVersion;
+        long version = topologyVersion.get();
         String cacheKey = txnId + "|v" + version + "|"
                 + clouds.stream().sorted()
                 .reduce((a, b) -> a + "," + b).orElse("");
@@ -106,6 +107,6 @@ public final class GlobalUnifiedOnePhaseArbitration {
     }
 
     public long topologyVersion() {
-        return topologyVersion;
+        return topologyVersion.get();
     }
 }

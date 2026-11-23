@@ -3,6 +3,7 @@ package io.tieringkv.transaction.async;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 跨监管域联邦仲裁（ADR-0256）：cloud → regulatory domain 边界发现 +
@@ -27,7 +28,7 @@ public final class CrossRegulatoryFederationArbitration {
     private volatile ResolvedTimestampService resolvedTs;
     private volatile MultiOrgFederationArbitration multiOrg;
     private volatile GlobalUnifiedOnePhaseArbitration global;
-    private volatile long topologyVersion;
+    private final AtomicLong topologyVersion = new AtomicLong();
 
     /** 监管域边界发现：cloud → domain。 */
     public void registerDomain(String cloud, String domain) {
@@ -37,7 +38,7 @@ public final class CrossRegulatoryFederationArbitration {
                     "cloud and domain required");
         }
         cloudDomain.put(cloud, domain);
-        topologyVersion++;
+        topologyVersion.incrementAndGet();
         completed.clear();
     }
 
@@ -51,7 +52,7 @@ public final class CrossRegulatoryFederationArbitration {
         zoneEligibility.computeIfAbsent(cloud,
                 ignored -> new ConcurrentHashMap<>())
                 .put(zone, eligible);
-        topologyVersion++;
+        topologyVersion.incrementAndGet();
         completed.clear();
     }
 
@@ -97,7 +98,7 @@ public final class CrossRegulatoryFederationArbitration {
             throw new IllegalArgumentException(
                     "clouds required");
         }
-        long version = topologyVersion;
+        long version = topologyVersion.get();
         String cacheKey = txnId + "|v" + version + "|"
                 + clouds.stream().sorted()
                 .reduce((a, b) -> a + "," + b).orElse("");
@@ -169,7 +170,7 @@ public final class CrossRegulatoryFederationArbitration {
     }
 
     public long topologyVersion() {
-        return topologyVersion;
+        return topologyVersion.get();
     }
 
     public int completedCount() {

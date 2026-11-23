@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { keyspaceApi } from '@/api'
 import type { KeyDetail, KeyEntry } from '@/api/types'
 import { useInstanceStore } from '@/stores/instance'
 import { useAuthStore } from '@/stores/auth'
-import { formatBytes, formatTtl } from '@/utils/format'
+import { formatTtl } from '@/utils/format'
 import EmptyState from '@/components/EmptyState.vue'
 
 const store = useInstanceStore()
@@ -24,17 +24,6 @@ const ttlInput = ref<number>(-1)
 const hashRows = ref<Array<{ field: string; value: string }>>([])
 const newField = ref({ field: '', value: '' })
 const hashSaving = ref(false)
-
-function typeTagType(type: string) {
-  switch (type) {
-    case 'string': return 'success'
-    case 'hash': return 'warning'
-    case 'list': return 'primary'
-    case 'set': return 'info'
-    case 'zset': return 'danger'
-    default: return 'info'
-  }
-}
 
 async function scan(reset = true) {
   const id = store.selectedId
