@@ -28,11 +28,29 @@ cache:
   block-size: 1024
   hotkey-window-ms: 1000
   hotkey-threshold: 1000
+  max-hot-keys: 1024
+  hotkey-cache-ttl-ms: 500
+  eviction-decay-interval-ms: 60000
+  max-evictions-per-cycle: 1024
+
+storage:
+  data-dir: ./data
+  # wal-dir: ./data/wal
+  # cold-dir: ./data/cold
+  # migration-dir: ./data/migration
+
+vector:
+  # index-dir: ./data/vector
+  max-level: 6
+  checkpoint-interval-ms: 60000
 
 tiering:
   low-watermark: 0.70
   high-watermark: 0.85
   critical-watermark: 0.95
+  max-entry-count: 1000000
+  warning-queue-tasks: 5000
+  critical-queue-tasks: 10000
   backpressure-timeout-ms: 1000
   drain-timeout-ms: 5000
 

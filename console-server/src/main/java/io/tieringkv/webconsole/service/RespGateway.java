@@ -6,7 +6,9 @@ import io.tieringkv.webconsole.domain.DbInstance;
 import io.tieringkv.webconsole.resp.RespClient;
 import io.tieringkv.webconsole.resp.RespClientPool;
 import io.tieringkv.webconsole.resp.RespReply;
+import io.tieringkv.webconsole.security.InstanceCredentialCipher;
 import jakarta.annotation.PreDestroy;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -19,10 +21,17 @@ import java.util.concurrent.ConcurrentHashMap;
 public class RespGateway {
 
     private final ConsoleProperties properties;
+    private final InstanceCredentialCipher cipher;
     private final Map<Long, RespClientPool> pools = new ConcurrentHashMap<>();
 
     public RespGateway(ConsoleProperties properties) {
+        this(properties, new InstanceCredentialCipher((String) null));
+    }
+
+    @Autowired
+    public RespGateway(ConsoleProperties properties, InstanceCredentialCipher cipher) {
         this.properties = properties;
+        this.cipher = cipher;
     }
 
     @FunctionalInterface
@@ -52,7 +61,7 @@ public class RespGateway {
             if (healthy && client.isUsable()) {
                 pool.release(client);
             } else {
-                client.close();
+                pool.discard(client);
             }
         }
     }
@@ -87,8 +96,13 @@ public class RespGateway {
     }
 
     private RespClientPool pool(DbInstance instance) {
+        ConsoleProperties.Pool cfg = properties.getPool();
         return pools.computeIfAbsent(instance.getId(), key -> new RespClientPool(
-                () -> open(instance), 4));
+                () -> open(instance),
+                cfg.getMaxIdle(),
+                cfg.getMaxTotal(),
+                cfg.getBorrowTimeoutMs(),
+                cfg.getMaxIdleTimeMs()));
     }
 
     private RespClient open(DbInstance instance) {
@@ -97,7 +111,7 @@ public class RespGateway {
             client = RespClient.open(instance.getHost(), instance.getPort(),
                     properties.getMetrics().getConnectTimeoutMs(),
                     properties.getMetrics().getReadTimeoutMs());
-            String password = instance.getPassword();
+            String password = cipher.decrypt(instance.getPassword());
             if (password != null && !password.isBlank()) {
                 RespReply reply = client.execute("AUTH", password);
                 if (reply instanceof RespReply.Error error) {

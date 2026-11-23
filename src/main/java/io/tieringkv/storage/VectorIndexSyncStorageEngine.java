@@ -162,6 +162,26 @@ public final class VectorIndexSyncStorageEngine extends AbstractStorageDecorator
         }
     }
 
+    /**
+     * 启动恢复后增量补全向量索引：将底层已恢复（WAL/冷存）但尚未落入向量 checkpoint 的
+     * VECTOR 类型化键重新灌入 {@link VectorIndexStore}。
+     */
+    public int rehydrateFromStorage() {
+        int count = 0;
+        try (StorageIterator iterator = delegate.iterator()) {
+            while (iterator.hasNext()) {
+                io.tieringkv.storage.memory.KeyValueEntry entry = iterator.next();
+                if (isVector(entry.value())) {
+                    vectorStore.put(new Embedding(
+                            new String(entry.key(), StandardCharsets.UTF_8),
+                            MultiModelCodec.decodeVector(entry.value())));
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
     private static boolean isVector(byte[] value) {
         return value != null
                 && TypedValueCodec.typeOf(value) == ValueType.VECTOR;

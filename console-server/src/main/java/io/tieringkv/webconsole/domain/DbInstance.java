@@ -33,7 +33,7 @@ public class DbInstance {
     private int port;
 
     @JsonIgnore
-    @Column(length = 128)
+    @Column(length = 512)
     private String password;
 
     @Enumerated(EnumType.STRING)

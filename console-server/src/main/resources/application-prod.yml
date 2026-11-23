@@ -1,0 +1,6 @@
+# 生产 profile 默认收口：关闭在线 Swagger / OpenAPI 文档暴露
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

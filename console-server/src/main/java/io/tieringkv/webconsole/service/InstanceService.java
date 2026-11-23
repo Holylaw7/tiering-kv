@@ -4,9 +4,11 @@ import io.tieringkv.webconsole.common.BusinessException;
 import io.tieringkv.webconsole.domain.DbInstance;
 import io.tieringkv.webconsole.domain.InstanceStatus;
 import io.tieringkv.webconsole.repository.DbInstanceRepository;
+import io.tieringkv.webconsole.security.InstanceCredentialCipher;
 import io.tieringkv.webconsole.support.InfoParser;
 import io.tieringkv.webconsole.web.dto.InstanceRequest;
 import io.tieringkv.webconsole.web.dto.InstanceView;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,12 +23,20 @@ public class InstanceService {
     private final DbInstanceRepository repository;
     private final RespGateway gateway;
     private final AuditService auditService;
+    private final InstanceCredentialCipher cipher;
 
     public InstanceService(DbInstanceRepository repository, RespGateway gateway,
                            AuditService auditService) {
+        this(repository, gateway, auditService, new InstanceCredentialCipher((String) null));
+    }
+
+    @Autowired
+    public InstanceService(DbInstanceRepository repository, RespGateway gateway,
+                           AuditService auditService, InstanceCredentialCipher cipher) {
         this.repository = repository;
         this.gateway = gateway;
         this.auditService = auditService;
+        this.cipher = cipher;
     }
 
     public List<InstanceView> list() {
@@ -55,7 +65,7 @@ public class InstanceService {
         instance.setName(request.name().trim());
         instance.setHost(host);
         instance.setPort(request.port());
-        instance.setPassword(request.password());
+        instance.setPassword(cipher.encrypt(request.password()));
         instance.setRemark(request.remark());
         instance.setEnabled(request.enabled() == null || request.enabled());
         repository.save(instance);
@@ -83,7 +93,7 @@ public class InstanceService {
         instance.setHost(host);
         instance.setPort(request.port());
         if (request.password() != null && !request.password().isBlank()) {
-            instance.setPassword(request.password());
+            instance.setPassword(cipher.encrypt(request.password()));
         }
         instance.setRemark(request.remark());
         if (request.enabled() != null) {

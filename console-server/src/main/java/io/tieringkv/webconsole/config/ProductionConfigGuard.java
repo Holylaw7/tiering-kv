@@ -71,6 +71,7 @@ public class ProductionConfigGuard implements InitializingBean {
         checkJwt(out);
         checkDatabase(out);
         checkAdmin(out);
+        checkSpringDoc(out);
         if (out.stream().noneMatch(f -> "FATAL".equals(f.level()))) {
             out.add(new Finding("INFO", "production-gate", "所有强制项通过"));
         }
@@ -140,5 +141,16 @@ public class ProductionConfigGuard implements InitializingBean {
             return;
         }
         out.add(new Finding("INFO", key, "已配置"));
+    }
+
+    private void checkSpringDoc(List<Finding> out) {
+        boolean apiDocsEnabled = Boolean.parseBoolean(
+                environment.getProperty("springdoc.api-docs.enabled", "true"));
+        boolean swaggerEnabled = Boolean.parseBoolean(
+                environment.getProperty("springdoc.swagger-ui.enabled", "true"));
+        if (apiDocsEnabled || swaggerEnabled) {
+            out.add(new Finding("WARN", "springdoc",
+                    "生产环境建议关闭 /v3/api-docs 与 /swagger-ui.html（springdoc.*.enabled=false）"));
+        }
     }
 }
