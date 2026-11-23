@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!-- 确认误报条目在此按 Class/Bug pattern 登记并附依据注释 -->
+</FindBugsFilter>

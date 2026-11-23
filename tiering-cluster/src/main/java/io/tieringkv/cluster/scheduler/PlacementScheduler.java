@@ -3,6 +3,7 @@ package io.tieringkv.cluster.scheduler;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /** 放置调度（ADR-0205）：机架/可用区约束 + epoch 保护。 */
 public final class PlacementScheduler {
@@ -14,7 +15,7 @@ public final class PlacementScheduler {
     private final Map<String, Node> nodes = new ConcurrentHashMap<>();
     private final Map<String, String> placements =
             new ConcurrentHashMap<>();
-    private volatile long epoch;
+    private final AtomicLong epoch = new AtomicLong();
 
     public void registerNode(Node node) {
         if (node == null || node.nodeId() == null
@@ -34,7 +35,7 @@ public final class PlacementScheduler {
             throw new IllegalArgumentException(
                     "region and az required");
         }
-        if (expectedEpoch != epoch) {
+        if (expectedEpoch != epoch.get()) {
             throw new IllegalStateException(
                     "epoch mismatch");
         }
@@ -63,12 +64,12 @@ public final class PlacementScheduler {
                 .equals(availabilityZone);
     }
 
-    public synchronized void advanceEpoch() {
-        epoch++;
+    public void advanceEpoch() {
+        epoch.incrementAndGet();
     }
 
     public long epoch() {
-        return epoch;
+        return epoch.get();
     }
 
     public Set<String> regions() {
