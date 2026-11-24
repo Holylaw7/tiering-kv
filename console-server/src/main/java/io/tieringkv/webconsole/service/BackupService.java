@@ -9,9 +9,11 @@ import io.tieringkv.webconsole.domain.DbInstance;
 import io.tieringkv.webconsole.domain.RestoreStatus;
 import io.tieringkv.webconsole.repository.BackupRecordRepository;
 import io.tieringkv.webconsole.repository.BackupReservationRepository;
+import io.tieringkv.webconsole.resp.RespClient;
 import io.tieringkv.webconsole.resp.RespReply;
 import io.tieringkv.webconsole.support.InfoParser;
 import io.tieringkv.webconsole.support.Text;
+import io.tieringkv.webconsole.web.dto.KeyEntry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -141,6 +143,9 @@ public class BackupService {
     private static final long PROGRESS_FLUSH_KEYS = 500L;
     private static final long PROGRESS_FLUSH_MS = 1_000L;
 
+    /** RESP Pipeline 导出/恢复每批键数上限（O2-A），在吞吐与单批内存占用间平衡。 */
+    private static final int PIPELINE_BATCH_SIZE = 100;
+
     /** 恢复超过该时长仍未结束，视为进程崩溃遗留的僵尸状态（ADR-0366）。 */
     private static final long STALE_RESTORING_MINUTES = 30;
 
@@ -254,24 +259,36 @@ public class BackupService {
                 }
                 cursor = text(array.items().get(0));
                 if (array.items().get(1) instanceof RespReply.Array keyArray && !keyArray.isNil()) {
+                    List<String> pageKeys = new ArrayList<>(keyArray.items().size());
                     for (RespReply item : keyArray.items()) {
                         String key = Text.decode(
                                 item instanceof RespReply.Bulk bulk ? bulk.value() : null);
-                        if (key == null) {
-                            continue;
+                        if (key != null) {
+                            pageKeys.add(key);
                         }
-                        String type = keyspaceService.type(instance, key);
-                        long ttl = keyspaceService.ttl(instance, key);
-                        Object value = keyspaceService.value(instance, key, type);
-                        writer.write(objectMapper.writeValueAsString(
-                                new SnapshotEntry(key, type, ttl, value)));
-                        writer.newLine();
-                        count++;
-                        if (maxKeys > 0 && count >= maxKeys) {
-                            throw new IllegalStateException("备份键数超过配置上限 " + maxKeys + "，已中止以避免生成不完整备份");
+                    }
+                    for (int offset = 0; offset < pageKeys.size(); offset += PIPELINE_BATCH_SIZE) {
+                        int end = Math.min(offset + PIPELINE_BATCH_SIZE, pageKeys.size());
+                        List<String> batchKeys = pageKeys.subList(offset, end);
+                        List<KeyEntry> metas = keyspaceService.inspectBatch(instance, batchKeys);
+                        List<Object> values = keyspaceService.readValuesBatch(instance, metas);
+                        for (int i = 0; i < metas.size(); i++) {
+                            KeyEntry meta = metas.get(i);
+                            if ("none".equals(meta.type())) {
+                                continue;
+                            }
+                            Object val = i < values.size() ? values.get(i) : null;
+                            writer.write(objectMapper.writeValueAsString(
+                                    new SnapshotEntry(meta.key(), meta.type(), meta.ttl(), val)));
+                            writer.newLine();
+                            count++;
+                            if (maxKeys > 0 && count >= maxKeys) {
+                                throw new IllegalStateException("备份键数超过配置上限 " + maxKeys + "，已中止以避免生成不完整备份");
+                            }
                         }
                         long now = System.currentTimeMillis();
-                        if (count % PROGRESS_FLUSH_KEYS == 0 || (now - lastProgressFlushAt) >= PROGRESS_FLUSH_MS) {
+                        if (count > 0 && (count % PROGRESS_FLUSH_KEYS < PIPELINE_BATCH_SIZE
+                                || (now - lastProgressFlushAt) >= PROGRESS_FLUSH_MS)) {
                             record.setProcessedKeys(count);
                             repository.save(record);
                             lastProgressFlushAt = now;
@@ -354,7 +371,7 @@ public class BackupService {
         return saved;
     }
 
-    /** 恢复异步执行体（O1-B）：按批节流刷新 restoredKeys，可单独调用以便单测确定性验证。 */
+    /** 恢复异步执行体（O1-B + O2-A）：使用 RESP Pipeline 批回放并按节流刷新 restoredKeys。 */
     public long runRestore(Long recordId) {
         BackupRecord record = repository.findById(recordId).orElse(null);
         if (record == null) {
@@ -363,25 +380,55 @@ public class BackupService {
         DbInstance instance = instanceService.require(record.getInstanceId());
         long restored = 0;
         long lastProgressFlushAt = System.currentTimeMillis();
+        long lastFlushedCount = 0;
+        List<SnapshotEntry> batch = new ArrayList<>(PIPELINE_BATCH_SIZE);
         try (BufferedReader reader = openSnapshotReader(record.getFileName())) {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.isBlank()) {
                     continue;
                 }
-                SnapshotEntry entry = objectMapper.readValue(line, SnapshotEntry.class);
-                restoreEntry(instance, entry);
-                restored++;
-                long now = System.currentTimeMillis();
-                if (restored % PROGRESS_FLUSH_KEYS == 0 || (now - lastProgressFlushAt) >= PROGRESS_FLUSH_MS) {
-                    record.setRestoredKeys(restored);
-                    repository.save(record);
-                    lastProgressFlushAt = now;
+                SnapshotEntry entry;
+                try {
+                    entry = objectMapper.readValue(line, SnapshotEntry.class);
+                } catch (Exception parseEx) {
+                    // 先提交此前已解析合法批次，保证部分恢复计数与文件行顺序一致
+                    if (!batch.isEmpty()) {
+                        restored += restoreBatch(instance, batch);
+                        batch.clear();
+                    }
+                    throw parseEx;
                 }
+                batch.add(entry);
+                if (batch.size() >= PIPELINE_BATCH_SIZE) {
+                    restored += restoreBatch(instance, batch);
+                    batch.clear();
+                    long now = System.currentTimeMillis();
+                    if ((restored - lastFlushedCount) >= PROGRESS_FLUSH_KEYS
+                            || (now - lastProgressFlushAt) >= PROGRESS_FLUSH_MS) {
+                        record.setRestoredKeys(restored);
+                        repository.save(record);
+                        lastFlushedCount = restored;
+                        lastProgressFlushAt = now;
+                    }
+                }
+            }
+            if (!batch.isEmpty()) {
+                restored += restoreBatch(instance, batch);
+                batch.clear();
             }
             finishRestore(record, RestoreStatus.SUCCEEDED, restored, null);
             auditService.record("RESTORE_BACKUP", instance.getName(),
                     "file=" + record.getFileName() + " restored=" + restored, true);
+            return restored;
+        } catch (BatchRestoreFailure failure) {
+            restored += failure.succeededInBatch();
+            String reason = failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
+            finishRestore(record, RestoreStatus.FAILED, restored,
+                    truncate("已回放 " + restored + " 个键，恢复中断：" + reason));
+            auditService.record("RESTORE_BACKUP", instance.getName(),
+                    "file=" + record.getFileName() + " restored=" + restored + " result=failed", false);
+            log.error("恢复批次失败 recordId={} instance={} restored={}", recordId, instance.getName(), restored, failure);
             return restored;
         } catch (Exception ex) {
             // 异常安全：已写入的部分保留，状态明确标失败，并记录"恢复了多少"
@@ -392,6 +439,117 @@ public class BackupService {
                     "file=" + record.getFileName() + " restored=" + restored + " result=failed", false);
             log.error("恢复失败 recordId={} instance={} restored={}", recordId, instance.getName(), restored, ex);
             return restored;
+        }
+    }
+
+    private static final class BatchRestoreFailure extends IOException {
+        private final long succeededInBatch;
+
+        BatchRestoreFailure(long succeededInBatch, String message) {
+            super(message);
+            this.succeededInBatch = succeededInBatch;
+        }
+
+        long succeededInBatch() {
+            return succeededInBatch;
+        }
+    }
+
+    /** 批次管线回放（O2-A）：将多条键恢复命令合并为单次 executeBatch，并按条目顺序核验应答。 */
+    private long restoreBatch(DbInstance instance, List<SnapshotEntry> entries) throws IOException {
+        List<List<byte[]>> commands = new ArrayList<>(entries.size() * 3);
+        List<String> ops = new ArrayList<>(entries.size() * 3);
+        int[] entryEndIndex = new int[entries.size()];
+        for (int i = 0; i < entries.size(); i++) {
+            appendRestoreCommands(entries.get(i), commands, ops);
+            entryEndIndex[i] = commands.size();
+        }
+        if (commands.isEmpty()) {
+            return entries.size();
+        }
+        List<RespReply> replies = gateway.executeBatch(instance, commands);
+        if (replies.size() != commands.size()) {
+            throw new BatchRestoreFailure(0, "管线恢复应答数量不匹配：期望 "
+                    + commands.size() + "，实际 " + replies.size());
+        }
+        long okEntries = 0;
+        int start = 0;
+        for (int i = 0; i < entries.size(); i++) {
+            int end = entryEndIndex[i];
+            for (int c = start; c < end; c++) {
+                RespReply reply = replies.get(c);
+                if (reply instanceof RespReply.Error error) {
+                    throw new BatchRestoreFailure(okEntries, ops.get(c) + " 失败：" + error.message());
+                }
+            }
+            okEntries++;
+            start = end;
+        }
+        return okEntries;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void appendRestoreCommands(SnapshotEntry entry, List<List<byte[]>> commands, List<String> ops)
+            throws IOException {
+        String key = entry.key();
+        if (key == null || entry.value() == null) {
+            return;
+        }
+        commands.add(RespClient.commandBytes("DEL", key));
+        ops.add("DEL");
+        switch (entry.type()) {
+            case "string" -> {
+                commands.add(RespClient.commandBytes("SET", key, String.valueOf(entry.value())));
+                ops.add("SET");
+            }
+            case "hash" -> {
+                Map<String, String> hash = (Map<String, String>) entry.value();
+                List<byte[]> args = new ArrayList<>(2 + hash.size() * 2);
+                args.add("HSET".getBytes(StandardCharsets.UTF_8));
+                args.add(key.getBytes(StandardCharsets.UTF_8));
+                hash.forEach((field, value) -> {
+                    args.add(field.getBytes(StandardCharsets.UTF_8));
+                    args.add(String.valueOf(value).getBytes(StandardCharsets.UTF_8));
+                });
+                if (args.size() > 2) {
+                    commands.add(args);
+                    ops.add("HSET");
+                }
+            }
+            case "list" -> {
+                List<String> list = (List<String>) entry.value();
+                for (String item : list) {
+                    commands.add(RespClient.commandBytes("RPUSH", key, item));
+                    ops.add("RPUSH");
+                }
+            }
+            case "set" -> {
+                List<String> set = (List<String>) entry.value();
+                for (String item : set) {
+                    commands.add(RespClient.commandBytes("SADD", key, item));
+                    ops.add("SADD");
+                }
+            }
+            case "zset" -> {
+                List<Map<String, String>> scored = (List<Map<String, String>>) entry.value();
+                for (Map<String, String> pair : scored) {
+                    commands.add(RespClient.commandBytes("ZADD", key,
+                            pair.getOrDefault("score", "0"), pair.getOrDefault("member", "")));
+                    ops.add("ZADD");
+                }
+            }
+            case "json" -> {
+                String json = entry.value() instanceof String raw
+                        ? raw
+                        : objectMapper.writeValueAsString(entry.value());
+                commands.add(RespClient.commandBytes("JSON.SET", key, "$", json));
+                ops.add("JSON.SET");
+            }
+            default -> log.debug("跳过不支持的类型恢复：{} ({})", key, entry.type());
+        }
+        if (entry.ttl() > 0) {
+            commands.add(RespClient.commandBytes("EXPIRE", key, String.valueOf(entry.ttl())));
+            ops.add("EXPIRE");
         }
     }
 
@@ -406,67 +564,6 @@ public class BackupService {
 
     private static boolean isFresh(LocalDateTime time, long minutes) {
         return time != null && time.isAfter(LocalDateTime.now().minusMinutes(minutes));
-    }
-
-    @SuppressWarnings("unchecked")
-    private void restoreEntry(DbInstance instance, SnapshotEntry entry) throws IOException {
-        String key = entry.key();
-        if (key == null || entry.value() == null) {
-            return;
-        }
-        requireOk(gateway.execute(instance, "DEL", key), "DEL");
-        switch (entry.type()) {
-            case "string" -> requireOk(gateway.execute(instance, "SET", key, String.valueOf(entry.value())), "SET");
-            case "hash" -> {
-                Map<String, String> hash = (Map<String, String>) entry.value();
-                List<String> args = new ArrayList<>();
-                args.add("HSET");
-                args.add(key);
-                hash.forEach((field, value) -> {
-                    args.add(field);
-                    args.add(value);
-                });
-                if (args.size() > 2) {
-                    requireOk(gateway.execute(instance, args.stream()
-                            .map(item -> item.getBytes(StandardCharsets.UTF_8)).toList()), "HSET");
-                }
-            }
-            case "list" -> {
-                List<String> list = (List<String>) entry.value();
-                for (String item : list) {
-                    requireOk(gateway.execute(instance, "RPUSH", key, item), "RPUSH");
-                }
-            }
-            case "set" -> {
-                List<String> set = (List<String>) entry.value();
-                for (String item : set) {
-                    requireOk(gateway.execute(instance, "SADD", key, item), "SADD");
-                }
-            }
-            case "zset" -> {
-                List<Map<String, String>> scored = (List<Map<String, String>>) entry.value();
-                for (Map<String, String> pair : scored) {
-                    requireOk(gateway.execute(instance, "ZADD", key,
-                            pair.getOrDefault("score", "0"), pair.getOrDefault("member", "")), "ZADD");
-                }
-            }
-            case "json" -> {
-                String json = entry.value() instanceof String raw
-                        ? raw
-                        : objectMapper.writeValueAsString(entry.value());
-                requireOk(gateway.execute(instance, "JSON.SET", key, "$", json), "JSON.SET");
-            }
-            default -> log.debug("跳过不支持的类型恢复：{} ({})", key, entry.type());
-        }
-        if (entry.ttl() > 0) {
-            requireOk(gateway.execute(instance, "EXPIRE", key, String.valueOf(entry.ttl())), "EXPIRE");
-        }
-    }
-
-    private static void requireOk(RespReply reply, String op) throws IOException {
-        if (reply instanceof RespReply.Error error) {
-            throw new IOException(op + " 失败：" + error.message());
-        }
     }
 
     /**

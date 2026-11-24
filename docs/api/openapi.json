@@ -767,6 +767,17 @@
             "maxLength" : 255,
             "minLength" : 0,
             "type" : "string"
+          },
+          "tlsCaCert" : {
+            "maxLength" : 16384,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "tlsEnabled" : {
+            "type" : "boolean"
+          },
+          "tlsVerifyHostname" : {
+            "type" : "boolean"
           }
         },
         "required" : [ "host", "name" ],
@@ -778,6 +789,9 @@
             "type" : "boolean"
           },
           "hasPassword" : {
+            "type" : "boolean"
+          },
+          "hasTlsCaCert" : {
             "type" : "boolean"
           },
           "host" : {
@@ -804,6 +818,12 @@
           "status" : {
             "enum" : [ "UP", "DOWN", "UNKNOWN" ],
             "type" : "string"
+          },
+          "tlsEnabled" : {
+            "type" : "boolean"
+          },
+          "tlsVerifyHostname" : {
+            "type" : "boolean"
           },
           "version" : {
             "type" : "string"

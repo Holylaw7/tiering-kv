@@ -8,6 +8,7 @@ import io.tieringkv.webconsole.domain.BackupStatus;
 import io.tieringkv.webconsole.domain.DbInstance;
 import io.tieringkv.webconsole.repository.BackupRecordRepository;
 import io.tieringkv.webconsole.resp.RespReply;
+import io.tieringkv.webconsole.web.dto.KeyEntry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -197,12 +198,11 @@ class BackupServiceAsyncTest {
                                 new RespReply.Bulk("k1".getBytes()),
                                 new RespReply.Bulk("k2".getBytes()))))));
         BackupService service = service(Runnable::run);
-        when(keyspaceService.type(instance, "k1")).thenReturn("string");
-        when(keyspaceService.type(instance, "k2")).thenReturn("string");
-        when(keyspaceService.ttl(instance, "k1")).thenReturn(-1L);
-        when(keyspaceService.ttl(instance, "k2")).thenReturn(-1L);
-        when(keyspaceService.value(instance, "k1", "string")).thenReturn("v1");
-        when(keyspaceService.value(instance, "k2", "string")).thenReturn("v2");
+        List<KeyEntry> metas = List.of(
+                new KeyEntry("k1", "string", -1L),
+                new KeyEntry("k2", "string", -1L));
+        when(keyspaceService.inspectBatch(eq(instance), eq(List.of("k1", "k2")))).thenReturn(metas);
+        when(keyspaceService.readValuesBatch(eq(instance), eq(metas))).thenReturn(List.of("v1", "v2"));
 
         service.runExport(7L);
 

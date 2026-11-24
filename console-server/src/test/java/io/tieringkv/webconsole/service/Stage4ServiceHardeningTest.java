@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -115,15 +116,23 @@ class Stage4ServiceHardeningTest {
                 StandardCharsets.UTF_8);
         when(repo.findById(2L)).thenReturn(Optional.of(jsonAndErr));
 
-        when(gateway.execute(instance, "DEL", "doc:1")).thenReturn(new RespReply.Integer(1));
-        when(gateway.execute(instance, "DEL", "bad:1")).thenReturn(new RespReply.Integer(1));
-        when(gateway.execute(instance, "JSON.SET", "doc:1", "$", "{\"a\":1}"))
-                .thenReturn(new RespReply.Simple("OK"));
-        when(gateway.execute(instance, "SET", "bad:1", "v"))
-                .thenReturn(new RespReply.Error("OOM command not allowed"));
+        List<List<String>> captured = new java.util.ArrayList<>();
+        when(gateway.executeBatch(eq(instance), any())).thenAnswer(inv -> {
+            @SuppressWarnings("unchecked")
+            List<List<byte[]>> cmds = inv.getArgument(1);
+            for (List<byte[]> cmd : cmds) {
+                captured.add(cmd.stream().map(b -> new String(b, StandardCharsets.UTF_8)).toList());
+            }
+            return List.of(
+                    new RespReply.Integer(1),
+                    new RespReply.Simple("OK"),
+                    new RespReply.Integer(1),
+                    new RespReply.Error("OOM command not allowed")
+            );
+        });
 
         service.restore(2L);
-        verify(gateway).execute(instance, "JSON.SET", "doc:1", "$", "{\"a\":1}");
+        assertThat(captured).contains(List.of("JSON.SET", "doc:1", "$", "{\"a\":1}"));
         assertThat(jsonAndErr.getRestoreStatus()).isEqualTo(RestoreStatus.FAILED);
         assertThat(jsonAndErr.getRestoredKeys()).isEqualTo(1L);
         assertThat(jsonAndErr.getRestoreMessage())

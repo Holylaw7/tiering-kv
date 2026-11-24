@@ -4,6 +4,7 @@ import io.tieringkv.webconsole.common.BusinessException;
 import io.tieringkv.webconsole.domain.DbInstance;
 import io.tieringkv.webconsole.domain.InstanceStatus;
 import io.tieringkv.webconsole.repository.DbInstanceRepository;
+import io.tieringkv.webconsole.resp.RespClient;
 import io.tieringkv.webconsole.security.InstanceCredentialCipher;
 import io.tieringkv.webconsole.support.InfoParser;
 import io.tieringkv.webconsole.web.dto.InstanceRequest;
@@ -68,9 +69,10 @@ public class InstanceService {
         instance.setPassword(cipher.encrypt(request.password()));
         instance.setRemark(request.remark());
         instance.setEnabled(request.enabled() == null || request.enabled());
+        applyTls(instance, request, true);
         repository.save(instance);
         auditService.record("INSTANCE_CREATE", instance.getName(),
-                host + ":" + instance.getPort(), true);
+                host + ":" + instance.getPort() + (instance.isTlsEnabled() ? " (TLS)" : ""), true);
         return InstanceView.of(instance);
     }
 
@@ -99,10 +101,41 @@ public class InstanceService {
         if (request.enabled() != null) {
             instance.setEnabled(request.enabled());
         }
+        applyTls(instance, request, false);
         repository.save(instance);
         gateway.evict(id);
-        auditService.record("INSTANCE_UPDATE", instance.getName(), null, true);
+        auditService.record("INSTANCE_UPDATE", instance.getName(),
+                instance.isTlsEnabled() ? "tls=true" : null, true);
         return InstanceView.of(instance);
+    }
+
+    private void applyTls(DbInstance instance, InstanceRequest request, boolean creating) {
+        if (request.tlsEnabled() != null) {
+            instance.setTlsEnabled(request.tlsEnabled());
+        } else if (creating) {
+            instance.setTlsEnabled(false);
+        }
+        if (request.tlsVerifyHostname() != null) {
+            instance.setTlsVerifyHostname(request.tlsVerifyHostname());
+        } else if (creating) {
+            instance.setTlsVerifyHostname(true);
+        }
+        if (request.tlsCaCert() != null) {
+            String trimmed = request.tlsCaCert().trim();
+            if (!trimmed.isEmpty()) {
+                try {
+                    RespClient.validateCaCertPem(trimmed);
+                } catch (IllegalArgumentException ex) {
+                    throw BusinessException.badRequest(ex.getMessage());
+                }
+                instance.setTlsCaCert(trimmed);
+            } else if (creating) {
+                instance.setTlsCaCert(null);
+            }
+        }
+        if (!instance.isTlsEnabled()) {
+            // 关闭 TLS 时保留或不影响连接行为；不做强制清空以免误删历史 CA
+        }
     }
 
     @Transactional

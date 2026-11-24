@@ -126,12 +126,19 @@ class MilestoneM3ConsoleHardeningTest {
                         new RespReply.Array(List.of(
                                 new RespReply.Bulk("k1".getBytes(StandardCharsets.UTF_8)),
                                 new RespReply.Bulk("k2".getBytes(StandardCharsets.UTF_8)))))));
-        when(keyspaceService.type(eq(inst), any())).thenReturn("string");
-        when(keyspaceService.ttl(eq(inst), any())).thenReturn(-1L);
-        when(keyspaceService.value(eq(inst), eq("k1"), eq("string"))).thenReturn("v1");
-        when(keyspaceService.value(eq(inst), eq("k2"), eq("string"))).thenReturn("v2");
-        when(gateway.execute(eq(inst), eq("DEL"), any())).thenReturn(new RespReply.Integer(1));
-        when(gateway.execute(eq(inst), eq("SET"), any(), any())).thenReturn(new RespReply.Simple("OK"));
+        List<io.tieringkv.webconsole.web.dto.KeyEntry> metas = List.of(
+                new io.tieringkv.webconsole.web.dto.KeyEntry("k1", "string", -1L),
+                new io.tieringkv.webconsole.web.dto.KeyEntry("k2", "string", -1L));
+        when(keyspaceService.inspectBatch(eq(inst), eq(List.of("k1", "k2")))).thenReturn(metas);
+        when(keyspaceService.readValuesBatch(eq(inst), eq(metas))).thenReturn(List.of("v1", "v2"));
+        when(gateway.executeBatch(eq(inst), any())).thenAnswer(inv -> {
+            List<?> cmds = inv.getArgument(1);
+            List<RespReply> replies = new java.util.ArrayList<>(cmds.size());
+            for (int i = 0; i < cmds.size(); i++) {
+                replies.add(new RespReply.Simple("OK"));
+            }
+            return replies;
+        });
 
         ConsoleProperties props = new ConsoleProperties();
         Path backupDir = tempDir.resolve("backups");
