@@ -3,6 +3,33 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Added
+
+- **控制面备份恢复异步化与权限加固（O1）**：
+  - `GET /api/v1/backups/{id}/download` 收紧至 `ADMIN + OPS` 角色访问（`VIEWER` 返回 `403`）；
+  - `POST /api/v1/backups/{id}/restore` 全面异步化至 `backupExecutor` 线程池，新增 Flyway `V7__backup_progress_tracking.sql`（`processed_keys`）与按 500 键 / 1 秒节流落库进度；前端备份页展示实时进度条并自动恢复轮询。
+- **RESP 批量 Pipeline 与 TLS 加密连接（O2）**：
+  - `RespClient` 与 `RespGateway` 新增 `executeBatch` 批量管线执行与 `TlsOptions`（TLS/SNI 与自定义 CA PEM 校验），新增 Flyway `V8__instance_tls_support.sql` 及实例表单 TLS 动态配置；
+  - `KeyspaceService` 与 `BackupService` 接入 100 键批量 Pipeline，10,000 键全库导出耗时 `0.76s`、异步恢复后台耗时 `0.607s`、`/keys/scan` P50 `16.9ms`。
+- **生产安全加固、告警 Webhook 渠道与容器健康检查（O3）**：
+  - 收紧 `/actuator/info`、`/actuator/metrics/**`、`/actuator/prometheus` 至 `ADMIN` 角色；`ProductionConfigGuard` 增加静态加密主密钥校验与 `console.security.require-encryption-in-prod` 严格开关；
+  - 新增 `LoginAttemptStore` 与 `ClientIpResolver`，支持用户名 + IP 双维度登录限流及受信代理 CIDR 解析；
+  - 新增 Flyway `V9__alert_webhook_channels.sql` 与 `AlertWebhookDispatcher`（HMAC-SHA256 签名、静默窗口、3s 超时与 5xx 重试），前端告警中心新增“通知渠道”管理与测试发送页签；
+  - 补齐 `deploy/console/docker-compose.yml` 全服务 `healthcheck`，新增 `docker-compose.prod.yml` 与 `.env.example`。
+- **CI 门禁与测试体系扩容（O5）**：
+  - `console-server` 接入 SpotBugs High（0 缺陷）与 JaCoCo 行覆盖率 ≥ 75% 门禁（当前 76.67%），同步纳入 `.github/workflows/test.yml`（含 `docker-compose.prod.yml` 校验）；
+  - 新增前端 Store 单测（`auth.test.ts`、`instance.test.ts`，Vitest 共 29 项）与 3 组 Playwright E2E 规范（`backups-async-restore.spec.ts`、`alerts-webhook.spec.ts`、`instances-slowlog-audit.spec.ts`，全栈共 5 组 6 项全绿）。
+
+### Changed
+
+- **Web 前端按需瘦身与组件重构（O4）**：
+  - 引入 `unplugin-auto-import` 与 `unplugin-vue-components` 按需解析 Element Plus，彻底消除 1,174.72 kB 全量 `element` 巨块，首包 CSS 由 372.86 kB 降至 62.23 kB（-83.3%），`chunkSizeWarningLimit` 收紧至 600 kB 且零告警；
+  - 新增防重入轮询 Composable `usePolling.ts`（支持后台标签页自动暂停与可见刷新）与 `ResizeObserver` 防抖监听工具；
+  - 将 1,383 行的 `DashboardView.vue` 模块化拆分为 191 行主容器与 4 个内聚子组件（`InstanceSummaryStrip` / `TieringMemoryPanel` / `TrendChartsGrid` / `SstableInventoryDrawer`）。
+- **仓库卫生收敛（O5）**：移除 `console-web/scripts/` 下 27 个未被引用的历史临时调试探针脚本，保留全部文档引用及活跃验证脚本。
+
 ## [5.1.0] - 2026-10-28
 
 ### Fixed
