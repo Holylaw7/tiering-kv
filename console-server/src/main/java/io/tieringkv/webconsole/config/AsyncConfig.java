@@ -21,4 +21,17 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    /** O3-B：告警 Webhook 异步派发线程池，有界队列 + 丢弃最旧策略，确保绝不阻塞指标采集。 */
+    @Bean(name = "alertWebhookExecutor")
+    public Executor alertWebhookExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(2);
+        executor.setQueueCapacity(64);
+        executor.setThreadNamePrefix("alert-webhook-");
+        executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
+        executor.initialize();
+        return executor;
+    }
 }

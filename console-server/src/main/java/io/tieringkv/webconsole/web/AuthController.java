@@ -1,12 +1,16 @@
 package io.tieringkv.webconsole.web;
 
 import io.tieringkv.webconsole.common.ApiResponse;
+import io.tieringkv.webconsole.config.ConsoleProperties;
+import io.tieringkv.webconsole.security.ClientIpResolver;
 import io.tieringkv.webconsole.service.AuthService;
 import io.tieringkv.webconsole.web.dto.ChangePasswordRequest;
 import io.tieringkv.webconsole.web.dto.LoginRequest;
 import io.tieringkv.webconsole.web.dto.LoginResponse;
 import io.tieringkv.webconsole.web.dto.UserView;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -19,14 +23,24 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService authService;
+    private final ConsoleProperties properties;
 
     public AuthController(AuthService authService) {
+        this(authService, new ConsoleProperties());
+    }
+
+    @Autowired
+    public AuthController(AuthService authService, ConsoleProperties properties) {
         this.authService = authService;
+        this.properties = properties;
     }
 
     @PostMapping("/login")
-    public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ApiResponse.ok(authService.login(request));
+    public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request,
+                                            HttpServletRequest httpRequest) {
+        String clientIp = ClientIpResolver.resolve(httpRequest,
+                properties.getSecurity().getTrustedProxies());
+        return ApiResponse.ok(authService.login(request, clientIp));
     }
 
     @GetMapping("/me")

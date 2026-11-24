@@ -4,6 +4,54 @@
  */
 
 export interface paths {
+    "/api/v1/alerts/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_2"];
+        put?: never;
+        post: operations["create_3"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/channels/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["update_2"];
+        post?: never;
+        delete: operations["delete_3"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/alerts/channels/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["test"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/alerts/events": {
         parameters: {
             query?: never;
@@ -254,7 +302,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete: operations["delete_3"];
+        delete: operations["delete_4"];
         options?: never;
         head?: never;
         patch?: never;
@@ -459,7 +507,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_2"];
+        get: operations["list_3"];
         put?: never;
         post?: never;
         delete?: never;
@@ -600,6 +648,30 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AlertChannelRequest: {
+            enabled?: boolean;
+            name: string;
+            secret?: string;
+            /** Format: int32 */
+            silenceSeconds?: number;
+            type?: string;
+            url: string;
+        };
+        AlertChannelView: {
+            /** Format: date-time */
+            createdAt?: string;
+            enabled?: boolean;
+            hasSecret?: boolean;
+            /** Format: int64 */
+            id?: number;
+            name?: string;
+            /** Format: int32 */
+            silenceSeconds?: number;
+            type?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+            url?: string;
+        };
         AlertEvent: {
             /** Format: date-time */
             firedAt?: string;
@@ -657,6 +729,12 @@ export interface components {
             /** Format: double */
             threshold: number;
         };
+        ApiResponseAlertChannelView: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["AlertChannelView"];
+            message?: string;
+        };
         ApiResponseAlertRule: {
             /** Format: int32 */
             code?: number;
@@ -703,6 +781,12 @@ export interface components {
             /** Format: int32 */
             code?: number;
             data?: components["schemas"]["KeyScanPage"];
+            message?: string;
+        };
+        ApiResponseListAlertChannelView: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["AlertChannelView"][];
             message?: string;
         };
         ApiResponseListAlertRule: {
@@ -811,6 +895,12 @@ export interface components {
             /** Format: int32 */
             code?: number;
             data?: unknown;
+            message?: string;
+        };
+        ApiResponseWebhookTestResult: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["WebhookTestResult"];
             message?: string;
         };
         BackupRecord: {
@@ -1317,6 +1407,14 @@ export interface components {
             /** Format: int64 */
             totalEntries?: number;
         };
+        WebhookTestResult: {
+            /** Format: int64 */
+            costMs?: number;
+            delivered?: boolean;
+            message?: string;
+            /** Format: int32 */
+            statusCode?: number;
+        };
     };
     responses: never;
     parameters: never;
@@ -1326,6 +1424,120 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListAlertChannelView"];
+                };
+            };
+        };
+    };
+    create_3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertChannelRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseAlertChannelView"];
+                };
+            };
+        };
+    };
+    update_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertChannelRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseAlertChannelView"];
+                };
+            };
+        };
+    };
+    delete_3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    test: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseWebhookTestResult"];
+                };
+            };
+        };
+    };
     events: {
         parameters: {
             query?: {
@@ -1734,7 +1946,7 @@ export interface operations {
             };
         };
     };
-    delete_3: {
+    delete_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -2132,7 +2344,7 @@ export interface operations {
             };
         };
     };
-    list_2: {
+    list_3: {
         parameters: {
             query: {
                 instanceId: number;

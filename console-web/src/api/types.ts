@@ -168,6 +168,25 @@ export interface AlertEvent {
   resolvedAt?: string
 }
 
+export interface AlertChannelView {
+  id: number
+  name: string
+  type: string
+  url: string
+  hasSecret: boolean
+  silenceSeconds: number
+  enabled: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface WebhookTestResult {
+  delivered: boolean
+  statusCode: number
+  message: string
+  costMs: number
+}
+
 export type RestoreStatus = 'NONE' | 'RESTORING' | 'SUCCEEDED' | 'FAILED'
 
 export interface BackupRecord {

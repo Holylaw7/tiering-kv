@@ -88,8 +88,14 @@ console:
     borrow-timeout-ms: ${CONSOLE_POOL_BORROW_TIMEOUT_MS:5000}
     max-idle-time-ms: ${CONSOLE_POOL_MAX_IDLE_TIME_MS:60000}
   security:
-    # 配置后以 AES-256-GCM 静态加密实例口令；留空兼容明文
+    # 配置后以 AES-256-GCM 静态加密实例口令与告警密钥；留空兼容明文
     encryption-key: ${CONSOLE_ENCRYPTION_KEY:}
+    # 生产环境是否强制要求配置 encryption-key（默认 false 输出 WARN，true 则阻断启动）
+    require-encryption-in-prod: ${CONSOLE_REQUIRE_ENCRYPTION_IN_PROD:false}
+    # 登录防撞库：单源 IP 5 分钟窗口最大失败次数
+    ip-max-failures: ${CONSOLE_LOGIN_IP_MAX_FAILURES:20}
+    # 受信任反向代理列表（仅当直连对端命中时才采信 X-Forwarded-For）
+    trusted-proxies: ${CONSOLE_TRUSTED_PROXIES:127.0.0.1,::1,0:0:0:0:0:0:0:1}
   terminal:
     # 危险命令黑名单（逗号分隔，命中直接拒绝）
     blocked-commands: ${CONSOLE_BLOCKED_COMMANDS:FLUSHALL,FLUSHDB,SHUTDOWN,DEBUG}

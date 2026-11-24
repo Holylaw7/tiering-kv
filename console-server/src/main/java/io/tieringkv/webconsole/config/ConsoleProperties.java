@@ -358,11 +358,26 @@ public class ConsoleProperties {
         public void setMaxIdleTimeMs(long maxIdleTimeMs) { this.maxIdleTimeMs = maxIdleTimeMs; }
     }
 
-    /** 敏感凭据加密主密钥配置（M3-B3）。 */
+    /** 敏感凭据加密与认证防护配置（M3-B3 + O3-A）。 */
     public static class Security {
         private String encryptionKey;
+        /** 生产环境未配置主密钥时是否直接阻断启动（默认 false，输出 WARN 兼容存量部署）。 */
+        private boolean requireEncryptionInProd = false;
+        /** 登录防撞库：单源 IP 5 分钟窗口内允许的最大失败次数。 */
+        private int ipMaxFailures = 20;
+        /** 允许采信 X-Forwarded-For 头的受信任代理 IP 或网段（默认仅本机回环）。 */
+        private List<String> trustedProxies = new ArrayList<>(
+                List.of("127.0.0.1", "::1", "0:0:0:0:0:0:0:1"));
 
         public String getEncryptionKey() { return encryptionKey; }
         public void setEncryptionKey(String encryptionKey) { this.encryptionKey = encryptionKey; }
+        public boolean isRequireEncryptionInProd() { return requireEncryptionInProd; }
+        public void setRequireEncryptionInProd(boolean requireEncryptionInProd) {
+            this.requireEncryptionInProd = requireEncryptionInProd;
+        }
+        public int getIpMaxFailures() { return ipMaxFailures; }
+        public void setIpMaxFailures(int ipMaxFailures) { this.ipMaxFailures = ipMaxFailures; }
+        public List<String> getTrustedProxies() { return trustedProxies; }
+        public void setTrustedProxies(List<String> trustedProxies) { this.trustedProxies = trustedProxies; }
     }
 }

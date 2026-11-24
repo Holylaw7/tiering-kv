@@ -39,7 +39,17 @@ public class AuthService {
 
     @Transactional
     public LoginResponse login(LoginRequest request) {
+        return login(request, null);
+    }
+
+    @Transactional
+    public LoginResponse login(LoginRequest request, String clientIp) {
         String username = request.username().trim();
+        if (attemptGuard.blockedIp(clientIp)) {
+            auditService.record("LOGIN", username, "来源 IP(" + clientIp + ") 失败次数过多，已限流", false);
+            throw BusinessException.tooManyRequests(
+                    "当前来源失败尝试过多，请 " + attemptGuard.remainingIpSeconds(clientIp) + " 秒后再试");
+        }
         if (attemptGuard.blocked(username)) {
             auditService.record("LOGIN", username, "失败次数过多，已限流", false);
             throw BusinessException.tooManyRequests(
@@ -48,6 +58,7 @@ public class AuthService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> {
                     attemptGuard.recordFailure(username);
+                    attemptGuard.recordIpFailure(clientIp);
                     return BusinessException.unauthorized("用户名或密码错误");
                 });
         if (user.getStatus() != 1) {
@@ -56,6 +67,7 @@ public class AuthService {
         }
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
             attemptGuard.recordFailure(username);
+            attemptGuard.recordIpFailure(clientIp);
             auditService.record("LOGIN", user.getUsername(), "口令错误", false);
             throw BusinessException.unauthorized("用户名或密码错误");
         }

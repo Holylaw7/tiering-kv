@@ -71,6 +71,7 @@ public class ProductionConfigGuard implements InitializingBean {
         checkJwt(out);
         checkDatabase(out);
         checkAdmin(out);
+        checkEncryptionKey(out);
         checkSpringDoc(out);
         checkBackupStorage(out);
         if (out.stream().noneMatch(f -> "FATAL".equals(f.level()))) {
@@ -139,6 +140,25 @@ public class ProductionConfigGuard implements InitializingBean {
         }
         if (password.length() < 12) {
             out.add(new Finding("FATAL", key, "长度不足 12 位"));
+            return;
+        }
+        out.add(new Finding("INFO", key, "已配置"));
+    }
+
+    private void checkEncryptionKey(List<Finding> out) {
+        ConsoleProperties.Security sec = properties.getSecurity();
+        String encKey = sec == null ? null : sec.getEncryptionKey();
+        boolean required = sec != null && sec.isRequireEncryptionInProd();
+        String key = "console.security.encryption-key";
+        if (encKey == null || encKey.isBlank()) {
+            out.add(new Finding(required ? "FATAL" : "WARN", key,
+                    required
+                            ? "生产严格模式已开启，但未配置静态加密主密钥（CONSOLE_ENCRYPTION_KEY）"
+                            : "未配置实例凭据静态加密主密钥（CONSOLE_ENCRYPTION_KEY），实例口令将以明文落库"));
+            return;
+        }
+        if (encKey.getBytes(StandardCharsets.UTF_8).length < 16) {
+            out.add(new Finding("FATAL", key, "静态加密主密钥长度不足 16 字节"));
             return;
         }
         out.add(new Finding("INFO", key, "已配置"));

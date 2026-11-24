@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import { alertApi } from '@/api'
-import type { AlertEvent, AlertRule } from '@/api/types'
+import type { AlertChannelView, AlertEvent, AlertRule } from '@/api/types'
 import { useInstanceStore } from '@/stores/instance'
 import { useAuthStore } from '@/stores/auth'
 import EmptyState from '@/components/EmptyState.vue'
@@ -14,6 +14,7 @@ const auth = useAuthStore()
 const tab = ref('events')
 const rules = ref<AlertRule[]>([])
 const events = ref<AlertEvent[]>([])
+const channels = ref<AlertChannelView[]>([])
 const total = ref(0)
 const page = ref(1)
 const size = ref(20)
@@ -21,6 +22,19 @@ const status = ref('')
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
 const formRef = ref<FormInstance>()
+
+const channelDialogVisible = ref(false)
+const editingChannelId = ref<number | null>(null)
+const channelFormRef = ref<FormInstance>()
+const testingChannelId = ref<number | null>(null)
+const channelForm = reactive({
+  name: '',
+  type: 'WEBHOOK',
+  url: '',
+  secret: '',
+  silenceSeconds: 300,
+  enabled: true
+})
 
 const metrics = [
   { value: 'qps', label: 'QPS', unit: '' },
@@ -54,6 +68,71 @@ async function loadEvents() {
   const result = await alertApi.events({ status: status.value || undefined, page: page.value, size: size.value })
   events.value = result.items
   total.value = result.total
+}
+
+async function loadChannels() {
+  channels.value = await alertApi.channels()
+}
+
+function openCreateChannel() {
+  editingChannelId.value = null
+  Object.assign(channelForm, {
+    name: '',
+    type: 'WEBHOOK',
+    url: '',
+    secret: '',
+    silenceSeconds: 300,
+    enabled: true
+  })
+  channelDialogVisible.value = true
+}
+
+function openEditChannel(channel: AlertChannelView) {
+  editingChannelId.value = channel.id
+  Object.assign(channelForm, {
+    name: channel.name,
+    type: channel.type,
+    url: channel.url,
+    secret: '',
+    silenceSeconds: channel.silenceSeconds,
+    enabled: channel.enabled
+  })
+  channelDialogVisible.value = true
+}
+
+async function submitChannel() {
+  const valid = await channelFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+  if (editingChannelId.value) {
+    await alertApi.updateChannel(editingChannelId.value, { ...channelForm })
+    ElMessage.success('通知渠道已更新')
+  } else {
+    await alertApi.createChannel({ ...channelForm })
+    ElMessage.success('通知渠道已创建')
+  }
+  channelDialogVisible.value = false
+  await loadChannels()
+}
+
+async function removeChannel(channel: AlertChannelView) {
+  await ElMessageBox.confirm(`确认删除通知渠道 ${channel.name}？`, '提示', { type: 'warning' })
+  await alertApi.removeChannel(channel.id)
+  ElMessage.success('渠道已删除')
+  await loadChannels()
+}
+
+async function testChannel(channel: AlertChannelView) {
+  testingChannelId.value = channel.id
+  try {
+    const res = await alertApi.testChannel(channel.id)
+    if (res.delivered) {
+      ElMessage.success(`推送成功（${res.message}，耗时 ${res.costMs} ms）`)
+    } else {
+      ElMessage.error(`推送失败：${res.message}`)
+    }
+  } finally {
+    testingChannelId.value = null
+  }
 }
 
 function openCreate() {
@@ -107,7 +186,7 @@ function levelType(level: string) {
 }
 
 onMounted(async () => {
-  await Promise.all([loadRules(), loadEvents()])
+  await Promise.all([loadRules(), loadEvents(), loadChannels()])
 })
 </script>
 
@@ -118,9 +197,14 @@ onMounted(async () => {
         <h2 class="page-title">告警中心</h2>
         <p class="page-subtitle">基于采集指标做阈值判定，持续满足时长后才触发，恢复后自动闭环</p>
       </div>
-      <el-button v-if="auth.canOperate" type="primary" @click="openCreate">
-        <el-icon><Plus /></el-icon> 新建规则
-      </el-button>
+      <div style="display: flex; gap: 8px">
+        <el-button v-if="auth.canOperate" @click="openCreateChannel">
+          <el-icon><Promotion /></el-icon> 新建通知渠道
+        </el-button>
+        <el-button v-if="auth.canOperate" type="primary" @click="openCreate">
+          <el-icon><Plus /></el-icon> 新建规则
+        </el-button>
+      </div>
     </div>
 
     <div class="kpi-grid">
@@ -238,6 +322,51 @@ onMounted(async () => {
             </el-table-column>
           </el-table>
         </el-tab-pane>
+
+        <el-tab-pane :label="`通知渠道 (${channels.length})`" name="channels">
+          <el-table :data="channels" size="small" style="width: 100%">
+            <template #empty>
+              <EmptyState title="尚未配置通知渠道" description="新增 Webhook 渠道后，告警触发与恢复将自动异步推送。" />
+            </template>
+            <el-table-column prop="name" label="渠道名称" width="160" />
+            <el-table-column prop="type" label="类型" width="100">
+              <template #default="{ row }">
+                <StatusBadge :label="row.type" tone="accent" mono />
+              </template>
+            </el-table-column>
+            <el-table-column prop="url" label="Webhook URL" min-width="240" show-overflow-tooltip>
+              <template #default="{ row }"><span class="mono">{{ row.url }}</span></template>
+            </el-table-column>
+            <el-table-column label="签名" width="90">
+              <template #default="{ row }">
+                <StatusBadge v-if="row.hasSecret" label="HMAC" tone="success" mono />
+                <span v-else class="hint">无</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="静默窗口" width="100">
+              <template #default="{ row }">{{ row.silenceSeconds }} s</template>
+            </el-table-column>
+            <el-table-column label="状态" width="84">
+              <template #default="{ row }">
+                <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? '启用' : '停用' }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="190">
+              <template #default="{ row }">
+                <el-button
+                  v-if="auth.canOperate"
+                  link type="success" size="small"
+                  :loading="testingChannelId === row.id"
+                  @click="testChannel(row)"
+                >
+                  测试发送
+                </el-button>
+                <el-button v-if="auth.canOperate" link type="primary" size="small" @click="openEditChannel(row)">编辑</el-button>
+                <el-button v-if="auth.canOperate" link type="danger" size="small" @click="removeChannel(row)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
       </el-tabs>
     </div>
 
@@ -282,6 +411,31 @@ onMounted(async () => {
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" @click="submit">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="channelDialogVisible" :title="editingChannelId ? '编辑通知渠道' : '新建通知渠道'" width="520px">
+      <el-form ref="channelFormRef" :model="channelForm" label-width="100px">
+        <el-form-item label="渠道名称" prop="name" :rules="[{ required: true, message: '请输入渠道名称', trigger: 'blur' }]">
+          <el-input v-model="channelForm.name" placeholder="如 运维企微群 / PagerDuty" />
+        </el-form-item>
+        <el-form-item label="Webhook URL" prop="url" :rules="[{ required: true, message: '请输入 http/https 地址', trigger: 'blur' }]">
+          <el-input v-model="channelForm.url" placeholder="https://example.com/webhook/alerts" />
+        </el-form-item>
+        <el-form-item label="签名密钥">
+          <el-input v-model="channelForm.secret" type="password" show-password placeholder="可选：HMAC-SHA256 签名密钥（编辑留空保持原值）" />
+        </el-form-item>
+        <el-form-item label="静默窗口">
+          <el-input-number v-model="channelForm.silenceSeconds" :min="0" :max="86400" controls-position="right" />
+          <span class="hint">秒（避免重复触发刷屏，恢复通知不受限）</span>
+        </el-form-item>
+        <el-form-item label="启用">
+          <el-switch v-model="channelForm.enabled" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="channelDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="submitChannel">保存</el-button>
       </template>
     </el-dialog>
   </div>

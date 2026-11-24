@@ -38,6 +38,12 @@ services:
     volumes:
       - ../../config:/app/config:ro
       - core-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/6379 && printf \"*1\\r\\n$$4\\r\\nPING\\r\\n\" >&3 && head -c 5 <&3 | grep -q PONG'"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
     networks:
       - tk-net
 
@@ -47,9 +53,12 @@ services:
     container_name: tk-console
     environment:
       CONSOLE_DB_URL: jdbc:mysql://mysql:3306/tiering_console?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
-      CONSOLE_DB_USER: root
+      CONSOLE_DB_USER: ${CONSOLE_DB_USER:-root}
       CONSOLE_DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-tk_root_pwd}
       CONSOLE_JWT_SECRET: ${CONSOLE_JWT_SECRET:-change-me-in-production-0123456789abcdef}
+      CONSOLE_ENCRYPTION_KEY: ${CONSOLE_ENCRYPTION_KEY:-}
+      CONSOLE_REQUIRE_ENCRYPTION_IN_PROD: ${CONSOLE_REQUIRE_ENCRYPTION_IN_PROD:-false}
+      CONSOLE_TRUSTED_PROXIES: ${CONSOLE_TRUSTED_PROXIES:-127.0.0.1,::1,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16}
       CONSOLE_BACKUP_DIR: /app/backups
       CONSOLE_BACKUP_STORAGE: ${CONSOLE_BACKUP_STORAGE:-local}
       CONSOLE_BACKUP_S3_ENDPOINT: ${CONSOLE_BACKUP_S3_ENDPOINT:-http://minio:9000}
@@ -60,14 +69,20 @@ services:
       CONSOLE_BACKUP_S3_SECRET_KEY: ${CONSOLE_BACKUP_S3_SECRET_KEY:-minioadmin}
       CONSOLE_BACKUP_S3_PATH_STYLE: ${CONSOLE_BACKUP_S3_PATH_STYLE:-true}
       # 直接访问 :8080 时的允许来源（经 Nginx 同源访问不需要）
-      CONSOLE_CORS: http://localhost:8081,http://127.0.0.1:8081
+      CONSOLE_CORS: ${CONSOLE_CORS:-http://localhost:8081,http://127.0.0.1:8081}
       # 数据面在另一个容器：修正默认实例地址（本机开发时留空即可）
       CONSOLE_BOOTSTRAP_INSTANCE: local-6379@tiering-kv:6379
     depends_on:
       mysql:
         condition: service_healthy
       tiering-kv:
-        condition: service_started
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/actuator/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 15s
     volumes:
       - console-backups:/app/backups
     networks:
@@ -80,7 +95,8 @@ services:
     ports:
       - "8081:80"
     depends_on:
-      - console-server
+      console-server:
+        condition: service_healthy
     networks:
       - tk-net
 

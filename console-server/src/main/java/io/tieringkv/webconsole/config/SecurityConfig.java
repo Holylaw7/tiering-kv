@@ -50,8 +50,10 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
-                        .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                        // OpenAPI 契约与文档页（TD-088）：只读、无敏感数据
+                        .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
+                        .requestMatchers("/actuator/info", "/actuator/metrics/**", "/actuator/prometheus")
+                        .hasRole("ADMIN")
+                        // OpenAPI 契约与文档页（TD-088）：只读、无敏感数据；prod 下通过 springdoc.*.enabled=false 关闭
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html")
                         .permitAll()
                         .requestMatchers("/error").permitAll()

@@ -107,4 +107,31 @@ class ProductionConfigGuardTest {
                 .map(f -> f.level()).toList();
         assertThat(levels).allMatch(l -> List.of("FATAL", "WARN", "INFO").contains(l));
     }
+
+    @Test
+    void 静态加密主密钥默认WARN且严格模式下阻断启动() {
+        // 默认未配置 encryption-key：输出 WARN 但不阻断启动（向后兼容）
+        ProductionConfigGuard compat = guard(STRONG, "S3cure-db-pass", "AdminPass!2345");
+        assertThat(compat.check()).anyMatch(f ->
+                "WARN".equals(f.level()) && "console.security.encryption-key".equals(f.key()));
+        assertThatCode(compat::afterPropertiesSet).doesNotThrowAnyException();
+
+        // 开启严格模式且未配置：升级为 FATAL 阻断启动
+        ConsoleProperties strictProps = props(STRONG, "AdminPass!2345");
+        strictProps.getSecurity().setRequireEncryptionInProd(true);
+        ProductionConfigGuard strict = new ProductionConfigGuard(strictProps, env("S3cure-db-pass"));
+        assertThat(fatalKeys(strict)).contains("console.security.encryption-key");
+
+        // 密钥过短（< 16 字节）：直接 FATAL
+        ConsoleProperties shortProps = props(STRONG, "AdminPass!2345");
+        shortProps.getSecurity().setEncryptionKey("too-short");
+        assertThat(fatalKeys(new ProductionConfigGuard(shortProps, env("S3cure-db-pass"))))
+                .contains("console.security.encryption-key");
+
+        // 合法密钥（>= 16 字节）：通过
+        ConsoleProperties validProps = props(STRONG, "AdminPass!2345");
+        validProps.getSecurity().setRequireEncryptionInProd(true);
+        validProps.getSecurity().setEncryptionKey("Prod-Master-Encryption-Key-2026!");
+        assertThat(fatalKeys(new ProductionConfigGuard(validProps, env("S3cure-db-pass")))).isEmpty();
+    }
 }
