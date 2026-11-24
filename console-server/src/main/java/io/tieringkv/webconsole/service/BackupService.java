@@ -137,6 +137,10 @@ public class BackupService {
     private final java.util.concurrent.ConcurrentHashMap<Long, Object> instanceLocks =
             new java.util.concurrent.ConcurrentHashMap<>();
 
+    /** 进度持久化节流阈值：每处理 500 键或间隔 ≥ 1 秒刷库一次，避免高频写库。 */
+    private static final long PROGRESS_FLUSH_KEYS = 500L;
+    private static final long PROGRESS_FLUSH_MS = 1_000L;
+
     /** 恢复超过该时长仍未结束，视为进程崩溃遗留的僵尸状态（ADR-0366）。 */
     private static final long STALE_RESTORING_MINUTES = 30;
 
@@ -178,6 +182,7 @@ public class BackupService {
             String ext = properties.getBackup().isCompress() ? ".jsonl.gz" : ".jsonl";
             record.setFileName("backup-" + instanceId + "-" + LocalDateTime.now().format(STAMP) + "-" + unique + ext);
             record.setStatus(BackupStatus.RUNNING);
+            record.setProcessedKeys(0L);
             record.setCreatedAt(LocalDateTime.now());
             created = repository.save(record);
         }
@@ -208,9 +213,10 @@ public class BackupService {
         String fileName = record.getFileName();
         long written = 0;
         try {
-            long keys = writeSnapshot(instance, fileName);
+            long keys = writeSnapshot(instance, record, fileName);
             written = storageBackend.publish(fileName);
             record.setKeyCount(keys);
+            record.setProcessedKeys(keys);
             record.setSizeBytes(written);
             record.setStatus(BackupStatus.SUCCESS);
             record.setMessage("导出 " + keys + " 个键");
@@ -227,8 +233,9 @@ public class BackupService {
         repository.save(record);
     }
 
-    private long writeSnapshot(DbInstance instance, String fileName) throws IOException {
+    private long writeSnapshot(DbInstance instance, BackupRecord record, String fileName) throws IOException {
         long count = 0;
+        long lastProgressFlushAt = System.currentTimeMillis();
         String cursor = "0";
         int scanCount = Math.max(50, properties.getBackup().getScanCount());
         long maxKeys = properties.getBackup().getMaxKeys();
@@ -263,6 +270,12 @@ public class BackupService {
                         if (maxKeys > 0 && count >= maxKeys) {
                             throw new IllegalStateException("备份键数超过配置上限 " + maxKeys + "，已中止以避免生成不完整备份");
                         }
+                        long now = System.currentTimeMillis();
+                        if (count % PROGRESS_FLUSH_KEYS == 0 || (now - lastProgressFlushAt) >= PROGRESS_FLUSH_MS) {
+                            record.setProcessedKeys(count);
+                            repository.save(record);
+                            lastProgressFlushAt = now;
+                        }
                     }
                 }
             } while (!"0".equals(cursor));
@@ -278,25 +291,26 @@ public class BackupService {
         }
     }
 
-    /** 从备份文件回放（先删同键再写入，保持幂等）。 */
     /**
-     * 从备份文件回放（ADR-0366）。
+     * 提交一次异步恢复任务（ADR-0366 + O1-B）。
      *
-     * <p>三道约束：
+     * <p>四道约束：
      * <ol>
-     *   <li><b>实例级互斥</b>：与导出共用同一把按实例锁，且恢复期间导出、另一次恢复都返回 409；</li>
+     *   <li><b>实例级互斥</b>：与导出共用同一把按实例锁，且恢复期间导出、另一次恢复均返回 409；</li>
+     *   <li><b>异步防超时</b>：锁内落库 {@link RestoreStatus#RESTORING} 后立即返回记录，
+     *       实际回放提交至 {@code backupExecutor}，避免大库恢复击穿 HTTP 超时；</li>
      *   <li><b>状态隔离</b>：恢复状态写入 {@code restoreStatus}，不污染备份记录自身的 {@code status}；</li>
-     *   <li><b>异常安全</b>：失败时标记 {@link RestoreStatus#FAILED} 并记录已回放键数，
-     *       绝不把失败的恢复标成 SUCCEEDED，也不把备份标成坏文件。</li>
+     *   <li><b>进度与异常安全</b>：按批节流更新 {@code restoredKeys}，失败时标记 {@link RestoreStatus#FAILED}
+     *       并保留部分已回放键数，绝不把失败标成 SUCCEEDED。</li>
      * </ol>
      */
-    public long restore(Long recordId) {
+    public BackupRecord restore(Long recordId) {
         BackupRecord record = repository.findById(recordId)
                 .orElseThrow(() -> BusinessException.notFound("备份记录不存在：" + recordId));
         if (record.getStatus() != BackupStatus.SUCCESS) {
             throw BusinessException.badRequest("仅成功的备份可恢复");
         }
-        DbInstance instance = instanceService.require(record.getInstanceId());
+        instanceService.require(record.getInstanceId());
         storageBackend.validateFileName(record.getFileName());
         if (!storageBackend.exists(record.getFileName())) {
             throw BusinessException.notFound("备份文件已丢失：" + record.getFileName());
@@ -304,6 +318,7 @@ public class BackupService {
 
         Long instanceId = record.getInstanceId();
         Object lock = instanceLocks.computeIfAbsent(instanceId, key -> new Object());
+        BackupRecord saved;
         synchronized (lock) {
             // 恢复进行中：拒绝第二次恢复
             repository.findFirstByInstanceIdAndRestoreStatusOrderByRestoreStartedAtDesc(
@@ -326,16 +341,28 @@ public class BackupService {
                                     "该实例正在备份（id=" + running.getId() + "），请稍后再试");
                         }
                     });
-            // 标记进入恢复：先落库再回放，保证其他请求能看到 RESTORING
+            // 标记进入恢复：先落库再提交异步执行，保证其他请求立即看到 RESTORING
             record.setRestoreStatus(RestoreStatus.RESTORING);
             record.setRestoreStartedAt(LocalDateTime.now());
             record.setRestoreFinishedAt(null);
             record.setRestoredKeys(0);
             record.setRestoreMessage(null);
-            repository.save(record);
+            saved = repository.save(record);
         }
 
+        executor.execute(() -> runRestore(recordId));
+        return saved;
+    }
+
+    /** 恢复异步执行体（O1-B）：按批节流刷新 restoredKeys，可单独调用以便单测确定性验证。 */
+    public long runRestore(Long recordId) {
+        BackupRecord record = repository.findById(recordId).orElse(null);
+        if (record == null) {
+            return 0L;
+        }
+        DbInstance instance = instanceService.require(record.getInstanceId());
         long restored = 0;
+        long lastProgressFlushAt = System.currentTimeMillis();
         try (BufferedReader reader = openSnapshotReader(record.getFileName())) {
             String line;
             while ((line = reader.readLine()) != null) {
@@ -345,6 +372,12 @@ public class BackupService {
                 SnapshotEntry entry = objectMapper.readValue(line, SnapshotEntry.class);
                 restoreEntry(instance, entry);
                 restored++;
+                long now = System.currentTimeMillis();
+                if (restored % PROGRESS_FLUSH_KEYS == 0 || (now - lastProgressFlushAt) >= PROGRESS_FLUSH_MS) {
+                    record.setRestoredKeys(restored);
+                    repository.save(record);
+                    lastProgressFlushAt = now;
+                }
             }
             finishRestore(record, RestoreStatus.SUCCEEDED, restored, null);
             auditService.record("RESTORE_BACKUP", instance.getName(),
@@ -353,10 +386,12 @@ public class BackupService {
         } catch (Exception ex) {
             // 异常安全：已写入的部分保留，状态明确标失败，并记录"恢复了多少"
             String reason = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
-            finishRestore(record, RestoreStatus.FAILED, restored, truncate(reason));
+            finishRestore(record, RestoreStatus.FAILED, restored,
+                    truncate("已回放 " + restored + " 个键，恢复中断：" + reason));
             auditService.record("RESTORE_BACKUP", instance.getName(),
                     "file=" + record.getFileName() + " restored=" + restored + " result=failed", false);
-            throw BusinessException.upstream("恢复失败（已回放 " + restored + " 个键，数据可能不完整）：" + reason);
+            log.error("恢复失败 recordId={} instance={} restored={}", recordId, instance.getName(), restored, ex);
+            return restored;
         }
     }
 

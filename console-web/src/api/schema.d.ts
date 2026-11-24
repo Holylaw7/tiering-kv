@@ -735,13 +735,6 @@ export interface components {
             data?: components["schemas"]["LoginResponse"];
             message?: string;
         };
-        ApiResponseLong: {
-            /** Format: int32 */
-            code?: number;
-            /** Format: int64 */
-            data?: number;
-            message?: string;
-        };
         ApiResponseOverviewView: {
             /** Format: int32 */
             code?: number;
@@ -836,6 +829,8 @@ export interface components {
             /** Format: int64 */
             keyCount?: number;
             message?: string;
+            /** Format: int64 */
+            processedKeys?: number;
             /** Format: date-time */
             restoreFinishedAt?: string;
             restoreMessage?: string;
@@ -1794,7 +1789,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseLong"];
+                    "*/*": components["schemas"]["ApiResponseBackupRecord"];
                 };
             };
         };

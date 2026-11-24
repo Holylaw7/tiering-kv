@@ -50,11 +50,12 @@ public class BackupController {
 
     @PostMapping("/{id}/restore")
     @PreAuthorize("hasRole('ADMIN')")
-    public ApiResponse<Long> restore(@PathVariable Long id) {
+    public ApiResponse<BackupRecord> restore(@PathVariable Long id) {
         return ApiResponse.ok(backupService.restore(id));
     }
 
     @GetMapping("/{id}/download")
+    @PreAuthorize("hasAnyRole('ADMIN','OPS')")
     public ResponseEntity<Resource> download(@PathVariable Long id) {
         BackupService.DownloadStream stream = backupService.openDownload(id);
         return ResponseEntity.ok()

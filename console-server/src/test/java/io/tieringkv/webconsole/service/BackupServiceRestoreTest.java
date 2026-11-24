@@ -181,27 +181,27 @@ class BackupServiceRestoreTest {
     void 恢复失败不污染备份状态且记录已回放数() throws Exception {
         BackupRecord record = backupWith(entry("k1", "v1"), "{损坏的行}");
 
-        assertThatThrownBy(() -> service.restore(record.getId()))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("已回放 1 个键");
+        BackupRecord submitted = service.restore(record.getId());
 
+        assertThat(submitted.getId()).isEqualTo(record.getId());
         assertThat(record.getStatus()).isEqualTo(BackupStatus.SUCCESS);
         assertThat(record.getRestoreStatus()).isEqualTo(RestoreStatus.FAILED);
         assertThat(record.getRestoredKeys()).isEqualTo(1);
-        assertThat(record.getRestoreMessage()).isNotBlank();
+        assertThat(record.getRestoreMessage()).contains("已回放 1 个键");
         assertThat(record.getRestoreFinishedAt()).isNotNull();
     }
 
     @Test
     void 失败后可以重试并成功() throws Exception {
         BackupRecord record = backupWith("{损坏的行}");
-        assertThatThrownBy(() -> service.restore(record.getId())).isInstanceOf(BusinessException.class);
+        service.restore(record.getId());
+        assertThat(record.getRestoreStatus()).isEqualTo(RestoreStatus.FAILED);
 
         Files.write(dir.resolve(record.getFileName()),
                 String.join("\n", entry("k1", "v1"), entry("k2", "v2")).getBytes(StandardCharsets.UTF_8));
-        long restored = service.restore(record.getId());
+        BackupRecord retried = service.restore(record.getId());
 
-        assertThat(restored).isEqualTo(2);
+        assertThat(retried.getId()).isEqualTo(record.getId());
         assertThat(record.getRestoreStatus()).isEqualTo(RestoreStatus.SUCCEEDED);
         assertThat(record.getRestoredKeys()).isEqualTo(2);
         assertThat(record.getRestoreMessage()).isNull();
@@ -219,10 +219,59 @@ class BackupServiceRestoreTest {
         zombie.setCreatedAt(LocalDateTime.now().minusHours(1));
         store.put(zombie.getId(), zombie);
 
-        long restored = service.restore(record.getId());
+        BackupRecord result = service.restore(record.getId());
 
-        assertThat(restored).isEqualTo(1);
+        assertThat(result.getId()).isEqualTo(record.getId());
+        assertThat(record.getRestoreStatus()).isEqualTo(RestoreStatus.SUCCEEDED);
+        assertThat(record.getRestoredKeys()).isEqualTo(1);
         assertThat(zombie.getRestoreStatus()).isEqualTo(RestoreStatus.FAILED);
         assertThat(zombie.getRestoreMessage()).contains("超时");
+    }
+
+    @Test
+    void 恢复异步提交立即返回RESTORING并在执行器中完成() throws Exception {
+        BackupRecord record = backupWith(entry("k1", "v1"), entry("k2", "v2"));
+        List<Runnable> queued = new java.util.ArrayList<>();
+        InstanceService instanceService = mock(InstanceService.class);
+        when(instanceService.require(any())).thenReturn(instance);
+        ConsoleProperties props = new ConsoleProperties();
+        props.getBackup().setDir(dir.toString());
+        BackupService asyncService = new BackupService(repository, instanceService,
+                mock(KeyspaceService.class), gateway, new ObjectMapper(), props,
+                queued::add, mock(AuditService.class), capacity);
+
+        BackupRecord submitted = asyncService.restore(record.getId());
+
+        assertThat(submitted.getRestoreStatus()).isEqualTo(RestoreStatus.RESTORING);
+        assertThat(submitted.getRestoredKeys()).isEqualTo(0);
+        assertThat(queued).hasSize(1);
+
+        queued.get(0).run();
+        assertThat(record.getRestoreStatus()).isEqualTo(RestoreStatus.SUCCEEDED);
+        assertThat(record.getRestoredKeys()).isEqualTo(2);
+    }
+
+    @Test
+    void 大批量回放按节流持久化中间恢复进度() throws Exception {
+        String[] lines = new String[550];
+        for (int i = 0; i < lines.length; i++) {
+            lines[i] = entry("k" + i, "v" + i);
+        }
+        BackupRecord record = backupWith(lines);
+        List<Long> observedProgress = new java.util.ArrayList<>();
+        when(repository.save(any(BackupRecord.class))).thenAnswer(inv -> {
+            BackupRecord r = inv.getArgument(0);
+            store.put(r.getId(), r);
+            if (r.getRestoreStatus() == RestoreStatus.RESTORING && r.getRestoredKeys() > 0) {
+                observedProgress.add(r.getRestoredKeys());
+            }
+            return r;
+        });
+
+        service.restore(record.getId());
+
+        assertThat(observedProgress).contains(500L);
+        assertThat(record.getRestoreStatus()).isEqualTo(RestoreStatus.SUCCEEDED);
+        assertThat(record.getRestoredKeys()).isEqualTo(550L);
     }
 }

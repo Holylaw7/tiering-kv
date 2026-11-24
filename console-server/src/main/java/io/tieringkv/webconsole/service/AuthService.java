@@ -6,7 +6,6 @@ import io.tieringkv.webconsole.repository.UserRepository;
 import io.tieringkv.webconsole.security.JwtService;
 import io.tieringkv.webconsole.security.LoginAttemptGuard;
 import io.tieringkv.webconsole.security.SecurityUtils;
-import io.tieringkv.webconsole.security.SecurityUtils;
 import io.tieringkv.webconsole.security.UserPrincipal;
 import io.tieringkv.webconsole.web.dto.ChangePasswordRequest;
 import io.tieringkv.webconsole.web.dto.LoginRequest;
