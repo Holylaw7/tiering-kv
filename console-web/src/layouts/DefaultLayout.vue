@@ -1,11 +1,46 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import {
+  Bell,
+  CaretBottom,
+  Coin,
+  Document,
+  Expand,
+  Files,
+  Fold,
+  Grid,
+  Menu,
+  Monitor,
+  Odometer,
+  Operation,
+  Setting,
+  Timer,
+  User
+} from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useInstanceStore } from '@/stores/instance'
 import { alertApi, authApi } from '@/api'
 import StatusBadge from '@/components/StatusBadge.vue'
+
+const NAV_ICONS: Record<string, Component> = {
+  Odometer,
+  Coin,
+  Grid,
+  Monitor,
+  Bell,
+  Timer,
+  Files,
+  Document,
+  Setting,
+  User,
+  Menu
+}
+
+function iconOf(name: string): Component {
+  return NAV_ICONS[name] ?? Menu
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -148,7 +183,7 @@ function goAlerts() {
           <p v-if="!collapsed" class="nav-label">{{ group.name }}</p>
           <el-menu :default-active="route.path" :collapse="collapsed" router class="menu">
             <el-menu-item v-for="item in group.items" :key="item.path" :index="item.path">
-              <el-icon><component :is="item.icon" /></el-icon>
+              <el-icon><component :is="iconOf(item.icon)" /></el-icon>
               <template #title>{{ item.title }}</template>
             </el-menu-item>
           </el-menu>
@@ -157,7 +192,7 @@ function goAlerts() {
 
       <div class="sidebar-foot">
         <button class="collapse" type="button" :aria-label="collapsed ? '展开侧栏' : '收起侧栏'" @click="collapsed = !collapsed">
-          <el-icon><component :is="collapsed ? 'Expand' : 'Fold'" /></el-icon>
+          <el-icon><component :is="collapsed ? Expand : Fold" /></el-icon>
         </button>
         <span v-if="!collapsed" class="version mono">v5.1.0</span>
       </div>
@@ -268,7 +303,7 @@ function goAlerts() {
         <p class="nav-label">{{ group.name }}</p>
         <el-menu :default-active="route.path" router class="menu">
           <el-menu-item v-for="item in group.items" :key="item.path" :index="item.path">
-            <el-icon><component :is="item.icon" /></el-icon>
+            <el-icon><component :is="iconOf(item.icon)" /></el-icon>
             <template #title>{{ item.title }}</template>
           </el-menu-item>
         </el-menu>

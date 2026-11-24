@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Search } from '@element-plus/icons-vue'
 import { keyspaceApi } from '@/api'
 import type { KeyDetail, KeyEntry } from '@/api/types'
 import { useInstanceStore } from '@/stores/instance'
@@ -193,8 +194,8 @@ onMounted(() => scan(true))
         </el-table-column>
         <el-table-column label="操作" width="170">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="openDetail(row)">查看</el-button>
-            <el-button v-if="auth.canOperate" link type="danger" size="small" @click="remove(row)">删除</el-button>
+            <el-button link type="primary" size="small" @click="openDetail(row as KeyEntry)">查看</el-button>
+            <el-button v-if="auth.canOperate" link type="danger" size="small" @click="remove(row as KeyEntry)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
