@@ -39,7 +39,7 @@ services:
       - ../../config:/app/config:ro
       - core-data:/app/data
     healthcheck:
-      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/6379 && printf \"*1\\r\\n$$4\\r\\nPING\\r\\n\" >&3 && head -c 5 <&3 | grep -q PONG'"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9100/healthz || exit 1"]
       interval: 5s
       timeout: 3s
       retries: 20
