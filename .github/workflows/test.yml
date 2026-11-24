@@ -124,7 +124,7 @@ jobs:
       - name: SpotBugs High severity gate
         run: |
           mvn -B -pl tiering-protocol,tiering-storage,tiering-server,tiering-cluster,tiering-operator \
-            -DskipTests test-compile jar:test-jar spotbugs:check \
+            -DskipTests test-compile jar:test-jar com.github.spotbugs:spotbugs-maven-plugin:check \
             -Dspotbugs.threshold=High -Dspotbugs.failOnError=true
 
   docker-compose-e2e:

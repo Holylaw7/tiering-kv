@@ -3,9 +3,11 @@ package io.tieringkv.webconsole.web;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.tieringkv.webconsole.domain.BackupRecord;
 import io.tieringkv.webconsole.domain.BackupStatus;
+import io.tieringkv.webconsole.domain.DbInstance;
 import io.tieringkv.webconsole.domain.RestoreStatus;
 import io.tieringkv.webconsole.domain.Role;
 import io.tieringkv.webconsole.repository.BackupRecordRepository;
+import io.tieringkv.webconsole.repository.DbInstanceRepository;
 import io.tieringkv.webconsole.repository.UserRepository;
 import io.tieringkv.webconsole.service.BackupStorageBackend;
 import io.tieringkv.webconsole.support.TestUsers;
@@ -51,11 +53,15 @@ class BackupControllerSecurityTest {
     private BackupRecordRepository backupRecordRepository;
 
     @Autowired
+    private DbInstanceRepository instanceRepository;
+
+    @Autowired
     private BackupStorageBackend storageBackend;
 
     private String viewerToken;
     private String opsToken;
     private String adminToken;
+    private Long instanceId;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -65,6 +71,16 @@ class BackupControllerSecurityTest {
         viewerToken = login("o1_viewer", "viewer123");
         opsToken = login("o1_ops", "ops123456");
         adminToken = login("o1_admin", "admin1234");
+        instanceId = instanceRepository.findByName("o1-sec-inst")
+                .map(DbInstance::getId)
+                .orElseGet(() -> {
+                    DbInstance inst = new DbInstance();
+                    inst.setName("o1-sec-inst");
+                    inst.setHost("127.0.0.1");
+                    inst.setPort(65099);
+                    inst.setEnabled(true);
+                    return instanceRepository.save(inst).getId();
+                });
     }
 
     private String login(String username, String password) throws Exception {
@@ -86,7 +102,7 @@ class BackupControllerSecurityTest {
         storageBackend.publish(fileName);
 
         BackupRecord rec = new BackupRecord();
-        rec.setInstanceId(1L);
+        rec.setInstanceId(instanceId);
         rec.setFileName(fileName);
         rec.setSizeBytes(56L);
         rec.setKeyCount(1L);
@@ -127,7 +143,7 @@ class BackupControllerSecurityTest {
         storageBackend.publish(fileName);
 
         BackupRecord rec = new BackupRecord();
-        rec.setInstanceId(1L);
+        rec.setInstanceId(instanceId);
         rec.setFileName(fileName);
         rec.setSizeBytes(0L);
         rec.setKeyCount(0L);
