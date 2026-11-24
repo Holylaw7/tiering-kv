@@ -32,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -58,6 +59,14 @@ class BackupServiceRestoreTest {
     void setUp() throws Exception {
         repository = mock(BackupRecordRepository.class);
         gateway = mock(RespGateway.class);
+        when(gateway.executeBatch(any(), any())).thenAnswer(inv -> {
+            List<?> cmds = inv.getArgument(1);
+            List<RespReply> replies = new java.util.ArrayList<>(cmds.size());
+            for (int i = 0; i < cmds.size(); i++) {
+                replies.add(new RespReply.Simple("OK"));
+            }
+            return replies;
+        });
         instance = new DbInstance();
         instance.setName("local");
 
@@ -114,12 +123,17 @@ class BackupServiceRestoreTest {
         BackupRecord record = backupWith(entry("k1", "v1"), entry("k2", "v2"));
         CountDownLatch inReplay = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
-        // 第一次 restore 在回放时阻塞，制造"恢复进行中"的窗口
-        when(gateway.execute(any(), any(String[].class))).thenAnswer(inv -> {
+        // 第一次 restore 在管线批回放时阻塞，制造"恢复进行中"的窗口
+        doAnswer(inv -> {
             inReplay.countDown();
             release.await(3, TimeUnit.SECONDS);
-            return new RespReply.Simple("OK");
-        });
+            List<?> cmds = inv.getArgument(1);
+            List<RespReply> replies = new java.util.ArrayList<>(cmds.size());
+            for (int i = 0; i < cmds.size(); i++) {
+                replies.add(new RespReply.Simple("OK"));
+            }
+            return replies;
+        }).when(gateway).executeBatch(any(), any());
 
         ExecutorService pool = Executors.newFixedThreadPool(2);
         List<Throwable> errors = java.util.Collections.synchronizedList(new java.util.ArrayList<>());

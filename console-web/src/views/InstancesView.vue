@@ -18,7 +18,17 @@ const loading = ref(false)
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
 const formRef = ref<FormInstance>()
-const form = reactive({ name: '', host: '127.0.0.1', port: 6379, password: '', remark: '', enabled: true })
+const form = reactive({
+  name: '',
+  host: '127.0.0.1',
+  port: 6379,
+  password: '',
+  remark: '',
+  enabled: true,
+  tlsEnabled: false,
+  tlsVerifyHostname: true,
+  tlsCaCert: ''
+})
 
 const rules = {
   name: [{ required: true, message: '请输入实例名称', trigger: 'blur' }],
@@ -37,7 +47,17 @@ async function load() {
 
 function openCreate() {
   editingId.value = null
-  Object.assign(form, { name: '', host: '127.0.0.1', port: 6379, password: '', remark: '', enabled: true })
+  Object.assign(form, {
+    name: '',
+    host: '127.0.0.1',
+    port: 6379,
+    password: '',
+    remark: '',
+    enabled: true,
+    tlsEnabled: false,
+    tlsVerifyHostname: true,
+    tlsCaCert: ''
+  })
   dialogVisible.value = true
 }
 
@@ -49,7 +69,10 @@ function openEdit(row: InstanceView) {
     port: row.port,
     password: '',
     remark: row.remark ?? '',
-    enabled: row.enabled
+    enabled: row.enabled,
+    tlsEnabled: Boolean(row.tlsEnabled),
+    tlsVerifyHostname: row.tlsVerifyHostname !== false,
+    tlsCaCert: ''
   })
   dialogVisible.value = true
 }
@@ -118,9 +141,12 @@ onMounted(load)
 
       <el-table :data="rows" size="default">
         <el-table-column prop="name" label="名称" min-width="140" />
-        <el-table-column label="地址" min-width="180">
+        <el-table-column label="地址" min-width="210">
           <template #default="{ row }">
-            <span class="mono">{{ row.host }}:{{ row.port }}</span>
+            <div class="addr-cell">
+              <span class="mono">{{ row.host }}:{{ row.port }}</span>
+              <StatusBadge v-if="row.tlsEnabled" label="TLS" tone="accent" mono />
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="110">
@@ -176,6 +202,20 @@ onMounted(load)
         <el-form-item label="启用">
           <el-switch v-model="form.enabled" />
         </el-form-item>
+        <el-form-item label="启用 TLS">
+          <el-switch v-model="form.tlsEnabled" />
+        </el-form-item>
+        <el-form-item v-if="form.tlsEnabled" label="校验主机名">
+          <el-switch v-model="form.tlsVerifyHostname" />
+        </el-form-item>
+        <el-form-item v-if="form.tlsEnabled" label="CA 证书">
+          <el-input
+            v-model="form.tlsCaCert"
+            type="textarea"
+            :rows="4"
+            placeholder="可选 PEM 格式根证书（留空使用系统信任库或保留已存证书）"
+          />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -186,6 +226,12 @@ onMounted(load)
 </template>
 
 <style scoped>
+.addr-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .muted {
   color: var(--text-3);
 }

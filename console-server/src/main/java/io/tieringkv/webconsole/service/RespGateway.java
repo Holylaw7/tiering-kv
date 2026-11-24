@@ -35,8 +35,8 @@ public class RespGateway {
     }
 
     @FunctionalInterface
-    private interface ClientAction {
-        RespReply run(RespClient client) throws IOException;
+    private interface ClientAction<T> {
+        T run(RespClient client) throws IOException;
     }
 
     public RespReply execute(DbInstance instance, String... args) throws IOException {
@@ -47,7 +47,15 @@ public class RespGateway {
         return withClient(instance, client -> client.execute(args));
     }
 
-    private RespReply withClient(DbInstance instance, ClientAction action) throws IOException {
+    /** RESP Pipeline 批量执行（O2-A），异常时销毁脏连接确保池隔离。 */
+    public List<RespReply> executeBatch(DbInstance instance, List<List<byte[]>> commands) throws IOException {
+        if (commands == null || commands.isEmpty()) {
+            return List.of();
+        }
+        return withClient(instance, client -> client.executeBatch(commands));
+    }
+
+    private <T> T withClient(DbInstance instance, ClientAction<T> action) throws IOException {
         RespClientPool pool = pool(instance);
         RespClient client = pool.borrow();
         boolean healthy = true;
@@ -108,9 +116,14 @@ public class RespGateway {
     private RespClient open(DbInstance instance) {
         RespClient client = null;
         try {
+            RespClient.TlsOptions tls = new RespClient.TlsOptions(
+                    instance.isTlsEnabled(),
+                    instance.isTlsVerifyHostname(),
+                    instance.getTlsCaCert());
             client = RespClient.open(instance.getHost(), instance.getPort(),
                     properties.getMetrics().getConnectTimeoutMs(),
-                    properties.getMetrics().getReadTimeoutMs());
+                    properties.getMetrics().getReadTimeoutMs(),
+                    tls);
             String password = cipher.decrypt(instance.getPassword());
             if (password != null && !password.isBlank()) {
                 RespReply reply = client.execute("AUTH", password);

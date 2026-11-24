@@ -30,6 +30,9 @@ export interface InstanceView {
   remark?: string
   enabled: boolean
   hasPassword: boolean
+  tlsEnabled?: boolean
+  tlsVerifyHostname?: boolean
+  hasTlsCaCert?: boolean
 }
 
 export interface LiveMetrics {

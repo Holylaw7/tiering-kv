@@ -64,6 +64,19 @@ public class DbInstance {
     @Column(nullable = false)
     private boolean enabled = true;
 
+    /** O2-B：是否启用到数据面的 TLS 加密链路。 */
+    @Column(name = "tls_enabled", nullable = false)
+    private boolean tlsEnabled = false;
+
+    /** O2-B：启用 TLS 时是否校验证书主机名/SAN。 */
+    @Column(name = "tls_verify_hostname", nullable = false)
+    private boolean tlsVerifyHostname = true;
+
+    /** O2-B：可选自定义 CA 根证书（PEM），留空走 JVM 默认 TrustStore。 */
+    @JsonIgnore
+    @Column(name = "tls_ca_cert", columnDefinition = "TEXT")
+    private String tlsCaCert;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -160,6 +173,30 @@ public class DbInstance {
 
     public void setEnabled(boolean enabled) {
         this.enabled = enabled;
+    }
+
+    public boolean isTlsEnabled() {
+        return tlsEnabled;
+    }
+
+    public void setTlsEnabled(boolean tlsEnabled) {
+        this.tlsEnabled = tlsEnabled;
+    }
+
+    public boolean isTlsVerifyHostname() {
+        return tlsVerifyHostname;
+    }
+
+    public void setTlsVerifyHostname(boolean tlsVerifyHostname) {
+        this.tlsVerifyHostname = tlsVerifyHostname;
+    }
+
+    public String getTlsCaCert() {
+        return tlsCaCert;
+    }
+
+    public void setTlsCaCert(String tlsCaCert) {
+        this.tlsCaCert = tlsCaCert;
     }
 
     public LocalDateTime getCreatedAt() {

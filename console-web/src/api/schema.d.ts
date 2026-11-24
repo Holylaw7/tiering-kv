@@ -903,10 +903,14 @@ export interface components {
             /** Format: int32 */
             port?: number;
             remark?: string;
+            tlsCaCert?: string;
+            tlsEnabled?: boolean;
+            tlsVerifyHostname?: boolean;
         };
         InstanceView: {
             enabled?: boolean;
             hasPassword?: boolean;
+            hasTlsCaCert?: boolean;
             host?: string;
             /** Format: int64 */
             id?: number;
@@ -918,6 +922,8 @@ export interface components {
             remark?: string;
             /** @enum {string} */
             status?: "UP" | "DOWN" | "UNKNOWN";
+            tlsEnabled?: boolean;
+            tlsVerifyHostname?: boolean;
             version?: string;
         };
         KeyDetail: {

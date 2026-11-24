@@ -2,6 +2,7 @@ package io.tieringkv.webconsole.service;
 
 import io.tieringkv.webconsole.common.BusinessException;
 import io.tieringkv.webconsole.domain.DbInstance;
+import io.tieringkv.webconsole.resp.RespClient;
 import io.tieringkv.webconsole.resp.RespReply;
 import io.tieringkv.webconsole.support.Text;
 import io.tieringkv.webconsole.web.dto.KeyDetail;
@@ -52,15 +53,124 @@ public class KeyspaceService {
             throw BusinessException.upstream("SCAN 返回结构异常");
         }
         String nextCursor = text(array.items().get(0));
-        List<KeyEntry> keys = new ArrayList<>();
+        List<String> keyNames = new ArrayList<>();
         if (array.items().get(1) instanceof RespReply.Array keyArray && !keyArray.isNil()) {
             for (RespReply item : keyArray.items()) {
                 String key = text(item);
-                keys.add(new KeyEntry(key, type(instance, key), ttl(instance, key)));
+                if (key != null) {
+                    keyNames.add(key);
+                }
             }
         }
+        List<KeyEntry> keys = inspectBatch(instance, keyNames);
         boolean finished = "0".equals(nextCursor);
         return new KeyScanPage(nextCursor, keys, finished);
+    }
+
+    /**
+     * RESP Pipeline 批量探测键元数据（O2-A）：整批键的 TYPE + TTL 合并为单次网络往返。
+     */
+    public List<KeyEntry> inspectBatch(DbInstance instance, List<String> keys) {
+        if (keys == null || keys.isEmpty()) {
+            return List.of();
+        }
+        List<List<byte[]>> commands = new ArrayList<>(keys.size() * 2);
+        for (String key : keys) {
+            commands.add(RespClient.commandBytes("TYPE", key));
+            commands.add(RespClient.commandBytes("TTL", key));
+        }
+        List<RespReply> replies;
+        try {
+            replies = gateway.executeBatch(instance, commands);
+        } catch (IOException ex) {
+            throw upstream(instance, ex);
+        }
+        if (replies.size() != commands.size()) {
+            throw BusinessException.upstream("管线批量探测返回条目数不匹配：期望 "
+                    + commands.size() + "，实际 " + replies.size());
+        }
+        List<KeyEntry> result = new ArrayList<>(keys.size());
+        for (int i = 0; i < keys.size(); i++) {
+            String type = text(replies.get(i * 2));
+            RespReply ttlReply = replies.get(i * 2 + 1);
+            long ttl = ttlReply instanceof RespReply.Integer integer ? integer.value() : -2;
+            result.add(new KeyEntry(keys.get(i), type, ttl));
+        }
+        return result;
+    }
+
+    /**
+     * RESP Pipeline 批量读取键值（O2-A）：将同批标准类型键的取值命令合并为单次往返。
+     */
+    public List<Object> readValuesBatch(DbInstance instance, List<KeyEntry> entries) {
+        if (entries == null || entries.isEmpty()) {
+            return List.of();
+        }
+        List<List<byte[]>> commands = new ArrayList<>(entries.size());
+        List<Integer> commandIndices = new ArrayList<>(entries.size());
+        Object[] values = new Object[entries.size()];
+        for (int i = 0; i < entries.size(); i++) {
+            KeyEntry entry = entries.get(i);
+            List<byte[]> cmd = valueReadCommand(entry.key(), entry.type());
+            if (cmd != null) {
+                commands.add(cmd);
+                commandIndices.add(i);
+            } else if ("stream".equals(entry.type())) {
+                values[i] = safeDump(instance, "XRANGE", entry.key(), "-", "+", "COUNT", "50");
+            } else if ("timeseries".equals(entry.type())) {
+                values[i] = safeDump(instance, "TS.RANGE", entry.key(), "-", "+");
+            }
+        }
+        if (!commands.isEmpty()) {
+            List<RespReply> replies;
+            try {
+                replies = gateway.executeBatch(instance, commands);
+            } catch (IOException ex) {
+                throw upstream(instance, ex);
+            }
+            if (replies.size() != commands.size()) {
+                throw BusinessException.upstream("管线批量取值返回条目数不匹配：期望 "
+                        + commands.size() + "，实际 " + replies.size());
+            }
+            for (int j = 0; j < commandIndices.size(); j++) {
+                int idx = commandIndices.get(j);
+                RespReply reply = replies.get(j);
+                if (reply instanceof RespReply.Error error) {
+                    throw BusinessException.badRequest("命令执行失败：" + error.message());
+                }
+                values[idx] = decodeValue(entries.get(idx).type(), reply);
+            }
+        }
+        List<Object> out = new ArrayList<>(entries.size());
+        for (Object v : values) {
+            out.add(v);
+        }
+        return out;
+    }
+
+    private List<byte[]> valueReadCommand(String key, String type) {
+        if (type == null) {
+            return null;
+        }
+        return switch (type) {
+            case "string" -> RespClient.commandBytes("GET", key);
+            case "hash" -> RespClient.commandBytes("HGETALL", key);
+            case "list" -> RespClient.commandBytes("LRANGE", key, "0", "-1");
+            case "set" -> RespClient.commandBytes("SMEMBERS", key);
+            case "zset" -> RespClient.commandBytes("ZRANGE", key, "0", "-1", "WITHSCORES");
+            case "json" -> RespClient.commandBytes("JSON.GET", key);
+            default -> null;
+        };
+    }
+
+    private Object decodeValue(String type, RespReply reply) {
+        return switch (type) {
+            case "string", "json" -> text(reply);
+            case "hash" -> toMap(reply);
+            case "list", "set" -> toList(reply);
+            case "zset" -> toScoredList(reply);
+            default -> null;
+        };
     }
 
     public KeyDetail detail(Long instanceId, String key) {
