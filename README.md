@@ -44,23 +44,23 @@ redis-cli -p 6379 INFO vector        # 可观测性 sections：vector/replicatio
 
 ## Web 运维管理平台（前后端）
 
-`console-web`（Vue 3 + Vite + Element Plus + ECharts）与
-`console-server`（Spring Boot 3.3 + JPA + MySQL 8）构成独立的**控制面**：
-通过 RESP 协议纳管内核实例，提供认证授权、指标看板、键空间浏览、在线终端、
-告警、备份恢复与审计，不与数据面共享进程。
+`console-web`（Vue 3 + Vite + Element Plus 按需引入 + ECharts）与
+`console-server`（Spring Boot 3.5 + JPA + Flyway + MySQL 8）构成独立的**控制面**：
+通过 RESP 协议（支持批量 Pipeline 与 TLS/自定义 CA）纳管内核实例，提供认证授权、
+指标看板、键空间浏览、在线终端、告警与 Webhook 推送、异步备份恢复与审计，不与数据面共享进程。
 
 ![运行总览](console-web/screenshots/02-dashboard.png)
 
 | 模块 | 能力 |
 | --- | --- |
-| 认证 | JWT + BCrypt，ADMIN / OPS / VIEWER 三级角色，登录与写操作全审计 |
-| 总览 | 5s 采集 INFO，QPS/延迟/连接数/键数/内存水位趋势图，多实例切换 |
-| 实例 | 纳管、探测连通性与版本、连接池复用、口令不回显 |
-| 键空间 | SCAN 游标分页、类型识别（string/hash/list/set/zset/json/stream）、值查看与改写、TTL |
+| 认证 | JWT + BCrypt，ADMIN / OPS / VIEWER 三级角色，用户名 + IP 双维度登录限流（支持受信代理 CIDR），Actuator 细粒度鉴权，登录与写操作全审计 |
+| 总览 | 5s 采集 INFO，QPS/延迟/连接数/键数/内存水位趋势图，防重入轮询（后台标签页自动暂停）、`ResizeObserver` 容器自适应重绘与 SSTable 清单抽屉 |
+| 实例 | 纳管、探测连通性与版本、有界连接池复用、RESP TLS 加密传输与自定义 CA PEM 校验、口令静态加密且不回显 |
+| 键空间 | SCAN 游标分页与批量 Pipeline 元数据/值读取、类型识别（string/hash/list/set/zset/json/stream）、值查看与改写、TTL |
 | 终端 | 任意命令直连执行、危险命令拦截、历史回放 |
-| 告警 | 阈值 + 持续时长规则、触发/恢复闭环、事件人工处置 |
-| 备份 | 逻辑备份（SCAN → JSONL）、下载、按类型回放恢复 |
-| 审计 | 操作留痕（动作/对象/来源 IP/成败），按动作检索 |
+| 告警 | 阈值 + 持续时长规则、触发/恢复闭环、Webhook 异步推送（HMAC-SHA256 签名 + 静默窗口 + 5xx 重试）、事件人工处置 |
+| 备份 | 异步逻辑备份与恢复（100 键批量 Pipeline + 实时进度条 + 同实例并发 `409` 保护）、ADMIN/OPS 权限下载、物理 Checkpoint |
+| 审计 | 操作留痕（动作/对象/来源 IP/成败），按条件检索与 CSV 导出 |
 
 本地一键启动（Windows，PowerShell）：
 
@@ -69,11 +69,16 @@ redis-cli -p 6379 INFO vector        # 可观测性 sections：vector/replicatio
 . .\scripts\dev-up.ps1       # MySQL(3307) + 内核(6379) + 控制面(8080) + 前端(5173)
 ```
 
-容器化部署（内核 + 控制面 + 前端 + MySQL）：
+容器化部署（内核 + 控制面 + 前端 + MySQL，全服务内置 `healthcheck`）：
 
 ```bash
-cd deploy/console && docker compose up -d --build
+# 开发 / 演示环境
+cd deploy/console && docker compose up -d --build --wait
 # 控制台 http://localhost:8081
+
+# 生产环境覆盖（开启 prod 启动门禁、强口令与加密主密钥约束、容器内存上限）
+cp deploy/console/.env.example deploy/console/.env   # 填入生产密钥后执行：
+cd deploy/console && docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build --wait
 ```
 
 设计与接口文档：
@@ -88,9 +93,11 @@ cd deploy/console && docker compose up -d --build
 
 | 层级 | 命令 | 结果 |
 | --- | --- | --- |
-| 控制面单元/接口测试 | `cd console-server && mvn test` | 40 用例通过（H2 + MockMvc） |
-| 接口端到端 | `node scripts/api-smoke.mjs` | 25 项断言通过 |
-| 前端构建与冒烟 | `cd console-web && npm run build && node scripts/smoke.mjs` | 构建通过 + 6 页截图 |
+| 控制面测试与覆盖率门禁 | `cd console-server && mvn -B test org.jacoco:jacoco-maven-plugin:check` | 162 项测试 0 失败，JaCoCo 行覆盖率 76.67%（≥ 75% 门禁） |
+| 控制面静态缺陷扫描 | `cd console-server && mvn -B -DskipTests test-compile com.github.spotbugs:spotbugs-maven-plugin:check -Dspotbugs.threshold=High -Dspotbugs.failOnError=true` | SpotBugs High 0 缺陷 |
+| 前端质量、构建与单测 | `cd console-web && npm run lint && npm run build && npm test` | ESLint / `vue-tsc` / Vite 0 告警（首包 CSS 62.23 kB），29 项 Vitest 全绿 |
+| OpenAPI 契约漂移校验 | `cd console-web && npm run gen:api && git diff --exit-code -- src/api/schema.d.ts ../docs/api/openapi.json` | 0 漂移 |
+| 全栈容器 E2E 回归 | `cd console-web && E2E_BASE_URL=http://127.0.0.1:8081 npm run test:e2e` | 5 组 Playwright 规范（6 项用例）全绿，4 容器均 `healthy` |
 | 负载演示 | `node scripts/demo-load.mjs --seconds 60 --conns 6` | 约 6.7 万 ops/s（本机） |
 
 分布式事务栈（coordinator/participant/metadata/gateway 五容器）：

@@ -79,9 +79,9 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
-      - name: Console server tests
+      - name: Console server tests & JaCoCo coverage gate
         working-directory: console-server
-        run: mvn -B -q test
+        run: mvn -B -q test org.jacoco:jacoco-maven-plugin:check
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -110,6 +110,10 @@ jobs:
           docker compose -f deploy/docker-compose.yml config --quiet
           docker compose -f deploy/console/docker-compose.yml config --quiet
           docker compose -f deploy/console/docker-compose.yml --profile minio config --quiet
+          MYSQL_ROOT_PASSWORD=ci-test-root-pass \
+          CONSOLE_JWT_SECRET=ci-test-jwt-secret-must-be-32-chars-min \
+          CONSOLE_ADMIN_PASSWORD=ci-admin-pass-123 \
+          docker compose -f deploy/console/docker-compose.yml -f deploy/console/docker-compose.prod.yml config --quiet
 
   spotbugs-high:
     runs-on: ubuntu-latest
@@ -125,6 +129,11 @@ jobs:
         run: |
           mvn -B -pl tiering-protocol,tiering-storage,tiering-server,tiering-cluster,tiering-operator \
             -DskipTests test-compile jar:test-jar com.github.spotbugs:spotbugs-maven-plugin:check \
+            -Dspotbugs.threshold=High -Dspotbugs.failOnError=true
+      - name: Console server SpotBugs High gate
+        working-directory: console-server
+        run: |
+          mvn -B -DskipTests test-compile com.github.spotbugs:spotbugs-maven-plugin:check \
             -Dspotbugs.threshold=High -Dspotbugs.failOnError=true
 
   docker-compose-e2e:
