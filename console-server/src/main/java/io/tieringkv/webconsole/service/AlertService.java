@@ -8,6 +8,7 @@ import io.tieringkv.webconsole.domain.AlertStatus;
 import io.tieringkv.webconsole.repository.AlertEventRepository;
 import io.tieringkv.webconsole.repository.AlertRuleRepository;
 import io.tieringkv.webconsole.web.dto.AlertRuleRequest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,7 @@ public class AlertService {
     private final AlertRuleRepository ruleRepository;
     private final AlertEventRepository eventRepository;
     private final AuditService auditService;
+    private final AlertWebhookDispatcher webhookDispatcher;
 
     /** ruleId:instanceId -> 首次满足时间（用于 durationSeconds 判定）。 */
     private final Map<String, LocalDateTime> satisfiedSince = new ConcurrentHashMap<>();
@@ -34,9 +36,18 @@ public class AlertService {
     public AlertService(AlertRuleRepository ruleRepository,
                         AlertEventRepository eventRepository,
                         AuditService auditService) {
+        this(ruleRepository, eventRepository, auditService, null);
+    }
+
+    @Autowired
+    public AlertService(AlertRuleRepository ruleRepository,
+                        AlertEventRepository eventRepository,
+                        AuditService auditService,
+                        AlertWebhookDispatcher webhookDispatcher) {
         this.ruleRepository = ruleRepository;
         this.eventRepository = eventRepository;
         this.auditService = auditService;
+        this.webhookDispatcher = webhookDispatcher;
     }
 
     public List<AlertRule> rules() {
@@ -135,14 +146,20 @@ public class AlertService {
                 LocalDateTime since = satisfiedSince.computeIfAbsent(key, ignored -> now);
                 long lasted = Duration.between(since, now).getSeconds();
                 if (firing == null && lasted >= rule.getDurationSeconds()) {
-                    eventRepository.save(buildEvent(rule, instanceId, value, now));
+                    AlertEvent saved = eventRepository.save(buildEvent(rule, instanceId, value, now));
+                    if (webhookDispatcher != null) {
+                        webhookDispatcher.dispatchAsync(saved);
+                    }
                 }
             } else {
                 satisfiedSince.remove(key);
                 if (firing != null) {
                     firing.setStatus(AlertStatus.RESOLVED);
                     firing.setResolvedAt(now);
-                    eventRepository.save(firing);
+                    AlertEvent resolved = eventRepository.save(firing);
+                    if (webhookDispatcher != null) {
+                        webhookDispatcher.dispatchAsync(resolved);
+                    }
                 }
             }
         }

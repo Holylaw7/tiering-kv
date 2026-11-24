@@ -1,10 +1,10 @@
 import http from './http'
 import type {
-  AlertEvent, AlertRule, BackupRecord, CheckpointResult, CheckpointStatusView,
+  AlertChannelView, AlertEvent, AlertRule, BackupRecord, CheckpointResult, CheckpointStatusView,
   InstanceView, KeyDetail, KeyScanPage,
   LoginResponse, OpLog, OverviewView, PageResult, SlowLogView,
   SstableTableView, SystemInfo, TerminalHistory,
-  TerminalResult, TrendPoint, UserView
+  TerminalResult, TrendPoint, UserView, WebhookTestResult
 } from './types'
 
 export const authApi = {
@@ -77,7 +77,14 @@ export const alertApi = {
   removeRule: (id: number) => http.delete<unknown, void>(`/alerts/rules/${id}`),
   events: (params: { status?: string; page?: number; size?: number }) =>
     http.get<unknown, PageResult<AlertEvent>>('/alerts/events', { params }),
-  resolve: (id: number) => http.post<unknown, void>(`/alerts/events/${id}/resolve`)
+  resolve: (id: number) => http.post<unknown, void>(`/alerts/events/${id}/resolve`),
+  channels: () => http.get<unknown, AlertChannelView[]>('/alerts/channels'),
+  createChannel: (payload: Record<string, unknown>) =>
+    http.post<unknown, AlertChannelView>('/alerts/channels', payload),
+  updateChannel: (id: number, payload: Record<string, unknown>) =>
+    http.put<unknown, AlertChannelView>(`/alerts/channels/${id}`, payload),
+  removeChannel: (id: number) => http.delete<unknown, void>(`/alerts/channels/${id}`),
+  testChannel: (id: number) => http.post<unknown, WebhookTestResult>(`/alerts/channels/${id}/test`)
 }
 
 export const backupApi = {

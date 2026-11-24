@@ -1,0 +1,29 @@
+# Tiering-KV Console 生产覆盖配置（O3-C）
+# 用法：docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+services:
+  mysql:
+    restart: unless-stopped
+    mem_limit: 1g
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请先在 .env 中设置 MYSQL_ROOT_PASSWORD}
+
+  tiering-kv:
+    restart: unless-stopped
+    mem_limit: 1536m
+
+  console-server:
+    restart: unless-stopped
+    mem_limit: 1g
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      SPRINGDOC_API_DOCS_ENABLED: "false"
+      SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+      CONSOLE_DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请先在 .env 中设置 MYSQL_ROOT_PASSWORD}
+      CONSOLE_JWT_SECRET: ${CONSOLE_JWT_SECRET:?请先在 .env 中设置至少 32 字节的 CONSOLE_JWT_SECRET}
+      CONSOLE_ADMIN_PASSWORD: ${CONSOLE_ADMIN_PASSWORD:?请先在 .env 中设置至少 12 位的 CONSOLE_ADMIN_PASSWORD}
+      CONSOLE_ENCRYPTION_KEY: ${CONSOLE_ENCRYPTION_KEY:-}
+      CONSOLE_REQUIRE_ENCRYPTION_IN_PROD: ${CONSOLE_REQUIRE_ENCRYPTION_IN_PROD:-false}
+
+  console-web:
+    restart: unless-stopped
+    mem_limit: 256m

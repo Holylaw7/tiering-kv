@@ -1,6 +1,77 @@
 {
   "components" : {
     "schemas" : {
+      "AlertChannelRequest" : {
+        "properties" : {
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "name" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "secret" : {
+            "maxLength" : 256,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "silenceSeconds" : {
+            "format" : "int32",
+            "maximum" : 86400,
+            "minimum" : 0,
+            "type" : "integer"
+          },
+          "type" : {
+            "maxLength" : 16,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "url" : {
+            "maxLength" : 512,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "name", "url" ],
+        "type" : "object"
+      },
+      "AlertChannelView" : {
+        "properties" : {
+          "createdAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "hasSecret" : {
+            "type" : "boolean"
+          },
+          "id" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "silenceSeconds" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "updatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "url" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "AlertEvent" : {
         "properties" : {
           "firedAt" : {
@@ -138,6 +209,21 @@
         "required" : [ "level", "metric", "name", "operator", "threshold" ],
         "type" : "object"
       },
+      "ApiResponseAlertChannelView" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/AlertChannelView"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseAlertRule" : {
         "properties" : {
           "code" : {
@@ -251,6 +337,24 @@
           },
           "data" : {
             "$ref" : "#/components/schemas/KeyScanPage"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiResponseListAlertChannelView" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "items" : {
+              "$ref" : "#/components/schemas/AlertChannelView"
+            },
+            "type" : "array"
           },
           "message" : {
             "type" : "string"
@@ -532,6 +636,21 @@
             "type" : "integer"
           },
           "data" : { },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiResponseWebhookTestResult" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/WebhookTestResult"
+          },
           "message" : {
             "type" : "string"
           }
@@ -1772,6 +1891,25 @@
           }
         },
         "type" : "object"
+      },
+      "WebhookTestResult" : {
+        "properties" : {
+          "costMs" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "delivered" : {
+            "type" : "boolean"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "statusCode" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
       }
     },
     "securitySchemes" : {
@@ -1789,6 +1927,139 @@
   },
   "openapi" : "3.1.0",
   "paths" : {
+    "/api/v1/alerts/channels" : {
+      "get" : {
+        "operationId" : "list_2",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseListAlertChannelView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "alert-channel-controller" ]
+      },
+      "post" : {
+        "operationId" : "create_3",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AlertChannelRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseAlertChannelView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "alert-channel-controller" ]
+      }
+    },
+    "/api/v1/alerts/channels/{id}" : {
+      "delete" : {
+        "operationId" : "delete_3",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseVoid"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "alert-channel-controller" ]
+      },
+      "put" : {
+        "operationId" : "update_2",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AlertChannelRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseAlertChannelView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "alert-channel-controller" ]
+      }
+    },
+    "/api/v1/alerts/channels/{id}/test" : {
+      "post" : {
+        "operationId" : "test",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseWebhookTestResult"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "alert-channel-controller" ]
+      }
+    },
     "/api/v1/alerts/events" : {
       "get" : {
         "operationId" : "events",
@@ -2333,7 +2604,7 @@
     },
     "/api/v1/backups/{id}" : {
       "delete" : {
-        "operationId" : "delete_3",
+        "operationId" : "delete_4",
         "parameters" : [ {
           "in" : "path",
           "name" : "id",
@@ -2877,7 +3148,7 @@
     },
     "/api/v1/slowlog" : {
       "get" : {
-        "operationId" : "list_2",
+        "operationId" : "list_3",
         "parameters" : [ {
           "in" : "query",
           "name" : "instanceId",
