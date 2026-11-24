@@ -345,22 +345,6 @@
         },
         "type" : "object"
       },
-      "ApiResponseLong" : {
-        "properties" : {
-          "code" : {
-            "format" : "int32",
-            "type" : "integer"
-          },
-          "data" : {
-            "format" : "int64",
-            "type" : "integer"
-          },
-          "message" : {
-            "type" : "string"
-          }
-        },
-        "type" : "object"
-      },
       "ApiResponseOverviewView" : {
         "properties" : {
           "code" : {
@@ -588,6 +572,10 @@
           },
           "message" : {
             "type" : "string"
+          },
+          "processedKeys" : {
+            "format" : "int64",
+            "type" : "integer"
           },
           "restoreFinishedAt" : {
             "format" : "date-time",
@@ -2395,7 +2383,7 @@
             "content" : {
               "*/*" : {
                 "schema" : {
-                  "$ref" : "#/components/schemas/ApiResponseLong"
+                  "$ref" : "#/components/schemas/ApiResponseBackupRecord"
                 }
               }
             },

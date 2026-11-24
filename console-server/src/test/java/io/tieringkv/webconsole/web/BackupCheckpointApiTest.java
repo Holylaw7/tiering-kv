@@ -76,7 +76,9 @@ class BackupCheckpointApiTest {
     @Test
     void streamsBackupDownloadAndRejectsMissingFile() throws Exception {
         TestUsers.ensure(userRepository, passwordEncoder, "cpviewer", "viewer123", Role.VIEWER);
-        String token = login("cpviewer", "viewer123");
+        TestUsers.ensure(userRepository, passwordEncoder, "cpdlops", "ops12345", Role.OPS);
+        String viewerToken = login("cpviewer", "viewer123");
+        String opsToken = login("cpdlops", "ops12345");
 
         String fileName = "stream-test-" + System.nanoTime() + ".jsonl.gz";
         byte[] bytes = "stream-payload-n1".getBytes(StandardCharsets.UTF_8);
@@ -97,8 +99,13 @@ class BackupCheckpointApiTest {
         rec = backupRecordRepository.save(rec);
 
         try {
+            // O1-A：VIEWER 无权下载整库明文快照
+            mockMvc.perform(get("/api/v1/backups/" + rec.getId() + "/download")
+                            .header("Authorization", "Bearer " + viewerToken))
+                    .andExpect(status().isForbidden());
+
             byte[] downloaded = mockMvc.perform(get("/api/v1/backups/" + rec.getId() + "/download")
-                            .header("Authorization", "Bearer " + token))
+                            .header("Authorization", "Bearer " + opsToken))
                     .andExpect(status().isOk())
                     .andExpect(header().string("Content-Disposition",
                             "attachment; filename=\"" + fileName + "\""))
@@ -107,7 +114,7 @@ class BackupCheckpointApiTest {
 
             storageBackend.deleteIfExists(fileName);
             mockMvc.perform(get("/api/v1/backups/" + rec.getId() + "/download")
-                            .header("Authorization", "Bearer " + token))
+                            .header("Authorization", "Bearer " + opsToken))
                     .andExpect(status().isNotFound());
         } finally {
             storageBackend.deleteIfExists(fileName);

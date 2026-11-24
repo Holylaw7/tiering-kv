@@ -53,13 +53,14 @@ test.describe('Authentication & RBAC', () => {
       await page.goto('/#/audit')
       await expect(page).toHaveURL(/#\/dashboard/)
 
-      // 备份页隐藏写操作按钮
+      // 备份页隐藏写操作与敏感下载按钮
       await page.goto('/#/backups')
       await expect(page.getByRole('heading', { name: '备份与恢复' })).toBeVisible()
       await expect(page.getByRole('button', { name: '立即备份' })).toHaveCount(0)
       await expect(page.getByRole('button', { name: '触发物理 Checkpoint' })).toHaveCount(0)
+      await expect(page.getByRole('button', { name: '下载', exact: true })).toHaveCount(0)
 
-      // 后端 RBAC 兜底：VIEWER 调用终端写与慢日志清空返回 403
+      // 后端 RBAC 兜底：VIEWER 调用终端写与备份下载返回 403
       const vLogin = await request.post(`${baseURL}/api/v1/auth/login`, {
         data: { username: viewerName, password: 'viewerPass123' }
       })
@@ -69,6 +70,10 @@ test.describe('Authentication & RBAC', () => {
         data: { instanceId: 1, command: 'SET e2e:forbid 1' }
       })
       expect(termForbidden.status()).toBe(403)
+      const dlForbidden = await request.get(`${baseURL}/api/v1/backups/1/download`, {
+        headers: { Authorization: `Bearer ${viewerToken}` }
+      })
+      expect(dlForbidden.status()).toBe(403)
     } finally {
       await request.delete(`${baseURL}/api/v1/users/${viewerId}`, {
         headers: { Authorization: `Bearer ${adminToken}` }

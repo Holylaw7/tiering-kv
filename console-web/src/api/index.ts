@@ -85,7 +85,7 @@ export const backupApi = {
     http.get<unknown, BackupRecord[]>('/backups', { params: { instanceId } }),
   create: (instanceId: number) =>
     http.post<unknown, BackupRecord>('/backups', null, { params: { instanceId } }),
-  restore: (id: number) => http.post<unknown, number>(`/backups/${id}/restore`),
+  restore: (id: number) => http.post<unknown, BackupRecord>(`/backups/${id}/restore`),
   remove: (id: number) => http.delete<unknown, void>(`/backups/${id}`),
   checkpoint: (instanceId: number) =>
     http.post<unknown, CheckpointResult>('/backups/checkpoint', null, { params: { instanceId } }),

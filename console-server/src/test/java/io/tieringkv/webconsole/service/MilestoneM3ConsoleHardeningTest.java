@@ -151,8 +151,10 @@ class MilestoneM3ConsoleHardeningTest {
         assertThat(rawBytes[0] & 0xff).isEqualTo(0x1f);
         assertThat(rawBytes[1] & 0xff).isEqualTo(0x8b);
 
-        // 压缩包可透明恢复
-        assertThat(service.restore(created.getId())).isEqualTo(2L);
+        // 压缩包可透明恢复（O1-B 异步执行体在 Runnable::run 下同步收敛）
+        BackupRecord restoredCompressed = service.restore(created.getId());
+        assertThat(restoredCompressed.getId()).isEqualTo(created.getId());
+        assertThat(created.getRestoredKeys()).isEqualTo(2L);
         assertThat(created.getRestoreStatus()).isEqualTo(RestoreStatus.SUCCEEDED);
 
         // 历史明文 .jsonl 同样可透明恢复
@@ -165,7 +167,9 @@ class MilestoneM3ConsoleHardeningTest {
         legacy.setStatus(BackupStatus.SUCCESS);
         legacy.setCreatedAt(LocalDateTime.now());
         db.put(99L, legacy);
-        assertThat(service.restore(99L)).isEqualTo(1L);
+        service.restore(99L);
+        assertThat(legacy.getRestoreStatus()).isEqualTo(RestoreStatus.SUCCEEDED);
+        assertThat(legacy.getRestoredKeys()).isEqualTo(1L);
     }
 
     @Test

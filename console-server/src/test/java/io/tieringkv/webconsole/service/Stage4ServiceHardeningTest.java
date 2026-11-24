@@ -122,12 +122,13 @@ class Stage4ServiceHardeningTest {
         when(gateway.execute(instance, "SET", "bad:1", "v"))
                 .thenReturn(new RespReply.Error("OOM command not allowed"));
 
-        assertThatThrownBy(() -> service.restore(2L))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("SET 失败")
-                .hasMessageContaining("已回放 1 个键");
+        service.restore(2L);
         verify(gateway).execute(instance, "JSON.SET", "doc:1", "$", "{\"a\":1}");
         assertThat(jsonAndErr.getRestoreStatus()).isEqualTo(RestoreStatus.FAILED);
+        assertThat(jsonAndErr.getRestoredKeys()).isEqualTo(1L);
+        assertThat(jsonAndErr.getRestoreMessage())
+                .contains("SET 失败")
+                .contains("已回放 1 个键");
     }
 
     @Test

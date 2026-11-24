@@ -165,16 +165,24 @@ export interface AlertEvent {
   resolvedAt?: string
 }
 
+export type RestoreStatus = 'NONE' | 'RESTORING' | 'SUCCEEDED' | 'FAILED'
+
 export interface BackupRecord {
   id: number
   instanceId: number
   fileName: string
   sizeBytes: number
   keyCount: number
+  processedKeys?: number
   status: 'RUNNING' | 'SUCCESS' | 'FAILED'
   message?: string
   createdAt: string
   finishedAt?: string
+  restoreStatus?: RestoreStatus
+  restoreStartedAt?: string
+  restoreFinishedAt?: string
+  restoredKeys?: number
+  restoreMessage?: string
 }
 
 export interface CheckpointResult {

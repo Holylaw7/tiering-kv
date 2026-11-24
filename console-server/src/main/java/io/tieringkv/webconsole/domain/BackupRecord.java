@@ -32,6 +32,10 @@ public class BackupRecord {
     @Column(name = "key_count", nullable = false)
     private long keyCount;
 
+    /** 导出进行中已处理键数（O1-B），完成后与 keyCount 对齐。 */
+    @Column(name = "processed_keys", nullable = false)
+    private long processedKeys;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 16)
     private BackupStatus status = BackupStatus.RUNNING;
@@ -164,6 +168,14 @@ public class BackupRecord {
 
     public void setKeyCount(long keyCount) {
         this.keyCount = keyCount;
+    }
+
+    public long getProcessedKeys() {
+        return processedKeys;
+    }
+
+    public void setProcessedKeys(long processedKeys) {
+        this.processedKeys = processedKeys;
     }
 
     public BackupStatus getStatus() {

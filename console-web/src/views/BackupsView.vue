@@ -67,34 +67,86 @@ async function load() {
 }
 
 let pollTimer: number | undefined
+let restorePollTimer: number | undefined
 let checkpointPollTimer: number | undefined
 
-/** 轮询备份状态（TD-091）：异步任务提交后最多观察 60 秒。 */
+function restorePercent(row: BackupRecord): number {
+  const total = Math.max(1, row.keyCount || 0)
+  const done = Math.max(0, row.restoredKeys || 0)
+  if (row.restoreStatus === 'SUCCEEDED') return 100
+  return Math.min(99, Math.round((done / total) * 100))
+}
+
+/** 轮询备份状态（TD-091 + O1-B）：实时刷新导出进度与终态。 */
 function startPolling(recordId: number) {
-  stopPolling()
+  if (pollTimer) {
+    window.clearInterval(pollTimer)
+    pollTimer = undefined
+  }
   let ticks = 0
   pollTimer = window.setInterval(async () => {
     ticks += 1
     await load()
     const current = rows.value.find((row) => row.id === recordId)
     if (!current || current.status !== 'RUNNING') {
-      stopPolling()
+      if (pollTimer) {
+        window.clearInterval(pollTimer)
+        pollTimer = undefined
+      }
       if (current?.status === 'SUCCESS') {
         ElMessage.success(`备份完成，共 ${current.keyCount} 个键`)
       } else if (current?.status === 'FAILED') {
         ElMessage.error(`备份失败：${current.message ?? '未知原因'}`)
       }
-    } else if (ticks >= 30) {
-      stopPolling()
+    } else if (ticks >= 150) {
+      if (pollTimer) {
+        window.clearInterval(pollTimer)
+        pollTimer = undefined
+      }
       ElMessage.warning('备份仍在执行，请稍后刷新查看结果')
     }
   }, 2000)
+}
+
+/** 轮询异步恢复进度与终态（O1-B）：避免大库恢复击穿 HTTP 超时。 */
+function startRestorePolling(recordId: number) {
+  if (restorePollTimer) {
+    window.clearInterval(restorePollTimer)
+    restorePollTimer = undefined
+  }
+  let ticks = 0
+  restorePollTimer = window.setInterval(async () => {
+    ticks += 1
+    await load()
+    const current = rows.value.find((row) => row.id === recordId)
+    if (!current || current.restoreStatus !== 'RESTORING') {
+      if (restorePollTimer) {
+        window.clearInterval(restorePollTimer)
+        restorePollTimer = undefined
+      }
+      if (current?.restoreStatus === 'SUCCEEDED') {
+        ElMessage.success(`已恢复 ${current.restoredKeys ?? 0} 个键`)
+      } else if (current?.restoreStatus === 'FAILED') {
+        ElMessage.error(`恢复失败：${current.restoreMessage ?? '未知原因'}`)
+      }
+    } else if (ticks >= 200) {
+      if (restorePollTimer) {
+        window.clearInterval(restorePollTimer)
+        restorePollTimer = undefined
+      }
+      ElMessage.warning('恢复仍在后台执行，请稍后刷新查看结果')
+    }
+  }, 1500)
 }
 
 function stopPolling() {
   if (pollTimer) {
     window.clearInterval(pollTimer)
     pollTimer = undefined
+  }
+  if (restorePollTimer) {
+    window.clearInterval(restorePollTimer)
+    restorePollTimer = undefined
   }
   if (checkpointPollTimer) {
     window.clearInterval(checkpointPollTimer)
@@ -165,8 +217,16 @@ async function restore(row: BackupRecord) {
     '恢复数据',
     { type: 'warning' }
   )
-  const count = await backupApi.restore(row.id)
-  ElMessage.success(`已恢复 ${count} 个键`)
+  const record = await backupApi.restore(row.id)
+  await load()
+  if (record.restoreStatus === 'RESTORING') {
+    ElMessage.info('恢复任务已提交，页面会自动刷新进度')
+    startRestorePolling(record.id)
+  } else if (record.restoreStatus === 'SUCCEEDED') {
+    ElMessage.success(`已恢复 ${record.restoredKeys ?? 0} 个键`)
+  } else if (record.restoreStatus === 'FAILED') {
+    ElMessage.error(`恢复失败：${record.restoreMessage ?? '未知原因'}`)
+  }
 }
 
 async function remove(row: BackupRecord) {
@@ -197,7 +257,13 @@ function download(row: BackupRecord) {
 }
 
 watch(() => store.selectedId, loadCheckpointStatus)
-onMounted(load)
+onMounted(async () => {
+  await load()
+  const running = rows.value.find((row) => row.status === 'RUNNING')
+  if (running) startPolling(running.id)
+  const restoring = rows.value.find((row) => row.restoreStatus === 'RESTORING')
+  if (restoring) startRestorePolling(restoring.id)
+})
 onUnmounted(stopPolling)
 </script>
 
@@ -307,7 +373,7 @@ onUnmounted(stopPolling)
         <el-table-column label="大小" width="108" align="right">
           <template #default="{ row }"><span class="num">{{ formatBytes(row.sizeBytes) }}</span></template>
         </el-table-column>
-        <el-table-column label="状态" width="118">
+        <el-table-column label="状态" width="140">
           <template #default="{ row }">
             <StatusBadge
               :label="row.status"
@@ -315,16 +381,63 @@ onUnmounted(stopPolling)
               dot
               mono
             />
+            <div v-if="row.status === 'RUNNING'" class="progress-hint mono">
+              已导出 {{ row.processedKeys ?? 0 }} 键
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="恢复进度" width="168">
+          <template #default="{ row }">
+            <div v-if="row.restoreStatus === 'RESTORING'" class="restore-progress">
+              <el-progress :percentage="restorePercent(row)" :stroke-width="6" />
+              <span class="progress-hint mono">{{ row.restoredKeys ?? 0 }} / {{ row.keyCount }}</span>
+            </div>
+            <StatusBadge
+              v-else-if="row.restoreStatus === 'SUCCEEDED'"
+              :label="`已恢复 ${row.restoredKeys ?? 0} 键`"
+              tone="success"
+              dot
+            />
+            <el-tooltip
+              v-else-if="row.restoreStatus === 'FAILED'"
+              :content="row.restoreMessage || '恢复中断'"
+              placement="top"
+            >
+              <StatusBadge
+                :label="`失败 (${row.restoredKeys ?? 0}/${row.keyCount})`"
+                tone="danger"
+                dot
+              />
+            </el-tooltip>
+            <span v-else class="muted">—</span>
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="180" />
         <el-table-column label="操作" width="210">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="download(row)">下载</el-button>
-            <el-button v-if="auth.isAdmin" link type="warning" size="small" :disabled="row.status !== 'SUCCESS'" @click="restore(row)">
+            <el-button v-if="auth.canOperate" link type="primary" size="small" :disabled="row.status !== 'SUCCESS'" @click="download(row)">
+              下载
+            </el-button>
+            <el-button
+              v-if="auth.isAdmin"
+              link
+              type="warning"
+              size="small"
+              :disabled="row.status !== 'SUCCESS' || row.restoreStatus === 'RESTORING'"
+              @click="restore(row)"
+            >
               恢复
             </el-button>
-            <el-button v-if="auth.canOperate" link type="danger" size="small" @click="remove(row)">删除</el-button>
+            <el-button
+              v-if="auth.canOperate"
+              link
+              type="danger"
+              size="small"
+              :disabled="row.status === 'RUNNING' || row.restoreStatus === 'RESTORING'"
+              @click="remove(row)"
+            >
+              删除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -370,5 +483,17 @@ onUnmounted(stopPolling)
 .muted {
   font-size: var(--text-xs);
   color: var(--text-3);
+}
+
+.progress-hint {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.restore-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 </style>
