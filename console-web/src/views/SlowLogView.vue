@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Refresh } from '@element-plus/icons-vue'
 import { slowLogApi } from '@/api'
 import type { SlowLogEntryView, SlowLogView } from '@/api/types'
 import { useInstanceStore } from '@/stores/instance'
@@ -204,7 +205,7 @@ onMounted(load)
         </el-table-column>
         <el-table-column label="操作" width="120" align="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="openInTerminal(row)">带入终端</el-button>
+            <el-button link type="primary" size="small" @click="openInTerminal(row as SlowLogEntryView)">带入终端</el-button>
           </template>
         </el-table-column>
       </el-table>

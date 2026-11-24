@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 import { userApi } from '@/api'
 import type { UserView } from '@/api/types'
 import EmptyState from '@/components/EmptyState.vue'
@@ -160,9 +161,9 @@ onMounted(load)
         <el-table-column prop="lastLoginAt" label="最近登录" width="180" />
         <el-table-column label="操作" width="200">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button link size="small" @click="resetPassword(row)">重置口令</el-button>
-            <el-button link type="danger" size="small" @click="remove(row)">删除</el-button>
+            <el-button link type="primary" size="small" @click="openEdit(row as UserView)">编辑</el-button>
+            <el-button link size="small" @click="resetPassword(row as UserView)">重置口令</el-button>
+            <el-button link type="danger" size="small" @click="remove(row as UserView)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>

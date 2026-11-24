@@ -5,6 +5,7 @@ import { BarChart, LineChart } from 'echarts/charts'
 import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { EChartsOption } from 'echarts'
+import { observeElementResize } from '@/utils/resizeObserver'
 
 echarts.use([LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent, CanvasRenderer])
 
@@ -17,28 +18,27 @@ const props = defineProps<{
 
 const container = ref<HTMLDivElement | null>(null)
 let chart: echarts.ECharts | null = null
+let stopResizeObserver: (() => void) | null = null
 
 function render() {
   if (!chart) return
   chart.setOption(props.option, true)
 }
 
-function resize() {
-  chart?.resize()
-}
-
 onMounted(() => {
   if (container.value) {
     chart = echarts.init(container.value, undefined, { renderer: 'canvas' })
     render()
-    window.addEventListener('resize', resize)
+    stopResizeObserver = observeElementResize(container.value, () => chart?.resize(), 50)
   }
 })
 
-watch(() => props.option, render, { deep: true })
+// O4-B：调用侧 computed 返回新 option 引用，使用浅监听避免大对象深度递归比对
+watch(() => props.option, render)
 
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', resize)
+  stopResizeObserver?.()
+  stopResizeObserver = null
   chart?.dispose()
   chart = null
 })

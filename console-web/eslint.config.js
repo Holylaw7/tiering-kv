@@ -5,7 +5,16 @@ import tseslint from 'typescript-eslint'
 
 export default [
   {
-    ignores: ['dist/**', 'node_modules/**', 'playwright-report/**', 'test-results/**', 'src/api/schema.d.ts', 'scripts/**']
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      'playwright-report/**',
+      'test-results/**',
+      'src/api/schema.d.ts',
+      'src/auto-imports.d.ts',
+      'src/components.d.ts',
+      'scripts/**'
+    ]
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

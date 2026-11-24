@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
+import { Plus, Refresh } from '@element-plus/icons-vue'
 import { instanceApi } from '@/api'
 import type { InstanceView } from '@/api/types'
 import { useInstanceStore } from '@/stores/instance'
@@ -174,9 +175,9 @@ onMounted(load)
         <el-table-column prop="lastProbeAt" label="最近探测" width="170" />
         <el-table-column label="操作" width="170" align="right">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="probe(row)">探测</el-button>
-            <el-button v-if="auth.canOperate" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button v-if="auth.isAdmin" link type="danger" size="small" @click="remove(row)">删除</el-button>
+            <el-button link type="primary" size="small" @click="probe(row as InstanceView)">探测</el-button>
+            <el-button v-if="auth.canOperate" link type="primary" size="small" @click="openEdit(row as InstanceView)">编辑</el-button>
+            <el-button v-if="auth.isAdmin" link type="danger" size="small" @click="remove(row as InstanceView)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>

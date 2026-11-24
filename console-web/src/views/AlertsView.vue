@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
+import { Plus, Promotion } from '@element-plus/icons-vue'
 import { alertApi } from '@/api'
 import type { AlertChannelView, AlertEvent, AlertRule } from '@/api/types'
 import { useInstanceStore } from '@/stores/instance'
@@ -267,7 +268,7 @@ onMounted(async () => {
               <template #default="{ row }">
                 <el-button
                   v-if="row.status === 'FIRING' && auth.canOperate"
-                  link type="primary" size="small" @click="resolve(row)"
+                  link type="primary" size="small" @click="resolve(row as AlertEvent)"
                 >
                   标记恢复
                 </el-button>
@@ -316,8 +317,8 @@ onMounted(async () => {
             </el-table-column>
             <el-table-column label="操作" width="140">
               <template #default="{ row }">
-                <el-button v-if="auth.canOperate" link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
-                <el-button v-if="auth.canOperate" link type="danger" size="small" @click="removeRule(row)">删除</el-button>
+                <el-button v-if="auth.canOperate" link type="primary" size="small" @click="openEdit(row as AlertRule)">编辑</el-button>
+                <el-button v-if="auth.canOperate" link type="danger" size="small" @click="removeRule(row as AlertRule)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -357,12 +358,12 @@ onMounted(async () => {
                   v-if="auth.canOperate"
                   link type="success" size="small"
                   :loading="testingChannelId === row.id"
-                  @click="testChannel(row)"
+                  @click="testChannel(row as AlertChannelView)"
                 >
                   测试发送
                 </el-button>
-                <el-button v-if="auth.canOperate" link type="primary" size="small" @click="openEditChannel(row)">编辑</el-button>
-                <el-button v-if="auth.canOperate" link type="danger" size="small" @click="removeChannel(row)">删除</el-button>
+                <el-button v-if="auth.canOperate" link type="primary" size="small" @click="openEditChannel(row as AlertChannelView)">编辑</el-button>
+                <el-button v-if="auth.canOperate" link type="danger" size="small" @click="removeChannel(row as AlertChannelView)">删除</el-button>
               </template>
             </el-table-column>
           </el-table>

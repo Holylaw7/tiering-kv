@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Finished, FolderAdd, Refresh } from '@element-plus/icons-vue'
 import { backupApi } from '@/api'
 import type { BackupRecord, CheckpointStatusView } from '@/api/types'
 import { useInstanceStore } from '@/stores/instance'
@@ -389,7 +390,7 @@ onUnmounted(stopPolling)
         <el-table-column label="恢复进度" width="168">
           <template #default="{ row }">
             <div v-if="row.restoreStatus === 'RESTORING'" class="restore-progress">
-              <el-progress :percentage="restorePercent(row)" :stroke-width="6" />
+              <el-progress :percentage="restorePercent(row as BackupRecord)" :stroke-width="6" />
               <span class="progress-hint mono">{{ row.restoredKeys ?? 0 }} / {{ row.keyCount }}</span>
             </div>
             <StatusBadge
@@ -415,7 +416,7 @@ onUnmounted(stopPolling)
         <el-table-column prop="createdAt" label="创建时间" width="180" />
         <el-table-column label="操作" width="210">
           <template #default="{ row }">
-            <el-button v-if="auth.canOperate" link type="primary" size="small" :disabled="row.status !== 'SUCCESS'" @click="download(row)">
+            <el-button v-if="auth.canOperate" link type="primary" size="small" :disabled="row.status !== 'SUCCESS'" @click="download(row as BackupRecord)">
               下载
             </el-button>
             <el-button
@@ -424,7 +425,7 @@ onUnmounted(stopPolling)
               type="warning"
               size="small"
               :disabled="row.status !== 'SUCCESS' || row.restoreStatus === 'RESTORING'"
-              @click="restore(row)"
+              @click="restore(row as BackupRecord)"
             >
               恢复
             </el-button>
@@ -434,7 +435,7 @@ onUnmounted(stopPolling)
               type="danger"
               size="small"
               :disabled="row.status === 'RUNNING' || row.restoreStatus === 'RESTORING'"
-              @click="remove(row)"
+              @click="remove(row as BackupRecord)"
             >
               删除
             </el-button>
