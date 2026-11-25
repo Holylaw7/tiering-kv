@@ -16,6 +16,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -37,48 +38,60 @@ public class BackupRetentionService {
 
     private static final Logger log = LoggerFactory.getLogger(BackupRetentionService.class);
     private static final String RETIRING = "RETIRING";
+    static final String BACKUP_RETENTION_LEASE_KEY = "scheduler:backup-retention";
 
     private final BackupRecordRepository repository;
     private final DbInstanceRepository instanceRepository;
     private final ConsoleProperties properties;
     private final BackupStorageBackend storageBackend;
     private final TransactionTemplate transactionTemplate;
+    private final DbLeaseLockService leaseLockService;
     private final Object lock = new Object();
     private volatile PurgeReport lastReport;
 
     public BackupRetentionService(BackupRecordRepository repository, DbInstanceRepository instanceRepository,
                                   ConsoleProperties properties) {
         this(repository, instanceRepository, properties,
-                new LocalBackupStorageBackend(properties), (TransactionTemplate) null);
+                new LocalBackupStorageBackend(properties), (TransactionTemplate) null, null);
     }
 
     public BackupRetentionService(BackupRecordRepository repository, DbInstanceRepository instanceRepository,
                                   ConsoleProperties properties, PlatformTransactionManager transactionManager) {
         this(repository, instanceRepository, properties,
-                new LocalBackupStorageBackend(properties), transactionManager);
+                new LocalBackupStorageBackend(properties), transactionManager, null);
     }
 
     public BackupRetentionService(BackupRecordRepository repository, DbInstanceRepository instanceRepository,
                                   ConsoleProperties properties, BackupStorageBackend storageBackend) {
-        this(repository, instanceRepository, properties, storageBackend, (TransactionTemplate) null);
+        this(repository, instanceRepository, properties, storageBackend, (TransactionTemplate) null, null);
+    }
+
+    public BackupRetentionService(BackupRecordRepository repository, DbInstanceRepository instanceRepository,
+                                  ConsoleProperties properties, BackupStorageBackend storageBackend,
+                                  PlatformTransactionManager transactionManager) {
+        this(repository, instanceRepository, properties, storageBackend, transactionManager, null);
     }
 
     @Autowired
     public BackupRetentionService(BackupRecordRepository repository, DbInstanceRepository instanceRepository,
                                   ConsoleProperties properties, BackupStorageBackend storageBackend,
-                                  PlatformTransactionManager transactionManager) {
+                                  PlatformTransactionManager transactionManager,
+                                  DbLeaseLockService leaseLockService) {
         this(repository, instanceRepository, properties, storageBackend,
-                transactionManager != null ? new TransactionTemplate(transactionManager) : null);
+                transactionManager != null ? new TransactionTemplate(transactionManager) : null,
+                leaseLockService);
     }
 
     private BackupRetentionService(BackupRecordRepository repository, DbInstanceRepository instanceRepository,
                                    ConsoleProperties properties, BackupStorageBackend storageBackend,
-                                   TransactionTemplate transactionTemplate) {
+                                   TransactionTemplate transactionTemplate,
+                                   DbLeaseLockService leaseLockService) {
         this.repository = repository;
         this.instanceRepository = instanceRepository;
         this.properties = properties;
         this.storageBackend = storageBackend;
         this.transactionTemplate = transactionTemplate;
+        this.leaseLockService = leaseLockService;
     }
 
     /** 一次清理的结果，用于接口与审计。 */
@@ -98,10 +111,14 @@ public class BackupRetentionService {
                 r.getOrphanGraceMinutes(), r.getIntervalMs(), r.isEnabled(), lastReport);
     }
 
-    /** 定时清理：默认每小时一次；单进程内串行，跨进程由数据库认领协调。 */
+    /** 定时清理：多副本部署通过数据库租约锁选主，避免所有副本重复扫库与列举对象。 */
     @Scheduled(fixedDelayString = "${console.backup.retention.interval-ms:3600000}")
     public void scheduledPurge() {
         if (!properties.getBackup().getRetention().isEnabled()) {
+            return;
+        }
+        if (leaseLockService != null
+                && !leaseLockService.tryAcquire(BACKUP_RETENTION_LEASE_KEY, Duration.ofMinutes(5))) {
             return;
         }
         try {

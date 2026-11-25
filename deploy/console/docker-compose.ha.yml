@@ -1,0 +1,60 @@
+# Tiering-KV Console 控制面双副本高可用覆盖配置（M3）
+# 用法：docker compose -f docker-compose.yml -f docker-compose.ha.yml --profile s3 up -d --build --wait
+# 说明：
+#   - 两个无状态 console-server 副本共享 MySQL（Flyway V10 租约锁 + DB 登录限流）与 S3/RustFS 备份桶；
+#   - Nginx 自动在 console-server 与 console-server-2 之间负载均衡并故障摘除。
+services:
+  console-server:
+    hostname: tk-console-1
+    environment:
+      CONSOLE_BACKUP_STORAGE: ${CONSOLE_BACKUP_STORAGE:-s3}
+      CONSOLE_LOGIN_ATTEMPT_STORE: db
+
+  console-server-2:
+    build:
+      context: ../../console-server
+    container_name: tk-console-2
+    hostname: tk-console-2
+    environment:
+      CONSOLE_DB_URL: jdbc:mysql://mysql:3306/tiering_console?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+      CONSOLE_DB_USER: ${CONSOLE_DB_USER:-root}
+      CONSOLE_DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-tk_root_pwd}
+      CONSOLE_JWT_SECRET: ${CONSOLE_JWT_SECRET:-change-me-in-production-0123456789abcdef}
+      CONSOLE_ENCRYPTION_KEY: ${CONSOLE_ENCRYPTION_KEY:-}
+      CONSOLE_REQUIRE_ENCRYPTION_IN_PROD: ${CONSOLE_REQUIRE_ENCRYPTION_IN_PROD:-false}
+      CONSOLE_LOGIN_ATTEMPT_STORE: db
+      CONSOLE_TRUSTED_PROXIES: ${CONSOLE_TRUSTED_PROXIES:-127.0.0.1,::1,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16}
+      CONSOLE_BACKUP_DIR: /app/backups
+      CONSOLE_BACKUP_STORAGE: ${CONSOLE_BACKUP_STORAGE:-s3}
+      CONSOLE_BACKUP_S3_ENDPOINT: ${CONSOLE_BACKUP_S3_ENDPOINT:-http://minio:9000}
+      CONSOLE_BACKUP_S3_REGION: ${CONSOLE_BACKUP_S3_REGION:-us-east-1}
+      CONSOLE_BACKUP_S3_BUCKET: ${CONSOLE_BACKUP_S3_BUCKET:-tiering-backups}
+      CONSOLE_BACKUP_S3_PREFIX: ${CONSOLE_BACKUP_S3_PREFIX:-backups/}
+      CONSOLE_BACKUP_S3_ACCESS_KEY: ${CONSOLE_BACKUP_S3_ACCESS_KEY:-minioadmin}
+      CONSOLE_BACKUP_S3_SECRET_KEY: ${CONSOLE_BACKUP_S3_SECRET_KEY:-minioadmin}
+      CONSOLE_BACKUP_S3_PATH_STYLE: ${CONSOLE_BACKUP_S3_PATH_STYLE:-true}
+      CONSOLE_BACKUP_S3_AUTO_CREATE_BUCKET: ${CONSOLE_BACKUP_S3_AUTO_CREATE_BUCKET:-true}
+      CONSOLE_CORS: ${CONSOLE_CORS:-http://localhost:8081,http://127.0.0.1:8081}
+      CONSOLE_BOOTSTRAP_INSTANCE: local-6379@tiering-kv:6379
+    depends_on:
+      mysql:
+        condition: service_healthy
+      tiering-kv:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/actuator/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+      start_period: 15s
+    networks:
+      - tk-net
+
+  console-web:
+    volumes:
+      - ./nginx-ha.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      console-server:
+        condition: service_healthy
+      console-server-2:
+        condition: service_healthy

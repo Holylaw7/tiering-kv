@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
@@ -62,7 +63,12 @@ public class BootstrapDataInitializer implements ApplicationRunner {
         admin.setNickname("系统管理员");
         admin.setRole(Role.ADMIN);
         admin.setStatus(1);
-        userRepository.save(admin);
+        try {
+            userRepository.save(admin);
+        } catch (DataIntegrityViolationException ex) {
+            log.info("初始管理员 {} 已由其他副本并发创建，跳过重复引导", admin.getUsername());
+            return;
+        }
         if (customized) {
             log.info("已创建初始管理员 {}（口令来自配置，不打印）", admin.getUsername());
         } else {
@@ -112,7 +118,12 @@ public class BootstrapDataInitializer implements ApplicationRunner {
             instance.setRemark("容器引导创建");
             instance.setEnabled(true);
         }
-        instanceRepository.save(instance);
+        try {
+            instanceRepository.save(instance);
+        } catch (DataIntegrityViolationException ex) {
+            log.info("默认实例 {} 已由其他副本并发引导，跳过重复写入", name);
+            return false;
+        }
         log.info("默认实例已指向 {}:{}（name={}）", host, port, name);
         return true;
     }

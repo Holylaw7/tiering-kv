@@ -1,5 +1,6 @@
 package io.tieringkv.webconsole.service;
 
+import io.tieringkv.webconsole.config.ConsoleProperties;
 import io.tieringkv.webconsole.domain.DbInstance;
 import io.tieringkv.webconsole.domain.InstanceStatus;
 import io.tieringkv.webconsole.domain.MetricPoint;
@@ -9,9 +10,11 @@ import io.tieringkv.webconsole.support.InfoParser;
 import io.tieringkv.webconsole.web.dto.LiveMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -22,12 +25,15 @@ import java.util.Optional;
 public class MonitorService {
 
     private static final Logger log = LoggerFactory.getLogger(MonitorService.class);
+    static final String MONITOR_LEASE_KEY = "scheduler:monitor";
 
     private final InstanceService instanceService;
     private final RespGateway gateway;
     private final MetricPointRepository metricRepository;
     private final DbInstanceRepository instanceRepository;
     private final AlertService alertService;
+    private final DbLeaseLockService leaseLockService;
+    private final ConsoleProperties properties;
     private static final long STATUS_PERSIST_INTERVAL_MS = 60_000L;
     private final Map<Long, Long> lastPersistedAt = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -35,17 +41,39 @@ public class MonitorService {
                           MetricPointRepository metricRepository,
                           DbInstanceRepository instanceRepository,
                           AlertService alertService) {
+        this(instanceService, gateway, metricRepository, instanceRepository, alertService, null, null);
+    }
+
+    @Autowired
+    public MonitorService(InstanceService instanceService, RespGateway gateway,
+                          MetricPointRepository metricRepository,
+                          DbInstanceRepository instanceRepository,
+                          AlertService alertService,
+                          DbLeaseLockService leaseLockService,
+                          ConsoleProperties properties) {
         this.instanceService = instanceService;
         this.gateway = gateway;
         this.metricRepository = metricRepository;
         this.instanceRepository = instanceRepository;
         this.alertService = alertService;
+        this.leaseLockService = leaseLockService;
+        this.properties = properties;
     }
 
-    /** 定时采集：fixedDelay 由配置给出，采集耗时不影响间隔。 */
+    /** 定时采集：多副本部署通过数据库租约锁选主，确保单周期仅主副本采集落库。 */
     @Scheduled(fixedDelayString = "${console.metrics.interval-ms:5000}",
             initialDelayString = "${console.metrics.initial-delay-ms:3000}")
     public void scheduledCollect() {
+        if (leaseLockService != null) {
+            long intervalMs = properties != null && properties.getMetrics() != null
+                    ? properties.getMetrics().getIntervalMs()
+                    : 5000L;
+            // 租约 TTL 取 2 倍采样间隔：主副本每轮凭同一 owner_id 原地续租避免抖动，宕机后两轮内由备副本自动接管
+            Duration leaseTtl = Duration.ofMillis(Math.max(4000L, intervalMs * 2L));
+            if (!leaseLockService.tryAcquire(MONITOR_LEASE_KEY, leaseTtl)) {
+                return;
+            }
+        }
         for (DbInstance instance : instanceService.enabled()) {
             try {
                 collectOnce(instance);
