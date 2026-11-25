@@ -79,19 +79,26 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
-      - name: Console server tests
+      - name: Version consistency check
+        run: bash scripts/version-check.sh
+      - name: Console server tests, JaCoCo & SpotBugs High gate
         working-directory: console-server
-        run: mvn -B -q test
+        run: |
+          mvn -B -q test org.jacoco:jacoco-maven-plugin:check
+          mvn -B -DskipTests test-compile com.github.spotbugs:spotbugs-maven-plugin:check \
+            -Dspotbugs.threshold=High -Dspotbugs.failOnError=true
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: console-web/package-lock.json
-      - name: Frontend typecheck and build
+      - name: Frontend lint, typecheck, build and Vitest
         working-directory: console-web
         run: |
           npm ci
+          npm run lint
           npm run build
+          npm test
       # 契约漂移：openapi.json 由后端测试保证，schema.d.ts 必须与之一致
       - name: API contract drift check
         working-directory: console-web
@@ -130,11 +137,16 @@ jobs:
           # 依赖（npm devDependencies 等），以报告形式保留在 CI 日志中。
           severity: "CRITICAL,HIGH"
       - name: Build image
-        run: docker build -t ghcr.io/holylaw7/tiering-kv:${GITHUB_REF_NAME} -f deploy/Dockerfile .
+        run: |
+          docker build -t ghcr.io/holylaw7/tiering-kv:${GITHUB_REF_NAME} -f deploy/Dockerfile .
+          docker build -t ghcr.io/holylaw7/tiering-kv-console-server:${GITHUB_REF_NAME} -f console-server/Dockerfile console-server
+          docker build -t ghcr.io/holylaw7/tiering-kv-console-web:${GITHUB_REF_NAME} -f console-web/Dockerfile console-web
       - name: Publish image
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
           docker push ghcr.io/holylaw7/tiering-kv:${GITHUB_REF_NAME}
+          docker push ghcr.io/holylaw7/tiering-kv-console-server:${GITHUB_REF_NAME}
+          docker push ghcr.io/holylaw7/tiering-kv-console-web:${GITHUB_REF_NAME}
       - name: Checksums
         run: |
           find . -path '*/target/*.jar' ! -path './console-web/*' ! -name 'original-*' -exec sha256sum {} + > target-checksums.sha256
