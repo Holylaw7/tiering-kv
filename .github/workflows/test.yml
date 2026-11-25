@@ -9,6 +9,16 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  MAVEN_ARGS: >-
+    -ntp
+    -Daether.transport.http.retryHandler.count=5
+    -Daether.transport.http.retryHandler.interval=3000
+    -Daether.transport.http.retryHandler.serviceUnavailable=429,500,502,503,504
+    -Daether.connector.http.retryHandler.count=5
+    -Daether.connector.http.retryHandler.interval=3000
+    -Daether.connector.http.retryHandler.serviceUnavailable=429,500,502,503,504
+
 jobs:
   unit-and-integration:
     runs-on: ubuntu-latest
@@ -24,6 +34,8 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - name: Configure CI Maven mirror
+        run: mkdir -p ~/.m2 && cp .github/maven-ci-settings.xml ~/.m2/settings.xml
       # 性能断言（@Tag("benchmark")）从功能门禁排除，由 release Benchmark 步骤
       # 显式执行；失败用例重跑一次，重跑仍失败则门禁照常失败，不掩盖真实缺陷。
       - name: Compile tests
@@ -39,7 +51,7 @@ jobs:
             -Dtest="$(cat /tmp/shard-tests.txt)" test
       - name: Upload surefire reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: surefire-reports
           path: "*/target/surefire-reports"
@@ -55,6 +67,8 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - name: Configure CI Maven mirror
+        run: mkdir -p ~/.m2 && cp .github/maven-ci-settings.xml ~/.m2/settings.xml
       - name: JFR recording smoke
         run: |
           mvn -B -Djacoco.skip=true \
@@ -62,7 +76,7 @@ jobs:
             -Dtest=PackageBoundaryTest,TracerTest,GatewayRuntimeRespTest test
       - name: Upload JFR
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: jfr-smoke
           path: "*.jfr"
@@ -79,10 +93,12 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - name: Configure CI Maven mirror
+        run: mkdir -p ~/.m2 && cp .github/maven-ci-settings.xml ~/.m2/settings.xml
       - name: Console server tests & JaCoCo coverage gate
         working-directory: console-server
         run: mvn -B -q test org.jacoco:jacoco-maven-plugin:check
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
@@ -126,6 +142,8 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - name: Configure CI Maven mirror
+        run: mkdir -p ~/.m2 && cp .github/maven-ci-settings.xml ~/.m2/settings.xml
       - name: SpotBugs High severity gate
         run: |
           mvn -B -pl tiering-protocol,tiering-storage,tiering-server,tiering-cluster,tiering-operator \
@@ -142,7 +160,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
@@ -180,7 +198,7 @@ jobs:
         run: docker compose logs --tail=200
       - name: Upload Playwright report on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: playwright-report
           path: |
@@ -198,7 +216,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
@@ -240,7 +258,7 @@ jobs:
         run: docker compose --profile s3 logs --tail=200
       - name: Upload S3 Playwright report on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: playwright-s3-report
           path: |

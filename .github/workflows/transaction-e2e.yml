@@ -6,6 +6,16 @@ on:
   pull_request:
     branches: [develop, main]
 
+env:
+  MAVEN_ARGS: >-
+    -ntp
+    -Daether.transport.http.retryHandler.count=5
+    -Daether.transport.http.retryHandler.interval=3000
+    -Daether.transport.http.retryHandler.serviceUnavailable=429,500,502,503,504
+    -Daether.connector.http.retryHandler.count=5
+    -Daether.connector.http.retryHandler.interval=3000
+    -Daether.connector.http.retryHandler.serviceUnavailable=429,500,502,503,504
+
 jobs:
   jvm-e2e:
     runs-on: ubuntu-latest
@@ -16,6 +26,8 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - name: Configure CI Maven mirror
+        run: mkdir -p ~/.m2 && cp .github/maven-ci-settings.xml ~/.m2/settings.xml
       - name: JVM container-equivalent E2E
         # 慢 runner 上 Raft 选举窗口内并发写入偶发 "no metadata leader"；
         # 失败用例重跑一次，重跑仍失败则门禁照常失败。
@@ -31,6 +43,8 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - name: Configure CI Maven mirror
+        run: mkdir -p ~/.m2 && cp .github/maven-ci-settings.xml ~/.m2/settings.xml
       - name: Build image
         # GitHub runner 的 BuildKit 偶发 gRPC EOF（瞬时基础设施故障）；
         # 构建幂等，重试 3 次吸收抖动，避免整条 e2e 因一次连接中断失败。
@@ -105,7 +119,7 @@ jobs:
             --tail=200 > docker-compose.log 2>&1 || true
       - name: Upload e2e evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: container-e2e-evidence
           path: |
@@ -127,6 +141,8 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - name: Configure CI Maven mirror
+        run: mkdir -p ~/.m2 && cp .github/maven-ci-settings.xml ~/.m2/settings.xml
       - uses: helm/kind-action@v1
         with:
           cluster_name: tiering-kv
@@ -181,6 +197,8 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - name: Configure CI Maven mirror
+        run: mkdir -p ~/.m2 && cp .github/maven-ci-settings.xml ~/.m2/settings.xml
       - name: Block device setup
         run: |
           sudo scripts/block-device-chaos.sh setup
@@ -267,6 +285,8 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - name: Configure CI Maven mirror
+        run: mkdir -p ~/.m2 && cp .github/maven-ci-settings.xml ~/.m2/settings.xml
       - name: Jepsen externalized validation
         run: scripts/jepsen-run.sh run
       - name: Collect report

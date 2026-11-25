@@ -9,6 +9,16 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  MAVEN_ARGS: >-
+    -ntp
+    -Daether.transport.http.retryHandler.count=5
+    -Daether.transport.http.retryHandler.interval=3000
+    -Daether.transport.http.retryHandler.serviceUnavailable=429,500,502,503,504
+    -Daether.connector.http.retryHandler.count=5
+    -Daether.connector.http.retryHandler.interval=3000
+    -Daether.connector.http.retryHandler.serviceUnavailable=429,500,502,503,504
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,6 +30,8 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - name: Configure CI Maven mirror
+        run: mkdir -p ~/.m2 && cp .github/maven-ci-settings.xml ~/.m2/settings.xml
       # 测试职责由 test.yml 全量承担；build 只验证编译与打包，
       # 避免 push 一次并发跑 4 个完整测试套件导致 runner 资源抖动/OOM。
       - run: mvn -B -DskipTests clean verify

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GitHub Actions CI 专用 Maven 镜像配置：
+  避免多 Job 并发直连 repo.maven.apache.org 触发 HTTP 429 Too Many Requests。
+  使用 Google Cloud 官方同步的 Maven Central 全球镜像（HTTPS CDN）。
+  仅在 GitHub Actions 作业中显式安装到 ~/.m2/settings.xml，不影响本机开发环境。
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+    <mirrors>
+        <mirror>
+            <id>google-maven-central</id>
+            <name>Google Maven Central Mirror</name>
+            <url>https://maven-central.storage-download.googleapis.com/maven2</url>
+            <mirrorOf>central</mirrorOf>
+        </mirror>
+    </mirrors>
+</settings>

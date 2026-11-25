@@ -33,6 +33,16 @@ on:
            "v4.1.0-rc*", "v4.1.0"]
   workflow_dispatch:
 
+env:
+  MAVEN_ARGS: >-
+    -ntp
+    -Daether.transport.http.retryHandler.count=5
+    -Daether.transport.http.retryHandler.interval=3000
+    -Daether.transport.http.retryHandler.serviceUnavailable=429,500,502,503,504
+    -Daether.connector.http.retryHandler.count=5
+    -Daether.connector.http.retryHandler.interval=3000
+    -Daether.connector.http.retryHandler.serviceUnavailable=429,500,502,503,504
+
 jobs:
   test-shards:
     runs-on: ubuntu-latest
@@ -48,6 +58,8 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - name: Configure CI Maven mirror
+        run: mkdir -p ~/.m2 && cp .github/maven-ci-settings.xml ~/.m2/settings.xml
       - name: Compile tests
         run: mvn -B -q process-test-classes
       - name: Build shard test list
@@ -61,7 +73,7 @@ jobs:
             -Dtest="$(cat /tmp/shard-tests.txt)" test
       - name: Upload surefire reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: surefire-reports-shard-${{ matrix.shard }}
           path: "*/target/surefire-reports"
@@ -79,6 +91,8 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - name: Configure CI Maven mirror
+        run: mkdir -p ~/.m2 && cp .github/maven-ci-settings.xml ~/.m2/settings.xml
       - name: Version consistency check
         run: bash scripts/version-check.sh
       - name: Console server tests, JaCoCo & SpotBugs High gate
@@ -87,7 +101,7 @@ jobs:
           mvn -B -q test org.jacoco:jacoco-maven-plugin:check
           mvn -B -DskipTests test-compile com.github.spotbugs:spotbugs-maven-plugin:check \
             -Dspotbugs.threshold=High -Dspotbugs.failOnError=true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
           cache: npm
@@ -120,6 +134,8 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      - name: Configure CI Maven mirror
+        run: mkdir -p ~/.m2 && cp .github/maven-ci-settings.xml ~/.m2/settings.xml
       - name: Benchmark
         # 显式覆盖 excludedGroups 为空并列出全部 @Tag("benchmark") 类（71 个），
         # 确保 benchmark 仍在发布门禁执行。
@@ -156,7 +172,8 @@ jobs:
         run: |
           chmod +x scripts/release-notes.sh
           ./scripts/release-notes.sh "${GITHUB_REF_NAME}" > release-notes.md
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
           body_path: release-notes.md
+          files: target/checksums.sha256
