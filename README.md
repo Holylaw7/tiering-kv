@@ -4,12 +4,12 @@
 > 内存/磁盘分层 + 分布式事务 + 多模型值 + 向量检索 + SQL + 云原生运行时，
 > 配套 **Vue 3 + Spring Boot 的 Web 运维管理平台**（前后端分离）。
 
-**版本：v5.3.0（2026-11-25）** · **约 6,738 个内核测试方法 + 173 项控制面测试（JaCoCo 79.58%）+ 32 项 Vitest + 6 组 Playwright E2E + 双副本 HA 实时故障转移门禁 / 0 failures**（内核测试口径见 [docs/testing/measurement-conventions.md](
+**版本：v5.4.0（2026-11-25）** · **约 6,738 个内核测试方法 + 78 项 Operator 测试 + 173 项控制面测试（JaCoCo 79.58%）+ 32 项 Vitest + 6 组 Playwright E2E + 双副本 HA 实时故障转移门禁 + 真实 kind Operator 6 阶段全生命周期 E2E / 0 failures**（内核测试口径见 [docs/testing/measurement-conventions.md](
 docs/testing/measurement-conventions.md)） ·
 技术债 **50/50 处置完成**（含 TD-081 集群复制原子操作，ADR-0352） ·
 JDK 21 · 真实 GitHub Runner 门禁全绿
-（build / test（三分片）/ transaction-e2e /
-release：Benchmark + Trivy 0 漏洞 + GHCR 镜像）
+（build / test（三分片）/ transaction-e2e（含 `operator-kind-e2e`）/
+release：Benchmark + Trivy 0 漏洞 + 4 镜像 GHCR 发布）
 
 ## 项目定位
 
@@ -108,7 +108,14 @@ docker compose -f deploy/docker-compose.transaction.yml up -d --wait
 redis-cli -p 6379 SET k v   # 自动 2PC 事务
 ```
 
-Kubernetes：`deploy/kubernetes/*.yaml` + Operator（fabric8 6.13.4）。
+Kubernetes（Operator 生产清单 + 真实 `kind` 6 阶段全生命周期验证，fabric8 6.13.4）：
+
+```bash
+kubectl apply -f deploy/operator/tieringkvcluster-crd.yaml
+kubectl apply -f deploy/operator/rbac.yaml
+kubectl apply -f deploy/operator/deployment.yaml
+kubectl apply -f deploy/operator/kind-cluster-sample.yaml
+```
 
 ## 能力矩阵
 
@@ -150,6 +157,7 @@ Kubernetes：`deploy/kubernetes/*.yaml` + Operator（fabric8 6.13.4）。
 | v5.1.0 | 2026-10-28 | 冷层读回退修复（TD-086/ADR-0361）：迁移后 100% 可读、DBSIZE 精确；容量模型 ≈ 值 + 74B/键 |
 | v5.2.0 | 2026-11-25 | 控制面 O1–O5 生产级增强：异步备份恢复与进度条、RESP 批量 Pipeline + TLS、双维度限流 + HMAC Webhook 告警、前端按需瘦身（CSS -83.3%）与 Dashboard 拆分、SpotBugs/JaCoCo/5 组 E2E 门禁与三镜像 GHCR 发布 |
 | v5.3.0 | 2026-11-25 | 控制面 S3/RustFS 真实对象存储 E2E 闭环（M2）、MySQL 租约锁 + DB 登录限流双副本无状态高可用与实时故障转移门禁（M3）、内核扩展 INFO 段落脱敏透出与系统页分栏观测面板（M4） |
+| v5.4.0 | 2026-11-25 | Kubernetes Operator 真实集群实战闭环（A1–A3）：CRD `status` 子资源与安全 Patch、TCP 探针与真实 RESP 备份 Job、`:8088` 健康服务与 Lease 选主、最小权限 RBAC、真实 `kind` 6 阶段全生命周期门禁 `operator-kind-e2e` 与 4 镜像 GHCR 发布 |
 | v5.0.3 | 2026-10-24 | 发布链路自动化：任意 v* 标签自动发版，门禁加控制面与前端作业（ADR-0360） |
 | v5.0.2 | 2026-10-24 | 版本号对齐：pom / 脚本 / 文档统一到 5.0.2，构建脚本不再写死构件名 |
 | v4.1.0 维护补丁 | 2026-08-16 | 生产链 TTL 修复（ADR-0351）+ 集群复制原子操作（ADR-0352，TD-081）+ 选举窗口/CI 稳定性加固（ADR-0353）+ RPC ERROR 帧 term 污染修复（ADR-0354）；技术债 50/50；约 6,738 个测试方法 / 14,957 次测试执行全绿 |
