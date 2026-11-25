@@ -191,3 +191,63 @@ jobs:
         if: always()
         working-directory: deploy/console
         run: docker compose down -v
+
+  docker-compose-s3-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: console-web/package-lock.json
+      - name: Install Playwright Chromium
+        working-directory: console-web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Start full-stack compose with S3/RustFS profile
+        working-directory: deploy/console
+        env:
+          CONSOLE_BACKUP_STORAGE: s3
+        run: docker compose --profile s3 up -d --build
+      - name: Wait for S3 and console stack readiness
+        run: |
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:9000/health/ready >/dev/null && \
+               curl -fsS http://127.0.0.1:8081/ >/dev/null && \
+               curl -fsS -X POST http://127.0.0.1:8081/api/v1/auth/login \
+                 -H "Content-Type: application/json" \
+                 -d '{"username":"admin","password":"admin123"}' >/dev/null; then
+              echo "S3 + Console stack ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Timed out waiting for S3 + Console stack readiness"
+          exit 1
+      - name: Run S3 Playwright E2E
+        working-directory: console-web
+        env:
+          E2E_BASE_URL: http://127.0.0.1:8081
+          E2E_S3_MODE: "true"
+        run: npx playwright test e2e/backups-s3-storage.spec.ts
+      - name: Dump compose logs on failure
+        if: failure()
+        working-directory: deploy/console
+        run: docker compose --profile s3 logs --tail=200
+      - name: Upload S3 Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-s3-report
+          path: |
+            console-web/playwright-report
+            console-web/test-results
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Tear down S3 compose stack
+        if: always()
+        working-directory: deploy/console
+        run: docker compose --profile s3 down -v

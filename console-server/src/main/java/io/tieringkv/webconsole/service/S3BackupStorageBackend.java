@@ -14,6 +14,7 @@ import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.checksums.RequestChecksumCalculation;
 import software.amazon.awssdk.core.checksums.ResponseChecksumValidation;
+import software.amazon.awssdk.core.client.config.ClientOverrideConfiguration;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.urlconnection.UrlConnectionHttpClient;
@@ -50,6 +51,7 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -249,15 +251,15 @@ public class S3BackupStorageBackend implements BackupStorageBackend {
                     .bucket(bucket)
                     .key(key)
                     .build());
-        } catch (NoSuchKeyException ex) {
+        } catch (NoSuchKeyException | NoSuchBucketException ex) {
             throw BusinessException.notFound("备份文件不存在：" + fileName);
         } catch (S3Exception ex) {
             if (ex.statusCode() == 404) {
                 throw BusinessException.notFound("备份文件不存在：" + fileName);
             }
-            throw new IOException("读取 S3 备份失败：" + ex.getMessage(), ex);
+            throw new IOException("读取 S3 备份失败：" + sanitizeMessage(ex), ex);
         } catch (SdkException ex) {
-            throw new IOException("读取 S3 备份失败：" + ex.getMessage(), ex);
+            throw new IOException("读取 S3 备份失败：" + sanitizeMessage(ex), ex);
         }
     }
 
@@ -270,30 +272,32 @@ public class S3BackupStorageBackend implements BackupStorageBackend {
                     .key(key)
                     .build());
             return true;
-        } catch (NoSuchKeyException ex) {
+        } catch (NoSuchKeyException | NoSuchBucketException ex) {
             return false;
         } catch (S3Exception ex) {
             if (ex.statusCode() == 404) {
                 return false;
             }
-            throw new IllegalStateException("查询 S3 备份对象状态失败：" + ex.getMessage(), ex);
+            throw new IllegalStateException("查询 S3 备份对象状态失败：" + sanitizeMessage(ex), ex);
+        } catch (SdkException ex) {
+            throw new IllegalStateException("查询 S3 备份对象状态失败：" + sanitizeMessage(ex), ex);
         }
     }
 
     @Override
     public boolean deleteIfExists(String fileName) throws IOException {
         String key = objectKey(fileName);
-        if (!exists(fileName)) {
-            return false;
-        }
         try {
+            if (!exists(fileName)) {
+                return false;
+            }
             s3Client.deleteObject(DeleteObjectRequest.builder()
                     .bucket(bucket)
                     .key(key)
                     .build());
             return true;
-        } catch (SdkException ex) {
-            throw new IOException("删除 S3 备份对象失败：" + ex.getMessage(), ex);
+        } catch (IllegalStateException | SdkException ex) {
+            throw new IOException("删除 S3 备份对象失败：" + sanitizeMessage(ex), ex);
         }
     }
 
@@ -363,7 +367,7 @@ public class S3BackupStorageBackend implements BackupStorageBackend {
         return quotaBytes > 0 ? OptionalLong.of(quotaBytes) : OptionalLong.empty();
     }
 
-    private void ensureBucketReady() {
+    private void ensureBucketReady() throws IOException {
         if (bucketVerified || !autoCreateBucket) {
             return;
         }
@@ -382,19 +386,33 @@ public class S3BackupStorageBackend implements BackupStorageBackend {
                     createBucketIfMissing();
                     bucketVerified = true;
                 } else {
-                    throw new IllegalStateException("检查 S3 存储桶失败：" + ex.getMessage(), ex);
+                    throw new IOException("检查 S3 存储桶失败：" + sanitizeMessage(ex), ex);
                 }
+            } catch (SdkException ex) {
+                throw new IOException("连接 S3 存储桶失败：" + sanitizeMessage(ex), ex);
             }
         }
     }
 
-    private void createBucketIfMissing() {
+    private void createBucketIfMissing() throws IOException {
         try {
             s3Client.createBucket(CreateBucketRequest.builder().bucket(bucket).build());
             log.info("已自动创建 S3 备份存储桶：{}", bucket);
         } catch (BucketAlreadyExistsException | BucketAlreadyOwnedByYouException ex) {
             log.debug("S3 存储桶已存在：{}", bucket);
+        } catch (SdkException ex) {
+            throw new IOException("自动创建 S3 存储桶失败：" + sanitizeMessage(ex), ex);
         }
+    }
+
+    private static String sanitizeMessage(Throwable ex) {
+        String msg = ex.getMessage();
+        if (msg == null || msg.isBlank()) {
+            return ex.getClass().getSimpleName();
+        }
+        // 避免长堆栈或签名/密钥片段透出至前端错误提示
+        String cleaned = msg.replaceAll("(?i)(AWSAccessKeyId|Credential|Signature|SecretKey)=[^&\\s,;]+", "$1=***");
+        return cleaned.length() > 240 ? cleaned.substring(0, 240) + "..." : cleaned;
     }
 
     private String objectKey(String fileName) {
@@ -415,9 +433,18 @@ public class S3BackupStorageBackend implements BackupStorageBackend {
         String region = (cfg.getRegion() == null || cfg.getRegion().isBlank())
                 ? "us-east-1"
                 : cfg.getRegion().trim();
+        int connectMs = Math.max(500, cfg.getConnectTimeoutMs());
+        int socketMs = Math.max(1000, cfg.getSocketTimeoutMs());
+        int apiMs = Math.max(socketMs, cfg.getApiCallTimeoutMs());
         S3ClientBuilder builder = S3Client.builder()
                 .region(Region.of(region))
-                .httpClientBuilder(UrlConnectionHttpClient.builder())
+                .httpClientBuilder(UrlConnectionHttpClient.builder()
+                        .connectionTimeout(Duration.ofMillis(connectMs))
+                        .socketTimeout(Duration.ofMillis(socketMs)))
+                .overrideConfiguration(ClientOverrideConfiguration.builder()
+                        .apiCallAttemptTimeout(Duration.ofMillis(socketMs))
+                        .apiCallTimeout(Duration.ofMillis(apiMs))
+                        .build())
                 .requestChecksumCalculation(RequestChecksumCalculation.WHEN_REQUIRED)
                 .responseChecksumValidation(ResponseChecksumValidation.WHEN_REQUIRED)
                 .forcePathStyle(cfg.isPathStyleAccess())

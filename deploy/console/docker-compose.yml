@@ -68,6 +68,7 @@ services:
       CONSOLE_BACKUP_S3_ACCESS_KEY: ${CONSOLE_BACKUP_S3_ACCESS_KEY:-minioadmin}
       CONSOLE_BACKUP_S3_SECRET_KEY: ${CONSOLE_BACKUP_S3_SECRET_KEY:-minioadmin}
       CONSOLE_BACKUP_S3_PATH_STYLE: ${CONSOLE_BACKUP_S3_PATH_STYLE:-true}
+      CONSOLE_BACKUP_S3_AUTO_CREATE_BUCKET: ${CONSOLE_BACKUP_S3_AUTO_CREATE_BUCKET:-true}
       # 直接访问 :8080 时的允许来源（经 Nginx 同源访问不需要）
       CONSOLE_CORS: ${CONSOLE_CORS:-http://localhost:8081,http://127.0.0.1:8081}
       # 数据面在另一个容器：修正默认实例地址（本机开发时留空即可）
