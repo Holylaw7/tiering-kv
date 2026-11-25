@@ -1,4 +1,4 @@
-# 控制面后端（Spring Boot 3.3 / JDK 21）
+# 控制面后端（Spring Boot 3.5 / JDK 21）
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /build
 # 构建期走阿里云镜像：本机网络直连 Maven Central 返回 403
