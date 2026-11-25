@@ -25,4 +25,7 @@ WORKDIR /app
 RUN groupadd -r tiering && useradd -r -g tiering tiering
 COPY --from=build /tmp/tiering-operator.jar /app/tiering-operator.jar
 USER tiering
+EXPOSE 8088
+HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=3 \
+  CMD /bin/bash -c 'exec 3<>/dev/tcp/127.0.0.1/8088 && printf "GET /healthz HTTP/1.0\r\n\r\n" >&3 && grep -q "200 OK" <&3'
 ENTRYPOINT ["java", "-Xmx512m", "-jar", "/app/tiering-operator.jar"]

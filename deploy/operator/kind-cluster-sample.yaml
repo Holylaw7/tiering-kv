@@ -1,0 +1,16 @@
+# 轻量化 TieringKVCluster CR 示例（适配 kind 与单机验证环境）
+apiVersion: tieringkv.io/v1
+kind: TieringKVCluster
+metadata:
+  name: demo
+  namespace: tiering-kv
+spec:
+  metadataReplicas: 1
+  storageReplicas: 2
+  gatewayReplicas: 1
+  regionIds: [r1, r2]
+  image: ghcr.io/holylaw7/tiering-kv:v5.4.0
+  metadataStorageSize: 1Gi
+  storageDataSize: 1Gi
+  backupScheduleCron: "0 2 * * *"
+  backupRetentionHours: 168
