@@ -374,6 +374,8 @@ public class ConsoleProperties {
         private boolean requireEncryptionInProd = false;
         /** 登录防撞库：单源 IP 5 分钟窗口内允许的最大失败次数。 */
         private int ipMaxFailures = 20;
+        /** 登录限流计数存储后端：memory（单机默认）| db（多副本共享 MySQL）。 */
+        private String loginAttemptStore = "memory";
         /** 允许采信 X-Forwarded-For 头的受信任代理 IP 或网段（默认仅本机回环）。 */
         private List<String> trustedProxies = new ArrayList<>(
                 List.of("127.0.0.1", "::1", "0:0:0:0:0:0:0:1"));
@@ -386,6 +388,8 @@ public class ConsoleProperties {
         }
         public int getIpMaxFailures() { return ipMaxFailures; }
         public void setIpMaxFailures(int ipMaxFailures) { this.ipMaxFailures = ipMaxFailures; }
+        public String getLoginAttemptStore() { return loginAttemptStore; }
+        public void setLoginAttemptStore(String loginAttemptStore) { this.loginAttemptStore = loginAttemptStore; }
         public List<String> getTrustedProxies() { return trustedProxies; }
         public void setTrustedProxies(List<String> trustedProxies) { this.trustedProxies = trustedProxies; }
     }

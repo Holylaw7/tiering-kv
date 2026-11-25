@@ -30,6 +30,7 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PushbackInputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -57,6 +58,7 @@ public class BackupService {
     private final Executor executor;
     private final AuditService auditService;
     private final BackupCapacityService capacityService;
+    private final DbLeaseLockService leaseLockService;
 
     public BackupService(BackupRecordRepository repository, InstanceService instanceService,
                          KeyspaceService keyspaceService, RespGateway gateway,
@@ -66,7 +68,18 @@ public class BackupService {
                          BackupCapacityService capacityService) {
         this(repository, instanceService, keyspaceService, gateway, objectMapper, properties,
                 new LocalBackupStorageBackend(properties),
-                executor, auditService, capacityService);
+                executor, auditService, capacityService, null);
+    }
+
+    public BackupService(BackupRecordRepository repository, InstanceService instanceService,
+                         KeyspaceService keyspaceService, RespGateway gateway,
+                         ObjectMapper objectMapper, ConsoleProperties properties,
+                         BackupStorageBackend storageBackend,
+                         @Qualifier("backupExecutor") Executor executor,
+                         AuditService auditService,
+                         BackupCapacityService capacityService) {
+        this(repository, instanceService, keyspaceService, gateway, objectMapper, properties,
+                storageBackend, executor, auditService, capacityService, null);
     }
 
     @Autowired
@@ -76,7 +89,8 @@ public class BackupService {
                          BackupStorageBackend storageBackend,
                          @Qualifier("backupExecutor") Executor executor,
                          AuditService auditService,
-                         BackupCapacityService capacityService) {
+                         BackupCapacityService capacityService,
+                         DbLeaseLockService leaseLockService) {
         this.repository = repository;
         this.instanceService = instanceService;
         this.keyspaceService = keyspaceService;
@@ -87,6 +101,7 @@ public class BackupService {
         this.executor = executor;
         this.auditService = auditService;
         this.capacityService = capacityService;
+        this.leaseLockService = leaseLockService;
     }
 
     /** 备份条目（JSONL 一行）。 */
@@ -148,48 +163,61 @@ public class BackupService {
 
     /** 恢复超过该时长仍未结束，视为进程崩溃遗留的僵尸状态（ADR-0366）。 */
     private static final long STALE_RESTORING_MINUTES = 30;
+    private static final Duration INSTANCE_OP_LEASE_TTL = Duration.ofSeconds(15);
+
+    private static String instanceLeaseKey(Long instanceId) {
+        return "backup-op:instance:" + instanceId;
+    }
 
     public BackupRecord export(Long instanceId) {
         instanceService.require(instanceId);
         Object lock = instanceLocks.computeIfAbsent(instanceId, key -> new Object());
         BackupRecord created;
         synchronized (lock) {
-            // 恢复进行中禁止导出：此时导出的是一份"半恢复"的数据（ADR-0366）
-            repository.findFirstByInstanceIdAndRestoreStatusOrderByRestoreStartedAtDesc(
-                            instanceId, RestoreStatus.RESTORING)
-                    .ifPresent(restoring -> {
-                        if (isFresh(restoring.getRestoreStartedAt(), STALE_RESTORING_MINUTES)) {
-                            throw BusinessException.conflict(
-                                    "该实例正在恢复（备份 id=" + restoring.getId() + "），请稍后再试");
-                        }
-                        restoring.setRestoreStatus(RestoreStatus.FAILED);
-                        restoring.setRestoreMessage("恢复超时未完成，已标记为失败");
-                        restoring.setRestoreFinishedAt(LocalDateTime.now());
-                        repository.save(restoring);
-                    });
-            repository.findFirstByInstanceIdAndStatusOrderByCreatedAtDesc(instanceId, BackupStatus.RUNNING)
-                    .ifPresent(running -> {
-                        if (running.getCreatedAt() != null
-                                && running.getCreatedAt().isAfter(
-                                        LocalDateTime.now().minusMinutes(STALE_RUNNING_MINUTES))) {
-                            throw BusinessException.conflict(
-                                    "该实例已有备份任务在执行（id=" + running.getId() + "），请稍后再试");
-                        }
-                        running.setStatus(BackupStatus.FAILED);
-                        running.setMessage("任务超时未完成，已标记为失败");
-                        running.setFinishedAt(LocalDateTime.now());
-                        repository.save(running);
-                    });
+            String leaseKey = instanceLeaseKey(instanceId);
+            boolean leaseHeld = acquireInstanceLeaseOrConflict(leaseKey);
+            try {
+                // 恢复进行中禁止导出：此时导出的是一份"半恢复"的数据（ADR-0366）
+                repository.findFirstByInstanceIdAndRestoreStatusOrderByRestoreStartedAtDesc(
+                                instanceId, RestoreStatus.RESTORING)
+                        .ifPresent(restoring -> {
+                            if (isFresh(restoring.getRestoreStartedAt(), STALE_RESTORING_MINUTES)) {
+                                throw BusinessException.conflict(
+                                        "该实例正在恢复（备份 id=" + restoring.getId() + "），请稍后再试");
+                            }
+                            restoring.setRestoreStatus(RestoreStatus.FAILED);
+                            restoring.setRestoreMessage("恢复超时未完成，已标记为失败");
+                            restoring.setRestoreFinishedAt(LocalDateTime.now());
+                            repository.save(restoring);
+                        });
+                repository.findFirstByInstanceIdAndStatusOrderByCreatedAtDesc(instanceId, BackupStatus.RUNNING)
+                        .ifPresent(running -> {
+                            if (running.getCreatedAt() != null
+                                    && running.getCreatedAt().isAfter(
+                                            LocalDateTime.now().minusMinutes(STALE_RUNNING_MINUTES))) {
+                                throw BusinessException.conflict(
+                                        "该实例已有备份任务在执行（id=" + running.getId() + "），请稍后再试");
+                            }
+                            running.setStatus(BackupStatus.FAILED);
+                            running.setMessage("任务超时未完成，已标记为失败");
+                            running.setFinishedAt(LocalDateTime.now());
+                            repository.save(running);
+                        });
 
-            BackupRecord record = new BackupRecord();
-            record.setInstanceId(instanceId);
-            String unique = java.util.UUID.randomUUID().toString().substring(0, 8);
-            String ext = properties.getBackup().isCompress() ? ".jsonl.gz" : ".jsonl";
-            record.setFileName("backup-" + instanceId + "-" + LocalDateTime.now().format(STAMP) + "-" + unique + ext);
-            record.setStatus(BackupStatus.RUNNING);
-            record.setProcessedKeys(0L);
-            record.setCreatedAt(LocalDateTime.now());
-            created = repository.save(record);
+                BackupRecord record = new BackupRecord();
+                record.setInstanceId(instanceId);
+                String unique = java.util.UUID.randomUUID().toString().substring(0, 8);
+                String ext = properties.getBackup().isCompress() ? ".jsonl.gz" : ".jsonl";
+                record.setFileName("backup-" + instanceId + "-" + LocalDateTime.now().format(STAMP) + "-" + unique + ext);
+                record.setStatus(BackupStatus.RUNNING);
+                record.setProcessedKeys(0L);
+                record.setCreatedAt(LocalDateTime.now());
+                created = repository.save(record);
+            } finally {
+                if (leaseHeld) {
+                    leaseLockService.release(leaseKey);
+                }
+            }
         }
 
         Long recordId = created.getId();
@@ -337,38 +365,56 @@ public class BackupService {
         Object lock = instanceLocks.computeIfAbsent(instanceId, key -> new Object());
         BackupRecord saved;
         synchronized (lock) {
-            // 恢复进行中：拒绝第二次恢复
-            repository.findFirstByInstanceIdAndRestoreStatusOrderByRestoreStartedAtDesc(
-                            instanceId, RestoreStatus.RESTORING)
-                    .ifPresent(restoring -> {
-                        if (isFresh(restoring.getRestoreStartedAt(), STALE_RESTORING_MINUTES)) {
-                            throw BusinessException.conflict(
-                                    "该实例正在恢复（备份 id=" + restoring.getId() + "），请稍后再试");
-                        }
-                        restoring.setRestoreStatus(RestoreStatus.FAILED);
-                        restoring.setRestoreMessage("恢复超时未完成，已标记为失败");
-                        restoring.setRestoreFinishedAt(LocalDateTime.now());
-                        repository.save(restoring);
-                    });
-            // 备份进行中：恢复会与导出争用同一实例，返回 409
-            repository.findFirstByInstanceIdAndStatusOrderByCreatedAtDesc(instanceId, BackupStatus.RUNNING)
-                    .ifPresent(running -> {
-                        if (isFresh(running.getCreatedAt(), STALE_RUNNING_MINUTES)) {
-                            throw BusinessException.conflict(
-                                    "该实例正在备份（id=" + running.getId() + "），请稍后再试");
-                        }
-                    });
-            // 标记进入恢复：先落库再提交异步执行，保证其他请求立即看到 RESTORING
-            record.setRestoreStatus(RestoreStatus.RESTORING);
-            record.setRestoreStartedAt(LocalDateTime.now());
-            record.setRestoreFinishedAt(null);
-            record.setRestoredKeys(0);
-            record.setRestoreMessage(null);
-            saved = repository.save(record);
+            String leaseKey = instanceLeaseKey(instanceId);
+            boolean leaseHeld = acquireInstanceLeaseOrConflict(leaseKey);
+            try {
+                // 恢复进行中：拒绝第二次恢复
+                repository.findFirstByInstanceIdAndRestoreStatusOrderByRestoreStartedAtDesc(
+                                instanceId, RestoreStatus.RESTORING)
+                        .ifPresent(restoring -> {
+                            if (isFresh(restoring.getRestoreStartedAt(), STALE_RESTORING_MINUTES)) {
+                                throw BusinessException.conflict(
+                                        "该实例正在恢复（备份 id=" + restoring.getId() + "），请稍后再试");
+                            }
+                            restoring.setRestoreStatus(RestoreStatus.FAILED);
+                            restoring.setRestoreMessage("恢复超时未完成，已标记为失败");
+                            restoring.setRestoreFinishedAt(LocalDateTime.now());
+                            repository.save(restoring);
+                        });
+                // 备份进行中：恢复会与导出争用同一实例，返回 409
+                repository.findFirstByInstanceIdAndStatusOrderByCreatedAtDesc(instanceId, BackupStatus.RUNNING)
+                        .ifPresent(running -> {
+                            if (isFresh(running.getCreatedAt(), STALE_RUNNING_MINUTES)) {
+                                throw BusinessException.conflict(
+                                        "该实例正在备份（id=" + running.getId() + "），请稍后再试");
+                            }
+                        });
+                // 标记进入恢复：先落库再提交异步执行，保证其他请求立即看到 RESTORING
+                record.setRestoreStatus(RestoreStatus.RESTORING);
+                record.setRestoreStartedAt(LocalDateTime.now());
+                record.setRestoreFinishedAt(null);
+                record.setRestoredKeys(0);
+                record.setRestoreMessage(null);
+                saved = repository.save(record);
+            } finally {
+                if (leaseHeld) {
+                    leaseLockService.release(leaseKey);
+                }
+            }
         }
 
         executor.execute(() -> runRestore(recordId));
         return saved;
+    }
+
+    private boolean acquireInstanceLeaseOrConflict(String leaseKey) {
+        if (leaseLockService == null) {
+            return false;
+        }
+        if (!leaseLockService.tryAcquire(leaseKey, INSTANCE_OP_LEASE_TTL)) {
+            throw BusinessException.conflict("该实例正在提交备份或恢复任务，请稍后再试");
+        }
+        return true;
     }
 
     /** 恢复异步执行体（O1-B + O2-A）：使用 RESP Pipeline 批回放并按节流刷新 restoredKeys。 */

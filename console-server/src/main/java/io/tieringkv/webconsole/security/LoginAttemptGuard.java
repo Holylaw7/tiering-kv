@@ -1,6 +1,7 @@
 package io.tieringkv.webconsole.security;
 
 import io.tieringkv.webconsole.config.ConsoleProperties;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -36,12 +37,24 @@ public class LoginAttemptGuard {
         this(new InMemoryLoginAttemptStore(MAX_TRACKED_BUCKETS), DEFAULT_IP_MAX_FAILURES);
     }
 
-    @Autowired
     public LoginAttemptGuard(ConsoleProperties properties) {
         this(new InMemoryLoginAttemptStore(MAX_TRACKED_BUCKETS),
                 properties != null && properties.getSecurity() != null
                         ? Math.max(5, properties.getSecurity().getIpMaxFailures())
                         : DEFAULT_IP_MAX_FAILURES);
+    }
+
+    @Autowired
+    public LoginAttemptGuard(ConsoleProperties properties, ObjectProvider<LoginAttemptStore> storeProvider) {
+        this(resolveStore(storeProvider),
+                properties != null && properties.getSecurity() != null
+                        ? Math.max(5, properties.getSecurity().getIpMaxFailures())
+                        : DEFAULT_IP_MAX_FAILURES);
+    }
+
+    private static LoginAttemptStore resolveStore(ObjectProvider<LoginAttemptStore> provider) {
+        LoginAttemptStore provided = provider == null ? null : provider.getIfAvailable();
+        return provided != null ? provided : new InMemoryLoginAttemptStore(MAX_TRACKED_BUCKETS);
     }
 
     public LoginAttemptGuard(LoginAttemptStore store, int ipMaxFailures) {

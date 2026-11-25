@@ -97,6 +97,8 @@ console:
     require-encryption-in-prod: ${CONSOLE_REQUIRE_ENCRYPTION_IN_PROD:false}
     # 登录防撞库：单源 IP 5 分钟窗口最大失败次数
     ip-max-failures: ${CONSOLE_LOGIN_IP_MAX_FAILURES:20}
+    # 登录限流计数存储：memory（单机默认）| db（多副本共享 MySQL）
+    login-attempt-store: ${CONSOLE_LOGIN_ATTEMPT_STORE:memory}
     # 受信任反向代理列表（仅当直连对端命中时才采信 X-Forwarded-For）
     trusted-proxies: ${CONSOLE_TRUSTED_PROXIES:127.0.0.1,::1,0:0:0:0:0:0:0:1}
   terminal:
