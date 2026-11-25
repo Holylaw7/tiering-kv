@@ -66,5 +66,37 @@ test.describe('Instances TLS, SlowLog & Audit CSV E2E', () => {
     expect(exportRes.headers()['content-type'] || '').toContain('text/csv')
     const csvText = await exportRes.text()
     expect(csvText).toContain('LOGIN')
+
+    // 4. 系统信息页（M4）：校验内核扩展 INFO Sections 只读透出、段落切换与过滤
+    const sysRes = await request.get(`${baseURL}/api/v1/system/info?instanceId=${instanceId}`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    })
+    expect(sysRes.status()).toBe(200)
+    const sysSections = (await sysRes.json()).data.sections as Record<string, Record<string, string>>
+    expect(sysSections).toBeTruthy()
+    expect(sysSections.Tiering).toBeTruthy()
+    expect(sysSections.Persistence).toBeTruthy()
+    expect(sysSections.Server).toBeTruthy()
+    expect(sysSections.default).toBeUndefined()
+
+    await page.locator('.sidebar').getByText('系统信息').click()
+    await expect(page).toHaveURL(/#\/system/)
+    await expect(page.getByRole('heading', { name: '系统信息' })).toBeVisible()
+
+    const sectionsPanel = page.getByTestId('info-sections-panel')
+    await expect(sectionsPanel).toBeVisible()
+    const tieringTab = sectionsPanel.locator('[role="tab"][data-section="Tiering"]')
+    await expect(tieringTab).toHaveAttribute('aria-selected', 'true')
+    await expect(sectionsPanel.locator('.el-table__body')).toContainText('tiering_memtable_used_bytes')
+
+    const persistenceTab = sectionsPanel.locator('[role="tab"][data-section="Persistence"]')
+    await persistenceTab.click()
+    await expect(persistenceTab).toHaveAttribute('aria-selected', 'true')
+
+    const filterInput = sectionsPanel.getByPlaceholder('过滤指标键或值，如 memtable / rdb')
+    await filterInput.fill('__no_such_metric_xyz__')
+    await expect(sectionsPanel).toContainText('当前段落无匹配指标')
+    await filterInput.fill('')
+    await expect(sectionsPanel.locator('.el-table__body tr').first()).toBeVisible()
   })
 })
