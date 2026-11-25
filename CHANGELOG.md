@@ -3,6 +3,29 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [5.4.0] - 2026-11-25
+
+### Added
+
+- **Kubernetes Operator 真实集群实战闭环（A1–A3）**：
+  - **核心修复与全生命周期协调（A1）**：
+    - 修正 `tiering-operator/pom.xml` `<mainClass>` 为 `io.tieringkv.operator.k8s.TieringKVOperator`，修复 `K8sTieringKVCluster` 缺失 `@Kind("TieringKVCluster")` 与 `Namespaced` 标记接口的问题；
+    - 升级 `deploy/operator/tieringkvcluster-crd.yaml`：声明 `subresources.status: {}`、`additionalPrinterColumns`（`Phase / Meta / Storage / Gateway / Image / Age`）、可选规格字段（`gatewayReplicas`、`storageClassName`、`metadataStorageSize`、`storageDataSize`）与完整备份状态字段（`phase`、`lastBackupJob`、`lastBackupStatus`、`lastBackupTime`、`message`）；
+    - 加固 `K8sActionApplier`：修正存储层 Pod 角色为 `ROLE=participant`（`start.sh` 同时兼容 `participant|storage`）；`StatefulSet` / `Service` 已存在时采用不可变字段安全 `edit()` Patch（不覆盖 `volumeClaimTemplates` 与已分配 `clusterIP`）；三层工作负载接入 TCP `readinessProbe` / `livenessProbe` 与 `tieringkv.io/config-hash` 配置滚动哈希；备份 `CronJob` 改为真实 RESP（`PING` + `DBSIZE` + `BGSAVE`）且 `suspend: false`，新增 CR 注解 `tieringkv.io/backup-request-id` 按需触发 `batch/v1 Job` 并回写状态；`deleteCluster()` 改为按名称逐个以 `DeletionPropagation.BACKGROUND` 清理备份 Job（无需 `deletecollection` 权限）且严格保留全部 PVC。
+  - **Operator 生产运行态加固（A2）**：
+    - 新增零外部依赖健康探针服务 `OperatorHealthServer`（`:8088`，`/healthz` 存活 + `/readyz` 动态跟随 Watch 与选主状态）；
+    - 新增基于 `coordination.k8s.io/v1 Lease` 的 `OperatorLeaderElector`（抢占、周期续租、超时接管、优雅停机释放）；
+    - 加固 `Fabric8OperatorClient`（已有资源走命名空间级 `replace()`、`resourceVersion` 同步与状态回写 `409` 自动重拉重试）与 `TieringKVOperator`（每 CR `ReentrantLock` 串行互斥、`WATCH_NAMESPACE` 隔离、`SIGTERM` 优雅停机）；
+    - 新增最小权限 `deploy/operator/rbac.yaml`（明确禁止 `persistentvolumeclaims` 删除权限）、生产清单 `deploy/operator/deployment.yaml`（UID `10001:10001` 非 root 只读安全上下文）与 `deploy/operator/kind-cluster-sample.yaml`，补齐 `deploy/Dockerfile.operator` 健康检查与非 root 权限；新增 `K8sActionApplierLifecycleTest` 与 `OperatorRuntimeTest`（Operator 模块共 78 项单测全绿）。
+  - **真实 `kind` 集群 6 阶段全生命周期 E2E 与 4 镜像发布（A3）**：
+    - `K8sActionApplier.ready(...)` 增加滚动升级中 `updatedReplicas` 感知；
+    - 新增 `scripts/kind-operator-e2e.sh` 并在 `.github/workflows/transaction-e2e.yml` 新增 `operator-kind-e2e` 真实 K8s 门禁：实测覆盖 Operator 就绪与 Lease 选主 → 创建 CR（1/2/1）+ RESP 读写 → 在线扩容 `storageReplicas 2→3` + `regions.conf` 自动补全 `r3` → 镜像滚动升级 `e2e-v1→e2e-v2` + RESP 读写 → 注解触发按需备份 Job `SUCCEEDED` 状态回写 → Finalizer 删除 CR 清理工作负载并 100% 保留 4 块 PVC；
+    - `.github/workflows/release.yml` 扩展为 4 镜像 GHCR 发布（新增 `ghcr.io/holylaw7/tiering-kv-operator:<tag>`）并附带 `checksums.sha256` Release 资产。
+
+### Fixed
+
+- **GitHub Actions 稳定性与零告警加固**：所有 5 个工作流接入 `.github/maven-ci-settings.xml`（Google Cloud Maven Central 镜像）与 Maven 3.9 `429/5xx` 重试参数消除构建限流抖动，升级 Actions 至原生 Node 24（`setup-node@v6` / `upload-artifact@v6` / `action-gh-release@v3`），修复 `MultiKeyCommandTest` varargs 编译器告警，实现全量工作流 `attempt=1` 零注解通过。
+
 ## [5.3.0] - 2026-11-25
 
 ### Added
