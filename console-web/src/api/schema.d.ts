@@ -1315,6 +1315,11 @@ export interface components {
             instance?: components["schemas"]["InstanceView"];
             keyspace?: components["schemas"]["Keyspace"][];
             memory?: components["schemas"]["Memory"];
+            sections?: {
+                [key: string]: {
+                    [key: string]: string;
+                };
+            };
             server?: components["schemas"]["Server"];
             stats?: components["schemas"]["Stats"];
             warnings?: string[];

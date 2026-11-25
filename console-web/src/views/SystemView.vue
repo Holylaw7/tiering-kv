@@ -1,14 +1,45 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import { systemApi } from '@/api'
 import type { SystemInfo } from '@/api/types'
 import { useInstanceStore } from '@/stores/instance'
 import { formatBytes } from '@/utils/format'
+import {
+  buildInfoSections,
+  countSectionMatches,
+  filterSectionEntries,
+  formatSectionJson,
+  formatSectionKvText
+} from '@/utils/infoSections'
 
 const store = useInstanceStore()
 const info = ref<SystemInfo>()
 const loading = ref(false)
 const configFilter = ref('')
+const sectionFilter = ref('')
+const extendedOnly = ref(false)
+const activeSectionName = ref('')
+
+const allSections = computed(() => buildInfoSections(info.value?.sections))
+const hasExtendedSections = computed(() => allSections.value.some((sec) => sec.extended))
+
+const visibleSections = computed(() => {
+  if (extendedOnly.value && hasExtendedSections.value) {
+    return allSections.value.filter((sec) => sec.extended)
+  }
+  return allSections.value
+})
+
+const activeSection = computed(
+  () =>
+    visibleSections.value.find((sec) => sec.name === activeSectionName.value) ??
+    visibleSections.value[0]
+)
+
+const activeSectionEntries = computed(() =>
+  filterSectionEntries(activeSection.value, sectionFilter.value)
+)
 
 const configEntries = computed(() => {
   const entries = Object.entries(info.value?.config ?? {}).map(([key, value]) => ({ key, value }))
@@ -16,6 +47,56 @@ const configEntries = computed(() => {
   if (!q) return entries
   return entries.filter((item) => item.key.toLowerCase().includes(q) || item.value.toLowerCase().includes(q))
 })
+
+watch(
+  visibleSections,
+  (list) => {
+    if (!list.length) {
+      activeSectionName.value = ''
+      return
+    }
+    if (!list.some((sec) => sec.name === activeSectionName.value)) {
+      activeSectionName.value = list[0].name
+    }
+  },
+  { immediate: true }
+)
+
+async function copyText(text: string, label: string) {
+  try {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = text
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+    }
+    ElMessage.success(`已复制 ${label}`)
+  } catch {
+    ElMessage.error('复制失败，请检查浏览器剪贴板权限')
+  }
+}
+
+function copyActiveKv() {
+  if (!activeSection.value) return
+  copyText(
+    formatSectionKvText(activeSection.value, activeSectionEntries.value),
+    `# ${activeSection.value.name} 文本`
+  )
+}
+
+function copyActiveJson() {
+  if (!activeSection.value) return
+  copyText(
+    formatSectionJson(activeSection.value, activeSectionEntries.value),
+    `${activeSection.value.name} JSON`
+  )
+}
 
 async function load() {
   if (!store.selectedId) return
@@ -131,6 +212,81 @@ onMounted(load)
       </el-table>
     </div>
 
+    <div class="panel" data-testid="info-sections-panel">
+      <div class="config-head">
+        <div class="section-heading">
+          <div class="card-title" style="margin-bottom: 0">内核扩展段落（INFO Sections）</div>
+          <span v-if="allSections.length" class="section-meta">
+            共 {{ visibleSections.length }} 段
+          </span>
+        </div>
+        <div class="section-tools">
+          <el-checkbox v-if="hasExtendedSections" v-model="extendedOnly" size="small">
+            仅扩展段落
+          </el-checkbox>
+          <el-input
+            v-model="sectionFilter"
+            placeholder="过滤指标键或值，如 memtable / rdb"
+            clearable
+            size="small"
+            style="width: 240px"
+          />
+          <el-button
+            size="small"
+            :disabled="!activeSection || activeSectionEntries.length === 0"
+            @click="copyActiveKv"
+          >
+            复制文本
+          </el-button>
+          <el-button
+            size="small"
+            :disabled="!activeSection || activeSectionEntries.length === 0"
+            @click="copyActiveJson"
+          >
+            复制 JSON
+          </el-button>
+        </div>
+      </div>
+
+      <div v-if="visibleSections.length" class="section-tabs" role="tablist" aria-label="INFO 段落">
+        <button
+          v-for="sec in visibleSections"
+          :key="sec.name"
+          type="button"
+          role="tab"
+          class="section-tab"
+          :class="{
+            active: activeSection?.name === sec.name,
+            extended: sec.extended,
+            dimmed: sectionFilter.trim().length > 0 && countSectionMatches(sec, sectionFilter) === 0
+          }"
+          :aria-selected="activeSection?.name === sec.name"
+          :data-section="sec.name"
+          @click="activeSectionName = sec.name"
+        >
+          <span class="tab-name">{{ sec.name }}</span>
+          <span v-if="sec.label !== sec.name" class="tab-label">{{ sec.label }}</span>
+          <span class="tab-count">{{ countSectionMatches(sec, sectionFilter) }}</span>
+        </button>
+      </div>
+
+      <el-table
+        v-if="visibleSections.length"
+        :data="activeSectionEntries"
+        size="small"
+        max-height="360"
+        :empty-text="sectionFilter.trim() ? '当前段落无匹配指标' : '当前段落暂无指标'"
+      >
+        <el-table-column prop="key" label="指标键" min-width="240">
+          <template #default="{ row }"><span class="mono">{{ row.key }}</span></template>
+        </el-table-column>
+        <el-table-column prop="value" label="值" min-width="200">
+          <template #default="{ row }"><span class="mono">{{ row.value }}</span></template>
+        </el-table-column>
+      </el-table>
+      <div v-else class="empty-sections">内核未返回 INFO 段落</div>
+    </div>
+
     <div class="panel">
       <div class="config-head">
         <div class="card-title" style="margin-bottom: 0">配置（只读）</div>
@@ -211,6 +367,92 @@ onMounted(load)
 
 .panel + .panel {
   margin-top: 14px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-meta {
+  font-size: var(--text-xs);
+  color: var(--text-2);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-2, rgba(148, 163, 184, 0.14));
+}
+
+.section-tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.section-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.section-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-soft);
+  background: transparent;
+  color: var(--text-1);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.section-tab:hover {
+  border-color: var(--el-color-primary);
+}
+
+.section-tab.active {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+
+.section-tab.dimmed {
+  opacity: 0.45;
+}
+
+.tab-label {
+  color: var(--text-2);
+  font-weight: 400;
+}
+
+.section-tab.active .tab-label {
+  color: var(--el-color-primary);
+}
+
+.tab-count {
+  padding: 0 6px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  background: rgba(148, 163, 184, 0.18);
+  color: var(--text-2);
+}
+
+.section-tab.active .tab-count {
+  background: var(--el-color-primary);
+  color: #fff;
+}
+
+.empty-sections {
+  padding: 24px 0;
+  text-align: center;
+  color: var(--text-2);
+  font-size: var(--text-sm);
 }
 
 .warn {

@@ -244,6 +244,7 @@ export interface SystemInfo {
   keyspace: Array<{ db: string; keys: number; expires: number; avgTtl: number }>
   config: Record<string, string>
   warnings: string[]
+  sections?: Record<string, Record<string, string>>
 }
 
 export interface SstableTable {

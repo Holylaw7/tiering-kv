@@ -10,18 +10,30 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
- * 系统信息只读快照（TD-092）：`INFO` 全部段落 + `CONFIG GET *`。
+ * 系统信息只读快照（TD-092 / M4）：`INFO` 全部非空段落 + `CONFIG GET *`。
  *
  * <p>字段名以 Tiering-KV 的 INFO 为准（见 `ServerInfoProvider`），
- * Redis 同名段落有差异的字段保留回退取值。
+ * Redis 同名段落有差异的字段保留回退取值；透出的全部 `sections` 与 `config`
+ * 均对口令/密钥/令牌类敏感键自动脱敏。
  */
 @Service
 public class SystemInfoService {
+
+    static final String MASKED_VALUE = "******";
+    private static final Pattern CAMEL_BOUNDARY = Pattern.compile("([a-z0-9])([A-Z])");
+    private static final Pattern SENSITIVE_KEY_PATTERN = Pattern.compile(
+            "(?i)(?:^|[_.-])(?:"
+                    + "requirepass|masterauth|pass(?:word|wd|phrase)?|secret|token|credential|"
+                    + "apikey|privatekey|accesskey|secretkey|"
+                    + "(?:private|secret|access|api|auth|encrypt(?:ion)?|tls|ssl|signing|master)[_.-]key"
+                    + ")(?:$|[_.-])");
 
     private final InstanceService instanceService;
     private final RespGateway gateway;
@@ -74,7 +86,8 @@ public class SystemInfoService {
                         number(stats.get("total_keys"))),
                 keyspace(info.getOrDefault("Keyspace", Map.of())),
                 config,
-                warnings);
+                warnings,
+                sanitizeSections(info));
     }
 
     private Map<String, Map<String, String>> parseInfo(DbInstance instance, List<String> warnings) {
@@ -101,7 +114,7 @@ public class SystemInfoService {
                     String key = text(items.get(i));
                     String value = text(items.get(i + 1));
                     if (key != null) {
-                        config.put(key, value);
+                        config.put(key, maskIfSensitive(key, value));
                     }
                 }
             } else {
@@ -111,6 +124,43 @@ public class SystemInfoService {
             warnings.add("读取 CONFIG 失败：" + ex.getMessage());
         }
         return config;
+    }
+
+    static Map<String, Map<String, String>> sanitizeSections(Map<String, Map<String, String>> rawSections) {
+        if (rawSections == null || rawSections.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, Map<String, String>> sanitized = new LinkedHashMap<>();
+        rawSections.forEach((sectionName, entries) -> {
+            if (sectionName == null || sectionName.isBlank() || entries == null || entries.isEmpty()) {
+                return;
+            }
+            Map<String, String> maskedEntries = new LinkedHashMap<>();
+            entries.forEach((key, value) -> {
+                if (key != null && !key.isBlank()) {
+                    maskedEntries.put(key, maskIfSensitive(key, value));
+                }
+            });
+            if (!maskedEntries.isEmpty()) {
+                sanitized.put(sectionName, Collections.unmodifiableMap(maskedEntries));
+            }
+        });
+        return Collections.unmodifiableMap(sanitized);
+    }
+
+    static boolean isSensitiveKey(String key) {
+        if (key == null || key.isBlank()) {
+            return false;
+        }
+        String normalized = CAMEL_BOUNDARY.matcher(key.trim()).replaceAll("$1_$2");
+        return SENSITIVE_KEY_PATTERN.matcher(normalized).find();
+    }
+
+    static String maskIfSensitive(String key, String value) {
+        if (value == null || value.isBlank()) {
+            return value == null ? "" : value;
+        }
+        return isSensitiveKey(key) ? MASKED_VALUE : value;
     }
 
     private static List<SystemInfoView.Keyspace> keyspace(Map<String, String> section) {

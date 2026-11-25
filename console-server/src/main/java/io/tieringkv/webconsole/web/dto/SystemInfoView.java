@@ -17,7 +17,12 @@ public record SystemInfoView(
         Stats stats,
         List<Keyspace> keyspace,
         Map<String, String> config,
-        List<String> warnings) {
+        List<String> warnings,
+        Map<String, Map<String, String>> sections) {
+
+    public SystemInfoView {
+        sections = sections == null ? Map.of() : sections;
+    }
 
     public record Server(String version, String mode, long uptimeSeconds, int tcpPort,
                          String os, String arch, String jdk, String processId) {
