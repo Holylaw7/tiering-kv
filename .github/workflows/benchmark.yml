@@ -5,6 +5,16 @@ on:
   schedule:
     - cron: "0 2 * * 0"   # 每周日 02:00（示例，Phase 9 定稿）
 
+env:
+  MAVEN_ARGS: >-
+    -ntp
+    -Daether.transport.http.retryHandler.count=5
+    -Daether.transport.http.retryHandler.interval=3000
+    -Daether.transport.http.retryHandler.serviceUnavailable=429,500,502,503,504
+    -Daether.connector.http.retryHandler.count=5
+    -Daether.connector.http.retryHandler.interval=3000
+    -Daether.connector.http.retryHandler.serviceUnavailable=429,500,502,503,504
+
 jobs:
   benchmark:
     runs-on: ubuntu-latest
@@ -14,10 +24,13 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+          cache: maven
+      - name: Configure CI Maven mirror
+        run: mkdir -p ~/.m2 && cp .github/maven-ci-settings.xml ~/.m2/settings.xml
       - run: bash scripts/benchmark.sh
       - name: Upload benchmark report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: benchmark-report
           path: |

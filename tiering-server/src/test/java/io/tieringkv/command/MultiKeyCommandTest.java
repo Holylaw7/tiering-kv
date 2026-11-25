@@ -109,7 +109,7 @@ class MultiKeyCommandTest {
                 runner.exec("set", keyParts[i], valueParts[i]);
             }
         }
-        RespValue result = runner.exec("mget", keyParts);
+        RespValue result = runner.exec("mget", (Object[]) keyParts);
         List<RespValue> items = ((RespArray) result).values();
         assertThat(items).hasSize(keyParts.length);
         for (int i = 0; i < keyParts.length; i++) {
@@ -137,7 +137,7 @@ class MultiKeyCommandTest {
         }
         assertThat(runner.exec("mset", args)).isEqualTo(
                 new RespSimpleString("OK"));
-        RespValue result = runner.exec("mget", keys);
+        RespValue result = runner.exec("mget", (Object[]) keys);
         assertThat(((RespArray) result).values()).hasSize(size);
         for (int i = 0; i < size; i++) {
             assertThat(((RespBulkString) ((RespArray) result)
@@ -170,7 +170,7 @@ class MultiKeyCommandTest {
             runner.exec("set", key, "v");
         }
         String[] keyParts = keys.split(",");
-        assertThat(runner.exec("del", keyParts)).isEqualTo(
+        assertThat(runner.exec("del", (Object[]) keyParts)).isEqualTo(
                 new RespInteger(Long.parseLong(expected)));
     }
 
