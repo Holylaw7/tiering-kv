@@ -38,10 +38,12 @@ wait_cr_condition() {
 dump_diagnostics() {
   echo "=== Operator & Cluster Diagnostics ===" >&2
   kubectl -n "$NS" get tkc,sts,deploy,po,svc,pvc,cj,job,lease -o wide >&2 || true
-  kubectl -n "$NS" get tkc "$CR_NAME" -o yaml >&2 || true
+  kubectl -n "$NS" describe po -l app=tiering-kv-operator >&2 || true
   kubectl -n "$NS" logs -l app=tiering-kv-operator --tail=120 >&2 || true
+  kubectl -n "$NS" get tkc "$CR_NAME" -o yaml >&2 || true
   kubectl -n "$NS" describe po -l tieringkv.io/cluster="$CR_NAME" >&2 || true
 }
+trap dump_diagnostics ERR
 
 smoke_resp() {
   local local_port="$1"

@@ -211,8 +211,11 @@ class OperatorRuntimeTest {
         Map<String, Object> podSpec = (Map<String, Object>)
                 ((Map<String, Object>) ((Map<String, Object>) dep.get("spec"))
                         .get("template")).get("spec");
-        assertThat(((Map<String, Object>) podSpec.get("securityContext"))
-                .get("runAsNonRoot")).isEqualTo(true);
+        Map<String, Object> podSec =
+                (Map<String, Object>) podSpec.get("securityContext");
+        assertThat(podSec.get("runAsNonRoot")).isEqualTo(true);
+        assertThat(((Number) podSec.get("runAsUser")).intValue()).isGreaterThan(0);
+        assertThat(((Number) podSec.get("runAsGroup")).intValue()).isGreaterThan(0);
         Map<String, Object> container =
                 ((List<Map<String, Object>>) podSpec.get("containers")).get(0);
         assertThat(((Map<String, Object>) ((Map<String, Object>)

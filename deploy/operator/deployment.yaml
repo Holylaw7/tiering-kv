@@ -19,6 +19,8 @@ spec:
       terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
       containers:
         - name: operator
           image: ghcr.io/holylaw7/tiering-kv-operator:v5.4.0
