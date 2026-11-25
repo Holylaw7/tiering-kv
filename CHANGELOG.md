@@ -3,6 +3,24 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [5.3.0] - 2026-11-25
+
+### Added
+
+- **S3 / RustFS 真实对象存储端到端验证与 CI 门禁（M2）**：
+  - 加固 `S3BackupStorageBackend`：新增有界超时（连接 5s / 读写 30s / 单次 API 调用 60s，可通过 `console.backup.s3.*-timeout-ms` 配置）、统一 `IOException` 包装与凭据脱敏、`NoSuchBucketException` 判别及失败后可重试恢复；
+  - 新增 Playwright 专项规范 `console-web/e2e/backups-s3-storage.spec.ts`（覆盖 `s3://tiering-backups` 自动建桶、204 键 5 类型数据备份导出、流式 `.jsonl.gz` 下载解压校验、删键后 UI 异步恢复、留存清理与删除后 `404` 校验）；
+  - 在 `.github/workflows/test.yml` 新增 `docker-compose-s3-e2e` 真实容器作业。
+- **控制面多副本无状态化与双副本高可用（M3，零新外部中间件）**：
+  - 新增 Flyway `V10__multi_replica_coordination.sql`（`console_lease` 分布式租约表 + `login_attempt` 多副本共享登录限流窗口表）；
+  - 新增 `DbLeaseLockService`（`PROPAGATION_REQUIRES_NEW` 条件更新 + 主键冲突回退 + 同副本原地续租 + 宕机自动接管），接入 `BackupService` 跨副本同实例 `409` 互斥锁以及 `MonitorService`（2× 间隔防抖续租）、`BackupRetentionService`、`RetentionService` 定时任务单主选主；
+  - 新增 `DbLoginAttemptStore`（`console.security.login-attempt-store=db`，生产与 HA Compose 默认启用），并加固 `BootstrapDataInitializer` 并发冷启动唯一约束容错；
+  - 新增 `deploy/console/docker-compose.ha.yml` 与 `deploy/console/nginx-ha.conf` 双副本高可用部署覆盖，并在 `.github/workflows/test.yml` 新增实时双副本故障转移门禁 `docker-compose-ha-smoke`。
+- **内核高阶可观测段落全景透出（M4）**：
+  - `SystemInfoView` 向后兼容增量新增 `sections` 字段，`SystemInfoService` 透出 `INFO` 全部非空段落（覆盖 `Tiering / Persistence / Cluster / Replication / Txn / MVCC / Vector / MultiModel / Backup / Tracing` 等扩展段及标准段），并对 `sections` 与 `config` 中的口令/密钥/令牌类敏感字段统一脱敏为 `******`（不误伤 `total_keys` / `tiering_hot_keys` 等指标键）；
+  - 同步更新 `docs/api/openapi.json` 与 `console-web/src/api/schema.d.ts`（0 漂移）；
+  - `SystemView.vue` 新增「内核扩展段落（INFO Sections）」分栏浏览面板（支持段落切换、「仅扩展段落」筛选、实时检索、命中计数徽标及单段一键复制 KV 文本 / JSON），补齐 `SystemInfoServiceSectionsTest`、`infoSections.test.ts` 与 Playwright E2E 覆盖。
+
 ## [5.2.0] - 2026-11-25
 
 ### Added

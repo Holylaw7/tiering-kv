@@ -84,6 +84,7 @@
 | 74 | v4.1.0 GA 发布（P4 收尾 + 依赖漏洞升级） | ✅ 完成（2026-08-16，v4.1.0 Release + GHCR 镜像 + Trivy 0 漏洞；发布门禁三分片均衡修复） |
 | 76 | 冷热分层读路径修复与容量模型（v5.1.0） | ✅ 完成（2026-10-28）：TD-086 关闭（ADR-0361，读回退/双删/归并迭代器/copy-up）、TD-084 容量模型（≈值+74B/键）、端到端 60 万键 100% 命中 |
 | 77 | 控制面生产加固、Pipeline/TLS、前端瘦身与 CI 门禁升级（v5.2.0） | ✅ 完成（2026-11-25）：O1 备份下载 RBAC + 异步恢复进度、O2 RESP 批量 Pipeline + TLS/CA、O3 Actuator/IP 限流/HMAC Webhook/生产 Compose、O4 Element Plus 按需瘦身 + `usePolling` + `DashboardView` 拆分、O5 控制面 SpotBugs/JaCoCo + 5 组 Playwright E2E + 三镜像 GHCR 发布 |
+| 78 | 控制面 S3 对象存储闭环、多副本无状态高可用与内核扩展 INFO 观测（v5.3.0） | ✅ 完成（2026-11-25）：M2 S3/RustFS 超时脱敏加固与 `docker-compose-s3-e2e` 真实对象存储门禁；M3 Flyway V10 MySQL 租约锁 + DB 登录限流 + `docker-compose.ha.yml` 双副本 HA 与 `docker-compose-ha-smoke` 实时故障转移门禁；M4 `SystemInfoView.sections` 全量扩展 INFO 段落脱敏透出与 `SystemView.vue` 分栏检索复制面板 |
 | 75 | Web 运维管理平台（v5.0.0 → v5.0.2） | ✅ 完成（2026-10-24）：console-server + console-web（ADR-0356/0357/0358）、INFO 标准 section（ADR-0355）、内存超限 OOM 拒绝（ADR-0359）、与 Redis 7 对比实测、版本号统一到 5.0.2；v5.0.3 起任意 v* 标签自动发版（ADR-0360） |
 
 ## Phase 0 — 工程初始化 ✅
