@@ -7,6 +7,7 @@ import io.tieringkv.operator.OperatorPlanner;
 import io.tieringkv.operator.TieringKVClusterSpec;
 import io.tieringkv.operator.TieringKVClusterStatus;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -77,10 +78,26 @@ public final class TieringKVReconciler {
                 name,
                 ignored -> new ClusterStateMachine(
                         ClusterPhase.PENDING));
-        advance(machine, spec, current, generation);
+        int expectedGateway = k8sSpec.effectiveGatewayReplicas();
+        advance(machine, spec, current, generation, expectedGateway);
 
-        List<OperatorAction> actions = planner.plan(spec, current,
-                generation);
+        List<OperatorAction> actions = new ArrayList<>(
+                planner.plan(spec, current, generation));
+        String backupRequestId = backupRequestId(resource);
+        if (backupRequestId != null
+                && !K8sActionApplier.backupJobName(resource, backupRequestId)
+                        .equals(k8sStatus.getLastBackupJob())) {
+            boolean hasBackupAction = actions.stream().anyMatch(
+                    a -> a.type() == OperatorAction.ActionType.TRIGGER_BACKUP);
+            if (!hasBackupAction) {
+                actions.removeIf(
+                        a -> a.type() == OperatorAction.ActionType.NOOP);
+                actions.add(new OperatorAction(
+                        OperatorAction.ActionType.TRIGGER_BACKUP,
+                        "backup:" + backupRequestId,
+                        "on-demand backup request " + backupRequestId));
+            }
+        }
         String lastAction = actions.isEmpty() ? "noop"
                 : actions.get(0).type().name();
         for (OperatorAction action : actions) {
@@ -98,33 +115,48 @@ public final class TieringKVReconciler {
         updated.setObservedGeneration(generation);
         updated.setLastAction(lastAction);
         updated.setPhase(machine.current().name());
-        return new ReconcileResult(actions, updated);
+        updated.setLastBackupJob(k8sStatus.getLastBackupJob());
+        updated.setLastBackupStatus(k8sStatus.getLastBackupStatus());
+        updated.setLastBackupTime(k8sStatus.getLastBackupTime());
+        updated.setMessage(k8sStatus.getMessage());
+        return new ReconcileResult(List.copyOf(actions), updated);
+    }
+
+    private static String backupRequestId(K8sTieringKVCluster resource) {
+        if (resource.getMetadata() == null
+                || resource.getMetadata().getAnnotations() == null) {
+            return null;
+        }
+        String raw = resource.getMetadata().getAnnotations()
+                .get(K8sActionApplier.BACKUP_REQUEST_ANNOTATION);
+        return raw == null || raw.isBlank() ? null : raw.trim();
     }
 
     private static void advance(ClusterStateMachine machine,
                                 TieringKVClusterSpec spec,
                                 TieringKVClusterStatus current,
-                                long generation) {
-        int ready = current.readyMetadata() + current.readyStorage()
-                + current.readyGateway();
+                                long generation,
+                                int expectedGateway) {
+        boolean replicasReady = current.readyMetadata() == spec.metadataReplicas()
+                && current.readyStorage() == spec.storageReplicas()
+                && current.readyGateway() >= expectedGateway;
         switch (machine.current()) {
             case PENDING -> machine.transition(
                     ClusterPhase.PROVISIONING);
             case PROVISIONING -> {
-                int expected = spec.metadataReplicas()
-                        + spec.storageReplicas()
-                        + Math.max(1, current.readyGateway());
-                if (ready == expected) {
+                if (replicasReady) {
                     machine.transition(ClusterPhase.READY);
                 }
             }
             case READY -> {
-                if (current.observedGeneration() < generation) {
+                if (current.observedGeneration() < generation
+                        || !replicasReady) {
                     machine.transition(ClusterPhase.UPGRADING);
                 }
             }
             case UPGRADING -> {
-                if (current.observedGeneration() >= generation) {
+                if (current.observedGeneration() >= generation
+                        && replicasReady) {
                     machine.transition(ClusterPhase.READY);
                 }
             }

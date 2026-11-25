@@ -107,4 +107,47 @@ class TieringKVReconcilerTest {
         assertThat(result.status().getPhase())
                 .isEqualTo("PROVISIONING");
     }
+
+    @Test
+    void scalingStaysUpgradingUntilAllTargetReplicasBecomeReady() {
+        TieringKVReconciler reconciler = new TieringKVReconciler();
+        K8sTieringKVCluster cluster = cluster("scale-test", 3, 2, "img:v1");
+        reconciler.reconcile(cluster);
+        setReady(cluster, 3, 2, 1, 1);
+        assertThat(reconciler.reconcile(cluster).status().getPhase())
+                .isEqualTo("READY");
+
+        // 扩容 storage 2 -> 3，generation=2 且仍仅 2 副本就绪：必须停留在 UPGRADING
+        cluster.getMetadata().setGeneration(2L);
+        cluster.getSpec().setStorageReplicas(3);
+        setReady(cluster, 3, 2, 1, 2);
+        assertThat(reconciler.reconcile(cluster).status().getPhase())
+                .isEqualTo("UPGRADING");
+
+        // 新 Pod 就绪（3/3）后收敛回 READY
+        setReady(cluster, 3, 3, 1, 2);
+        assertThat(reconciler.reconcile(cluster).status().getPhase())
+                .isEqualTo("READY");
+    }
+
+    @Test
+    void onDemandBackupAnnotationTriggersBackupOnceWithoutCronSchedule() {
+        TieringKVReconciler reconciler = new TieringKVReconciler();
+        K8sTieringKVCluster cluster = cluster("bkp-test", 3, 2, "img:v1");
+        cluster.getMetadata().setAnnotations(java.util.Map.of(
+                K8sActionApplier.BACKUP_REQUEST_ANNOTATION, "manual-42"));
+        setReady(cluster, 3, 2, 1, 1);
+
+        TieringKVReconciler.ReconcileResult first = reconciler.reconcile(cluster);
+        assertThat(first.actions()).anyMatch(a ->
+                a.type() == io.tieringkv.operator.OperatorAction.ActionType.TRIGGER_BACKUP
+                        && a.target().contains("manual-42"));
+
+        // Job 创建并观测回写后，不再重复触发备份
+        cluster.getStatus().setLastBackupJob(
+                K8sActionApplier.backupJobName(cluster, "manual-42"));
+        TieringKVReconciler.ReconcileResult second = reconciler.reconcile(cluster);
+        assertThat(second.actions()).noneMatch(a ->
+                a.type() == io.tieringkv.operator.OperatorAction.ActionType.TRIGGER_BACKUP);
+    }
 }
