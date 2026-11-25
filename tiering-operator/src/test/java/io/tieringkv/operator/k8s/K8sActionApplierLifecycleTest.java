@@ -72,9 +72,11 @@ class K8sActionApplierLifecycleTest {
         assertThat(storagePvc.getSpec().getResources().getRequests().get("storage")
                 .toString()).isEqualTo("5Gi");
 
-        // 4. Kind 注解与 CRD 对齐
+        // 4. Kind 注解与 Namespaced 标记接口与 CRD 对齐
         assertThat(HasMetadata.getKind(K8sTieringKVCluster.class))
                 .isEqualTo("TieringKVCluster");
+        assertThat(io.fabric8.kubernetes.api.model.Namespaced.class
+                .isAssignableFrom(K8sTieringKVCluster.class)).isTrue();
     }
 
     @Test

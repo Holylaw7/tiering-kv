@@ -2,13 +2,14 @@ package io.tieringkv.operator.k8s;
 
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.fabric8.kubernetes.client.KubernetesClientException;
+import io.fabric8.kubernetes.client.dsl.Resource;
 
 /**
- * fabric8 实现（ADR-0322 M4 / v5.4.0 A2 加固）：真实 K8s CRUD + 状态回写。
+ * fabric8 实现（ADR-0322 M4 / v5.4.0 加固）：真实 K8s 命名空间级 CRUD + 状态回写。
  *
- * <p>每次 {@link #upsert} 与 {@link #updateStatus} 均将 API Server 返回的最新
- * {@code resourceVersion} 同步回内存对象，且状态回写遇 {@code 409 Conflict}
- * 自动重拉重试，消除 Finalizer 写入后紧接状态更新导致的版本冲突。</p>
+ * <p>显式绑定命名空间；已有资源（含 {@code resourceVersion}）走 {@code update()}
+ * 避免向只授权 {@code update/patch} 的最小权限 RBAC 发送 {@code POST create}；
+ * 同步写回最新 {@code resourceVersion} 并在状态更新遇 {@code 409} 时自动重拉重试。</p>
  */
 public final class Fabric8OperatorClient implements OperatorClient {
 
@@ -23,35 +24,49 @@ public final class Fabric8OperatorClient implements OperatorClient {
 
     @Override
     public void upsert(K8sTieringKVCluster resource) {
-        K8sTieringKVCluster saved = client.resources(K8sTieringKVCluster.class)
-                .resource(resource).createOrReplace();
+        Resource<K8sTieringKVCluster> handle = resourceHandle(resource);
+        boolean exists = resource.getMetadata() != null
+                && resource.getMetadata().getResourceVersion() != null
+                && !resource.getMetadata().getResourceVersion().isBlank();
+        K8sTieringKVCluster saved = exists
+                ? handle.replace()
+                : handle.createOrReplace();
         syncResourceVersion(resource, saved);
     }
 
     @Override
     public void updateStatus(K8sTieringKVCluster resource) {
         try {
-            K8sTieringKVCluster saved = client.resources(K8sTieringKVCluster.class)
-                    .resource(resource).updateStatus();
+            K8sTieringKVCluster saved = resourceHandle(resource).updateStatus();
             syncResourceVersion(resource, saved);
         } catch (KubernetesClientException ex) {
             if (ex.getCode() != 409 || resource.getMetadata() == null) {
                 throw ex;
             }
-            String ns = resource.getMetadata().getNamespace();
+            String ns = namespace(resource);
             String name = resource.getMetadata().getName();
-            K8sTieringKVCluster latest = (ns == null || ns.isBlank())
-                    ? client.resources(K8sTieringKVCluster.class).withName(name).get()
-                    : client.resources(K8sTieringKVCluster.class)
-                            .inNamespace(ns).withName(name).get();
+            K8sTieringKVCluster latest = client.resources(K8sTieringKVCluster.class)
+                    .inNamespace(ns).withName(name).get();
             if (latest == null) {
                 throw ex;
             }
             latest.setStatus(resource.getStatus());
             K8sTieringKVCluster saved = client.resources(K8sTieringKVCluster.class)
-                    .resource(latest).updateStatus();
+                    .inNamespace(ns).resource(latest).updateStatus();
             syncResourceVersion(resource, saved);
         }
+    }
+
+    private Resource<K8sTieringKVCluster> resourceHandle(K8sTieringKVCluster resource) {
+        return client.resources(K8sTieringKVCluster.class)
+                .inNamespace(namespace(resource))
+                .resource(resource);
+    }
+
+    private static String namespace(K8sTieringKVCluster resource) {
+        String ns = resource.getMetadata() == null
+                ? null : resource.getMetadata().getNamespace();
+        return ns == null || ns.isBlank() ? "default" : ns;
     }
 
     private static void syncResourceVersion(K8sTieringKVCluster target,
