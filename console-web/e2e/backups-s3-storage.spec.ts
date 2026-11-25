@@ -30,12 +30,12 @@ test.describe('S3 / RustFS Object Storage Backup E2E', () => {
     expect(instances.length).toBeGreaterThan(0)
     const instanceId = instances[0].id
 
-    const prefix = `e2e:s3:${Date.now()}`
+    const prefix = `s3e2e:${Date.now().toString(36)}`
     const stringCount = 200
-    const hashKey = `${prefix}:hash`
-    const listKey = `${prefix}:list`
-    const setKey = `${prefix}:set`
-    const zsetKey = `${prefix}:zset`
+    const hashKey = `${prefix}:h`
+    const listKey = `${prefix}:l`
+    const setKey = `${prefix}:s`
+    const zsetKey = `${prefix}:z`
     let createdBackupId: number | undefined
     let backupDeleted = false
 
@@ -49,11 +49,11 @@ test.describe('S3 / RustFS Object Storage Backup E2E', () => {
     }
 
     try {
-      // 2. 写入 204 个多类型测试键（200 String + Hash + List + Set + ZSet）
-      for (let start = 0; start < stringCount; start += 50) {
+      // 2. 写入 204 个多类型测试键（每批 10 键，严格控制在 TerminalRequest 512 字符上限内）
+      for (let start = 0; start < stringCount; start += 10) {
         const pairs: string[] = []
-        for (let i = start; i < Math.min(start + 50, stringCount); i++) {
-          pairs.push(`${prefix}:str:${i}`, `s3-val-${i}`)
+        for (let i = start; i < Math.min(start + 10, stringCount); i++) {
+          pairs.push(`${prefix}:k${i}`, `v${i}`)
         }
         const mset = await execCmd(`MSET ${pairs.join(' ')}`)
         expect(mset.error).toBe(false)
@@ -127,16 +127,16 @@ test.describe('S3 / RustFS Object Storage Backup E2E', () => {
         .split('\n')
         .map((line) => JSON.parse(line) as { key: string; type: string })
       const typeByKey = new Map(jsonlLines.map((entry) => [entry.key, entry.type]))
-      expect(typeByKey.get(`${prefix}:str:0`)).toBe('string')
-      expect(typeByKey.get(`${prefix}:str:199`)).toBe('string')
+      expect(typeByKey.get(`${prefix}:k0`)).toBe('string')
+      expect(typeByKey.get(`${prefix}:k199`)).toBe('string')
       expect(typeByKey.get(hashKey)).toBe('hash')
       expect(typeByKey.get(listKey)).toBe('list')
       expect(typeByKey.get(setKey)).toBe('set')
       expect(typeByKey.get(zsetKey)).toBe('zset')
 
       // 5. 删除全部 5 种数据类型的代表键，确认消失后在 UI 触发异步恢复
-      await execCmd(`DEL ${prefix}:str:0 ${prefix}:str:199 ${hashKey} ${listKey} ${setKey} ${zsetKey}`)
-      expect((await execCmd(`GET ${prefix}:str:0`)).payload ?? null).toBeNull()
+      await execCmd(`DEL ${prefix}:k0 ${prefix}:k199 ${hashKey} ${listKey} ${setKey} ${zsetKey}`)
+      expect((await execCmd(`GET ${prefix}:k0`)).payload ?? null).toBeNull()
       expect((await execCmd(`HGET ${hashKey} f1`)).payload ?? null).toBeNull()
 
       await page.getByRole('button', { name: '刷新列表' }).click()
@@ -147,8 +147,8 @@ test.describe('S3 / RustFS Object Storage Backup E2E', () => {
       await expect(targetRow).toContainText(/已恢复 \d+ 键/, { timeout: 30_000 })
 
       // 6. 验证全部 5 种数据类型均从 S3 对象精确复原
-      expect((await execCmd(`GET ${prefix}:str:0`)).payload).toBe('s3-val-0')
-      expect((await execCmd(`GET ${prefix}:str:199`)).payload).toBe('s3-val-199')
+      expect((await execCmd(`GET ${prefix}:k0`)).payload).toBe('v0')
+      expect((await execCmd(`GET ${prefix}:k199`)).payload).toBe('v199')
       expect((await execCmd(`HGET ${hashKey} f2`)).payload).toBe('beta')
       expect((await execCmd(`LRANGE ${listKey} 0 -1`)).payload).toEqual(['item-1', 'item-2', 'item-3'])
       expect((await execCmd(`SISMEMBER ${setKey} tag-b`)).payload).toBe(1)
@@ -175,12 +175,12 @@ test.describe('S3 / RustFS Object Storage Backup E2E', () => {
         }
         const delBatch: string[] = [hashKey, listKey, setKey, zsetKey]
         for (let i = 0; i < stringCount; i++) {
-          delBatch.push(`${prefix}:str:${i}`)
+          delBatch.push(`${prefix}:k${i}`)
         }
-        for (let start = 0; start < delBatch.length; start += 50) {
+        for (let start = 0; start < delBatch.length; start += 10) {
           await request.post(`${baseURL}/api/v1/terminal/execute`, {
             headers: authHeaders,
-            data: { instanceId, command: `DEL ${delBatch.slice(start, start + 50).join(' ')}` }
+            data: { instanceId, command: `DEL ${delBatch.slice(start, start + 10).join(' ')}` }
           })
         }
       } catch {
