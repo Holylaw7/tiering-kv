@@ -141,8 +141,9 @@ case "${1:-run}" in
       dep_n=$(kubectl -n "$NS" get deploy -l "tieringkv.io/cluster=${CR_NAME}" -o name | wc -l | tr -d " ")
       svc_n=$(kubectl -n "$NS" get svc -l "tieringkv.io/cluster=${CR_NAME}" -o name | wc -l | tr -d " ")
       cj_n=$(kubectl -n "$NS" get cj -l "tieringkv.io/cluster=${CR_NAME}" -o name | wc -l | tr -d " ")
+      job_n=$(kubectl -n "$NS" get job -l "tieringkv.io/cluster=${CR_NAME}" -o name | wc -l | tr -d " ")
       cm_n=$(kubectl -n "$NS" get cm -l "tieringkv.io/cluster=${CR_NAME}" -o name | wc -l | tr -d " ")
-      [ "$sts_n" = "0" ] && [ "$dep_n" = "0" ] && [ "$svc_n" = "0" ] && [ "$cj_n" = "0" ] && [ "$cm_n" = "0" ]
+      [ "$sts_n" = "0" ] && [ "$dep_n" = "0" ] && [ "$svc_n" = "0" ] && [ "$cj_n" = "0" ] && [ "$job_n" = "0" ] && [ "$cm_n" = "0" ]
     '
     pvc_after=$(kubectl -n "$NS" get pvc -l "tieringkv.io/cluster=${CR_NAME}" -o name | wc -l | tr -d ' ')
     echo "[operator-e2e] PVCs after delete: $pvc_after (expected >= $pvc_before)"

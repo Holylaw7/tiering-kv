@@ -6,6 +6,7 @@ import io.fabric8.kubernetes.api.model.ConfigMapVolumeSourceBuilder;
 import io.fabric8.kubernetes.api.model.Container;
 import io.fabric8.kubernetes.api.model.ContainerBuilder;
 import io.fabric8.kubernetes.api.model.ContainerPortBuilder;
+import io.fabric8.kubernetes.api.model.DeletionPropagation;
 import io.fabric8.kubernetes.api.model.EnvVar;
 import io.fabric8.kubernetes.api.model.EnvVarBuilder;
 import io.fabric8.kubernetes.api.model.EnvVarSourceBuilder;
@@ -372,10 +373,24 @@ public final class K8sActionApplier implements ActionApplier {
         deleteIfPresent(() -> client.batch().v1().cronjobs()
                 .inNamespace(namespace)
                 .withName(backupName(resource)).delete());
-        deleteIfPresent(() -> client.batch().v1().jobs()
+        var backupJobs = client.batch().v1().jobs()
                 .inNamespace(namespace)
                 .withLabel("tieringkv.io/cluster", clusterName(resource))
-                .delete());
+                .list();
+        if (backupJobs != null && backupJobs.getItems() != null) {
+            for (Job job : backupJobs.getItems()) {
+                if (job.getMetadata() != null
+                        && job.getMetadata().getName() != null) {
+                    String jobName = job.getMetadata().getName();
+                    deleteIfPresent(() -> client.batch().v1().jobs()
+                            .inNamespace(namespace)
+                            .withName(jobName)
+                            .withPropagationPolicy(
+                                    DeletionPropagation.BACKGROUND)
+                            .delete());
+                }
+            }
+        }
         deleteIfPresent(() -> client.apps().deployments().inNamespace(namespace)
                 .withName(gatewayName(resource)).delete());
         deleteIfPresent(() -> client.services().inNamespace(namespace)
