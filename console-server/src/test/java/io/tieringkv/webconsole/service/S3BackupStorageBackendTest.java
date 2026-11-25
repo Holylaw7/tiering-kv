@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.mock.env.MockEnvironment;
 import software.amazon.awssdk.core.ResponseInputStream;
+import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.http.AbortableInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -275,6 +276,89 @@ class S3BackupStorageBackendTest {
         }
         backend.publish("b1.jsonl.gz");
         verify(s3).createBucket(any(CreateBucketRequest.class));
+    }
+
+    @Test
+    void transientHeadBucketFailureDoesNotPoisonAutoCreateRetry() throws Exception {
+        S3Client s3 = mock(S3Client.class);
+        when(s3.headBucket(any(HeadBucketRequest.class)))
+                .thenThrow(SdkClientException.create("Connection refused: minio:9000"))
+                .thenThrow(NoSuchBucketException.builder().message("missing").build());
+        when(s3.createBucket(any(CreateBucketRequest.class)))
+                .thenReturn(CreateBucketResponse.builder().build());
+        when(s3.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+                .thenReturn(PutObjectResponse.builder().eTag("etag-retry").build());
+
+        S3BackupStorageBackend backend = new S3BackupStorageBackend(
+                s3, "retry-bucket", "backups/", tempDir.resolve("staging"), 0L, true, 1024L * 1024L, 512);
+        try (OutputStream out = backend.openTempOutput("b-retry.jsonl.gz")) {
+            out.write("payload".getBytes(StandardCharsets.UTF_8));
+        }
+
+        // 首次连接失败应抛出 IOException，且不标记 bucketVerified=true
+        assertThatThrownBy(() -> backend.publish("b-retry.jsonl.gz"))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("连接 S3 存储桶失败");
+
+        // 重试时重新检测桶并完成自动建桶与上传
+        assertThat(backend.publish("b-retry.jsonl.gz")).isEqualTo(7L);
+        verify(s3).createBucket(any(CreateBucketRequest.class));
+    }
+
+    @Test
+    void s3AccessDeniedAndNetworkErrorsWrapIntoSanitizedIOException() {
+        S3Client s3 = mock(S3Client.class);
+        when(s3.headBucket(any(HeadBucketRequest.class)))
+                .thenThrow(S3Exception.builder()
+                        .statusCode(403)
+                        .message("AccessDenied Credential=AKIASECRET123/20261125/us-east-1/s3/aws4_request")
+                        .build());
+        when(s3.headObject(any(HeadObjectRequest.class)))
+                .thenThrow(SdkClientException.create("Unable to execute HTTP request: Read timed out"));
+        when(s3.getObject(any(GetObjectRequest.class)))
+                .thenThrow(NoSuchBucketException.builder().message("NoSuchBucket").build());
+
+        S3BackupStorageBackend backend = new S3BackupStorageBackend(
+                s3, "denied-bucket", "backups/", tempDir.resolve("staging"), 0L, true, 1024L * 1024L, 512);
+
+        assertThatThrownBy(backend::listObjects)
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("检查 S3 存储桶失败")
+                .hasMessageContaining("Credential=***")
+                .hasMessageNotContaining("AKIASECRET123");
+
+        assertThatThrownBy(() -> backend.deleteIfExists("a.jsonl.gz"))
+                .isInstanceOf(IOException.class)
+                .hasMessageContaining("删除 S3 备份对象失败");
+
+        assertThatThrownBy(() -> backend.openInput("a.jsonl.gz"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getStatus()).isEqualTo(404));
+    }
+
+    @Test
+    void noSuchBucketReturnsFalseOnExistsAndPropertiesBuildClientCleanly() {
+        S3Client s3 = mock(S3Client.class);
+        when(s3.headObject(any(HeadObjectRequest.class)))
+                .thenThrow(NoSuchBucketException.builder().message("NoSuchBucket").build());
+        S3BackupStorageBackend backend = new S3BackupStorageBackend(
+                s3, "absent-bucket", "backups/", tempDir.resolve("staging"), 0L);
+        assertThat(backend.exists("any.jsonl.gz")).isFalse();
+
+        ConsoleProperties props = new ConsoleProperties();
+        props.getBackup().getS3().setEndpoint("http://127.0.0.1:9000");
+        props.getBackup().getS3().setBucket("unit-test-bucket");
+        props.getBackup().getS3().setAccessKey("minioadmin");
+        props.getBackup().getS3().setSecretKey("minioadmin");
+        props.getBackup().getS3().setConnectTimeoutMs(2000);
+        props.getBackup().getS3().setSocketTimeoutMs(5000);
+        props.getBackup().getS3().setApiCallTimeoutMs(10000);
+        S3BackupStorageBackend built = new S3BackupStorageBackend(props);
+        try {
+            assertThat(built.storageKey()).isEqualTo("s3://unit-test-bucket/backups");
+        } finally {
+            built.close();
+        }
     }
 
     private static S3Client mockInMemoryS3(Map<String, byte[]> store, String bucket) {

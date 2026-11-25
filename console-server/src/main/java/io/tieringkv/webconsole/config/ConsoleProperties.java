@@ -248,6 +248,9 @@ public class ConsoleProperties {
         private long quotaBytes = 0;
         private boolean autoCreateBucket = true;
         private String stagingDir = System.getProperty("java.io.tmpdir", "/tmp") + "/tiering-console-staging";
+        private int connectTimeoutMs = 5000;
+        private int socketTimeoutMs = 30000;
+        private int apiCallTimeoutMs = 60000;
 
         public String getEndpoint() { return endpoint; }
         public void setEndpoint(String endpoint) { this.endpoint = endpoint; }
@@ -269,6 +272,12 @@ public class ConsoleProperties {
         public void setAutoCreateBucket(boolean autoCreateBucket) { this.autoCreateBucket = autoCreateBucket; }
         public String getStagingDir() { return stagingDir; }
         public void setStagingDir(String stagingDir) { this.stagingDir = stagingDir; }
+        public int getConnectTimeoutMs() { return connectTimeoutMs; }
+        public void setConnectTimeoutMs(int connectTimeoutMs) { this.connectTimeoutMs = connectTimeoutMs; }
+        public int getSocketTimeoutMs() { return socketTimeoutMs; }
+        public void setSocketTimeoutMs(int socketTimeoutMs) { this.socketTimeoutMs = socketTimeoutMs; }
+        public int getApiCallTimeoutMs() { return apiCallTimeoutMs; }
+        public void setApiCallTimeoutMs(int apiCallTimeoutMs) { this.apiCallTimeoutMs = apiCallTimeoutMs; }
 
         @Override
         public String toString() {

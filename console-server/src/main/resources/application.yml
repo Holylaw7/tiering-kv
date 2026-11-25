@@ -82,6 +82,9 @@ console:
       quota-bytes: ${CONSOLE_BACKUP_S3_QUOTA_BYTES:0}
       auto-create-bucket: ${CONSOLE_BACKUP_S3_AUTO_CREATE_BUCKET:true}
       staging-dir: ${CONSOLE_BACKUP_S3_STAGING_DIR:${java.io.tmpdir}/tiering-console-staging}
+      connect-timeout-ms: ${CONSOLE_BACKUP_S3_CONNECT_TIMEOUT_MS:5000}
+      socket-timeout-ms: ${CONSOLE_BACKUP_S3_SOCKET_TIMEOUT_MS:30000}
+      api-call-timeout-ms: ${CONSOLE_BACKUP_S3_API_TIMEOUT_MS:60000}
   pool:
     max-idle: ${CONSOLE_POOL_MAX_IDLE:4}
     max-total: ${CONSOLE_POOL_MAX_TOTAL:16}
