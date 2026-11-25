@@ -196,6 +196,38 @@ class K8sActionApplierLifecycleTest {
                 "phase", "lastBackupJob", "lastBackupStatus", "lastBackupTime", "message");
     }
 
+    @Test
+    void observeCapsReadyReplicasDuringInFlightRollingUpdate() {
+        K8sTieringKVCluster cluster = cluster("roll", 1, 2, "tiering-kv:v1");
+        K8sActionApplier applier = new K8sActionApplier(kubernetesClient);
+        applier.apply(cluster, new OperatorAction(
+                OperatorAction.ActionType.CREATE, "cluster", "create"));
+
+        var storage = kubernetesClient.apps().statefulSets()
+                .inNamespace("tiering-kv").withName("roll-storage").get();
+        var stsStatus = new io.fabric8.kubernetes.api.model.apps.StatefulSetStatus();
+        stsStatus.setReadyReplicas(2);
+        stsStatus.setUpdatedReplicas(1);
+        stsStatus.setCurrentRevision("rev-1");
+        stsStatus.setUpdateRevision("rev-2");
+        storage.setStatus(stsStatus);
+        kubernetesClient.apps().statefulSets().inNamespace("tiering-kv")
+                .resource(storage).replace();
+
+        var gateway = kubernetesClient.apps().deployments()
+                .inNamespace("tiering-kv").withName("roll-gateway").get();
+        var depStatus = new io.fabric8.kubernetes.api.model.apps.DeploymentStatus();
+        depStatus.setReadyReplicas(1);
+        depStatus.setUpdatedReplicas(0);
+        gateway.setStatus(depStatus);
+        kubernetesClient.apps().deployments().inNamespace("tiering-kv")
+                .resource(gateway).replace();
+
+        K8sTieringKVClusterStatus observed = applier.observe(cluster);
+        assertThat(observed.getReadyStorage()).isEqualTo(1);
+        assertThat(observed.getReadyGateway()).isEqualTo(0);
+    }
+
     private static String envValue(List<EnvVar> envVars, String name) {
         return envVars.stream()
                 .filter(e -> name.equals(e.getName()))

@@ -876,7 +876,15 @@ public final class K8sActionApplier implements ActionApplier {
                 || statefulSet.getStatus().getReadyReplicas() == null) {
             return 0;
         }
-        return statefulSet.getStatus().getReadyReplicas();
+        int ready = statefulSet.getStatus().getReadyReplicas();
+        Integer updated = statefulSet.getStatus().getUpdatedReplicas();
+        String currentRev = statefulSet.getStatus().getCurrentRevision();
+        String updateRev = statefulSet.getStatus().getUpdateRevision();
+        if (updated != null && currentRev != null && updateRev != null
+                && !currentRev.equals(updateRev)) {
+            return Math.min(ready, updated);
+        }
+        return ready;
     }
 
     private static int ready(Deployment deployment) {
@@ -884,7 +892,14 @@ public final class K8sActionApplier implements ActionApplier {
                 || deployment.getStatus().getReadyReplicas() == null) {
             return 0;
         }
-        return deployment.getStatus().getReadyReplicas();
+        int ready = deployment.getStatus().getReadyReplicas();
+        Integer updated = deployment.getStatus().getUpdatedReplicas();
+        Integer replicas = deployment.getSpec() == null
+                ? null : deployment.getSpec().getReplicas();
+        if (updated != null && replicas != null && updated < replicas) {
+            return Math.min(ready, updated);
+        }
+        return ready;
     }
 
     private static void validateResource(K8sTieringKVCluster resource) {

@@ -155,12 +155,14 @@ jobs:
       - name: Build image
         run: |
           docker build -t ghcr.io/holylaw7/tiering-kv:${GITHUB_REF_NAME} -f deploy/Dockerfile .
+          docker build -t ghcr.io/holylaw7/tiering-kv-operator:${GITHUB_REF_NAME} -f deploy/Dockerfile.operator .
           docker build -t ghcr.io/holylaw7/tiering-kv-console-server:${GITHUB_REF_NAME} -f console-server/Dockerfile console-server
           docker build -t ghcr.io/holylaw7/tiering-kv-console-web:${GITHUB_REF_NAME} -f console-web/Dockerfile console-web
       - name: Publish image
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
           docker push ghcr.io/holylaw7/tiering-kv:${GITHUB_REF_NAME}
+          docker push ghcr.io/holylaw7/tiering-kv-operator:${GITHUB_REF_NAME}
           docker push ghcr.io/holylaw7/tiering-kv-console-server:${GITHUB_REF_NAME}
           docker push ghcr.io/holylaw7/tiering-kv-console-web:${GITHUB_REF_NAME}
       - name: Checksums
