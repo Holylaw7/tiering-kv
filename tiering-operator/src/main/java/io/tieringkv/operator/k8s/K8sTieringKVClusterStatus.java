@@ -9,6 +9,10 @@ public final class K8sTieringKVClusterStatus {
     private long observedGeneration;
     private String lastAction;
     private String phase;
+    private String lastBackupJob;
+    private String lastBackupStatus;
+    private String lastBackupTime;
+    private String message;
 
     public int getReadyMetadata() {
         return readyMetadata;
@@ -56,5 +60,37 @@ public final class K8sTieringKVClusterStatus {
 
     public void setPhase(String phase) {
         this.phase = phase;
+    }
+
+    public String getLastBackupJob() {
+        return lastBackupJob;
+    }
+
+    public void setLastBackupJob(String lastBackupJob) {
+        this.lastBackupJob = lastBackupJob;
+    }
+
+    public String getLastBackupStatus() {
+        return lastBackupStatus;
+    }
+
+    public void setLastBackupStatus(String lastBackupStatus) {
+        this.lastBackupStatus = lastBackupStatus;
+    }
+
+    public String getLastBackupTime() {
+        return lastBackupTime;
+    }
+
+    public void setLastBackupTime(String lastBackupTime) {
+        this.lastBackupTime = lastBackupTime;
+    }
+
+    public String getMessage() {
+        return message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
     }
 }

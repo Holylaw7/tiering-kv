@@ -8,8 +8,12 @@ public final class K8sTieringKVClusterSpec {
 
     private int metadataReplicas;
     private int storageReplicas;
+    private Integer gatewayReplicas;
     private List<String> regionIds = new ArrayList<>();
     private String image;
+    private String storageClassName;
+    private String metadataStorageSize;
+    private String storageDataSize;
     private String backupScheduleCron;
     private long backupRetentionHours;
 
@@ -29,6 +33,19 @@ public final class K8sTieringKVClusterSpec {
         this.storageReplicas = storageReplicas;
     }
 
+    public Integer getGatewayReplicas() {
+        return gatewayReplicas;
+    }
+
+    public void setGatewayReplicas(Integer gatewayReplicas) {
+        this.gatewayReplicas = gatewayReplicas;
+    }
+
+    public int effectiveGatewayReplicas() {
+        return gatewayReplicas == null || gatewayReplicas < 1
+                ? 1 : gatewayReplicas;
+    }
+
     public List<String> getRegionIds() {
         return regionIds;
     }
@@ -44,6 +61,40 @@ public final class K8sTieringKVClusterSpec {
 
     public void setImage(String image) {
         this.image = image;
+    }
+
+    public String getStorageClassName() {
+        return storageClassName;
+    }
+
+    public void setStorageClassName(String storageClassName) {
+        this.storageClassName = storageClassName;
+    }
+
+    public String getMetadataStorageSize() {
+        return metadataStorageSize;
+    }
+
+    public void setMetadataStorageSize(String metadataStorageSize) {
+        this.metadataStorageSize = metadataStorageSize;
+    }
+
+    public String effectiveMetadataStorageSize() {
+        return metadataStorageSize == null || metadataStorageSize.isBlank()
+                ? "10Gi" : metadataStorageSize.trim();
+    }
+
+    public String getStorageDataSize() {
+        return storageDataSize;
+    }
+
+    public void setStorageDataSize(String storageDataSize) {
+        this.storageDataSize = storageDataSize;
+    }
+
+    public String effectiveStorageDataSize() {
+        return storageDataSize == null || storageDataSize.isBlank()
+                ? "100Gi" : storageDataSize.trim();
     }
 
     public String getBackupScheduleCron() {

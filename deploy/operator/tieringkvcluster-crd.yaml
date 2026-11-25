@@ -15,6 +15,27 @@ spec:
     - name: v1
       served: true
       storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Meta
+          type: integer
+          jsonPath: .status.readyMetadata
+        - name: Storage
+          type: integer
+          jsonPath: .status.readyStorage
+        - name: Gateway
+          type: integer
+          jsonPath: .status.readyGateway
+        - name: Image
+          type: string
+          jsonPath: .spec.image
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
       schema:
         openAPIV3Schema:
           type: object
@@ -29,11 +50,20 @@ spec:
                 storageReplicas:
                   type: integer
                   minimum: 1
+                gatewayReplicas:
+                  type: integer
+                  minimum: 1
                 regionIds:
                   type: array
                   items:
                     type: string
                 image:
+                  type: string
+                storageClassName:
+                  type: string
+                metadataStorageSize:
+                  type: string
+                storageDataSize:
                   type: string
                 backupScheduleCron:
                   type: string
@@ -42,6 +72,8 @@ spec:
             status:
               type: object
               properties:
+                phase:
+                  type: string
                 readyMetadata:
                   type: integer
                 readyStorage:
@@ -51,4 +83,12 @@ spec:
                 observedGeneration:
                   type: integer
                 lastAction:
+                  type: string
+                lastBackupJob:
+                  type: string
+                lastBackupStatus:
+                  type: string
+                lastBackupTime:
+                  type: string
+                message:
                   type: string
