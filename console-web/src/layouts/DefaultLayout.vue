@@ -122,8 +122,10 @@ async function submitPassword() {
   passwordLoading.value = true
   try {
     await authApi.changePassword(passwordForm.oldPassword, passwordForm.newPassword)
-    ElMessage.success('口令已更新')
+    ElMessage.success('口令已更新，请使用新口令重新登录')
     passwordVisible.value = false
+    auth.logout()
+    router.push('/login')
   } finally {
     passwordLoading.value = false
   }
@@ -150,7 +152,7 @@ async function handleCommand(command: string) {
     return
   }
   if (command === 'logout') {
-    auth.logout()
+    await auth.logoutAndRevoke()
     router.push('/login')
   }
 }

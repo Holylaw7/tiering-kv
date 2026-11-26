@@ -47,6 +47,16 @@ export const useAuthStore = defineStore('auth', {
       this.user = null
       localStorage.removeItem(TOKEN_KEY)
       localStorage.removeItem(USER_KEY)
+    },
+    async logoutAndRevoke() {
+      if (this.token) {
+        try {
+          await authApi.logout()
+        } catch {
+          // 令牌已失效或网络异常时仍保证本地会话清理
+        }
+      }
+      this.logout()
     }
   }
 })

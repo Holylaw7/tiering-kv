@@ -68,8 +68,12 @@ public class UserService {
         if (request.email() != null) {
             user.setEmail(request.email());
         }
+        boolean revokeToken = false;
         if (request.role() != null) {
             guardLastAdmin(user, request.role());
+            if (request.role() != user.getRole()) {
+                revokeToken = true;
+            }
             user.setRole(request.role());
         }
         if (request.status() != null) {
@@ -81,12 +85,19 @@ public class UserService {
                 if (user.getId().equals(SecurityUtils.currentUser().id())) {
                     throw BusinessException.badRequest("不能禁用当前登录账号");
                 }
+                if (user.getStatus() != 0) {
+                    revokeToken = true;
+                }
             }
             user.setStatus(request.status());
         }
+        if (revokeToken) {
+            user.bumpTokenVersion();
+        }
         userRepository.save(user);
         auditService.record("USER_UPDATE", user.getUsername(),
-                "role=" + user.getRole() + ",status=" + user.getStatus(), true);
+                "role=" + user.getRole() + ",status=" + user.getStatus()
+                        + (revokeToken ? ",tokenRevoked=true" : ""), true);
         return UserView.of(user);
     }
 
@@ -94,8 +105,9 @@ public class UserService {
     public void resetPassword(Long id, String rawPassword) {
         User user = find(id);
         user.setPassword(passwordEncoder.encode(rawPassword));
+        user.bumpTokenVersion();
         userRepository.save(user);
-        auditService.record("USER_PASSWORD_RESET", user.getUsername(), null, true);
+        auditService.record("USER_PASSWORD_RESET", user.getUsername(), "tokenRevoked=true", true);
     }
 
     @Transactional

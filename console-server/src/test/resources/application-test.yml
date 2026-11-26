@@ -25,6 +25,8 @@ console:
     read-timeout-ms: 300
   backup:
     dir: ./target/test-backups
+    schedule:
+      enabled: false
 
 logging:
   level:

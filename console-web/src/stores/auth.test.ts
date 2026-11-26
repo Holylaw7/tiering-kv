@@ -3,11 +3,13 @@ import { createPinia, setActivePinia } from 'pinia'
 
 const loginMock = vi.fn()
 const meMock = vi.fn()
+const logoutMock = vi.fn()
 
 vi.mock('@/api', () => ({
   authApi: {
     login: (...args: unknown[]) => loginMock(...args),
-    me: (...args: unknown[]) => meMock(...args)
+    me: (...args: unknown[]) => meMock(...args),
+    logout: (...args: unknown[]) => logoutMock(...args)
   }
 }))
 
@@ -39,6 +41,7 @@ describe('useAuthStore', () => {
     setActivePinia(createPinia())
     loginMock.mockReset()
     meMock.mockReset()
+    logoutMock.mockReset()
   })
 
   afterEach(() => {
@@ -101,5 +104,28 @@ describe('useAuthStore', () => {
     expect(store.user).toBeNull()
     expect(storage.getItem(TOKEN_KEY)).toBeNull()
     expect(storage.getItem(USER_KEY)).toBeNull()
+  })
+
+  it('calls server logout endpoint and clears local session even on error', async () => {
+    storage.setItem(TOKEN_KEY, 'tok-active')
+    storage.setItem(USER_KEY, JSON.stringify({ id: 1, username: 'admin', role: 'ADMIN', status: 1 }))
+    setActivePinia(createPinia())
+    const store = useAuthStore()
+
+    logoutMock.mockResolvedValueOnce(undefined)
+    await store.logoutAndRevoke()
+    expect(logoutMock).toHaveBeenCalledTimes(1)
+    expect(store.isLoggedIn).toBe(false)
+    expect(storage.getItem(TOKEN_KEY)).toBeNull()
+
+    // 即使服务端返回错误也应完成本地清理
+    storage.setItem(TOKEN_KEY, 'tok-expired')
+    setActivePinia(createPinia())
+    const store2 = useAuthStore()
+    logoutMock.mockRejectedValueOnce(new Error('401'))
+    await store2.logoutAndRevoke()
+    expect(logoutMock).toHaveBeenCalledTimes(2)
+    expect(store2.isLoggedIn).toBe(false)
+    expect(storage.getItem(TOKEN_KEY)).toBeNull()
   })
 })

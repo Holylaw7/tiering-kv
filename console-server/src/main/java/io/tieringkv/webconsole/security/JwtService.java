@@ -73,6 +73,7 @@ public class JwtService {
                 .subject(user.getUsername())
                 .claim("uid", user.getId())
                 .claim("role", user.getRole().name())
+                .claim("ver", user.getTokenVersion())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(now.plus(ttl)))
                 .signWith(key, Jwts.SIG.HS256)
@@ -93,10 +94,12 @@ public class JwtService {
             Long uid = claims.get("uid", Number.class) == null
                     ? null : claims.get("uid", Number.class).longValue();
             String role = claims.get("role", String.class);
+            Number verClaim = claims.get("ver", Number.class);
+            long tokenVersion = verClaim == null ? 0L : verClaim.longValue();
             if (uid == null || role == null) {
                 return Optional.empty();
             }
-            return Optional.of(new UserPrincipal(uid, claims.getSubject(), Role.valueOf(role)));
+            return Optional.of(new UserPrincipal(uid, claims.getSubject(), Role.valueOf(role), tokenVersion));
         } catch (JwtException | IllegalArgumentException ex) {
             return Optional.empty();
         }

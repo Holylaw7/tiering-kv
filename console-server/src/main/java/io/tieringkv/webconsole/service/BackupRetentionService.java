@@ -138,6 +138,39 @@ public class BackupRetentionService {
         }
     }
 
+    /**
+     * 按指定保留份数清理单个实例的冗余成功备份（v6.1.0 A2 供定时备份策略调用）；
+     * 严格遵守「至少保留 1 份最新 SUCCESS、绝不触碰 RUNNING/RESTORING」不变量。
+     */
+    public int purgeInstance(Long instanceId, int keepCount) {
+        synchronized (lock) {
+            if (transactionTemplate != null) {
+                Integer removed = transactionTemplate.execute(status -> doPurgeInstance(instanceId, keepCount));
+                return removed == null ? 0 : removed;
+            }
+            return doPurgeInstance(instanceId, keepCount);
+        }
+    }
+
+    private int doPurgeInstance(Long instanceId, int keepCount) {
+        LocalDateTime started = LocalDateTime.now();
+        LocalDateTime staleBefore = started.minusMinutes(
+                properties.getBackup().getRetention().getClaimTimeoutMinutes());
+        List<BackupRecord> records = repository.findByInstanceId(instanceId);
+        List<BackupRecord> successes = records.stream()
+                .filter(r -> r.getStatus() == BackupStatus.SUCCESS)
+                .sorted(Comparator.comparing(BackupRecord::getCreatedAt).reversed())
+                .toList();
+        List<BackupRecord> removable = successes.stream().skip(Math.max(keepCount, 1)).toList();
+        int deleted = 0;
+        for (BackupRecord record : removable) {
+            if (retire(record, staleBefore) == Outcome.DELETED) {
+                deleted++;
+            }
+        }
+        return deleted;
+    }
+
     private PurgeReport doPurge() {
         LocalDateTime started = LocalDateTime.now();
         int instances = 0;

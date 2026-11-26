@@ -43,6 +43,9 @@ public class User {
     @Column(nullable = false)
     private int status = 1;
 
+    @Column(name = "token_version", nullable = false)
+    private long tokenVersion = 0L;
+
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
 
@@ -118,6 +121,18 @@ public class User {
 
     public void setStatus(int status) {
         this.status = status;
+    }
+
+    public long getTokenVersion() {
+        return tokenVersion;
+    }
+
+    public void setTokenVersion(long tokenVersion) {
+        this.tokenVersion = tokenVersion;
+    }
+
+    public void bumpTokenVersion() {
+        this.tokenVersion += 1L;
     }
 
     public LocalDateTime getLastLoginAt() {
