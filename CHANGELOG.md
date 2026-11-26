@@ -3,6 +3,25 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [6.2.0] - 2026-11-26
+
+### Added
+
+- **控制台多模型工作台（`/#/multimodel`，C1）**：
+  - `RespCodec` 兼容 Tiering-KV RESP2 `RespDouble`（`:0.95\r\n`）及 RESP3 `,` 浮点 / `_` Null 帧；`Main.java` 为单机 `VectorCollectionRegistry` 接线 `configureCheckpoint(vectorDir)` 打通 `VECTOR.CHECKPOINT`；
+  - 新增 `MultiModelService` 与 `MultiModelController`（`/api/v1/multimodel/**`），基于内核既有 26 条多模型命令提供 Vector HNSW（集合管理/Top-K 检索/落盘）、TimeSeries（键发现/写入/范围查询与 7 种桶聚合/`REDUCE`）与 JSON Path Explorer（键发现/路径查询/原地编辑/数值自增/数组追加），写操作受 RBAC 与审计保护，普通 Redis 优雅返回 `supported=false`；
+  - 新增前端 `MultiModelView.vue`、`multimodel.ts`/`multimodel.test.ts`（Vitest 36/36）。
+- **分布式集群拓扑与 K8s Operator 零依赖桥接（`/#/topology`，C2）**：
+  - 新增 `ClusterTopologyService`（`/api/v1/cluster/topology`），解析 `# Cluster` / `# Transaction` / `# Persistence` 并按 `CRC16 % N` 精确计算 16384 HashSlot 分布；
+  - 新增零外部依赖 `K8sOperatorBridgeService`（纯 JDK 21 `HttpClient` + Jackson 3，`/api/v1/cluster/k8s/**`），直连 `tieringkv.io/v1/tieringkvclusters` 实现 CR 列举、在线扩缩容、滚动升级镜像与注解触发按需备份 Job，未接入 K8s 时优雅降级；
+  - 新增前端 `TopologyView.vue`（ECharts 6 16384 槽位分布图 + Region 清单 + 2PC 事务面板 + K8s CR 操作面板）；同步更新 `docs/api/openapi.json` 与 `console-web/src/api/schema.d.ts`（0 漂移）。
+- **第 8 组全栈 Playwright E2E 门禁（C3）**：
+  - 新增 `console-web/e2e/multimodel-and-topology.spec.ts`，实测覆盖 Vector HNSW / TimeSeries / JSONPath 及 `/#/topology` 端到端闭环。
+
+### Fixed
+
+- **多副本控制面冷启动 Flyway 竞态加固**：新增 `FlywayConfig` 与 `FlywayConfigTest`，以 MySQL 会话级咨询锁 `GET_LOCK('tiering_console_flyway_migrate', 60)` 串行化多副本首次建表与迁移（H2 透传），根治双副本并发冷启动时的 `flyway_schema_history already exists, and is empty` 异常。
+
 ## [6.1.0] - 2026-11-26
 
 ### Added

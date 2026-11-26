@@ -9,7 +9,7 @@ spec:
   storageReplicas: 2
   gatewayReplicas: 1
   regionIds: [r1, r2]
-  image: ghcr.io/holylaw7/tiering-kv:v6.1.0
+  image: ghcr.io/holylaw7/tiering-kv:v6.2.0
   metadataStorageSize: 1Gi
   storageDataSize: 1Gi
   backupScheduleCron: "0 2 * * *"
