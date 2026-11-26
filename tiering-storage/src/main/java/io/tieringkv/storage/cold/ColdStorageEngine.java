@@ -16,6 +16,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * 冷存储引擎（ADR-0017）：pending 缓冲 + SSTable 列表 + Manifest。
@@ -36,10 +38,11 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
     }
 
     private final Config config;
-    private final Object lock = new Object();
+    /** B3 读写分离锁：并发冷点查共享读锁无阻塞，flush/compaction/元数据变更持写锁。 */
+    private final ReentrantReadWriteLock rwLock = new ReentrantReadWriteLock();
     private final TreeMap<ByteBuffer, KeyValueEntry> pending = new TreeMap<>();
     private final List<SSTableMeta> tables = new ArrayList<>(); // 旧 → 新
-    private final Map<Long, SSTableReader> readers = new HashMap<>();
+    private final Map<Long, SSTableReader> readers = new ConcurrentHashMap<>();
     private final Map<Long, Integer> readerPins = new HashMap<>();
     private final List<RetiredReader> retiredReaders = new ArrayList<>();
     private final CompactionManager compactionManager;
@@ -126,10 +129,13 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
      */
     public KeyValueEntry entry(byte[] key) {
         long now = System.currentTimeMillis();
-        synchronized (lock) {
+        rwLock.readLock().lock();
+        try {
             KeyValueEntry entry = findEntryLocked(key);
             // 首个命中的条目决定结果：tombstone/过期视为不存在（不再查旧表）
             return entry != null && entry.isLive(now) ? entry : null;
+        } finally {
+            rwLock.readLock().unlock();
         }
     }
 
@@ -146,20 +152,18 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
         return liveCountCache;
     }
 
-    /** 重新扫描并发布计数快照（后台线程与测试使用，不在 INFO 路径调用）。 */
+    /** 重新扫描并发布计数快照（后台线程与测试使用，不在 INFO 路径调用；B3 迭代移至锁外不阻塞读写）。 */
     public void refreshLiveCount() {
-        synchronized (lock) {
-            long counted = 0;
-            try (StorageIterator iterator = iterator()) {
-                while (iterator.hasNext()) {
-                    iterator.next();
-                    counted++;
-                }
+        long counted = 0;
+        try (StorageIterator iterator = iterator()) {
+            while (iterator.hasNext()) {
+                iterator.next();
+                counted++;
             }
-            liveCountCache = counted;
-            liveCountDirty = false;
-            liveCountKnown = true;
         }
+        liveCountCache = counted;
+        liveCountDirty = false;
+        liveCountKnown = true;
     }
 
     /** 计数快照是否已就绪（供测试与诊断）。 */
@@ -219,7 +223,8 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
 
     @Override
     public void put(KeyValueEntry entry) {
-        synchronized (lock) {
+        rwLock.writeLock().lock();
+        try {
             ensureOpen();
             pending.put(Keys.wrap(entry.key()), entry);
             pendingBytes += entry.size();
@@ -227,6 +232,8 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
             if (pendingBytes >= config.pendingThresholdBytes()) {
                 flushPendingLocked();
             }
+        } finally {
+            rwLock.writeLock().unlock();
         }
     }
 
@@ -238,7 +245,8 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
     /** 快照迭代（pending + 所有表，最新优先），过滤 tombstone 与过期。 */
     public StorageIterator iterator() {
         long now = System.currentTimeMillis();
-        synchronized (lock) {
+        rwLock.writeLock().lock();
+        try {
             List<KeyValueEntry> pendingSnapshot = new ArrayList<>(pending.values());
             List<MergingIterator.Source> sources = new ArrayList<>();
             List<Long> pinnedIds = new ArrayList<>(tables.size());
@@ -259,12 +267,15 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
             }
             MergingIterator merged = new MergingIterator(sources);
             return new FilteringIterator(merged, now, () -> releasePins(pinnedIds));
+        } finally {
+            rwLock.writeLock().unlock();
         }
     }
 
     /** 直接把有序快照写成新表（FlushManager 用）；表内键唯一、升序。 */
     public SSTableMeta writeTable(List<KeyValueEntry> entries) throws IOException {
-        synchronized (lock) {
+        rwLock.writeLock().lock();
+        try {
             ensureOpen();
             SSTableMeta meta;
             try (SSTableWriter writer = new SSTableWriter(config.directory(), nextTableId,
@@ -281,18 +292,26 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
             invalidateLiveCount();
             compactIfNeededLocked();
             return meta;
+        } finally {
+            rwLock.writeLock().unlock();
         }
     }
 
     public boolean compactIfNeeded() {
-        synchronized (lock) {
+        rwLock.writeLock().lock();
+        try {
             return compactIfNeededLocked();
+        } finally {
+            rwLock.writeLock().unlock();
         }
     }
 
     public SSTableMeta compactAll() throws IOException {
-        synchronized (lock) {
+        rwLock.writeLock().lock();
+        try {
             return compactAllLocked();
+        } finally {
+            rwLock.writeLock().unlock();
         }
     }
 
@@ -303,7 +322,8 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
             throw new IllegalArgumentException(
                     "leveled compaction required");
         }
-        synchronized (lock) {
+        rwLock.writeLock().lock();
+        try {
             int from = leveled.nextMergeLevel();
             if (from < 0) {
                 return null;
@@ -327,6 +347,8 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
             } finally {
                 compacting.set(false);
             }
+        } finally {
+            rwLock.writeLock().unlock();
         }
     }
 
@@ -335,22 +357,31 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
 
     /** 冷层 pending 条目数（O(1)，供观测用）。 */
     public int pendingCount() {
-        synchronized (lock) {
+        rwLock.readLock().lock();
+        try {
             return pending.size();
+        } finally {
+            rwLock.readLock().unlock();
         }
     }
 
     /** 冷层 pending 字节数（O(1)，供观测用）。 */
     public long pendingByteSize() {
-        synchronized (lock) {
+        rwLock.readLock().lock();
+        try {
             return pendingBytes;
+        } finally {
+            rwLock.readLock().unlock();
         }
     }
 
     public List<SSTableMeta> tablesSnapshot() {
         tablesSnapshotCalls.incrementAndGet();
-        synchronized (lock) {
+        rwLock.readLock().lock();
+        try {
             return List.copyOf(tables);
+        } finally {
+            rwLock.readLock().unlock();
         }
     }
 
@@ -459,9 +490,12 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
 
     /** 同步将内存中暂存缓冲刷盘为持久化 SSTable 与 Manifest（N1-B 物理快照使用）。 */
     public void flushPending() {
-        synchronized (lock) {
+        rwLock.writeLock().lock();
+        try {
             ensureOpen();
             flushPendingLocked();
+        } finally {
+            rwLock.writeLock().unlock();
         }
     }
 
@@ -498,7 +532,7 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
         }
     }
 
-    /** BlockCache 路径：cache hit 直接解码；miss → mmap/FileChannel 读 + 回填。 */
+    /** BlockCache 路径（B3 优化）：命中跳过重复 CRC 与整块解码；未命中先校验查找再回填缓存。 */
     private KeyValueEntry readEntryWithCache(SSTableMeta meta, byte[] key) {
         try {
             SSTableReader reader = readerFor(meta);
@@ -508,20 +542,23 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
             BlockIndex.IndexEntry blockEntry = reader.locateBlock(key);
             CacheKey cacheKey = new CacheKey(meta.id(), blockEntry.offset());
             ByteBuffer cached = blockCache.get(cacheKey);
-            java.util.List<KeyValueEntry> entries;
             if (cached != null) {
-                ioStats.recordCacheHit();
-                entries = Block.decode(cached);
-            } else {
-                ioStats.recordCacheMiss();
-                long t0 = System.nanoTime();
-                ByteBuffer raw = reader.readBlockBuffer(blockEntry);
-                ioStats.recordRead(System.nanoTime() - t0);
-                blockCache.put(cacheKey, raw);
-                entries = Block.decode(raw);
+                if (ioStats != null) {
+                    ioStats.recordCacheHit();
+                }
+                return Block.findEntry(cached, key, false);
             }
-            int position = SSTableReader.binarySearchEntries(entries, key);
-            return position >= 0 ? entries.get(position) : null;
+            if (ioStats != null) {
+                ioStats.recordCacheMiss();
+            }
+            long t0 = System.nanoTime();
+            ByteBuffer raw = reader.readBlockBuffer(blockEntry);
+            if (ioStats != null) {
+                ioStats.recordRead(System.nanoTime() - t0);
+            }
+            KeyValueEntry found = Block.findEntry(raw, key, true);
+            blockCache.put(cacheKey, raw);
+            return found;
         } catch (IOException e) {
             throw new ColdCorruptionException(
                     "read " + meta.fileName() + " failed: " + e.getMessage());
@@ -544,9 +581,12 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
         if (pinnedIds.isEmpty()) {
             return;
         }
-        synchronized (lock) {
+        rwLock.writeLock().lock();
+        try {
             releasePinsLocked(pinnedIds);
             cleanupRetiredLocked();
+        } finally {
+            rwLock.writeLock().unlock();
         }
     }
 
@@ -595,7 +635,8 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
     }
 
     public void clear() {
-        synchronized (lock) {
+        rwLock.writeLock().lock();
+        try {
             ensureOpen();
             pending.clear();
             pendingBytes = 0;
@@ -621,6 +662,8 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
             liveCountDirty = false;
             liveCountKnown = true;
             cleanupRetiredLocked();
+        } finally {
+            rwLock.writeLock().unlock();
         }
     }
 
@@ -635,7 +678,8 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
         if (liveCountRefresher != null) {
             liveCountRefresher.interrupt();
         }
-        synchronized (lock) {
+        rwLock.writeLock().lock();
+        try {
             try {
                 if (!closed && !pending.isEmpty()) {
                     flushPendingLocked();
@@ -648,6 +692,8 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
                 cleanupRetiredLocked();
                 closed = true;
             }
+        } finally {
+            rwLock.writeLock().unlock();
         }
     }
 

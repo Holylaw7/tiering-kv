@@ -54,9 +54,7 @@ public class SSTableReader implements AutoCloseable {
             return null;
         }
         BlockIndex.IndexEntry blockEntry = index.findBlock(key);
-        List<KeyValueEntry> entries = Block.decode(readBlockBuffer(blockEntry));
-        int position = binarySearchEntries(entries, key);
-        return position >= 0 ? entries.get(position) : null;
+        return Block.findEntry(readBlockBuffer(blockEntry), key, true);
     }
 
     /** 定位 key 所在块（供 BlockCache 键计算）。 */

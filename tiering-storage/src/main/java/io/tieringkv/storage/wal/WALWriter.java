@@ -1,11 +1,11 @@
 package io.tieringkv.storage.wal;
 
-import java.io.IOException;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.List;
 
 /**
- * WAL 写入器（ADR-0014）：负责记录编码、段内追加与 fsync 策略执行。
+ * WAL 写入器（ADR-0014 / B3 Group Commit 优化）：负责记录编码、批量段追加与 fsync 策略执行。
  */
 public final class WALWriter implements AutoCloseable {
 
@@ -48,14 +48,34 @@ public final class WALWriter implements AutoCloseable {
         appendRecord(out.toByteArray());
     }
 
+    /**
+     * 预编码帧批量追加（B3 Group Commit 专用）：调用方已在锁外并行完成序列化与 CRC32C，
+     * 此处连续追加全部帧并仅执行单次 fsync 决策（ALWAYS 下整批共享 1 次 FileChannel.force）。
+     */
+    void appendEncodedBatch(List<byte[]> encodedRecords) throws IOException {
+        if (encodedRecords.isEmpty()) {
+            return;
+        }
+        LogSegment segment = segments.current();
+        for (int i = 0; i < encodedRecords.size(); i++) {
+            segment.append(encodedRecords.get(i));
+        }
+        applyFsyncAfterAppend(segment);
+    }
+
     private void appendRecord(byte[] record) throws IOException {
         LogSegment segment = segments.current();
         segment.append(record);
+        applyFsyncAfterAppend(segment);
+    }
+
+    private void applyFsyncAfterAppend(LogSegment segment) throws IOException {
         dirty = true;
-        if (fsyncPolicy == WALConfig.FsyncPolicy.ALWAYS) {
+        WALConfig.FsyncPolicy policy = this.fsyncPolicy;
+        if (policy == WALConfig.FsyncPolicy.ALWAYS) {
             segment.force();
             dirty = false;
-        } else if (fsyncPolicy == WALConfig.FsyncPolicy.EVERY_SEC) {
+        } else if (policy == WALConfig.FsyncPolicy.EVERY_SEC) {
             long now = System.currentTimeMillis();
             if (now - lastForceMillis >= 1000) {
                 segment.force();
