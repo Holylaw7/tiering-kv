@@ -116,14 +116,16 @@ public final class MetadataRaftGroup implements AutoCloseable {
         if (leader == null) {
             throw new IllegalStateException("no metadata leader");
         }
+        long initialTerm = leader.currentTerm();
         try {
             leader.propose(command).get(PROPOSE_TIMEOUT_MILLIS,
                     TimeUnit.MILLISECONDS);
         } catch (Exception first) {
-            RaftNode newLeader = leader();
-            if (newLeader != null && newLeader != leader) {
+            RaftNode retryLeader = awaitLeader(LEADER_WAIT_MILLIS);
+            if (retryLeader != null
+                    && (retryLeader != leader || retryLeader.currentTerm() != initialTerm)) {
                 try {
-                    newLeader.propose(command).get(PROPOSE_TIMEOUT_MILLIS,
+                    retryLeader.propose(command).get(PROPOSE_TIMEOUT_MILLIS,
                             TimeUnit.MILLISECONDS);
                     return;
                 } catch (Exception retry) {

@@ -146,7 +146,7 @@ class MetadataPersistenceTest {
     @Test
     void snapshotCompactionKeepsState() throws Exception {
         MetadataRaftGroup group = MetadataRaftGroup.createPersistent(
-                List.of("m1", "m2", "m3"), new LeaderElection(100, 80), 25, 10, dir);
+                List.of("m1", "m2", "m3"), new LeaderElection(300, 150), 50, 10, dir);
         group.start();
         MetadataClient client = new MetadataClient(group);
         try {
@@ -270,7 +270,7 @@ class MetadataPersistenceTest {
     @Test
     void snapshotFileCreatedAfterWrites() throws Exception {
         MetadataRaftGroup group = MetadataRaftGroup.createPersistent(
-                List.of("m1", "m2", "m3"), new LeaderElection(100, 80), 25, 10, dir);
+                List.of("m1", "m2", "m3"), new LeaderElection(300, 150), 50, 10, dir);
         group.start();
         MetadataClient client = new MetadataClient(group);
         try {
