@@ -3,6 +3,7 @@ package io.tieringkv.network.connection;
 import io.netty.channel.ChannelInitializer;
 import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.socket.SocketChannel;
+import io.netty.handler.flush.FlushConsolidationHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.timeout.IdleStateHandler;
 import io.tieringkv.command.CommandEngine;
@@ -15,8 +16,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
-/** 连接管道：[可选 TLS] → [可选空闲超时] → RESP 解码/编码 → 命令执行。 */
+/** 连接管道：FlushConsolidation → [可选 TLS] → [可选空闲超时] → RESP 解码/编码 → 命令执行。 */
 public final class ConnectionInitializer extends ChannelInitializer<SocketChannel> {
+
+    private static final int EXPLICIT_FLUSH_AFTER_FLUSHES = 256;
 
     private final CommandEngine engine;
     private final MetricsRegistry metrics;
@@ -51,6 +54,9 @@ public final class ConnectionInitializer extends ChannelInitializer<SocketChanne
         if (activeChannels != null) {
             activeChannels.add(channel);
         }
+        // B1：管道头端合并读循环与异步回调期间的出站 flush，降低 write() 系统调用次数
+        channel.pipeline().addLast("flush-consolidation",
+                new FlushConsolidationHandler(EXPLICIT_FLUSH_AFTER_FLUSHES, true));
         SslContext sslContext = sslContextSupplier == null ? null : sslContextSupplier.get();
         if (sslContext != null) {
             channel.pipeline().addLast("ssl", sslContext.newHandler(channel.alloc()));

@@ -1,14 +1,14 @@
 package io.tieringkv.network.tcp;
 
 import io.netty.bootstrap.ServerBootstrap;
+import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
+import io.netty.channel.WriteBufferWaterMark;
 import io.netty.channel.group.ChannelGroup;
 import io.netty.channel.group.DefaultChannelGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.ssl.ClientAuth;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
@@ -29,10 +29,14 @@ import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 
 /**
- * TCP 服务端（Netty NIO，ADR-0003 / ADR-0006）：
- * 支持可选 TLS、maxclients 连接数上限与空闲读超时控制。
+ * TCP 服务端（Netty Epoll/NIO 自适应传输，ADR-0003 / ADR-0006 / B1 优化）：
+ * 支持可选 TLS、池化直接缓冲、写水位保护、maxclients 连接数上限与空闲读超时控制。
  */
 public final class TieringKvServer implements AutoCloseable {
+
+    private static final int DEFAULT_BACKLOG = 4096;
+    private static final WriteBufferWaterMark DEFAULT_WATER_MARK =
+            new WriteBufferWaterMark(64 * 1024, 512 * 1024);
 
     private final ServerConfig config;
     private final CommandEngine engine;
@@ -77,13 +81,18 @@ public final class TieringKvServer implements AutoCloseable {
     }
 
     public void start() throws InterruptedException {
-        bossGroup = new NioEventLoopGroup(1);
-        workerGroup = new NioEventLoopGroup();
+        bossGroup = NettyTransportFactory.newBossGroup(1);
+        workerGroup = NettyTransportFactory.newWorkerGroup(0);
         ServerBootstrap bootstrap = new ServerBootstrap()
                 .group(bossGroup, workerGroup)
-                .channel(NioServerSocketChannel.class)
+                .channel(NettyTransportFactory.serverChannelClass())
                 .option(ChannelOption.SO_REUSEADDR, true)
+                .option(ChannelOption.SO_BACKLOG, DEFAULT_BACKLOG)
+                .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
                 .childOption(ChannelOption.TCP_NODELAY, true)
+                .childOption(ChannelOption.SO_KEEPALIVE, true)
+                .childOption(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
+                .childOption(ChannelOption.WRITE_BUFFER_WATER_MARK, DEFAULT_WATER_MARK)
                 .childHandler(new ConnectionInitializer(
                         engine,
                         metrics,
@@ -112,6 +121,8 @@ public final class TieringKvServer implements AutoCloseable {
                     IdleStateHandler handler = new IdleStateHandler(seconds, 0, 0, TimeUnit.SECONDS);
                     if (pipeline.get("ssl") != null) {
                         pipeline.addAfter("ssl", "idle-state", handler);
+                    } else if (pipeline.get("flush-consolidation") != null) {
+                        pipeline.addAfter("flush-consolidation", "idle-state", handler);
                     } else {
                         pipeline.addFirst("idle-state", handler);
                     }
@@ -140,6 +151,10 @@ public final class TieringKvServer implements AutoCloseable {
 
     public int boundPort() {
         return ((InetSocketAddress) serverChannel.localAddress()).getPort();
+    }
+
+    public String transportName() {
+        return NettyTransportFactory.transportName();
     }
 
     public int activeConnections() {

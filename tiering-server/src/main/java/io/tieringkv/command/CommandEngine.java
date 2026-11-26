@@ -30,6 +30,7 @@ public final class CommandEngine {
     /** OOM 语义与 Redis 对齐：内存超限时拒绝写命令，读命令继续服务。 */
     public static final String OOM_ERROR =
             "OOM command not allowed when used memory > 'maxmemory'.";
+    private static final RespSimpleString QUEUED = new RespSimpleString("QUEUED");
 
     private final CommandRegistry registry;
     private final StorageEngine storage;
@@ -88,10 +89,11 @@ public final class CommandEngine {
         if (context != null && context.inMulti()
                 && !isTxnControl(command.name())) {
             context.enqueue(command);
-            return new RespSimpleString("QUEUED");
+            return QUEUED;
         }
-        // Redis 语义：命令名大小写不敏感；解析器已归一化，此处兜底
-        String name = command.name().toLowerCase(Locale.ROOT);
+        // Redis 语义：命令名大小写不敏感；RespRequestParser 已归一化，此处快路径免分配
+        String rawName = command.name();
+        String name = isLowerAscii(rawName) ? rawName : rawName.toLowerCase(Locale.ROOT);
         Command handler = registry.find(name);
         if (handler == null) {
             return RespError.unknownCommand(name);
@@ -119,6 +121,17 @@ public final class CommandEngine {
         String user = context == null ? null : context.authenticatedUser();
         String denied = aclPolicy.authorize(user, command.name(), command.args());
         return denied == null ? null : new RespError(denied);
+    }
+
+    private static boolean isLowerAscii(String text) {
+        int len = text.length();
+        for (int i = 0; i < len; i++) {
+            char c = text.charAt(i);
+            if (c >= 'A' && c <= 'Z' || c > 0x7f) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean isTxnControl(String name) {
@@ -183,7 +196,9 @@ public final class CommandEngine {
             return;
         }
         byte[] key = command.args().isEmpty()
-                ? command.name().getBytes(StandardCharsets.UTF_8)
+                ? COMMAND_KEYS.computeIfAbsent(
+                        command.name(),
+                        name -> name.getBytes(StandardCharsets.UTF_8))
                 : command.args().get(0);
         boolean submitted = executor.submit(key, () -> {
             ConnectionContext previous = ConnectionContext.current();
