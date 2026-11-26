@@ -73,7 +73,12 @@ public final class VectorIndexStore {
 
     /** 从唯一向量集重建 HNSW 多层图（ADR-0332，确定性层级）。 */
     public HnswIndex rebuildIndex() {
-        HnswIndex index = new HnswIndex(maxLevel);
+        return rebuildIndex(HnswIndex.QuantizationMode.NONE);
+    }
+
+    /** 从唯一向量集按指定量化模式重建 HNSW 多层图（B4：支持 NONE / SQ8 / SQ8_RERANK）。 */
+    public HnswIndex rebuildIndex(HnswIndex.QuantizationMode quantizationMode) {
+        HnswIndex index = new HnswIndex(maxLevel, quantizationMode);
         index.build(snapshot());
         return index;
     }

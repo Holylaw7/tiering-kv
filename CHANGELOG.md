@@ -3,6 +3,30 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [6.3.0] - 2026-11-26
+
+### Changed
+
+- **内核高性能专版（Path B：B1–B4 全栈内核优化，见 [docs/benchmark/v6.3.0-kernel-optimization-report.md](docs/benchmark/v6.3.0-kernel-optimization-report.md)）**：
+  - **协议/网络/调度优化（B1）**：
+    - `RespDecoder`（零拷贝 `readAsciiLong`、`ByteProcessor.FIND_CR`、无栈单例 `IncompleteInputException`）、`RespEncoder`（预编码静态帧与 `:0..1024` 整数表、`writeAsciiLong`）、`RespRequestParser`（热 ASCII 命令零分配驻留）与 `CommandEngine`（`isLowerAscii` 快路径 + `COMMAND_KEYS` 缓存）；
+    - 引入 `netty-transport-native-epoll:4.1.137.Final`（`linux-x86_64` & `linux-aarch_64`，Trivy `0` CVE 例外），新增 `NettyTransportFactory` 自动 Linux Epoll / NIO 回退；`TieringKvServer` / `ConnectionInitializer` / `CommandHandler` 启用 `PooledByteBufAllocator.DEFAULT`、`FlushConsolidationHandler(256, true)`、`channelReadComplete` 批冲刷与 `ResponseSequencer` 256 槽环形缓冲；
+    - `KeyShardExecutor` / `ShardWorker` / `ShardQueue` / `ConcurrencyMetrics` / `ShardRouter` 消除全局 `AtomicInteger active` 热点（每分片 `LongAdder` + 单写 `AtomicLong`、`drainTo(64)` 批消费、位掩码路由），彻底消除 `c=200` 并发吞吐倒挂（回环实测 `c=50 81.4k/84.8k → c=200 91.7k/92.2k rps`，`c=50, P=16` 达 `651k/681k rps`）。
+  - **内存瘦身、24-bit 内联 Morris-LFU 与 Generational ZGC（B2）**：
+    - 在 `KeyValueEntry` 对齐间隙内联 24-bit Morris-LFU 热度状态（0 新增字节，99%+ 热读零 `volatile` 写），新增 `SampledLfuPolicy` 作为默认策略（`cache.eviction-policy: sampled-lfu`），`TrackingStorageEngine` 跳过 `AccessEvent` 分配；优化 `SkipList`（动态 `currentMaxLevel`、复用 `updateBuffer`、`numberOfTrailingZeros`）与 `MemTable`（`putOwned` + 256-bit 位图去重抽样）；`deploy/Dockerfile` 与 Compose 默认启用 JDK 21 Generational ZGC；
+    - 同机同 JVM A/B 实测：63 万键 × 64B 存活堆从 `504.0 MB` 降至 **`174.0 MB`（-65.5%）**，8 线程并发读吞吐提升 **`9.13×`**（`472k → 4.31M ops/s`）。
+  - **WAL Group Commit、16 分片 S3-FIFO 与并发冷层（B3）**：
+    - `WALManager` / `WALWriter` 实现锁外编码与 CRC32C + Leader-Follower Group Commit（16 线程 `fsync=ALWAYS` 实测 `avgBatch=12.31` writes/fsync，总耗时 `29 ms`，刷盘次数降 `91.9%`）；
+    - `BlockCache` 升级自适应 16 分片 SOSP'23 S3-FIFO（2,000 扫描块冲击下热点块 `120/120` 100% 存活）；`ColdStorageEngine` 升级 `ReentrantReadWriteLock` + 并发 `readers`（8 线程冷读 `115k~136k ops/s`、命中率 `99.90%`）；`BloomFilter` 改为零除法 FastRange（`0.4150%` FPR、`165.2 ns/probe`）；`Block.findEntry` 原地零全量解码查找。
+  - **HNSW 零装箱扁平图、SQ8 量化与可插拔 FMA/SIMD 核（B4）**：
+    - `HnswIndex` 邻接表重构为扁平 `int[][]` + 预归一化单位向量 + 上层 1-NN 贪心下降 + `ThreadLocal<SearchWorkspace>`（代数标记 `visitedGen[]` + 原始小/大根堆）；
+    - 新增 `VectorDistanceKernel`（4 路展开 `ScalarFmaKernel` + 运行时 `jdk.incubator.vector` 安全探测）与 `ScalarQuantizerSq8`（`QuantizationMode: NONE | SQ8 | SQ8_RERANK`），支持 `TKHN` v2 持久化并 100% 兼容 `TKHN` v1 反序列化；`VectorIndexStore` 新增 `rebuildIndex(QuantizationMode)`；
+    - 实测：`HnswSearchBenchmarkTest`（20K×64D）`P50 0.473 ms → 0.133 ms`（`3.56×`）、`P99 0.847 ms → 0.322 ms`（`2.63×`）；`SQ8` 向量内存减少 `69.1% ~ 75%`，`SQ8_RERANK(ef64)` 2K×64D `Recall@10 = 0.9700`。
+
+### Fixed
+
+- **分布式快照测试与迁移池竞态稳健化**：提升 `RaftNodeSnapshotIntegrationTest` 同步 fsync 选举窗口与 leader 重试传播；`MigrationScheduler` 调整扩容判定时机并同步 `TierWorkerPool.adjust()`；修复稀疏表下 `MemTable.sampleLiveEntries()` 采样覆盖率边界。
+
 ## [6.2.0] - 2026-11-26
 
 ### Added
