@@ -132,9 +132,9 @@ class SampledLfuPolicyTest {
         table.put("only-1".getBytes(StandardCharsets.UTF_8), "v1".getBytes(StandardCharsets.UTF_8));
         table.put("only-2".getBytes(StandardCharsets.UTF_8), "v2".getBytes(StandardCharsets.UTF_8));
 
-        for (int round = 0; round < 20; round++) {
+        for (int round = 0; round < 50; round++) {
             List<KeyValueEntry> samples = table.sampleLiveEntries(8, clock.nowMillis());
-            assertThat(samples).isNotEmpty();
+            assertThat(samples).hasSize(2);
             assertThat(samples).allMatch(e -> e.isLive(clock.nowMillis()));
         }
     }

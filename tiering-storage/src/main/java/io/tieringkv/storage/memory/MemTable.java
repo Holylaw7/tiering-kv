@@ -832,17 +832,26 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
      * 高密场景直接随机探测非空段；稀疏场景无锁跳过空段兜底，避免单锁与全表扫描。
      */
     public List<KeyValueEntry> sampleLiveEntries(int sampleSize, long nowMillis) {
-        if (sampleSize <= 0 || liveSize.get() <= 0) {
+        long live = liveSize.get();
+        if (sampleSize <= 0 || live <= 0) {
             return List.of();
         }
-        List<KeyValueEntry> samples = new ArrayList<>(sampleSize);
+        int target = (int) Math.min(sampleSize, live);
+        List<KeyValueEntry> samples = new ArrayList<>(target);
+        long[] visitedSegments = new long[SEGMENT_COUNT >>> 6];
         java.util.concurrent.ThreadLocalRandom rng = java.util.concurrent.ThreadLocalRandom.current();
-        int randomProbes = Math.min(SEGMENT_COUNT, Math.max(sampleSize * 2, 16));
-        for (int i = 0; i < randomProbes && samples.size() < sampleSize; i++) {
-            Segment segment = segments[rng.nextInt(SEGMENT_COUNT)];
+        int randomProbes = Math.min(SEGMENT_COUNT, Math.max(target * 2, 16));
+        for (int i = 0; i < randomProbes && samples.size() < target; i++) {
+            int segIdx = rng.nextInt(SEGMENT_COUNT);
+            long bit = 1L << (segIdx & 63);
+            if ((visitedSegments[segIdx >>> 6] & bit) != 0L) {
+                continue;
+            }
+            Segment segment = segments[segIdx];
             if (segment.list.size() == 0) {
                 continue;
             }
+            visitedSegments[segIdx >>> 6] |= bit;
             segment.lock.readLock().lock();
             try {
                 KeyValueEntry sampled = segment.list.sampleLive(nowMillis);
@@ -853,14 +862,21 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
                 segment.lock.readLock().unlock();
             }
         }
-        // 稀疏表兜底：单次无锁跳过空段，确保少量键场景也 100% 采得有效样本
-        if (samples.isEmpty() && liveSize.get() > 0) {
+        // 稀疏表补齐：随机探测未凑齐目标样本量时，单次无锁跳过空段与已采段补齐样本池，
+        // 避免仅命中少数分段（恰好为热键）导致淘汰器无从对比而误逐热键
+        if (samples.size() < target && liveSize.get() > 0) {
             int start = rng.nextInt(SEGMENT_COUNT);
-            for (int offset = 0; offset < SEGMENT_COUNT && samples.size() < sampleSize; offset++) {
-                Segment segment = segments[(start + offset) & (SEGMENT_COUNT - 1)];
+            for (int offset = 0; offset < SEGMENT_COUNT && samples.size() < target; offset++) {
+                int segIdx = (start + offset) & (SEGMENT_COUNT - 1);
+                long bit = 1L << (segIdx & 63);
+                if ((visitedSegments[segIdx >>> 6] & bit) != 0L) {
+                    continue;
+                }
+                Segment segment = segments[segIdx];
                 if (segment.list.size() == 0) {
                     continue;
                 }
+                visitedSegments[segIdx >>> 6] |= bit;
                 segment.lock.readLock().lock();
                 try {
                     KeyValueEntry sampled = segment.list.sampleLive(nowMillis);
