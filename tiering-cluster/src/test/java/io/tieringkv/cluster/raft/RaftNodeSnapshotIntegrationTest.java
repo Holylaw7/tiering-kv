@@ -83,7 +83,7 @@ class RaftNodeSnapshotIntegrationTest {
             RaftNode leader = io.tieringkv.cluster.RaftTestSupport.awaitLeader(
                     List.of(n1, n2, n3), 5000);
             for (int i = 0; i < ENTRIES; i++) {
-                proposeWithLeaderRetry(leader, n1, n2, n3,
+                leader = proposeWithLeaderRetry(leader, n1, n2, n3,
                         ("e" + i).getBytes(StandardCharsets.UTF_8));
             }
             // 慢 Runner 上快照可能在循环结束后才落盘：有界等待任一节点
@@ -106,17 +106,17 @@ class RaftNodeSnapshotIntegrationTest {
     }
 
     /** 慢 Runner 上 awaitLeader 返回后可能发生选举切换：
-     *  propose 遇 “not leader” 时重新等待 leader 并重试（有界）。 */
-    private static void proposeWithLeaderRetry(RaftNode leader,
-                                               RaftNode n1, RaftNode n2,
-                                               RaftNode n3, byte[] command)
+     *  propose 遇 “not leader” 或短暂切主超时时重新等待 leader 并重试（有界），返回当前 leader。 */
+    private static RaftNode proposeWithLeaderRetry(RaftNode leader,
+                                                   RaftNode n1, RaftNode n2,
+                                                   RaftNode n3, byte[] command)
             throws Exception {
-        long deadline = System.currentTimeMillis() + 10_000;
+        long deadline = System.currentTimeMillis() + 15_000;
         RaftNode current = leader;
         while (true) {
             try {
                 current.propose(command).get(5, java.util.concurrent.TimeUnit.SECONDS);
-                return;
+                return current;
             } catch (java.util.concurrent.ExecutionException e) {
                 if (e.getCause() instanceof IllegalStateException
                         && System.currentTimeMillis() < deadline) {
@@ -149,7 +149,7 @@ class RaftNodeSnapshotIntegrationTest {
             state.set(next);
         };
         return new RaftNode(id, new LocalRaftTransport(peers, id), apply,
-                new LeaderElection(100, 80), 25, 10, log, persistent, snapshot);
+                new LeaderElection(300, 150), 25, 10, log, persistent, snapshot);
     }
 
     private static int countCommands(byte[] state) {
