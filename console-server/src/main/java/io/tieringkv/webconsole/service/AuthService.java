@@ -80,10 +80,7 @@ public class AuthService {
     }
 
     /**
-     * 自助修改口令（TD-087）：校验原口令 → 更新散列 → 审计留痕。
-     *
-     * <p>注意：JWT 无状态，已签发的令牌在过期前仍然有效（限制已记录在
-     * 发布说明中）；如需即时失效需引入令牌版本号。
+     * 自助修改口令（TD-087 + v6.1.0 A2）：校验原口令 → 更新散列 → 递增 token_version 即时吊销旧令牌 → 审计留痕。
      */
     @Transactional
     public void changePassword(ChangePasswordRequest request) {
@@ -98,9 +95,21 @@ public class AuthService {
             throw BusinessException.badRequest("新口令不能与原口令相同");
         }
         user.setPassword(passwordEncoder.encode(request.newPassword()));
+        user.bumpTokenVersion();
         userRepository.save(user);
         attemptGuard.recordSuccess(user.getUsername());
-        auditService.record("PASSWORD_CHANGE", user.getUsername(), "自助修改", true);
+        auditService.record("PASSWORD_CHANGE", user.getUsername(), "自助修改并吊销旧令牌", true);
+    }
+
+    /** 主动登出（v6.1.0 A2）：递增 token_version，立即使当前用户所有已签发 JWT 跨副本失效。 */
+    @Transactional
+    public void logout() {
+        UserPrincipal principal = SecurityUtils.currentUser();
+        User user = userRepository.findById(principal.id())
+                .orElseThrow(() -> BusinessException.unauthorized("用户不存在"));
+        user.bumpTokenVersion();
+        userRepository.save(user);
+        auditService.record("LOGOUT", user.getUsername(), "主动登出并吊销令牌", true);
     }
 
     public UserView currentUser() {

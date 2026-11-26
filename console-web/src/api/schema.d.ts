@@ -11,9 +11,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_2"];
+        get: operations["list_3"];
         put?: never;
-        post: operations["create_3"];
+        post: operations["create_4"];
         delete?: never;
         options?: never;
         head?: never;
@@ -28,9 +28,9 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put: operations["update_2"];
+        put: operations["update_3"];
         post?: never;
-        delete: operations["delete_3"];
+        delete: operations["delete_4"];
         options?: never;
         head?: never;
         patch?: never;
@@ -158,6 +158,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["logout"];
         delete?: never;
         options?: never;
         head?: never;
@@ -292,6 +308,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/backups/schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_2"];
+        put?: never;
+        post: operations["create_3"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backups/schedules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["update_2"];
+        post?: never;
+        delete: operations["delete_3"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backups/schedules/{id}/run-now": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["runNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/backups/{id}": {
         parameters: {
             query?: never;
@@ -302,7 +366,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete: operations["delete_4"];
+        delete: operations["delete_5"];
         options?: never;
         head?: never;
         patch?: never;
@@ -507,7 +571,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_3"];
+        get: operations["list_4"];
         put?: never;
         post?: never;
         delete?: never;
@@ -747,6 +811,18 @@ export interface components {
             data?: components["schemas"]["BackupRecord"];
             message?: string;
         };
+        ApiResponseBackupScheduleRunResult: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["BackupScheduleRunResult"];
+            message?: string;
+        };
+        ApiResponseBackupScheduleView: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["BackupScheduleView"];
+            message?: string;
+        };
         ApiResponseCapacityView: {
             /** Format: int32 */
             code?: number;
@@ -799,6 +875,12 @@ export interface components {
             /** Format: int32 */
             code?: number;
             data?: components["schemas"]["BackupRecord"][];
+            message?: string;
+        };
+        ApiResponseListBackupScheduleView: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["BackupScheduleView"][];
             message?: string;
         };
         ApiResponseListInstanceView: {
@@ -934,6 +1016,53 @@ export interface components {
             sizeBytes?: number;
             /** @enum {string} */
             status?: "RUNNING" | "SUCCESS" | "FAILED";
+        };
+        BackupScheduleRequest: {
+            cronExpression: string;
+            enabled?: boolean;
+            /** Format: int64 */
+            instanceId: number;
+            /** @enum {string} */
+            mode?: "LOGICAL" | "CHECKPOINT";
+            name: string;
+            /** Format: int32 */
+            retentionCount?: number;
+        };
+        BackupScheduleRunResult: {
+            /** Format: int64 */
+            backupRecordId?: number;
+            /** Format: date-time */
+            executedAt?: string;
+            message?: string;
+            /** @enum {string} */
+            mode?: "LOGICAL" | "CHECKPOINT";
+            /** Format: int64 */
+            scheduleId?: number;
+            status?: string;
+        };
+        BackupScheduleView: {
+            /** Format: date-time */
+            createdAt?: string;
+            cronExpression?: string;
+            enabled?: boolean;
+            /** Format: int64 */
+            id?: number;
+            /** Format: int64 */
+            instanceId?: number;
+            instanceName?: string;
+            lastMessage?: string;
+            /** Format: date-time */
+            lastRunAt?: string;
+            lastStatus?: string;
+            /** @enum {string} */
+            mode?: "LOGICAL" | "CHECKPOINT";
+            name?: string;
+            /** Format: date-time */
+            nextRunAt?: string;
+            /** Format: int32 */
+            retentionCount?: number;
+            /** Format: date-time */
+            updatedAt?: string;
         };
         CapacityView: {
             /** Format: int32 */
@@ -1429,7 +1558,7 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    list_2: {
+    list_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -1449,7 +1578,7 @@ export interface operations {
             };
         };
     };
-    create_3: {
+    create_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -1473,7 +1602,7 @@ export interface operations {
             };
         };
     };
-    update_2: {
+    update_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -1499,7 +1628,7 @@ export interface operations {
             };
         };
     };
-    delete_3: {
+    delete_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -1759,6 +1888,26 @@ export interface operations {
             };
         };
     };
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
     me: {
         parameters: {
             query?: never;
@@ -1951,7 +2100,123 @@ export interface operations {
             };
         };
     };
-    delete_4: {
+    list_2: {
+        parameters: {
+            query?: {
+                instanceId?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListBackupScheduleView"];
+                };
+            };
+        };
+    };
+    create_3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BackupScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseBackupScheduleView"];
+                };
+            };
+        };
+    };
+    update_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BackupScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseBackupScheduleView"];
+                };
+            };
+        };
+    };
+    delete_3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    runNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseBackupScheduleRunResult"];
+                };
+            };
+        };
+    };
+    delete_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -2349,7 +2614,7 @@ export interface operations {
             };
         };
     };
-    list_3: {
+    list_4: {
         parameters: {
             query: {
                 instanceId: number;

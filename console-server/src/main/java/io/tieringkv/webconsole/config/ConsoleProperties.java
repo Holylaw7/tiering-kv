@@ -166,6 +166,7 @@ public class ConsoleProperties {
         /** SCAN 每批次键数。 */
         private int scanCount = 500;
         private Retention retention = new Retention();
+        private Schedule schedule = new Schedule();
         private S3 s3 = new S3();
 
         public String getDir() {
@@ -224,6 +225,14 @@ public class ConsoleProperties {
 
         public void setRetention(Retention retention) {
             this.retention = retention;
+        }
+
+        public Schedule getSchedule() {
+            return schedule;
+        }
+
+        public void setSchedule(Schedule schedule) {
+            this.schedule = schedule;
         }
 
         public S3 getS3() {
@@ -335,6 +344,19 @@ public class ConsoleProperties {
         public void setIntervalMs(long intervalMs) { this.intervalMs = intervalMs; }
         public boolean isEnabled() { return enabled; }
         public void setEnabled(boolean enabled) { this.enabled = enabled; }
+    }
+
+    /** 定时备份策略轮询配置（v6.1.0 A2）。 */
+    public static class Schedule {
+        /** 是否开启后台定时备份调度器。 */
+        private boolean enabled = true;
+        /** 轮询到期策略的间隔（毫秒），默认 30 秒。 */
+        private long pollIntervalMs = 30_000L;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public long getPollIntervalMs() { return pollIntervalMs; }
+        public void setPollIntervalMs(long pollIntervalMs) { this.pollIntervalMs = pollIntervalMs; }
     }
 
     public static class Terminal {

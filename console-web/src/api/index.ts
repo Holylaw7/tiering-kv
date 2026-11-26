@@ -1,6 +1,8 @@
 import http from './http'
 import type {
-  AlertChannelView, AlertEvent, AlertRule, BackupRecord, CheckpointResult, CheckpointStatusView,
+  AlertChannelView, AlertEvent, AlertRule, BackupRecord,
+  BackupScheduleRequest, BackupScheduleRunResult, BackupScheduleView,
+  CheckpointResult, CheckpointStatusView,
   InstanceView, KeyDetail, KeyScanPage,
   LoginResponse, OpLog, OverviewView, PageResult, SlowLogView,
   SstableTableView, SystemInfo, TerminalHistory,
@@ -12,7 +14,8 @@ export const authApi = {
     http.post<unknown, LoginResponse>('/auth/login', { username, password }),
   me: () => http.get<unknown, UserView>('/auth/me'),
   changePassword: (oldPassword: string, newPassword: string) =>
-    http.post<unknown, void>('/auth/password', { oldPassword, newPassword })
+    http.post<unknown, void>('/auth/password', { oldPassword, newPassword }),
+  logout: () => http.post<unknown, void>('/auth/logout')
 }
 
 export const userApi = {
@@ -97,7 +100,17 @@ export const backupApi = {
   checkpoint: (instanceId: number) =>
     http.post<unknown, CheckpointResult>('/backups/checkpoint', null, { params: { instanceId } }),
   checkpointStatus: (instanceId: number) =>
-    http.get<unknown, CheckpointStatusView>('/backups/checkpoint/status', { params: { instanceId } })
+    http.get<unknown, CheckpointStatusView>('/backups/checkpoint/status', { params: { instanceId } }),
+  schedules: (instanceId?: number) =>
+    http.get<unknown, BackupScheduleView[]>('/backups/schedules', { params: { instanceId } }),
+  createSchedule: (payload: BackupScheduleRequest) =>
+    http.post<unknown, BackupScheduleView>('/backups/schedules', payload),
+  updateSchedule: (id: number, payload: BackupScheduleRequest) =>
+    http.put<unknown, BackupScheduleView>(`/backups/schedules/${id}`, payload),
+  removeSchedule: (id: number) =>
+    http.delete<unknown, void>(`/backups/schedules/${id}`),
+  runScheduleNow: (id: number) =>
+    http.post<unknown, BackupScheduleRunResult>(`/backups/schedules/${id}/run-now`)
 }
 
 export interface AuditQuery {

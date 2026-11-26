@@ -48,11 +48,18 @@ public class AuthController {
         return ApiResponse.ok(authService.currentUser());
     }
 
-    /** 自助修改口令（任意已登录用户）。 */
+    /** 自助修改口令（任意已登录用户；修改成功后立即吊销旧 JWT）。 */
     @PostMapping("/password")
     public ApiResponse<Void> changePassword(
             @Valid @RequestBody ChangePasswordRequest request) {
         authService.changePassword(request);
+        return ApiResponse.ok();
+    }
+
+    /** 主动登出并吊销当前用户全部活跃令牌（v6.1.0 A2）。 */
+    @PostMapping("/logout")
+    public ApiResponse<Void> logout() {
+        authService.logout();
         return ApiResponse.ok();
     }
 }

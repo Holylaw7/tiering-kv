@@ -223,6 +223,43 @@ export interface CheckpointStatusView {
   lastError?: string
 }
 
+export type BackupScheduleMode = 'LOGICAL' | 'CHECKPOINT'
+
+export interface BackupScheduleView {
+  id: number
+  instanceId: number
+  instanceName: string
+  name: string
+  cronExpression: string
+  mode: BackupScheduleMode
+  retentionCount: number
+  enabled: boolean
+  lastRunAt?: string
+  nextRunAt?: string
+  lastStatus?: 'SUCCESS' | 'FAILED' | 'SKIPPED' | string
+  lastMessage?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface BackupScheduleRequest {
+  instanceId: number
+  name: string
+  cronExpression: string
+  mode: BackupScheduleMode
+  retentionCount: number
+  enabled: boolean
+}
+
+export interface BackupScheduleRunResult {
+  scheduleId: number
+  mode: BackupScheduleMode
+  status: string
+  message?: string
+  backupRecordId?: number
+  executedAt?: string
+}
+
 export interface OpLog {
   id: number
   userId?: number
