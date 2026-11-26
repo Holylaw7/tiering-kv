@@ -6,13 +6,24 @@ import io.tieringkv.storage.memory.MemTable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
+import java.util.concurrent.locks.LockSupport;
 
 /**
- * WAL 管理器（ADR-0014/0016）：append / flush / rotate / recover / checkpoint。
- * append 在锁内串行化（当前写路径为事件循环，多连接并发由此处兜底）。
+ * WAL 管理器（ADR-0014/0016 / B3 Group Commit 优化）：append / flush / rotate / recover / checkpoint。
+ *
+ * <p>B3 优化：记录序列化与 CRC32C 校验全部移出 {@code writeLock} 并行执行；
+ * 并发写入通过 Leader-Follower Group Commit 队列合并为单次段批量写与单次 fsync，
+ * 在 {@code fsync=ALWAYS} 下保持严格崩溃持久性等价的同时大幅提升并发写吞吐。
  */
 public final class WALManager implements AutoCloseable {
+
+    private static final int MAX_GROUP_BATCH_ENTRIES = 64;
+    private static final int MAX_GROUP_BATCH_BYTES = 256 * 1024;
+    private static final long FOLLOWER_PARK_NANOS = 1_000_000L;
 
     private final WALConfig config;
     private final SegmentManager segments;
@@ -21,7 +32,11 @@ public final class WALManager implements AutoCloseable {
     private final Object writeLock = new Object();
     private final Object checkpointLock = new Object();
     private final Object[] keyLocks = createKeyLocks();
-    private boolean closed;
+    private final ConcurrentLinkedQueue<CommitTicket> commitQueue = new ConcurrentLinkedQueue<>();
+    private final AtomicBoolean leaderActive = new AtomicBoolean();
+    private final LongAdder groupCommitBatches = new LongAdder();
+    private final LongAdder groupCommitRecords = new LongAdder();
+    private volatile boolean closed;
     /** EVERY_SEC 的后台落盘器（TD-103）：空闲时也必须把 buffer 刷出去。 */
     private java.util.concurrent.ScheduledExecutorService flusher;
 
@@ -92,23 +107,93 @@ public final class WALManager implements AutoCloseable {
         }
     }
 
-    /** 追加记录（写失败抛 {@link WalWriteException}，不进入 MemTable）。 */
+    /**
+     * 追加记录（写失败抛 {@link WalWriteException}，不进入 MemTable）：
+     * 1) 锁外并发完成 WALRecord 编码与 CRC32C；
+     * 2) 入队 Leader-Follower Group Commit 队列，单批单次 fsync 落盘。
+     */
     public void append(WALEntry entry) {
-        synchronized (writeLock) {
-            if (closed) {
-                throw new WalWriteException("WAL is closed", null);
-            }
-            try {
-                // 保留调用方时间戳：恢复时按 timestamp + ttl 计算绝对过期点
-                WALEntry stamped = new WALEntry(entry.operation(), entry.timestamp(),
-                        entry.key(), entry.value(), entry.ttlMillis(),
-                        recordSequence.incrementAndGet());
-                writer.append(stamped);
-                writer.rotateIfNeeded(config.maxSegmentBytes());
-            } catch (IOException e) {
-                throw new WalWriteException("WAL append failed", e);
+        if (closed) {
+            throw new WalWriteException("WAL is closed", null);
+        }
+        // 保留调用方时间戳：恢复时按 timestamp + ttl 计算绝对过期点；编码与 CRC32C 在锁外并发执行
+        WALEntry stamped = new WALEntry(entry.operation(), entry.timestamp(),
+                entry.key(), entry.value(), entry.ttlMillis(),
+                recordSequence.incrementAndGet());
+        byte[] encoded = WALRecord.encode(stamped);
+
+        CommitTicket ticket = new CommitTicket(encoded);
+        commitQueue.offer(ticket);
+        while (!ticket.done) {
+            if (leaderActive.compareAndSet(false, true)) {
+                try {
+                    drainAndCommitAsLeader();
+                } finally {
+                    leaderActive.set(false);
+                    CommitTicket next = commitQueue.peek();
+                    if (next != null) {
+                        LockSupport.unpark(next.waiter);
+                    }
+                }
+            } else if (!ticket.done) {
+                LockSupport.parkNanos(FOLLOWER_PARK_NANOS);
             }
         }
+        if (ticket.failure != null) {
+            throw ticket.failure;
+        }
+    }
+
+    private void drainAndCommitAsLeader() {
+        List<CommitTicket> batch = new ArrayList<>(16);
+        List<byte[]> frames = new ArrayList<>(16);
+        int batchBytes = 0;
+        while (batch.size() < MAX_GROUP_BATCH_ENTRIES) {
+            CommitTicket next = commitQueue.poll();
+            if (next == null) {
+                break;
+            }
+            batch.add(next);
+            frames.add(next.encoded);
+            batchBytes += next.encoded.length;
+            if (batchBytes >= MAX_GROUP_BATCH_BYTES) {
+                break;
+            }
+        }
+        if (batch.isEmpty()) {
+            return;
+        }
+        WalWriteException error = null;
+        synchronized (writeLock) {
+            if (closed) {
+                error = new WalWriteException("WAL is closed", null);
+            } else {
+                try {
+                    writer.appendEncodedBatch(frames);
+                    writer.rotateIfNeeded(config.maxSegmentBytes());
+                    groupCommitBatches.increment();
+                    groupCommitRecords.add(batch.size());
+                } catch (IOException e) {
+                    error = new WalWriteException("WAL append failed", e);
+                }
+            }
+        }
+        for (int i = 0; i < batch.size(); i++) {
+            CommitTicket t = batch.get(i);
+            t.failure = error;
+            t.done = true;
+            LockSupport.unpark(t.waiter);
+        }
+    }
+
+    /** Group Commit 累计提交批次数（用于观测与基准验证）。 */
+    public long groupCommitBatches() {
+        return groupCommitBatches.sum();
+    }
+
+    /** Group Commit 累计提交记录条数（用于观测与基准验证）。 */
+    public long groupCommitRecords() {
+        return groupCommitRecords.sum();
     }
 
     public void flushAndForce() {
@@ -221,5 +306,17 @@ public final class WALManager implements AutoCloseable {
     }
 
     public record WALPosition(long sequence, long offset) {
+    }
+
+    private static final class CommitTicket {
+        final byte[] encoded;
+        final Thread waiter;
+        volatile boolean done;
+        volatile WalWriteException failure;
+
+        CommitTicket(byte[] encoded) {
+            this.encoded = encoded;
+            this.waiter = Thread.currentThread();
+        }
     }
 }
