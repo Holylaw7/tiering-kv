@@ -3,17 +3,19 @@ package io.tieringkv.protocol;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageDecoder;
+import io.netty.util.ByteProcessor;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * RESP2 解码器（ADR-0006）。
+ * RESP2 零分配热路径解码器（ADR-0006 / B1 优化）。
  *
  * <p>增量解析：输入不足时回退 readerIndex 等待更多字节；单个缓冲区内的多条命令
- * （pipeline）循环解析直至输入不足。协议错误抛出 {@link RespProtocolException}，
- * 由管道统一转换为错误响应并关闭连接。
+ * （pipeline）循环解析直至输入不足。数组长度、Bulk 长度与整数直接在 {@link ByteBuf}
+ * 上逐字节解析（零临时 {@code byte[]} / {@code String} 分配），并使用无栈单例控制信号
+ * 避免 TCP 拆包时抓取 JVM 栈帧。
  */
 public final class RespDecoder extends ByteToMessageDecoder {
 
@@ -24,7 +26,7 @@ public final class RespDecoder extends ByteToMessageDecoder {
     /** 单值解码（测试/工具用）：解码输入中的第一个 RESP 值。 */
     public static RespValue decodeSingle(ByteBuf in) {
         RespDecoder decoder = new RespDecoder();
-        List<Object> out = new ArrayList<>();
+        List<Object> out = new ArrayList<>(1);
         try {
             decoder.decode(null, in, out);
         } catch (Exception e) {
@@ -49,7 +51,7 @@ public final class RespDecoder extends ByteToMessageDecoder {
 
     private RespValue parseValue(ByteBuf in) throws IncompleteInputException {
         if (!in.isReadable()) {
-            throw new IncompleteInputException();
+            throw IncompleteInputException.INSTANCE;
         }
         int start = in.readerIndex();
         byte type = in.readByte();
@@ -59,7 +61,7 @@ public final class RespDecoder extends ByteToMessageDecoder {
             case '-':
                 return new RespError(readLine(in));
             case ':':
-                return new RespInteger(parseLong(readLine(in), "invalid integer"));
+                return new RespInteger(readAsciiLong(in, "invalid integer"));
             case '$':
                 return parseBulkString(in);
             case '*':
@@ -72,7 +74,7 @@ public final class RespDecoder extends ByteToMessageDecoder {
     }
 
     private RespValue parseBulkString(ByteBuf in) throws IncompleteInputException {
-        long length = parseLong(readLine(in), "invalid bulk length");
+        long length = readAsciiLong(in, "invalid bulk length");
         if (length == -1) {
             return RespNull.BULK_STRING;
         }
@@ -80,7 +82,7 @@ public final class RespDecoder extends ByteToMessageDecoder {
             throw new RespProtocolException("invalid bulk length");
         }
         if (in.readableBytes() < length + 2) {
-            throw new IncompleteInputException();
+            throw IncompleteInputException.INSTANCE;
         }
         byte[] data = new byte[(int) length];
         in.readBytes(data);
@@ -89,14 +91,15 @@ public final class RespDecoder extends ByteToMessageDecoder {
     }
 
     private RespValue parseArray(ByteBuf in) throws IncompleteInputException {
-        long length = parseLong(readLine(in), "invalid multibulk length");
+        long length = readAsciiLong(in, "invalid multibulk length");
         if (length == -1) {
             return RespNull.ARRAY;
         }
         if (length < -1 || length > MAX_ARRAY_LENGTH) {
             throw new RespProtocolException("invalid multibulk length");
         }
-        List<RespValue> values = new ArrayList<>((int) Math.min(length, 64));
+        int capacity = (int) Math.min(length, 64);
+        List<RespValue> values = new ArrayList<>(capacity);
         for (int i = 0; i < length; i++) {
             values.add(parseValue(in));
         }
@@ -116,18 +119,22 @@ public final class RespDecoder extends ByteToMessageDecoder {
         return new RespArray(values);
     }
 
-    private String readLine(ByteBuf in) throws IncompleteInputException {
+    /**
+     * 零分配直读 ASCII 有符号 64 位整数（以 CRLF 结尾），兼容前后空白。
+     * 避免为每条 RESP 帧头分配临时 byte[] 与 String。
+     */
+    private long readAsciiLong(ByteBuf in, String error) throws IncompleteInputException {
         int start = in.readerIndex();
-        // ByteProcessor 语义：返回 true 继续扫描、false 停止；在第一个 '\r' 处停止
-        int cr = in.forEachByte(start, in.readableBytes(), (byte b) -> b != (byte) '\r');
+        int readable = in.readableBytes();
+        int cr = in.forEachByte(start, readable, ByteProcessor.FIND_CR);
         if (cr < 0) {
-            if (in.readableBytes() > MAX_INLINE_LENGTH) {
+            if (readable > MAX_INLINE_LENGTH) {
                 throw new RespProtocolException("too big inline request");
             }
-            throw new IncompleteInputException();
+            throw IncompleteInputException.INSTANCE;
         }
         if (cr + 1 >= in.writerIndex()) {
-            throw new IncompleteInputException();
+            throw IncompleteInputException.INSTANCE;
         }
         if (in.getByte(cr + 1) != (byte) '\n') {
             throw new RespProtocolException("expected CRLF");
@@ -136,10 +143,73 @@ public final class RespDecoder extends ByteToMessageDecoder {
         if (lineLength > MAX_INLINE_LENGTH) {
             throw new RespProtocolException("too big inline request");
         }
-        byte[] line = new byte[lineLength];
-        in.readBytes(line);
-        in.skipBytes(2);
-        return new String(line, StandardCharsets.UTF_8);
+        int p = start;
+        int end = cr;
+        while (p < end && in.getByte(p) <= ' ') {
+            p++;
+        }
+        while (end > p && in.getByte(end - 1) <= ' ') {
+            end--;
+        }
+        if (p >= end) {
+            throw new RespProtocolException(error);
+        }
+        boolean negative = false;
+        byte first = in.getByte(p);
+        if (first == '-') {
+            negative = true;
+            p++;
+        } else if (first == '+') {
+            p++;
+        }
+        if (p >= end) {
+            throw new RespProtocolException(error);
+        }
+        // 使用负数累计以精确覆盖 Long.MIN_VALUE（-9223372036854775808）
+        long limit = negative ? Long.MIN_VALUE : -Long.MAX_VALUE;
+        long multmin = limit / 10L;
+        long result = 0L;
+        while (p < end) {
+            int digit = in.getByte(p++) - '0';
+            if (digit < 0 || digit > 9) {
+                throw new RespProtocolException(error);
+            }
+            if (result < multmin) {
+                throw new RespProtocolException(error);
+            }
+            result *= 10L;
+            if (result < limit + digit) {
+                throw new RespProtocolException(error);
+            }
+            result -= digit;
+        }
+        in.readerIndex(cr + 2);
+        return negative ? result : -result;
+    }
+
+    private String readLine(ByteBuf in) throws IncompleteInputException {
+        int start = in.readerIndex();
+        int readable = in.readableBytes();
+        int cr = in.forEachByte(start, readable, ByteProcessor.FIND_CR);
+        if (cr < 0) {
+            if (readable > MAX_INLINE_LENGTH) {
+                throw new RespProtocolException("too big inline request");
+            }
+            throw IncompleteInputException.INSTANCE;
+        }
+        if (cr + 1 >= in.writerIndex()) {
+            throw IncompleteInputException.INSTANCE;
+        }
+        if (in.getByte(cr + 1) != (byte) '\n') {
+            throw new RespProtocolException("expected CRLF");
+        }
+        int lineLength = cr - start;
+        if (lineLength > MAX_INLINE_LENGTH) {
+            throw new RespProtocolException("too big inline request");
+        }
+        String line = in.toString(start, lineLength, StandardCharsets.UTF_8);
+        in.readerIndex(cr + 2);
+        return line;
     }
 
     private void expectCrLf(ByteBuf in) {
@@ -148,15 +218,18 @@ public final class RespDecoder extends ByteToMessageDecoder {
         }
     }
 
-    private long parseLong(String text, String error) {
-        try {
-            return Long.parseLong(text.trim());
-        } catch (NumberFormatException e) {
-            throw new RespProtocolException(error);
-        }
-    }
-
-    /** 输入不足的内部控制信号，不对外暴露。 */
+    /** 输入不足的内部无栈单例信号，避免拆包时抓取 JVM 栈帧。 */
     private static final class IncompleteInputException extends Exception {
+        private static final long serialVersionUID = 1L;
+        static final IncompleteInputException INSTANCE = new IncompleteInputException();
+
+        private IncompleteInputException() {
+            super(null, null, false, false);
+        }
+
+        @Override
+        public Throwable fillInStackTrace() {
+            return this;
+        }
     }
 }
