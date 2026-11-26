@@ -231,6 +231,45 @@ public final class TxnRpcCodec {
                 TxnMessages.Status.values()[ordinal], message);
     }
 
+    public static byte[] encodeScanResponse(List<TxnMessages.ScanEntry> entries) {
+        try (ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+             DataOutputStream out = new DataOutputStream(bytes)) {
+            out.writeInt(entries == null ? 0 : entries.size());
+            if (entries != null) {
+                for (TxnMessages.ScanEntry entry : entries) {
+                    writeBytes(out, entry.key());
+                    writeBytes(out, entry.value() == null ? new byte[0] : entry.value());
+                }
+            }
+            out.flush();
+            return bytes.toByteArray();
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    public static List<TxnMessages.ScanEntry> decodeScanResponse(byte[] payload) {
+        if (payload == null || payload.length < 4) {
+            return List.of();
+        }
+        try (DataInputStream in = new DataInputStream(
+                new ByteArrayInputStream(payload))) {
+            int count = in.readInt();
+            if (count <= 0) {
+                return List.of();
+            }
+            List<TxnMessages.ScanEntry> entries = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                byte[] key = readBytes(in);
+                byte[] value = readBytes(in);
+                entries.add(new TxnMessages.ScanEntry(key, value));
+            }
+            return entries;
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     private static void writeBytes(DataOutputStream out, byte[] bytes)
             throws IOException {
         out.writeInt(bytes.length);

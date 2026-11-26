@@ -39,11 +39,16 @@ public final class CoordinatorRuntime {
         new CountDownLatch(1).await();
     }
 
+    /** Region 拓扑元数据（供 Gateway INFO # Cluster 与控制面拓扑观测）。 */
+    public record RegionEndpoint(String regionId, String host, int port, int index) {
+    }
+
     /** 共享构建：gateway 与 coordinator 复用。 */
     public static final class RuntimeCoordinator {
         private final String nodeId;
         private final MultiRaftEndpoint endpoint;
         private final List<RegionTxnClient> regions;
+        private final List<RegionEndpoint> regionEndpoints;
         private final DistributedTxnRouter router;
         private final TransactionMetadataService metadata;
         private final TransactionMetricsRegistry metrics;
@@ -51,6 +56,7 @@ public final class CoordinatorRuntime {
 
         private RuntimeCoordinator(String nodeId, MultiRaftEndpoint endpoint,
                                    List<RegionTxnClient> regions,
+                                   List<RegionEndpoint> regionEndpoints,
                                    DistributedTxnRouter router,
                                    TransactionMetadataService metadata,
                                    TransactionMetricsRegistry metrics,
@@ -58,6 +64,7 @@ public final class CoordinatorRuntime {
             this.nodeId = nodeId;
             this.endpoint = endpoint;
             this.regions = regions;
+            this.regionEndpoints = List.copyOf(regionEndpoints);
             this.router = router;
             this.metadata = metadata;
             this.metrics = metrics;
@@ -85,9 +92,10 @@ public final class CoordinatorRuntime {
             TransactionMetricsRegistry metrics =
                     new TransactionMetricsRegistry();
             // 远程元数据：TXN_METADATA RPC → 远端 apply，本地缓存
+            String metadataPeer = metadataPeerKey(metadataNode, metadataPort);
             TransactionMetadataService metadata =
                     new TransactionMetadataService(
-                            payload -> endpoint.callTxn(metadataNode,
+                            payload -> endpoint.callTxn(metadataPeer,
                                     "meta", RpcMessageType.TXN_METADATA,
                                     payload)
                                     .thenApply(
@@ -96,17 +104,22 @@ public final class CoordinatorRuntime {
             String[] specs = regionsSpec.split(",");
             int regionCount = specs.length;
             List<RegionTxnClient> regions = new ArrayList<>(regionCount);
+            List<RegionEndpoint> regionEndpoints = new ArrayList<>(regionCount);
             for (int i = 0; i < regionCount; i++) {
                 String spec = specs[i];
                 String[] parts = spec.split("@");
                 String regionId = parts[0];
                 String[] hostPort = parts[1].split(":");
                 int regionIndex = i;
+                int regionPort = Integer.parseInt(hostPort[1]);
+                String peerKey = regionPeerKey(regionId, hostPort[0], regionPort);
                 RegionTxnClient region = new RegionTxnClient(regionId,
-                        new TxnParticipantClient(hostPort[0], regionId, transport),
+                        new TxnParticipantClient(peerKey, regionId, transport),
                         key -> HashSlotRouter.slot(key.key()) % regionCount == regionIndex);
                 regions.add(region);
+                regionEndpoints.add(new RegionEndpoint(regionId, hostPort[0], regionPort, regionIndex));
             }
+            metrics.recordRegionCount(regions.size());
             TransactionLifecycleManager lifecycle =
                     new TransactionLifecycleManager(metadata);
             DistributedTxnRouter router = new DistributedTxnRouter(oracle,
@@ -116,7 +129,7 @@ public final class CoordinatorRuntime {
             TxnTimeoutScheduler scheduler = new TxnTimeoutScheduler(
                     lifecycle, router, metrics);
             scheduler.start(1_000);
-            return new RuntimeCoordinator(nodeId, endpoint, regions, router,
+            return new RuntimeCoordinator(nodeId, endpoint, regions, regionEndpoints, router,
                     metadata, metrics, scheduler);
         }
 
@@ -130,6 +143,10 @@ public final class CoordinatorRuntime {
 
         public List<RegionTxnClient> regions() {
             return regions;
+        }
+
+        public List<RegionEndpoint> regionEndpoints() {
+            return regionEndpoints;
         }
 
         /** 按 CRC16 HashSlot 定位键归属的 Region 客户端。 */
@@ -166,8 +183,10 @@ public final class CoordinatorRuntime {
             int metadataPort, String regionsSpec) {
         Map<String, InetSocketAddress> addresses = new HashMap<>();
         addresses.put(nodeId, new InetSocketAddress("0.0.0.0", rpcPort));
-        addresses.put(metadataNode, InetSocketAddress.createUnresolved(
-                metadataNode, metadataPort));
+        InetSocketAddress metaAddr = InetSocketAddress.createUnresolved(
+                metadataNode, metadataPort);
+        addresses.put(metadataNode, metaAddr);
+        addresses.put(metadataPeerKey(metadataNode, metadataPort), metaAddr);
         for (String spec : regionsSpec.split(",")) {
             String[] parts = spec.split("@");
             if (parts.length != 2) {
@@ -179,10 +198,21 @@ public final class CoordinatorRuntime {
                 throw new IllegalArgumentException(
                         "invalid region endpoint: " + parts[1]);
             }
-            addresses.put(hostPort[0], InetSocketAddress.createUnresolved(
-                    hostPort[0], Integer.parseInt(hostPort[1])));
+            int regionPort = Integer.parseInt(hostPort[1]);
+            InetSocketAddress regionAddr = InetSocketAddress.createUnresolved(
+                    hostPort[0], regionPort);
+            addresses.put(hostPort[0], regionAddr);
+            addresses.put(regionPeerKey(parts[0], hostPort[0], regionPort), regionAddr);
         }
         return addresses;
+    }
+
+    static String metadataPeerKey(String metadataNode, int metadataPort) {
+        return "meta@" + metadataNode + ":" + metadataPort;
+    }
+
+    static String regionPeerKey(String regionId, String host, int port) {
+        return regionId + "@" + host + ":" + port;
     }
 
     /**

@@ -16,6 +16,11 @@ public final class TxnParticipantRpcHandler implements TxnRpcHandler {
 
     @Override
     public RpcFrame handle(RpcFrame request, String groupId, byte[] payload) {
+        if (request.type() == RpcMessageType.TXN_SCAN) {
+            return new RpcFrame(request.requestId(),
+                    RpcMessageType.TXN_SCAN_RESPONSE,
+                    TxnRpcCodec.encodeScanResponse(participant.scan()));
+        }
         TxnMessages.Response response;
         switch (request.type()) {
             case TXN_PREWRITE -> response = participant.prewrite(
@@ -42,6 +47,7 @@ public final class TxnParticipantRpcHandler implements TxnRpcHandler {
                         resolve.rollback());
             }
             case TXN_GET -> response = participant.get(payload);
+            case TXN_CHECKPOINT -> response = participant.checkpoint();
             default -> throw new IllegalArgumentException(
                     "unexpected txn rpc type " + request.type());
         }

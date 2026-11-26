@@ -33,6 +33,26 @@ class CoordinatorRuntimeAddressesTest {
                 .isEqualTo(7100);
         assertThat(addresses.get("participant-b").getHostString())
                 .isEqualTo("participant-b");
+        assertThat(addresses.get(CoordinatorRuntime.metadataPeerKey("metadata", 7300)).getPort())
+                .isEqualTo(7300);
+        assertThat(addresses.get(CoordinatorRuntime.regionPeerKey("r1", "participant-a", 7100)).getPort())
+                .isEqualTo(7100);
+        assertThat(addresses.get(CoordinatorRuntime.regionPeerKey("r2", "participant-b", 7100)).getPort())
+                .isEqualTo(7100);
+    }
+
+    @Test
+    void distinguishesMultipleRegionsOnSameHostByPort() {
+        Map<String, InetSocketAddress> addresses =
+                CoordinatorRuntime.buildRpcAddresses(
+                        "gateway-local", 7201, "127.0.0.1", 17300,
+                        "r1@127.0.0.1:17101,r2@127.0.0.1:17102");
+        assertThat(addresses.get(CoordinatorRuntime.metadataPeerKey("127.0.0.1", 17300)).getPort())
+                .isEqualTo(17300);
+        assertThat(addresses.get(CoordinatorRuntime.regionPeerKey("r1", "127.0.0.1", 17101)).getPort())
+                .isEqualTo(17101);
+        assertThat(addresses.get(CoordinatorRuntime.regionPeerKey("r2", "127.0.0.1", 17102)).getPort())
+                .isEqualTo(17102);
     }
 
     @Test

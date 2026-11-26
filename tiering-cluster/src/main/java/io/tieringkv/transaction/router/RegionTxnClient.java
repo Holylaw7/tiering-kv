@@ -86,6 +86,16 @@ public final class RegionTxnClient {
         return client.get(key);
     }
 
+    /** TXN_SCAN：读取该 Region 全部已提交存活键值。 */
+    public CompletableFuture<List<TxnMessages.ScanEntry>> scan() {
+        return client.scan();
+    }
+
+    /** TXN_CHECKPOINT：触发该 Region 持久化快照落盘。 */
+    public CompletableFuture<TxnMessages.Response> checkpoint() {
+        return client.checkpoint();
+    }
+
     public CompletableFuture<TxnMessages.Response> heartbeat(
             String txnId, long startTS, long ttlMillis) {
         return client.heartbeat(new TxnMessages.Heartbeat(

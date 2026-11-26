@@ -76,6 +76,23 @@ public final class TxnParticipantClient {
         return call(RpcMessageType.TXN_GET, key.clone());
     }
 
+    /** TXN_SCAN：拉取该 Region 当前已提交存活键值列表。 */
+    public CompletableFuture<java.util.List<TxnMessages.ScanEntry>> scan() {
+        return transport.call(target, regionId, RpcMessageType.TXN_SCAN, new byte[0])
+                .thenApply(frame -> {
+                    if (frame.type() == RpcMessageType.ERROR) {
+                        throw new IllegalStateException(new String(
+                                frame.payload(), java.nio.charset.StandardCharsets.UTF_8));
+                    }
+                    return TxnRpcCodec.decodeScanResponse(frame.payload());
+                });
+    }
+
+    /** TXN_CHECKPOINT：触发该 Region 原子落盘快照。 */
+    public CompletableFuture<TxnMessages.Response> checkpoint() {
+        return call(RpcMessageType.TXN_CHECKPOINT, new byte[0]);
+    }
+
     private CompletableFuture<TxnMessages.Response> call(
             RpcMessageType type, byte[] payload) {
         return callWithRetry(type, payload, 0);
