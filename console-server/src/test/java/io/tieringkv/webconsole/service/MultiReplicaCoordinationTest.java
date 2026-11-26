@@ -1,6 +1,6 @@
 package io.tieringkv.webconsole.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import io.tieringkv.webconsole.common.BusinessException;
 import io.tieringkv.webconsole.config.BootstrapDataInitializer;
 import io.tieringkv.webconsole.config.ConsoleProperties;

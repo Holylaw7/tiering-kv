@@ -1,7 +1,7 @@
 package io.tieringkv.webconsole.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import io.tieringkv.webconsole.domain.AlertChannel;
 import io.tieringkv.webconsole.domain.AlertEvent;

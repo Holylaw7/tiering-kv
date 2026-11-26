@@ -1,6 +1,6 @@
 package io.tieringkv.webconsole.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import io.tieringkv.webconsole.common.ApiResponse;
 import io.tieringkv.webconsole.security.JwtAuthenticationFilter;
 import jakarta.servlet.http.HttpServletResponse;

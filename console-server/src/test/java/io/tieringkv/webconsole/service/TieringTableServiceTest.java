@@ -4,7 +4,7 @@ import io.tieringkv.webconsole.common.BusinessException;
 import io.tieringkv.webconsole.domain.DbInstance;
 import io.tieringkv.webconsole.resp.RespReply;
 import io.tieringkv.webconsole.web.dto.SstableTable;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

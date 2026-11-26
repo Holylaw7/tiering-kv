@@ -1,11 +1,11 @@
 package io.tieringkv.webconsole.web;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -74,7 +74,7 @@ class OpenApiSnapshotTest {
         if (node instanceof ObjectNode object) {
             // 键值成对取出后按 key 排序，避免"名字排序、值不排序"造成错位
             java.util.List<java.util.Map.Entry<String, JsonNode>> entries = new java.util.ArrayList<>();
-            object.fields().forEachRemaining(entry ->
+            object.properties().forEach(entry ->
                     entries.add(java.util.Map.entry(entry.getKey(), entry.getValue())));
             entries.sort(java.util.Map.Entry.comparingByKey());
             object.removeAll();

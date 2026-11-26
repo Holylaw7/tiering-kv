@@ -1,6 +1,6 @@
 package io.tieringkv.webconsole.service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import io.tieringkv.webconsole.config.ConsoleProperties;
 import io.tieringkv.webconsole.config.ProductionConfigGuard;
 import io.tieringkv.webconsole.domain.BackupRecord;
