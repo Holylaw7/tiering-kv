@@ -54,8 +54,32 @@ public final class RespCodec {
                 return new RespReply.Simple(readLine(in));
             case '-':
                 return new RespReply.Error(readLine(in));
-            case ':':
-                return new RespReply.Integer(parseLong(readLine(in)));
+            case ':': {
+                String raw = readLine(in).trim();
+                try {
+                    return new RespReply.Integer(Long.parseLong(raw));
+                } catch (NumberFormatException ex) {
+                    // 兼容 Tiering-KV RESP2 对 RespDouble 的 ':' 浮点编码（如 ":0.95\r\n"）
+                    if (isFiniteDouble(raw)) {
+                        return new RespReply.Bulk(raw.getBytes(StandardCharsets.UTF_8));
+                    }
+                    throw new RespException("非法数字: " + raw, ex);
+                }
+            }
+            case ',': {
+                String raw = readLine(in).trim();
+                if (isFiniteDouble(raw)
+                        || "inf".equalsIgnoreCase(raw)
+                        || "-inf".equalsIgnoreCase(raw)
+                        || "nan".equalsIgnoreCase(raw)) {
+                    return new RespReply.Bulk(raw.getBytes(StandardCharsets.UTF_8));
+                }
+                throw new RespException("非法浮点: " + raw);
+            }
+            case '_': {
+                readLine(in);
+                return new RespReply.Bulk(null);
+            }
             case '$': {
                 int length = (int) parseLong(readLine(in));
                 if (length < 0) {
@@ -128,6 +152,17 @@ public final class RespCodec {
             return Long.parseLong(raw.trim());
         } catch (NumberFormatException ex) {
             throw new RespException("非法数字: " + raw, ex);
+        }
+    }
+
+    private static boolean isFiniteDouble(String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return false;
+        }
+        try {
+            return Double.isFinite(Double.parseDouble(raw));
+        } catch (NumberFormatException ex) {
+            return false;
         }
     }
 

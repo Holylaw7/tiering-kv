@@ -326,3 +326,76 @@ export interface SlowLogView {
   entries: SlowLogEntryView[]
   message?: string
 }
+
+export interface VectorCollectionSummary {
+  name: string
+  count: number
+}
+
+export interface VectorCollectionsView {
+  supported: boolean
+  message?: string
+  collections: VectorCollectionSummary[]
+  totalVectors: number
+}
+
+export interface VectorSearchHit {
+  id: string
+  score: number
+}
+
+export interface VectorSearchResultView {
+  supported: boolean
+  message?: string
+  collection: string
+  topK: number
+  costMs: number
+  hits: VectorSearchHit[]
+}
+
+export interface TimeSeriesPoint {
+  timestamp: number
+  value: number
+}
+
+export interface TimeSeriesSummary {
+  key: string
+  length: number
+  latestTimestamp?: number
+  latestValue?: number
+}
+
+export interface TimeSeriesKeysView {
+  supported: boolean
+  message?: string
+  series: TimeSeriesSummary[]
+}
+
+export interface TimeSeriesRangeView {
+  supported: boolean
+  message?: string
+  key: string
+  totalLen: number
+  aggregation?: string
+  bucketMs?: number
+  points: TimeSeriesPoint[]
+  reducedValue?: number
+}
+
+export interface JsonKeysView {
+  supported: boolean
+  message?: string
+  keys: string[]
+}
+
+export interface JsonQueryView {
+  supported: boolean
+  message?: string
+  exists: boolean
+  key: string
+  path: string
+  valueType?: string
+  rawJson?: string
+  prettyJson?: string
+  objectKeys: string[]
+}

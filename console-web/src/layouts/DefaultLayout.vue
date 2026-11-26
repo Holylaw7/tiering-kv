@@ -6,6 +6,7 @@ import {
   Bell,
   CaretBottom,
   Coin,
+  Cpu,
   Document,
   Expand,
   Files,
@@ -27,6 +28,7 @@ import StatusBadge from '@/components/StatusBadge.vue'
 const NAV_ICONS: Record<string, Component> = {
   Odometer,
   Coin,
+  Cpu,
   Grid,
   Monitor,
   Bell,
@@ -55,6 +57,7 @@ const GROUP_ORDER = ['概览', '数据', '运维', '系统'] as const
 const GROUP_OF: Record<string, string> = {
   '/dashboard': '概览',
   '/keyspace': '数据',
+  '/multimodel': '数据',
   '/terminal': '数据',
   '/instances': '运维',
   '/alerts': '运维',
