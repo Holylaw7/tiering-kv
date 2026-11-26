@@ -202,7 +202,7 @@ function goAlerts() {
         <button class="collapse" type="button" :aria-label="collapsed ? '展开侧栏' : '收起侧栏'" @click="collapsed = !collapsed">
           <el-icon><component :is="collapsed ? Expand : Fold" /></el-icon>
         </button>
-        <span v-if="!collapsed" class="version mono">v6.2.0</span>
+        <span v-if="!collapsed" class="version mono">v6.3.0</span>
       </div>
     </aside>
 

@@ -4,7 +4,7 @@
 > 内存/磁盘分层 + 分布式事务 + 多模型值 + 向量检索 + SQL + 云原生运行时，
 > 配套 **Vue 3 + Spring Boot 的 Web 运维管理平台**（前后端分离）。
 
-**版本：v6.2.0（2026-11-26）** · **约 6,741 个内核测试方法 + 78 项 Operator 测试 + 194 项控制面测试（JaCoCo 80.48%）+ 36 项 Vitest + 8 组 Playwright E2E + 双副本 HA 实时故障转移与跨副本 JWT 吊销门禁 + 真实 kind Operator 6 阶段全生命周期 E2E / 0 failures**（内核测试口径见 [docs/testing/measurement-conventions.md](
+**版本：v6.3.0（2026-11-26）** · **约 6,770+ 个内核测试方法 + 78 项 Operator 测试 + 194 项控制面测试（JaCoCo 80.48%）+ 36 项 Vitest + 8 组 Playwright E2E + 双副本 HA 实时故障转移与跨副本 JWT 吊销门禁 + 真实 kind Operator 6 阶段全生命周期 E2E / 0 failures**（内核测试口径见 [docs/testing/measurement-conventions.md](
 docs/testing/measurement-conventions.md)） ·
 技术债 **全量清零**（含 `TD-085` 关闭、`.trivyignore` `0` 例外） ·
 JDK 21 · Spring Boot 4.2 / Jackson 3 · 真实 GitHub Runner 门禁全绿
@@ -141,7 +141,10 @@ kubectl apply -f deploy/operator/kind-cluster-sample.yaml
 | --- | --- |
 | 存储层 GET（1M 数据集） | P99 ≈ 2.5μs |
 | 网络端到端 GET | P99 ≈ 0.19ms |
-| HNSW 检索（20K×64） | P50 0.473ms / P99 0.847ms（旧暴力 9.9ms） |
+| HNSW 检索（20K×64，v6.3.0） | P50 0.133ms / P99 0.322ms（v6.2.0 0.847ms；SQ8 向量内存 -69%~75%） |
+| 63 万键 × 64B 存活堆（v6.3.0） | 174.0 MB（Sampled-LFU，较旧 LFU 504.0 MB 下降 65.5%，8 线程并发读 9.13×） |
+| 流水线回环吞吐（c=50, P=16） | SET 651K / GET 681K rps（详见 [v6.3.0 压测报告](docs/benchmark/v6.3.0-kernel-optimization-report.md)） |
+| WAL Group Commit（fsync=ALWAYS） | 16 线程合并 avgBatch=12.31 writes/fsync，刷盘次数 -91.9% |
 | 并行迁移（100B） | 209MB/s |
 | 虚拟线程服务（JDK 21 POC） | 941K ops/s |
 | WAL append（buffered） | 1.44M ops/s |
@@ -164,6 +167,7 @@ kubectl apply -f deploy/operator/kind-cluster-sample.yaml
 | v6.0.0 | 2026-11-26 | 控制面底座现代化与零 CVE 例外清零（B1–B3）：Spring Boot 4.2.0 / Spring Framework 7.1.0 / Jackson 3.1.8 / springdoc 3.2.1 / jjwt 0.13.0（零 Jackson 2 `jackson-databind` 残留）、清空 `.trivyignore` 关闭 `TD-085` 并增设常驻 Trivy CI 门禁、`console-web` 升级 ECharts 6.1 / `vue-tsc` 3.3 实现 `npm audit` 全级别 0 漏洞、4 镜像 GHCR 发布 |
 | v6.1.0 | 2026-11-26 | 分布式运维全链路与安全闭环（A1–A3）：分布式 Gateway 全面支持 `SCAN`/`DBSIZE`/`SLOWLOG`/`BGSAVE`/`LASTSAVE` 与 `INFO # Cluster/# Transaction/# Persistence`，Participant 物理快照原子落盘与重启恢复（`operator-kind-e2e` Stage 5 硬断言真实 `DBSIZE>=1` & `BGSAVE`）；控制面 Flyway V11 定时备份策略（Cron + 逻辑/物理双模式 + HA 单活调度与留存清理）及 JWT `token_version` 跨副本即时吊销；7 组 Playwright E2E 与 4 镜像 GHCR 发布 |
 | v6.2.0 | 2026-11-26 | 控制面多模型工作台与集群拓扑/K8s 桥接（C1–C3）：`RespCodec` 兼容 RESP2/RESP3 浮点与 `VECTOR.CHECKPOINT` 落盘接线，落地 `/#/multimodel`（Vector HNSW + TimeSeries ECharts 6 + JSONPath）与 `/#/topology`（16384 HashSlot 分布 + 2PC 事务面板 + 纯 JDK 21 `HttpClient` 零依赖 K8s Operator 桥接）；新增 Flyway 多副本冷启动 MySQL 咨询锁；194 项控制面测试（JaCoCo 80.48%）、8 组 Playwright E2E 与 4 镜像 GHCR 发布 |
+| v6.3.0 | 2026-11-26 | 高性能内核专版（Path B：B1–B4）：零分配 RESP + Linux 原生 Epoll + 批冲刷 + 去争用分片调度（消除 c=200 倒挂、P=16 651k/681k rps）；24-bit 内联 Morris-LFU + `SampledLfuPolicy` + Generational ZGC（63 万键存活堆 `-65.5%`、8 线程读 `9.13×`）；WAL Group Commit（`avgBatch=12.31`）+ 16 分片 S3-FIFO + 并发冷读 + FastRange Bloom；HNSW 扁平图 + SQ8 + FMA 核（20K×64D P99 `0.847→0.322ms`，SQ8 内存 `-69%~75%`）；0 CVE 例外与 4 镜像 GHCR 发布 |
 | v5.0.3 | 2026-10-24 | 发布链路自动化：任意 v* 标签自动发版，门禁加控制面与前端作业（ADR-0360） |
 | v5.0.2 | 2026-10-24 | 版本号对齐：pom / 脚本 / 文档统一到 5.0.2，构建脚本不再写死构件名 |
 | v4.1.0 维护补丁 | 2026-08-16 | 生产链 TTL 修复（ADR-0351）+ 集群复制原子操作（ADR-0352，TD-081）+ 选举窗口/CI 稳定性加固（ADR-0353）+ RPC ERROR 帧 term 污染修复（ADR-0354）；技术债 50/50；约 6,738 个测试方法 / 14,957 次测试执行全绿 |
