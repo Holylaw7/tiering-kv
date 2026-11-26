@@ -6,10 +6,13 @@ import io.tieringkv.command.CommandRegistry;
 import io.tieringkv.command.RuntimeConfigBridge;
 import io.tieringkv.config.ServerConfig;
 import io.tieringkv.execution.KeyShardExecutor;
+import io.tieringkv.lifecycle.PhysicalSnapshotCoordinator;
 import io.tieringkv.monitor.MetricsRegistry;
 import io.tieringkv.network.tcp.TieringKvServer;
 import io.tieringkv.observability.ServerInfoProvider;
+import io.tieringkv.observability.SlowLog;
 import io.tieringkv.observability.tracing.Tracer;
+import io.tieringkv.runtime.CoordinatorRuntime.RegionEndpoint;
 import io.tieringkv.runtime.CoordinatorRuntime.RuntimeCoordinator;
 import io.tieringkv.security.AclPolicy;
 
@@ -17,9 +20,11 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.Supplier;
 
 /**
  * Redis RESP 网关运行时（ADR-0093 + M2-A1）：
@@ -67,29 +72,61 @@ public final class GatewayRuntime {
                 .timeout(options::idleTimeoutSeconds, options::setIdleTimeoutSeconds)
                 .requirePass(aclPolicy::requiresAuthForAnonymous, aclPolicy::configureRequirePass)
                 .build();
+        SlowLog slowLog = new SlowLog(10_000L, 128);
+        PhysicalSnapshotCoordinator snapshotCoordinator =
+                new PhysicalSnapshotCoordinator(storage::checkpointAll);
         ServerInfoProvider info = new ServerInfoProvider(
-                metrics, null, storage::size, port, ServerVersion.current());
+                metrics, null, storage::size, port, ServerVersion.current(),
+                null, null, null, snapshotCoordinator);
+        Supplier<String> clusterSection = () -> renderClusterSection(coordinator);
+        Supplier<String> txnSection = () -> coordinator.metrics().sectionText();
+        Map<String, Supplier<String>> infoSections = new LinkedHashMap<>(info.sections());
+        infoSections.put("cluster", clusterSection);
+        infoSections.put("transaction", txnSection);
+        infoSections.put("txn", txnSection);
+        Supplier<String> fullInfo = () -> info.render()
+                + clusterSection.get()
+                + txnSection.get();
         KeyShardExecutor executor = new KeyShardExecutor(
                 Math.max(2, Math.min(8, Runtime.getRuntime().availableProcessors())),
                 "gateway-resp-" + coordinator.nodeId());
         CommandEngine engine = new CommandEngine(
                 CommandRegistry.createDefaultWithRuntime(
-                        info::render, info.sections(), null, null, null, aclPolicy, runtimeConfig),
-                storage, executor, null, aclPolicy);
+                        fullInfo, Map.copyOf(infoSections), null, null, null,
+                        aclPolicy, runtimeConfig, slowLog, snapshotCoordinator),
+                storage, executor, null, aclPolicy, slowLog);
         TieringKvServer server = new TieringKvServer(config, engine, metrics, options);
         server.start();
-        return new RunningGateway(coordinator, executor, server);
+        return new RunningGateway(coordinator, executor, server, snapshotCoordinator);
+    }
+
+    private static String renderClusterSection(RuntimeCoordinator coordinator) {
+        StringBuilder sb = new StringBuilder("# Cluster\r\n");
+        sb.append("cluster_enabled:1\r\n");
+        sb.append("cluster_mode:distributed\r\n");
+        sb.append("cluster_node_id:").append(coordinator.nodeId()).append("\r\n");
+        sb.append("cluster_regions:").append(coordinator.regions().size()).append("\r\n");
+        sb.append("cluster_slots_total:16384\r\n");
+        for (RegionEndpoint ep : coordinator.regionEndpoints()) {
+            sb.append("region_").append(ep.index()).append(':')
+                    .append(ep.regionId()).append('@')
+                    .append(ep.host()).append(':').append(ep.port()).append("\r\n");
+        }
+        return sb.toString();
     }
 
     public static final class RunningGateway implements AutoCloseable {
         private final RuntimeCoordinator coordinator;
         private final KeyShardExecutor executor;
         private final TieringKvServer server;
+        private final PhysicalSnapshotCoordinator snapshotCoordinator;
 
-        RunningGateway(RuntimeCoordinator coordinator, KeyShardExecutor executor, TieringKvServer server) {
+        RunningGateway(RuntimeCoordinator coordinator, KeyShardExecutor executor,
+                       TieringKvServer server, PhysicalSnapshotCoordinator snapshotCoordinator) {
             this.coordinator = coordinator;
             this.executor = executor;
             this.server = server;
+            this.snapshotCoordinator = snapshotCoordinator;
         }
 
         public int port() {
@@ -103,6 +140,7 @@ public final class GatewayRuntime {
         @Override
         public void close() {
             server.shutdown();
+            snapshotCoordinator.close();
             executor.close();
             try {
                 coordinator.close();

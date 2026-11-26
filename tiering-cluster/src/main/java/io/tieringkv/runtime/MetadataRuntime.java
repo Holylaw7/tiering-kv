@@ -21,6 +21,15 @@ public final class MetadataRuntime {
     }
 
     public static void start(Map<String, String> options) throws Exception {
+        RunningMetadata running = startServer(options);
+        System.out.printf("MetadataRuntime %s listening on %d data=%s%n",
+                running.nodeId(), running.boundPort(), running.dataDir());
+        Runtime.getRuntime().addShutdownHook(new Thread(running::close));
+        new CountDownLatch(1).await();
+    }
+
+    /** 可测试启停句柄：启动 Metadata RPC 端点并持久化事务元数据日志。 */
+    public static RunningMetadata startServer(Map<String, String> options) throws Exception {
         String nodeId = TxnRuntimeMain.require(options, "node-id");
         int rpcPort = TxnRuntimeMain.port(options, "rpc-port", 7300);
         String dataDir = options.getOrDefault("data-dir", "/data");
@@ -47,8 +56,47 @@ public final class MetadataRuntime {
             }
         });
         endpoint.start();
-        System.out.printf("MetadataRuntime %s listening on %d data=%s%n",
-                nodeId, endpoint.boundPort(), dataDir);
-        new CountDownLatch(1).await();
+        return new RunningMetadata(nodeId, dataDir, endpoint, service);
+    }
+
+    public static final class RunningMetadata implements AutoCloseable {
+        private final String nodeId;
+        private final String dataDir;
+        private final MultiRaftEndpoint endpoint;
+        private final TransactionMetadataService service;
+
+        RunningMetadata(String nodeId, String dataDir, MultiRaftEndpoint endpoint,
+                        TransactionMetadataService service) {
+            this.nodeId = nodeId;
+            this.dataDir = dataDir;
+            this.endpoint = endpoint;
+            this.service = service;
+        }
+
+        public String nodeId() {
+            return nodeId;
+        }
+
+        public String dataDir() {
+            return dataDir;
+        }
+
+        public int boundPort() {
+            return endpoint.boundPort();
+        }
+
+        @Override
+        public void close() {
+            try {
+                endpoint.close();
+            } catch (Exception ignored) {
+                // 停机路径尽力释放
+            }
+            try {
+                service.close();
+            } catch (Exception ignored) {
+                // 停机路径尽力关闭
+            }
+        }
     }
 }

@@ -21,28 +21,42 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class TransactionParticipant {
 
+    @FunctionalInterface
+    public interface CheckpointAction {
+        int execute(Map<byte[], byte[]> snapshot) throws java.io.IOException;
+    }
+
     private final String regionId;
     private final MvccStorageEngine engine;
     private final LockTable locks;
     private final long lockTtlMillis;
     private final PersistentTxnJournal journal;
+    private final CheckpointAction checkpointAction;
     private final Map<String, TxnMessages.ParticipantState> states =
             new ConcurrentHashMap<>();
     private final Map<String, Object> txnLocks = new ConcurrentHashMap<>();
 
     public TransactionParticipant(String regionId, MvccStorageEngine engine,
                                   LockTable locks, long lockTtlMillis) {
-        this(regionId, engine, locks, lockTtlMillis, null);
+        this(regionId, engine, locks, lockTtlMillis, null, null);
     }
 
     public TransactionParticipant(String regionId, MvccStorageEngine engine,
                                   LockTable locks, long lockTtlMillis,
                                   PersistentTxnJournal journal) {
+        this(regionId, engine, locks, lockTtlMillis, journal, null);
+    }
+
+    public TransactionParticipant(String regionId, MvccStorageEngine engine,
+                                  LockTable locks, long lockTtlMillis,
+                                  PersistentTxnJournal journal,
+                                  CheckpointAction checkpointAction) {
         this.regionId = regionId;
         this.engine = engine;
         this.locks = locks;
         this.lockTtlMillis = lockTtlMillis;
         this.journal = journal;
+        this.checkpointAction = checkpointAction;
     }
 
     public String regionId() {
@@ -215,6 +229,34 @@ public final class TransactionParticipant {
                 ? new TxnMessages.Response(TxnMessages.Status.ALREADY, "")
                 : new TxnMessages.Response(TxnMessages.Status.OK,
                 new String(value, java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    /** TXN_SCAN：返回本 Region 全部已提交存活键值（供网关 SCAN / DBSIZE 汇聚）。 */
+    public List<TxnMessages.ScanEntry> scan() {
+        Map<byte[], byte[]> live = engine.scan(null, null, Long.MAX_VALUE);
+        List<TxnMessages.ScanEntry> entries = new ArrayList<>(live.size());
+        for (Map.Entry<byte[], byte[]> entry : live.entrySet()) {
+            entries.add(new TxnMessages.ScanEntry(entry.getKey(), entry.getValue()));
+        }
+        return entries;
+    }
+
+    /** TXN_CHECKPOINT：将本 Region 当前已提交快照原子落盘（供网关 BGSAVE 协调）。 */
+    public TxnMessages.Response checkpoint() {
+        Map<byte[], byte[]> live = engine.scan(null, null, Long.MAX_VALUE);
+        if (checkpointAction == null) {
+            return new TxnMessages.Response(TxnMessages.Status.OK,
+                    "entries=" + live.size());
+        }
+        try {
+            int written = checkpointAction.execute(live);
+            return new TxnMessages.Response(TxnMessages.Status.OK,
+                    "entries=" + written);
+        } catch (java.io.IOException | RuntimeException ex) {
+            String msg = ex.getMessage() == null
+                    ? ex.getClass().getSimpleName() : ex.getMessage();
+            return TxnMessages.Response.error("checkpoint failed: " + msg);
+        }
     }
 
     private void journal(TxnStateRecord.State state, String txnId,

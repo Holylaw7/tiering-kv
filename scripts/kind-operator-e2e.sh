@@ -127,7 +127,12 @@ case "${1:-run}" in
       echo "  backup poll: job_succeeded=${succ:-0} status=${bstat:-} job=${bjob:-}"
       [ "${succ:-0}" = "1" ] && [ "$bstat" = "SUCCEEDED" ] && [ "$bjob" = "${CR_NAME}-backup-e2e-1" ]
     '
-    kubectl -n "$NS" logs "job/${CR_NAME}-backup-e2e-1" || true
+    backup_log=$(kubectl -n "$NS" logs "job/${CR_NAME}-backup-e2e-1")
+    echo "$backup_log"
+    echo "$backup_log" | grep -q "ping=+PONG"
+    echo "$backup_log" | grep -Eq "dbsize=:[1-9][0-9]*"
+    echo "$backup_log" | grep -q "bgsave=+Background saving started"
+    echo "[operator-e2e] verified real distributed DBSIZE>=1 & BGSAVE success"
 
     echo "[operator-e2e] 6/6 Delete CR via Finalizer & assert PVCs retained"
     pvc_before=$(kubectl -n "$NS" get pvc -l "tieringkv.io/cluster=${CR_NAME}" -o name | wc -l | tr -d ' ')

@@ -25,6 +25,10 @@ public final class TxnMessages {
     public record Mutation(byte[] key, byte[] value, boolean deleted) {
     }
 
+    /** 分布式 SCAN/DBSIZE 返回条目（二进制键值安全）。 */
+    public record ScanEntry(byte[] key, byte[] value) {
+    }
+
     public record Prewrite(String txnId, long startTS, byte[] primary,
                            List<Mutation> mutations) {
     }

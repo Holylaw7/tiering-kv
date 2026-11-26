@@ -36,7 +36,11 @@ public enum RpcMessageType {
     PUBSUB(32),
     PUBSUB_RESPONSE(33),
     REPLICATION(34),
-    REPLICATION_RESPONSE(35);
+    REPLICATION_RESPONSE(35),
+    TXN_SCAN(36),
+    TXN_SCAN_RESPONSE(37),
+    TXN_CHECKPOINT(38),
+    TXN_CHECKPOINT_RESPONSE(39);
 
     private final int wireValue;
 
@@ -63,8 +67,10 @@ public enum RpcMessageType {
     }
 
     public boolean txn() {
-        return wireValue >= TXN_PREWRITE.wireValue()
-                && wireValue <= TXN_GET_RESPONSE.wireValue();
+        return (wireValue >= TXN_PREWRITE.wireValue()
+                && wireValue <= TXN_GET_RESPONSE.wireValue())
+                || (wireValue >= TXN_SCAN.wireValue()
+                && wireValue <= TXN_CHECKPOINT_RESPONSE.wireValue());
     }
 
     public RpcMessageType responseType() {
@@ -77,6 +83,8 @@ public enum RpcMessageType {
             case TXN_CHECK_STATUS -> TXN_CHECK_STATUS_RESPONSE;
             case TXN_RESOLVE_LOCK -> TXN_RESOLVE_LOCK_RESPONSE;
             case TXN_GET -> TXN_GET_RESPONSE;
+            case TXN_SCAN -> TXN_SCAN_RESPONSE;
+            case TXN_CHECKPOINT -> TXN_CHECKPOINT_RESPONSE;
             case META_PROPOSE -> META_PROPOSE_RESPONSE;
             case META_STATUS -> META_STATUS_RESPONSE;
             case PUBSUB -> PUBSUB_RESPONSE;
