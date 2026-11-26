@@ -65,7 +65,7 @@ case "${1:-run}" in
     echo "[operator-e2e] 1/6 Install CRD, RBAC & Operator Deployment"
     kubectl apply -f deploy/operator/tieringkvcluster-crd.yaml
     kubectl apply -f deploy/operator/rbac.yaml
-    sed "s|ghcr.io/holylaw7/tiering-kv-operator:v5.4.0|${OP_IMG}|g" \
+    sed -E "s|ghcr\.io/holylaw7/tiering-kv-operator:v[^[:space:]\"]+|${OP_IMG}|g" \
       deploy/operator/deployment.yaml | kubectl apply -f -
     kubectl -n "$NS" rollout status deployment/tiering-kv-operator --timeout=150s
 
@@ -75,7 +75,7 @@ case "${1:-run}" in
     '
 
     echo "[operator-e2e] 2/6 Apply TieringKVCluster CR (meta=1, storage=2, gw=1) & verify RESP"
-    sed "s|ghcr.io/holylaw7/tiering-kv:v5.4.0|${IMG_V1}|g" \
+    sed -E "s|ghcr\.io/holylaw7/tiering-kv:v[^[:space:]\"]+|${IMG_V1}|g" \
       deploy/operator/kind-cluster-sample.yaml | kubectl apply -f -
 
     wait_cr_condition "CR demo READY (1/2/1)" 180 '
