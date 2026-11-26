@@ -2,8 +2,10 @@ import http from './http'
 import type {
   AlertChannelView, AlertEvent, AlertRule, BackupRecord,
   BackupScheduleRequest, BackupScheduleRunResult, BackupScheduleView,
-  CheckpointResult, CheckpointStatusView,
-  InstanceView, JsonKeysView, JsonQueryView, KeyDetail, KeyScanPage,
+  CheckpointResult, CheckpointStatusView, ClusterTopologyView,
+  InstanceView, JsonKeysView, JsonQueryView,
+  K8sBackupTriggerResult, K8sClusterListView, K8sClusterSummary,
+  KeyDetail, KeyScanPage,
   LoginResponse, OpLog, OverviewView, PageResult, SlowLogView,
   SstableTableView, SystemInfo, TerminalHistory,
   TerminalResult, TimeSeriesKeysView, TimeSeriesPoint, TimeSeriesRangeView,
@@ -188,4 +190,19 @@ export const multiModelApi = {
     http.post<unknown, string>('/multimodel/json/numincrby', payload),
   arrAppendJson: (payload: { instanceId: number; key: string; path?: string; value: string }) =>
     http.post<unknown, number>('/multimodel/json/arrappend', payload)
+}
+
+export const clusterApi = {
+  topology: (instanceId: number) =>
+    http.get<unknown, ClusterTopologyView>('/cluster/topology', { params: { instanceId } }),
+  k8sClusters: () =>
+    http.get<unknown, K8sClusterListView>('/cluster/k8s/clusters'),
+  scaleK8sCluster: (
+    name: string,
+    payload: { storageReplicas?: number; gatewayReplicas?: number; metadataReplicas?: number }
+  ) => http.post<unknown, K8sClusterSummary>(`/cluster/k8s/clusters/${encodeURIComponent(name)}/scale`, payload),
+  upgradeK8sCluster: (name: string, image: string) =>
+    http.post<unknown, K8sClusterSummary>(`/cluster/k8s/clusters/${encodeURIComponent(name)}/upgrade`, { image }),
+  backupK8sCluster: (name: string) =>
+    http.post<unknown, K8sBackupTriggerResult>(`/cluster/k8s/clusters/${encodeURIComponent(name)}/backup`)
 }

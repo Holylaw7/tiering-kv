@@ -104,6 +104,14 @@ console:
   terminal:
     # 危险命令黑名单（逗号分隔，命中直接拒绝）
     blocked-commands: ${CONSOLE_BLOCKED_COMMANDS:FLUSHALL,FLUSHDB,SHUTDOWN,DEBUG}
+  kubernetes:
+    # 接入 Kubernetes 集群内/外控制面时设为 true（纯 JDK HttpClient，零外部 K8s SDK 依赖）
+    enabled: ${CONSOLE_K8S_ENABLED:false}
+    api-server: ${CONSOLE_K8S_API_SERVER:https://kubernetes.default.svc}
+    namespace: ${CONSOLE_K8S_NAMESPACE:tiering-kv}
+    token-path: ${CONSOLE_K8S_TOKEN_PATH:/var/run/secrets/kubernetes.io/serviceaccount/token}
+    ca-cert-path: ${CONSOLE_K8S_CA_CERT_PATH:/var/run/secrets/kubernetes.io/serviceaccount/ca.crt}
+    bearer-token: ${CONSOLE_K8S_BEARER_TOKEN:}
 
 management:
   endpoints:

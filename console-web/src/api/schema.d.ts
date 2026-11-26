@@ -404,6 +404,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cluster/k8s/clusters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["k8sClusters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cluster/k8s/clusters/{name}/backup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["triggerBackup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cluster/k8s/clusters/{name}/scale": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["scaleCluster"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cluster/k8s/clusters/{name}/upgrade": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["upgradeCluster"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cluster/topology": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["topology"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dashboard/overview": {
         parameters: {
             query?: never;
@@ -1103,6 +1183,12 @@ export interface components {
             data?: components["schemas"]["CheckpointStatusView"];
             message?: string;
         };
+        ApiResponseClusterTopologyView: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["ClusterTopologyView"];
+            message?: string;
+        };
         ApiResponseInstanceView: {
             /** Format: int32 */
             code?: number;
@@ -1119,6 +1205,24 @@ export interface components {
             /** Format: int32 */
             code?: number;
             data?: components["schemas"]["JsonQueryView"];
+            message?: string;
+        };
+        ApiResponseK8sBackupTriggerResult: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["K8sBackupTriggerResult"];
+            message?: string;
+        };
+        ApiResponseK8sClusterListView: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["K8sClusterListView"];
+            message?: string;
+        };
+        ApiResponseK8sClusterSummary: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["K8sClusterSummary"];
             message?: string;
         };
         ApiResponseKeyDetail: {
@@ -1426,6 +1530,24 @@ export interface components {
             /** Format: int64 */
             totalConnections?: number;
         };
+        ClusterTopologyView: {
+            distributed?: boolean;
+            /** Format: int64 */
+            instanceId?: number;
+            instanceName?: string;
+            mode?: string;
+            nodeId?: string;
+            persistence?: components["schemas"]["PersistenceStatusView"];
+            /** Format: int32 */
+            regionCount?: number;
+            regions?: components["schemas"]["RegionNodeView"][];
+            /** Format: int64 */
+            totalKeys?: number;
+            /** Format: int32 */
+            totalSlots?: number;
+            transaction?: components["schemas"]["TransactionMetricsView"];
+            version?: string;
+        };
         HashFieldRequest: {
             field: string;
             key: string;
@@ -1499,6 +1621,60 @@ export interface components {
             key: string;
             path?: string;
             value: string;
+        };
+        K8sBackupTriggerResult: {
+            clusterName?: string;
+            message?: string;
+            namespace?: string;
+            requestId?: string;
+        };
+        K8sClusterListView: {
+            apiServer?: string;
+            clusters?: components["schemas"]["K8sClusterSummary"][];
+            enabled?: boolean;
+            message?: string;
+            namespace?: string;
+        };
+        K8sClusterSummary: {
+            backupScheduleCron?: string;
+            createdAt?: string;
+            /** Format: int32 */
+            gatewayReplicas?: number;
+            /** Format: int64 */
+            generation?: number;
+            image?: string;
+            lastAction?: string;
+            lastBackupJob?: string;
+            lastBackupStatus?: string;
+            lastBackupTime?: string;
+            message?: string;
+            /** Format: int32 */
+            metadataReplicas?: number;
+            name?: string;
+            namespace?: string;
+            /** Format: int64 */
+            observedGeneration?: number;
+            phase?: string;
+            /** Format: int32 */
+            readyGateway?: number;
+            /** Format: int32 */
+            readyMetadata?: number;
+            /** Format: int32 */
+            readyStorage?: number;
+            regionIds?: string[];
+            /** Format: int32 */
+            storageReplicas?: number;
+        };
+        K8sScaleRequest: {
+            /** Format: int32 */
+            gatewayReplicas?: number;
+            /** Format: int32 */
+            metadataReplicas?: number;
+            /** Format: int32 */
+            storageReplicas?: number;
+        };
+        K8sUpgradeRequest: {
+            image: string;
         };
         KeyDetail: {
             key?: string;
@@ -1708,6 +1884,15 @@ export interface components {
         PasswordResetRequest: {
             password: string;
         };
+        PersistenceStatusView: {
+            bgsaveInProgress?: boolean;
+            /** Format: int64 */
+            lastDurationMillis?: number;
+            lastError?: string;
+            /** Format: int64 */
+            lastSaveTime?: number;
+            lastStatus?: string;
+        };
         PurgeReport: {
             /** Format: int32 */
             candidates?: number;
@@ -1725,6 +1910,18 @@ export interface components {
             skipped?: number;
             /** Format: date-time */
             startedAt?: string;
+        };
+        RegionNodeView: {
+            host?: string;
+            /** Format: int32 */
+            index?: number;
+            /** Format: int32 */
+            port?: number;
+            regionId?: string;
+            /** Format: int32 */
+            slotCount?: number;
+            /** Format: double */
+            slotPercent?: number;
         };
         RetentionView: {
             /** Format: int32 */
@@ -1886,6 +2083,34 @@ export interface components {
             latestValue?: number;
             /** Format: int64 */
             length?: number;
+        };
+        TransactionMetricsView: {
+            /** Format: int64 */
+            abortTxn?: number;
+            /** Format: int64 */
+            activeTxn?: number;
+            /** Format: int64 */
+            beginTxn?: number;
+            /** Format: double */
+            commitLatencyMs?: number;
+            /** Format: int64 */
+            committedTxn?: number;
+            /** Format: int64 */
+            conflictTxn?: number;
+            /** Format: int64 */
+            lockCount?: number;
+            /** Format: double */
+            lockWaitMs?: number;
+            /** Format: int64 */
+            networkRetry?: number;
+            /** Format: double */
+            prepareLatencyMs?: number;
+            /** Format: int64 */
+            recoveryTxn?: number;
+            /** Format: int64 */
+            regionCount?: number;
+            /** Format: int64 */
+            rollbackTxn?: number;
         };
         TrendPoint: {
             /** Format: double */
@@ -2726,6 +2951,122 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseBackupRecord"];
+                };
+            };
+        };
+    };
+    k8sClusters: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseK8sClusterListView"];
+                };
+            };
+        };
+    };
+    triggerBackup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseK8sBackupTriggerResult"];
+                };
+            };
+        };
+    };
+    scaleCluster: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["K8sScaleRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseK8sClusterSummary"];
+                };
+            };
+        };
+    };
+    upgradeCluster: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["K8sUpgradeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseK8sClusterSummary"];
+                };
+            };
+        };
+    };
+    topology: {
+        parameters: {
+            query: {
+                instanceId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseClusterTopologyView"];
                 };
             };
         };

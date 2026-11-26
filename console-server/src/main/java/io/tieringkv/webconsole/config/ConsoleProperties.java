@@ -17,6 +17,7 @@ public class ConsoleProperties {
     private final Bootstrap bootstrap = new Bootstrap();
     private final Pool pool = new Pool();
     private final Security security = new Security();
+    private final Kubernetes kubernetes = new Kubernetes();
 
     public Jwt getJwt() {
         return jwt;
@@ -48,6 +49,10 @@ public class ConsoleProperties {
 
     public Security getSecurity() {
         return security;
+    }
+
+    public Kubernetes getKubernetes() {
+        return kubernetes;
     }
 
     /** 启动引导：{@code name@host:port}，为空则沿用数据库中的实例。 */
@@ -414,5 +419,34 @@ public class ConsoleProperties {
         public void setLoginAttemptStore(String loginAttemptStore) { this.loginAttemptStore = loginAttemptStore; }
         public List<String> getTrustedProxies() { return trustedProxies; }
         public void setTrustedProxies(List<String> trustedProxies) { this.trustedProxies = trustedProxies; }
+    }
+
+    /** Kubernetes Operator 无依赖 REST 桥接配置（v6.2.0 C2，纯 JDK HttpClient）。 */
+    public static class Kubernetes {
+        private boolean enabled = false;
+        private String apiServer = "https://kubernetes.default.svc";
+        private String namespace = "tiering-kv";
+        private String tokenPath = "/var/run/secrets/kubernetes.io/serviceaccount/token";
+        private String caCertPath = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt";
+        private String bearerToken;
+        private int connectTimeoutMs = 3000;
+        private int requestTimeoutMs = 8000;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public String getApiServer() { return apiServer; }
+        public void setApiServer(String apiServer) { this.apiServer = apiServer; }
+        public String getNamespace() { return namespace; }
+        public void setNamespace(String namespace) { this.namespace = namespace; }
+        public String getTokenPath() { return tokenPath; }
+        public void setTokenPath(String tokenPath) { this.tokenPath = tokenPath; }
+        public String getCaCertPath() { return caCertPath; }
+        public void setCaCertPath(String caCertPath) { this.caCertPath = caCertPath; }
+        public String getBearerToken() { return bearerToken; }
+        public void setBearerToken(String bearerToken) { this.bearerToken = bearerToken; }
+        public int getConnectTimeoutMs() { return connectTimeoutMs; }
+        public void setConnectTimeoutMs(int connectTimeoutMs) { this.connectTimeoutMs = connectTimeoutMs; }
+        public int getRequestTimeoutMs() { return requestTimeoutMs; }
+        public void setRequestTimeoutMs(int requestTimeoutMs) { this.requestTimeoutMs = requestTimeoutMs; }
     }
 }

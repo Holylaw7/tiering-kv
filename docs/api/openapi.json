@@ -344,6 +344,21 @@
         },
         "type" : "object"
       },
+      "ApiResponseClusterTopologyView" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/ClusterTopologyView"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseInstanceView" : {
         "properties" : {
           "code" : {
@@ -382,6 +397,51 @@
           },
           "data" : {
             "$ref" : "#/components/schemas/JsonQueryView"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiResponseK8sBackupTriggerResult" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/K8sBackupTriggerResult"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiResponseK8sClusterListView" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/K8sClusterListView"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiResponseK8sClusterSummary" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/K8sClusterSummary"
           },
           "message" : {
             "type" : "string"
@@ -1149,6 +1209,54 @@
         },
         "type" : "object"
       },
+      "ClusterTopologyView" : {
+        "properties" : {
+          "distributed" : {
+            "type" : "boolean"
+          },
+          "instanceId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "instanceName" : {
+            "type" : "string"
+          },
+          "mode" : {
+            "type" : "string"
+          },
+          "nodeId" : {
+            "type" : "string"
+          },
+          "persistence" : {
+            "$ref" : "#/components/schemas/PersistenceStatusView"
+          },
+          "regionCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "regions" : {
+            "items" : {
+              "$ref" : "#/components/schemas/RegionNodeView"
+            },
+            "type" : "array"
+          },
+          "totalKeys" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "totalSlots" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "transaction" : {
+            "$ref" : "#/components/schemas/TransactionMetricsView"
+          },
+          "version" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "HashFieldRequest" : {
         "properties" : {
           "field" : {
@@ -1386,6 +1494,156 @@
           }
         },
         "required" : [ "instanceId", "key", "value" ],
+        "type" : "object"
+      },
+      "K8sBackupTriggerResult" : {
+        "properties" : {
+          "clusterName" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "namespace" : {
+            "type" : "string"
+          },
+          "requestId" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "K8sClusterListView" : {
+        "properties" : {
+          "apiServer" : {
+            "type" : "string"
+          },
+          "clusters" : {
+            "items" : {
+              "$ref" : "#/components/schemas/K8sClusterSummary"
+            },
+            "type" : "array"
+          },
+          "enabled" : {
+            "type" : "boolean"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "namespace" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "K8sClusterSummary" : {
+        "properties" : {
+          "backupScheduleCron" : {
+            "type" : "string"
+          },
+          "createdAt" : {
+            "type" : "string"
+          },
+          "gatewayReplicas" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "generation" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "image" : {
+            "type" : "string"
+          },
+          "lastAction" : {
+            "type" : "string"
+          },
+          "lastBackupJob" : {
+            "type" : "string"
+          },
+          "lastBackupStatus" : {
+            "type" : "string"
+          },
+          "lastBackupTime" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "metadataReplicas" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          },
+          "namespace" : {
+            "type" : "string"
+          },
+          "observedGeneration" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "phase" : {
+            "type" : "string"
+          },
+          "readyGateway" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "readyMetadata" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "readyStorage" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "regionIds" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "storageReplicas" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "K8sScaleRequest" : {
+        "properties" : {
+          "gatewayReplicas" : {
+            "format" : "int32",
+            "maximum" : 16,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "metadataReplicas" : {
+            "format" : "int32",
+            "maximum" : 7,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "storageReplicas" : {
+            "format" : "int32",
+            "maximum" : 32,
+            "minimum" : 1,
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "K8sUpgradeRequest" : {
+        "properties" : {
+          "image" : {
+            "maxLength" : 256,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "image" ],
         "type" : "object"
       },
       "KeyDetail" : {
@@ -1881,6 +2139,28 @@
         "required" : [ "password" ],
         "type" : "object"
       },
+      "PersistenceStatusView" : {
+        "properties" : {
+          "bgsaveInProgress" : {
+            "type" : "boolean"
+          },
+          "lastDurationMillis" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "lastError" : {
+            "type" : "string"
+          },
+          "lastSaveTime" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "lastStatus" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "PurgeReport" : {
         "properties" : {
           "candidates" : {
@@ -1914,6 +2194,33 @@
           "startedAt" : {
             "format" : "date-time",
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "RegionNodeView" : {
+        "properties" : {
+          "host" : {
+            "type" : "string"
+          },
+          "index" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "port" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "regionId" : {
+            "type" : "string"
+          },
+          "slotCount" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "slotPercent" : {
+            "format" : "double",
+            "type" : "number"
           }
         },
         "type" : "object"
@@ -2317,6 +2624,63 @@
             "type" : "number"
           },
           "length" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "TransactionMetricsView" : {
+        "properties" : {
+          "abortTxn" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "activeTxn" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "beginTxn" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "commitLatencyMs" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "committedTxn" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "conflictTxn" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "lockCount" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "lockWaitMs" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "networkRetry" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "prepareLatencyMs" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "recoveryTxn" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "regionCount" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "rollbackTxn" : {
             "format" : "int64",
             "type" : "integer"
           }
@@ -3552,6 +3916,149 @@
           }
         },
         "tags" : [ "backup-controller" ]
+      }
+    },
+    "/api/v1/cluster/k8s/clusters" : {
+      "get" : {
+        "operationId" : "k8sClusters",
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseK8sClusterListView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "cluster-controller" ]
+      }
+    },
+    "/api/v1/cluster/k8s/clusters/{name}/backup" : {
+      "post" : {
+        "operationId" : "triggerBackup",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseK8sBackupTriggerResult"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "cluster-controller" ]
+      }
+    },
+    "/api/v1/cluster/k8s/clusters/{name}/scale" : {
+      "post" : {
+        "operationId" : "scaleCluster",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/K8sScaleRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseK8sClusterSummary"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "cluster-controller" ]
+      }
+    },
+    "/api/v1/cluster/k8s/clusters/{name}/upgrade" : {
+      "post" : {
+        "operationId" : "upgradeCluster",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "name",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/K8sUpgradeRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseK8sClusterSummary"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "cluster-controller" ]
+      }
+    },
+    "/api/v1/cluster/topology" : {
+      "get" : {
+        "operationId" : "topology",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "instanceId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseClusterTopologyView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "cluster-controller" ]
       }
     },
     "/api/v1/dashboard/overview" : {

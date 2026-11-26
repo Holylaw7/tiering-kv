@@ -16,6 +16,7 @@ const router = createRouter({
       redirect: '/dashboard',
       children: [
         { path: 'dashboard', name: 'dashboard', component: () => import('@/views/DashboardView.vue'), meta: { title: '运行总览', icon: 'Odometer' } },
+        { path: 'topology', name: 'topology', component: () => import('@/views/TopologyView.vue'), meta: { title: '集群拓扑', icon: 'Share' } },
         { path: 'instances', name: 'instances', component: () => import('@/views/InstancesView.vue'), meta: { title: '实例管理', icon: 'Coin' } },
         { path: 'keyspace', name: 'keyspace', component: () => import('@/views/KeyspaceView.vue'), meta: { title: '键空间', icon: 'Grid' } },
         { path: 'multimodel', name: 'multimodel', component: () => import('@/views/MultiModelView.vue'), meta: { title: '多模型工作台', icon: 'Cpu' } },
