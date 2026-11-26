@@ -17,6 +17,7 @@ import {
   Odometer,
   Operation,
   Setting,
+  Share,
   Timer,
   User
 } from '@element-plus/icons-vue'
@@ -36,6 +37,7 @@ const NAV_ICONS: Record<string, Component> = {
   Files,
   Document,
   Setting,
+  Share,
   User,
   Menu
 }
@@ -56,6 +58,7 @@ const firingAlertCount = ref(0)
 const GROUP_ORDER = ['概览', '数据', '运维', '系统'] as const
 const GROUP_OF: Record<string, string> = {
   '/dashboard': '概览',
+  '/topology': '概览',
   '/keyspace': '数据',
   '/multimodel': '数据',
   '/terminal': '数据',

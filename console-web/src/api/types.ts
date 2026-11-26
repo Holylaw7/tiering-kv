@@ -399,3 +399,89 @@ export interface JsonQueryView {
   prettyJson?: string
   objectKeys: string[]
 }
+
+export interface RegionNodeView {
+  index: number
+  regionId: string
+  host: string
+  port: number
+  slotCount: number
+  slotPercent: number
+}
+
+export interface TransactionMetricsView {
+  beginTxn: number
+  activeTxn: number
+  committedTxn: number
+  rollbackTxn: number
+  conflictTxn: number
+  abortTxn: number
+  recoveryTxn: number
+  lockCount: number
+  commitLatencyMs: number
+  prepareLatencyMs: number
+  networkRetry: number
+  lockWaitMs: number
+  regionCount: number
+}
+
+export interface PersistenceStatusView {
+  bgsaveInProgress: boolean
+  lastSaveTime: number
+  lastStatus: string
+  lastDurationMillis: number
+  lastError?: string
+}
+
+export interface ClusterTopologyView {
+  instanceId: number
+  instanceName: string
+  mode: 'DISTRIBUTED' | 'STANDALONE' | string
+  distributed: boolean
+  nodeId?: string
+  version?: string
+  totalKeys: number
+  totalSlots: number
+  regionCount: number
+  regions: RegionNodeView[]
+  transaction?: TransactionMetricsView
+  persistence?: PersistenceStatusView
+}
+
+export interface K8sClusterSummary {
+  name: string
+  namespace: string
+  phase: string
+  image?: string
+  metadataReplicas: number
+  readyMetadata: number
+  storageReplicas: number
+  readyStorage: number
+  gatewayReplicas: number
+  readyGateway: number
+  regionIds: string[]
+  generation?: number
+  observedGeneration?: number
+  lastAction?: string
+  lastBackupJob?: string
+  lastBackupStatus?: string
+  lastBackupTime?: string
+  backupScheduleCron?: string
+  message?: string
+  createdAt?: string
+}
+
+export interface K8sClusterListView {
+  enabled: boolean
+  namespace: string
+  apiServer: string
+  message?: string
+  clusters: K8sClusterSummary[]
+}
+
+export interface K8sBackupTriggerResult {
+  clusterName: string
+  namespace: string
+  requestId: string
+  message: string
+}
