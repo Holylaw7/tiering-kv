@@ -23,7 +23,7 @@ spec:
         runAsGroup: 10001
       containers:
         - name: operator
-          image: ghcr.io/holylaw7/tiering-kv-operator:v6.1.0
+          image: ghcr.io/holylaw7/tiering-kv-operator:v6.2.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: health
