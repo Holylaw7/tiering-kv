@@ -360,6 +360,32 @@ jobs:
           echo "DB login_attempt fail_count=$fail_count"
           test "${fail_count:-0}" -ge 5
 
+          # 2.5. Cross-replica JWT revocation (v6.1.0 A2/A3): logout on one replica invalidates across all replicas
+          PROBE_USER="ha_revoke_probe"
+          PROBE_UID=$(curl -fsS -X POST http://127.0.0.1:8081/api/v1/users \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"username\":\"${PROBE_USER}\",\"password\":\"probePass123\",\"role\":\"OPS\"}" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["id"])')
+          PROBE_TOKEN=$(curl -fsS -X POST http://127.0.0.1:8081/api/v1/auth/login \
+            -H "Content-Type: application/json" \
+            -d "{\"username\":\"${PROBE_USER}\",\"password\":\"probePass123\"}" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"]["token"])')
+          test -n "$PROBE_TOKEN"
+          pre_code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $PROBE_TOKEN" http://127.0.0.1:8081/api/v1/auth/me)
+          test "$pre_code" = "200"
+          logout_code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer $PROBE_TOKEN" http://127.0.0.1:8081/api/v1/auth/logout)
+          test "$logout_code" = "200"
+          for r in 1 2 3 4; do
+            revoked_code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $PROBE_TOKEN" http://127.0.0.1:8081/api/v1/auth/me)
+            echo "Post-logout cross-replica /auth/me #$r -> HTTP $revoked_code"
+            test "$revoked_code" = "401"
+          done
+          tok_ver=$($MYSQL_CMD "SELECT token_version FROM sys_user WHERE username='${PROBE_USER}';")
+          echo "DB sys_user token_version for ${PROBE_USER}=$tok_ver"
+          test "${tok_ver:-0}" -ge 1
+          curl -fsS -X DELETE -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:8081/api/v1/users/${PROBE_UID}" >/dev/null
+
           # 3. Single-leader monitor sampling without duplicate samples
           sleep 12
           leader_owner=$($MYSQL_CMD "SELECT owner_id FROM console_lease WHERE lease_key='scheduler:monitor';")

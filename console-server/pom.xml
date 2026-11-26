@@ -14,7 +14,7 @@
 
     <groupId>io.tieringkv</groupId>
     <artifactId>tiering-kv-console</artifactId>
-    <version>6.0.0</version>
+    <version>6.1.0</version>
     <name>Tiering-KV Console</name>
     <description>Tiering-KV Web 运维管理平台后端（控制面）</description>
 

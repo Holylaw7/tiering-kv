@@ -4,7 +4,7 @@
 > 内存/磁盘分层 + 分布式事务 + 多模型值 + 向量检索 + SQL + 云原生运行时，
 > 配套 **Vue 3 + Spring Boot 的 Web 运维管理平台**（前后端分离）。
 
-**版本：v6.0.0（2026-11-26）** · **约 6,738 个内核测试方法 + 78 项 Operator 测试 + 175 项控制面测试（JaCoCo 79.77%）+ 32 项 Vitest + 6 组 Playwright E2E + 双副本 HA 实时故障转移门禁 + 真实 kind Operator 6 阶段全生命周期 E2E / 0 failures**（内核测试口径见 [docs/testing/measurement-conventions.md](
+**版本：v6.1.0（2026-11-26）** · **约 6,741 个内核测试方法 + 78 项 Operator 测试 + 182 项控制面测试（JaCoCo 80.39%）+ 33 项 Vitest + 7 组 Playwright E2E + 双副本 HA 实时故障转移与跨副本 JWT 吊销门禁 + 真实 kind Operator 6 阶段全生命周期 E2E / 0 failures**（内核测试口径见 [docs/testing/measurement-conventions.md](
 docs/testing/measurement-conventions.md)） ·
 技术债 **全量清零**（含 `TD-085` 关闭、`.trivyignore` `0` 例外） ·
 JDK 21 · Spring Boot 4.2 / Jackson 3 · 真实 GitHub Runner 门禁全绿
@@ -51,13 +51,13 @@ redis-cli -p 6379 INFO vector        # 可观测性 sections：vector/replicatio
 
 | 模块 | 能力 |
 | --- | --- |
-| 认证 | JWT + BCrypt，ADMIN / OPS / VIEWER 三级角色，用户名 + IP 双维度登录限流（支持受信代理 CIDR），Actuator 细粒度鉴权，登录与写操作全审计 |
+| 认证 | JWT + BCrypt + `token_version` 跨副本实时吊销（登出/改密/禁用/变角即时失效），ADMIN / OPS / VIEWER 三级角色，用户名 + IP 双维度登录限流（支持受信代理 CIDR），Actuator 细粒度鉴权，登录与写操作全审计 |
 | 总览 | 5s 采集 INFO，QPS/延迟/连接数/键数/内存水位趋势图，防重入轮询（后台标签页自动暂停）、`ResizeObserver` 容器自适应重绘与 SSTable 清单抽屉 |
 | 实例 | 纳管、探测连通性与版本、有界连接池复用、RESP TLS 加密传输与自定义 CA PEM 校验、口令静态加密且不回显 |
 | 键空间 | SCAN 游标分页与批量 Pipeline 元数据/值读取、类型识别（string/hash/list/set/zset/json/stream）、值查看与改写、TTL |
 | 终端 | 任意命令直连执行、危险命令拦截、历史回放 |
 | 告警 | 阈值 + 持续时长规则、触发/恢复闭环、Webhook 异步推送（HMAC-SHA256 签名 + 静默窗口 + 5xx 重试）、事件人工处置 |
-| 备份 | 异步逻辑备份与恢复（100 键批量 Pipeline + 实时进度条 + 同实例并发 `409` 保护）、ADMIN/OPS 权限下载、物理 Checkpoint |
+| 备份 | 异步逻辑备份与恢复（100 键批量 Pipeline + 实时进度条 + 同实例并发 `409` 保护）、定时备份策略（Cron + 逻辑/物理双模式 + 多副本 HA 单活调度与留存清理）、ADMIN/OPS 权限下载、单机/分布式物理 Checkpoint（`BGSAVE`） |
 | 审计 | 操作留痕（动作/对象/来源 IP/成败），按条件检索与 CSV 导出 |
 
 本地一键启动（Windows，PowerShell）：
@@ -94,12 +94,12 @@ cd deploy/console && docker compose -f docker-compose.yml -f docker-compose.ha.y
 
 | 层级 | 命令 | 结果 |
 | --- | --- | --- |
-| 控制面测试与覆盖率门禁 | `cd console-server && mvn -B test org.jacoco:jacoco-maven-plugin:check` | 175 项测试 0 失败，JaCoCo 行覆盖率 79.77%（≥ 75% 门禁） |
+| 控制面测试与覆盖率门禁 | `cd console-server && mvn -B test org.jacoco:jacoco-maven-plugin:check` | 182 项测试 0 失败，JaCoCo 行覆盖率 80.39%（≥ 75% 门禁） |
 | 控制面静态缺陷扫描 | `cd console-server && mvn -B -DskipTests test-compile com.github.spotbugs:spotbugs-maven-plugin:check -Dspotbugs.threshold=High -Dspotbugs.failOnError=true` | SpotBugs High 0 缺陷 |
-| 前端质量、构建、单测与安全审计 | `cd console-web && npm run lint && npm run build && npm test && npm audit` | ESLint / `vue-tsc` / Vite 0 告警（首包 CSS 62.23 kB），32 项 Vitest 全绿，`npm audit` 0 漏洞 |
+| 前端质量、构建、单测与安全审计 | `cd console-web && npm run lint && npm run build && npm test && npm audit` | ESLint / `vue-tsc` / Vite 0 告警，33 项 Vitest 全绿，`npm audit` 0 漏洞 |
 | 零例外安全扫描（Trivy） | `trivy fs . --severity CRITICAL,HIGH --ignore-unfixed --ignorefile .trivyignore` | `.trivyignore` 0 有效例外，0 CRITICAL/HIGH |
 | OpenAPI 契约漂移校验 | `cd console-web && npm run gen:api && git diff --exit-code -- src/api/schema.d.ts ../docs/api/openapi.json` | 0 漂移 |
-| 全栈容器 E2E 回归 | `cd console-web && E2E_BASE_URL=http://127.0.0.1:8081 npm run test:e2e` | 6 组 Playwright 规范全绿，双副本 HA 故障转移与 S3/RustFS 门禁全绿 |
+| 全栈容器 E2E 回归 | `cd console-web && E2E_BASE_URL=http://127.0.0.1:8081 npm run test:e2e` | 7 组 Playwright 规范全绿，双副本 HA 故障转移与跨副本 JWT 吊销、S3/RustFS 门禁全绿 |
 | 负载演示 | `node scripts/demo-load.mjs --seconds 60 --conns 6` | 约 6.7 万 ops/s（本机） |
 
 分布式事务栈（coordinator/participant/metadata/gateway 五容器）：
@@ -160,6 +160,7 @@ kubectl apply -f deploy/operator/kind-cluster-sample.yaml
 | v5.3.0 | 2026-11-25 | 控制面 S3/RustFS 真实对象存储 E2E 闭环（M2）、MySQL 租约锁 + DB 登录限流双副本无状态高可用与实时故障转移门禁（M3）、内核扩展 INFO 段落脱敏透出与系统页分栏观测面板（M4） |
 | v5.4.0 | 2026-11-25 | Kubernetes Operator 真实集群实战闭环（A1–A3）：CRD `status` 子资源与安全 Patch、TCP 探针与真实 RESP 备份 Job、`:8088` 健康服务与 Lease 选主、最小权限 RBAC、真实 `kind` 6 阶段全生命周期门禁 `operator-kind-e2e` 与 4 镜像 GHCR 发布 |
 | v6.0.0 | 2026-11-26 | 控制面底座现代化与零 CVE 例外清零（B1–B3）：Spring Boot 4.2.0 / Spring Framework 7.1.0 / Jackson 3.1.8 / springdoc 3.2.1 / jjwt 0.13.0（零 Jackson 2 `jackson-databind` 残留）、清空 `.trivyignore` 关闭 `TD-085` 并增设常驻 Trivy CI 门禁、`console-web` 升级 ECharts 6.1 / `vue-tsc` 3.3 实现 `npm audit` 全级别 0 漏洞、4 镜像 GHCR 发布 |
+| v6.1.0 | 2026-11-26 | 分布式运维全链路与安全闭环（A1–A3）：分布式 Gateway 全面支持 `SCAN`/`DBSIZE`/`SLOWLOG`/`BGSAVE`/`LASTSAVE` 与 `INFO # Cluster/# Transaction/# Persistence`，Participant 物理快照原子落盘与重启恢复（`operator-kind-e2e` Stage 5 硬断言真实 `DBSIZE>=1` & `BGSAVE`）；控制面 Flyway V11 定时备份策略（Cron + 逻辑/物理双模式 + HA 单活调度与留存清理）及 JWT `token_version` 跨副本即时吊销；7 组 Playwright E2E 与 4 镜像 GHCR 发布 |
 | v5.0.3 | 2026-10-24 | 发布链路自动化：任意 v* 标签自动发版，门禁加控制面与前端作业（ADR-0360） |
 | v5.0.2 | 2026-10-24 | 版本号对齐：pom / 脚本 / 文档统一到 5.0.2，构建脚本不再写死构件名 |
 | v4.1.0 维护补丁 | 2026-08-16 | 生产链 TTL 修复（ADR-0351）+ 集群复制原子操作（ADR-0352，TD-081）+ 选举窗口/CI 稳定性加固（ADR-0353）+ RPC ERROR 帧 term 污染修复（ADR-0354）；技术债 50/50；约 6,738 个测试方法 / 14,957 次测试执行全绿 |

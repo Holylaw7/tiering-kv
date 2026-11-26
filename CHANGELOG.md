@@ -3,6 +3,24 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [6.1.0] - 2026-11-26
+
+### Added
+
+- **分布式 Gateway 全量运维命令与 Participant 物理快照（A1）**：
+  - `RpcMessageType` 向后追加 `TXN_SCAN(36)` / `TXN_SCAN_RESPONSE(37)` / `TXN_CHECKPOINT(38)` / `TXN_CHECKPOINT_RESPONSE(39)`（原 `1..35` 线协议零改动），贯通 `TxnParticipantClient` → `RegionTxnClient` → `TxnParticipantRpcHandler` → `TransactionParticipant`；
+  - `ParticipantRuntime` 实现 `TKVS` v1 原子二进制快照落盘（`FileDescriptor.sync()` + 临时文件原子替换 `region-<id>-checkpoint.snap`）与启动自动恢复；
+  - `CoordinatorStorageEngine` 实现跨 Region 归并 `iterator()`（`SCAN`/`KEYS`）、聚合活跃键 `size()`（`DBSIZE`/`# Keyspace`）与强失败感知 `checkpointAll()`；`GatewayRuntime` 接线 `SlowLog`、`PhysicalSnapshotCoordinator`（`BGSAVE`/`LASTSAVE`/`# Persistence`）与 `INFO` `# Cluster` / `# Transaction` 段落；`CoordinatorRuntime` 修复同主机多端口 Peer 路由键冲突；
+  - 新增 `GatewayRuntimeOpsTest`（真 TCP 2 Region 端到端与重启恢复测试），并升级 `scripts/kind-operator-e2e.sh` Stage 5 硬断言真实分布式 `dbsize=:[1-9][0-9]*` 与 `bgsave=+Background saving started`。
+- **控制台定时备份策略与 JWT `token_version` 实时吊销（A2）**：
+  - 新增 Flyway `V11__backup_schedules_and_token_revocation.sql`（`sys_user.token_version` + `backup_schedule` 表）；
+  - `JwtService` 与 `JwtAuthenticationFilter` 接入令牌版本号实时核验，新增 `POST /api/v1/auth/logout`，并在登出、自助改密、管理员重置密码、禁用账号与变更角色时自动递增 `token_version` 实现跨副本即时失效；
+  - 新增 `/api/v1/backups/schedules` CRUD 与 `POST /{id}/run-now`（支持 5 段 Unix / 6 段 Spring Cron 与 `LOGICAL`/`CHECKPOINT` 双模式）、`DbLeaseLockService`（`scheduler:backup-schedule`）单活调度与 `BackupRetentionService.purgeInstance` 留存清理；
+  - 前端 `auth.logoutAndRevoke()` 联动登出吊销与改密后会话清理，`BackupsView.vue` 新增「定时备份策略」管理面板；同步更新 `docs/api/openapi.json` 与 `console-web/src/api/schema.d.ts`（0 漂移）；新增 `TokenRevocationApiTest` 与 `BackupScheduleServiceTest`（控制面共 182 项测试，JaCoCo 行覆盖率 `80.39%`）。
+- **全栈 E2E 与 HA 跨副本吊销门禁（A3）**：
+  - 新增 Playwright 规范 `console-web/e2e/backup-schedules-and-revocation.spec.ts`（定时备份策略生命周期 + 登出/改密旧令牌立即 `401`）；
+  - `.github/workflows/test.yml` 的 `docker-compose-ha-smoke` 增设跨副本 JWT 实时吊销断言（一副本登出，双副本均立即返回 `401`）。
+
 ## [6.0.0] - 2026-11-26
 
 ### Changed
