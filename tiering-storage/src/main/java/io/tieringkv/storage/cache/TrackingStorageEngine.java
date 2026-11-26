@@ -14,6 +14,7 @@ public final class TrackingStorageEngine extends AbstractStorageDecorator {
 
     private final EvictionManager evictionManager;
     private final TimeSource timeSource;
+    private final boolean trackAccessEvents;
 
     public TrackingStorageEngine(StorageEngine delegate, EvictionManager evictionManager) {
         this(delegate, evictionManager, System::currentTimeMillis);
@@ -26,6 +27,7 @@ public final class TrackingStorageEngine extends AbstractStorageDecorator {
         super(delegate);
         this.evictionManager = evictionManager;
         this.timeSource = timeSource;
+        this.trackAccessEvents = evictionManager.policy().tracksViaAccessEvents();
     }
 
     @Override
@@ -145,6 +147,9 @@ public final class TrackingStorageEngine extends AbstractStorageDecorator {
     }
 
     private void record(AccessEvent.AccessOperation operation, byte[] key, int sizeBytes) {
+        if (!trackAccessEvents) {
+            return;
+        }
         evictionManager.onAccess(new AccessEvent(key, operation, timeSource.nowMillis(), sizeBytes));
     }
 }

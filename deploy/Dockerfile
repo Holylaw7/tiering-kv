@@ -29,4 +29,5 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends iproute2 \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /tmp/tiering-kv.jar /app/tiering-kv.jar
-ENTRYPOINT ["java", "-Xmx1g", "-jar", "/app/tiering-kv.jar"]
+ENV JAVA_OPTS="-XX:+UseZGC -XX:+ZGenerational -Dio.netty.allocator.type=pooled -Xmx1g"
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/tiering-kv.jar \"$@\"", "--"]

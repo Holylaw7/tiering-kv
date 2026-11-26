@@ -30,7 +30,7 @@ services:
       dockerfile: deploy/Dockerfile
     container_name: tk-core
     # 单机数据面：直接跑 io.tieringkv.Main（镜像默认 ENTRYPOINT 是集群版 ClusterMain）
-    entrypoint: ["java", "-Xmx1g", "-cp", "/app/tiering-kv.jar", "io.tieringkv.Main"]
+    entrypoint: ["java", "-XX:+UseZGC", "-XX:+ZGenerational", "-Dio.netty.allocator.type=pooled", "-Xmx1g", "-cp", "/app/tiering-kv.jar", "io.tieringkv.Main"]
     working_dir: /app
     ports:
       - "6379:6379"

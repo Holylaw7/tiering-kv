@@ -43,6 +43,7 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
     private final AtomicLong liveSize = new AtomicLong();
     private final TTLManager ttlManager;
     private final ScheduledExecutorService scheduler;
+    private volatile long lfuDecayIntervalMillis = 60_000L;
 
     private MemTable(MemoryManager memoryManager, TimeSource timeSource, boolean startTtlScheduler) {
         this.memoryManager = memoryManager;
@@ -84,6 +85,17 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
 
     @Override
     public void put(byte[] key, byte[] value, long ttlMillis) {
+        putInternal(key, value, ttlMillis, false);
+    }
+
+    /**
+     * 所有权转移写入（B2 优化）：调用方保证不再修改 key/value 数组时跳过二次 clone。
+     */
+    public void putOwned(byte[] key, byte[] value, long ttlMillis) {
+        putInternal(key, value, ttlMillis, true);
+    }
+
+    private void putInternal(byte[] key, byte[] value, long ttlMillis, boolean owned) {
         if (ttlMillis != NO_TTL && ttlMillis <= 0) {
             // Redis 语义：SET ... EX 0 立即过期（等价于删除）
             expireImmediately(key);
@@ -91,7 +103,14 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
         }
         long now = timeSource.nowMillis();
         long versionId = version.next();
-        KeyValueEntry entry = KeyValueEntry.live(key, value, now, ttlMillis, versionId);
+        long decayMs = this.lfuDecayIntervalMillis;
+        KeyValueEntry entry;
+        if (owned) {
+            entry = KeyValueEntry.liveOwned(key, value, now, ttlMillis, versionId, decayMs);
+        } else {
+            entry = KeyValueEntry.live(key, value, now, ttlMillis, versionId);
+            entry.initLfuSlot(now, decayMs);
+        }
         int segmentIndex = segmentIndex(key);
         Segment segment = segments[segmentIndex];
         segment.lock.writeLock().lock();
@@ -281,7 +300,11 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
         segment.lock.readLock().lock();
         try {
             KeyValueEntry entry = segment.list.get(key);
-            return entry != null && entry.isLive(now) ? entry.value() : null;
+            if (entry != null && entry.isLive(now)) {
+                entry.touchLfu(now, lfuDecayIntervalMillis);
+                return entry.value();
+            }
+            return null;
         } finally {
             segment.lock.readLock().unlock();
         }
@@ -791,6 +814,65 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
 
     public MemoryManager memoryManager() {
         return memoryManager;
+    }
+
+    /** 配置内联 Morris-LFU 衰减步长（毫秒），与 SampledLfuPolicy 共享一致时钟口径。 */
+    public void setLfuDecayIntervalMillis(long decayIntervalMillis) {
+        if (decayIntervalMillis > 0) {
+            this.lfuDecayIntervalMillis = decayIntervalMillis;
+        }
+    }
+
+    public long lfuDecayIntervalMillis() {
+        return lfuDecayIntervalMillis;
+    }
+
+    /**
+     * O(sampleSize) 随机存活条目抽样（B2 近似 LFU 淘汰专用）：
+     * 高密场景直接随机探测非空段；稀疏场景无锁跳过空段兜底，避免单锁与全表扫描。
+     */
+    public List<KeyValueEntry> sampleLiveEntries(int sampleSize, long nowMillis) {
+        if (sampleSize <= 0 || liveSize.get() <= 0) {
+            return List.of();
+        }
+        List<KeyValueEntry> samples = new ArrayList<>(sampleSize);
+        java.util.concurrent.ThreadLocalRandom rng = java.util.concurrent.ThreadLocalRandom.current();
+        int randomProbes = Math.min(SEGMENT_COUNT, Math.max(sampleSize * 2, 16));
+        for (int i = 0; i < randomProbes && samples.size() < sampleSize; i++) {
+            Segment segment = segments[rng.nextInt(SEGMENT_COUNT)];
+            if (segment.list.size() == 0) {
+                continue;
+            }
+            segment.lock.readLock().lock();
+            try {
+                KeyValueEntry sampled = segment.list.sampleLive(nowMillis);
+                if (sampled != null) {
+                    samples.add(sampled);
+                }
+            } finally {
+                segment.lock.readLock().unlock();
+            }
+        }
+        // 稀疏表兜底：单次无锁跳过空段，确保少量键场景也 100% 采得有效样本
+        if (samples.isEmpty() && liveSize.get() > 0) {
+            int start = rng.nextInt(SEGMENT_COUNT);
+            for (int offset = 0; offset < SEGMENT_COUNT && samples.size() < sampleSize; offset++) {
+                Segment segment = segments[(start + offset) & (SEGMENT_COUNT - 1)];
+                if (segment.list.size() == 0) {
+                    continue;
+                }
+                segment.lock.readLock().lock();
+                try {
+                    KeyValueEntry sampled = segment.list.sampleLive(nowMillis);
+                    if (sampled != null) {
+                        samples.add(sampled);
+                    }
+                } finally {
+                    segment.lock.readLock().unlock();
+                }
+            }
+        }
+        return samples;
     }
 
     @Override

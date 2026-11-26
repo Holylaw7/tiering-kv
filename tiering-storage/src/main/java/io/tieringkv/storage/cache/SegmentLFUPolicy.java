@@ -16,10 +16,14 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 public final class SegmentLFUPolicy implements EvictionPolicy {
 
     public static final int DEFAULT_SEGMENTS = 16;
+    /** 缓冲队列上限（B2 加固）：防止低内存压力期只入不出造成无界堆泄漏。 */
+    public static final int MAX_BUFFERED_EVENTS = 65_536;
 
     private final SegmentLfu[] segments;
     private final Queue<AccessEvent> buffer =
             new ConcurrentLinkedQueue<>();
+    private final java.util.concurrent.atomic.AtomicInteger bufferedCount =
+            new java.util.concurrent.atomic.AtomicInteger();
 
     public SegmentLFUPolicy() {
         this(DEFAULT_SEGMENTS);
@@ -41,17 +45,26 @@ public final class SegmentLFUPolicy implements EvictionPolicy {
         return "segment-lfu";
     }
 
-    /** 热路径：仅入队（无锁）。 */
+    /** 热路径：无锁入队；达到有界上限时主动合并清理防止内存泄漏。 */
     @Override
     public void onAccess(AccessEvent event) {
+        if (bufferedCount.get() >= MAX_BUFFERED_EVENTS) {
+            drain(MAX_BUFFERED_EVENTS / 4);
+        }
         buffer.offer(event);
+        bufferedCount.incrementAndGet();
     }
 
     /** 合并缓冲事件到各段索引；返回处理数量。 */
     public int drain() {
+        return drain(Integer.MAX_VALUE);
+    }
+
+    private int drain(int maxEvents) {
         int drained = 0;
         AccessEvent event;
-        while ((event = buffer.poll()) != null) {
+        while (drained < maxEvents && (event = buffer.poll()) != null) {
+            bufferedCount.decrementAndGet();
             segments[segmentOf(event.key())].onAccess(event);
             drained++;
         }
@@ -59,7 +72,7 @@ public final class SegmentLFUPolicy implements EvictionPolicy {
     }
 
     public int buffered() {
-        return buffer.size();
+        return Math.max(0, bufferedCount.get());
     }
 
     /** 先 drain 再选出全局最小候选。 */
