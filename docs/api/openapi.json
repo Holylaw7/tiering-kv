@@ -284,6 +284,21 @@
         },
         "type" : "object"
       },
+      "ApiResponseBoolean" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "type" : "boolean"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseCapacityView" : {
         "properties" : {
           "code" : {
@@ -337,6 +352,36 @@
           },
           "data" : {
             "$ref" : "#/components/schemas/InstanceView"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiResponseJsonKeysView" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/JsonKeysView"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiResponseJsonQueryView" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/JsonQueryView"
           },
           "message" : {
             "type" : "string"
@@ -497,6 +542,22 @@
         },
         "type" : "object"
       },
+      "ApiResponseLong" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseOverviewView" : {
         "properties" : {
           "code" : {
@@ -617,6 +678,21 @@
         },
         "type" : "object"
       },
+      "ApiResponseString" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseSystemInfoView" : {
         "properties" : {
           "code" : {
@@ -647,6 +723,51 @@
         },
         "type" : "object"
       },
+      "ApiResponseTimeSeriesKeysView" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/TimeSeriesKeysView"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiResponseTimeSeriesPoint" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/TimeSeriesPoint"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiResponseTimeSeriesRangeView" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/TimeSeriesRangeView"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseUserView" : {
         "properties" : {
           "code" : {
@@ -655,6 +776,36 @@
           },
           "data" : {
             "$ref" : "#/components/schemas/UserView"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiResponseVectorCollectionsView" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/VectorCollectionsView"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiResponseVectorSearchResultView" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/VectorSearchResultView"
           },
           "message" : {
             "type" : "string"
@@ -1111,6 +1262,130 @@
             "type" : "string"
           }
         },
+        "type" : "object"
+      },
+      "JsonArrAppendRequest" : {
+        "properties" : {
+          "instanceId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "key" : {
+            "maxLength" : 256,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "path" : {
+            "maxLength" : 256,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "value" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "instanceId", "key", "value" ],
+        "type" : "object"
+      },
+      "JsonKeysView" : {
+        "properties" : {
+          "keys" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "supported" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "JsonNumIncrRequest" : {
+        "properties" : {
+          "delta" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "instanceId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "key" : {
+            "maxLength" : 256,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "path" : {
+            "maxLength" : 256,
+            "minLength" : 0,
+            "type" : "string"
+          }
+        },
+        "required" : [ "delta", "instanceId", "key", "path" ],
+        "type" : "object"
+      },
+      "JsonQueryView" : {
+        "properties" : {
+          "exists" : {
+            "type" : "boolean"
+          },
+          "key" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "objectKeys" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "path" : {
+            "type" : "string"
+          },
+          "prettyJson" : {
+            "type" : "string"
+          },
+          "rawJson" : {
+            "type" : "string"
+          },
+          "supported" : {
+            "type" : "boolean"
+          },
+          "valueType" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "JsonSetRequest" : {
+        "properties" : {
+          "instanceId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "key" : {
+            "maxLength" : 256,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "path" : {
+            "maxLength" : 256,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "value" : {
+            "minLength" : 1,
+            "type" : "string"
+          }
+        },
+        "required" : [ "instanceId", "key", "value" ],
         "type" : "object"
       },
       "KeyDetail" : {
@@ -1917,6 +2192,137 @@
         },
         "type" : "object"
       },
+      "TimeSeriesAddRequest" : {
+        "properties" : {
+          "instanceId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "key" : {
+            "maxLength" : 256,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "timestamp" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "value" : {
+            "format" : "double",
+            "type" : "number"
+          }
+        },
+        "required" : [ "instanceId", "key", "value" ],
+        "type" : "object"
+      },
+      "TimeSeriesIncrByRequest" : {
+        "properties" : {
+          "delta" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "instanceId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "key" : {
+            "maxLength" : 256,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "timestamp" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "required" : [ "delta", "instanceId", "key" ],
+        "type" : "object"
+      },
+      "TimeSeriesKeysView" : {
+        "properties" : {
+          "message" : {
+            "type" : "string"
+          },
+          "series" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TimeSeriesSummary"
+            },
+            "type" : "array"
+          },
+          "supported" : {
+            "type" : "boolean"
+          }
+        },
+        "type" : "object"
+      },
+      "TimeSeriesPoint" : {
+        "properties" : {
+          "timestamp" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "value" : {
+            "format" : "double",
+            "type" : "number"
+          }
+        },
+        "type" : "object"
+      },
+      "TimeSeriesRangeView" : {
+        "properties" : {
+          "aggregation" : {
+            "type" : "string"
+          },
+          "bucketMs" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "key" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "points" : {
+            "items" : {
+              "$ref" : "#/components/schemas/TimeSeriesPoint"
+            },
+            "type" : "array"
+          },
+          "reducedValue" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "supported" : {
+            "type" : "boolean"
+          },
+          "totalLen" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "TimeSeriesSummary" : {
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "latestTimestamp" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "latestValue" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "length" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "TrendPoint" : {
         "properties" : {
           "avgLatencyMs" : {
@@ -2034,6 +2440,138 @@
           },
           "username" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "VectorAddRequest" : {
+        "properties" : {
+          "collection" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "id" : {
+            "maxLength" : 128,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "instanceId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "values" : {
+            "items" : {
+              "format" : "double",
+              "type" : "number"
+            },
+            "maxItems" : 2048,
+            "minItems" : 0,
+            "type" : "array"
+          }
+        },
+        "required" : [ "id", "instanceId", "values" ],
+        "type" : "object"
+      },
+      "VectorCollectionSummary" : {
+        "properties" : {
+          "count" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "name" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "VectorCollectionsView" : {
+        "properties" : {
+          "collections" : {
+            "items" : {
+              "$ref" : "#/components/schemas/VectorCollectionSummary"
+            },
+            "type" : "array"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "supported" : {
+            "type" : "boolean"
+          },
+          "totalVectors" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
+      "VectorSearchHit" : {
+        "properties" : {
+          "id" : {
+            "type" : "string"
+          },
+          "score" : {
+            "format" : "double",
+            "type" : "number"
+          }
+        },
+        "type" : "object"
+      },
+      "VectorSearchRequest" : {
+        "properties" : {
+          "collection" : {
+            "maxLength" : 64,
+            "minLength" : 0,
+            "type" : "string"
+          },
+          "instanceId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "topK" : {
+            "format" : "int32",
+            "maximum" : 200,
+            "minimum" : 1,
+            "type" : "integer"
+          },
+          "vector" : {
+            "items" : {
+              "format" : "double",
+              "type" : "number"
+            },
+            "maxItems" : 2048,
+            "minItems" : 0,
+            "type" : "array"
+          }
+        },
+        "required" : [ "instanceId", "vector" ],
+        "type" : "object"
+      },
+      "VectorSearchResultView" : {
+        "properties" : {
+          "collection" : {
+            "type" : "string"
+          },
+          "costMs" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "hits" : {
+            "items" : {
+              "$ref" : "#/components/schemas/VectorSearchHit"
+            },
+            "type" : "array"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "supported" : {
+            "type" : "boolean"
+          },
+          "topK" : {
+            "format" : "int32",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -3476,6 +4014,561 @@
           }
         },
         "tags" : [ "keyspace-controller" ]
+      }
+    },
+    "/api/v1/multimodel/json/arrappend" : {
+      "post" : {
+        "operationId" : "arrAppendJson",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/JsonArrAppendRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseLong"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "multi-model-controller" ]
+      }
+    },
+    "/api/v1/multimodel/json/del" : {
+      "delete" : {
+        "operationId" : "deleteJson",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "instanceId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "key",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "path",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseLong"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "multi-model-controller" ]
+      }
+    },
+    "/api/v1/multimodel/json/get" : {
+      "get" : {
+        "operationId" : "getJson",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "instanceId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "key",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "path",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseJsonQueryView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "multi-model-controller" ]
+      }
+    },
+    "/api/v1/multimodel/json/keys" : {
+      "get" : {
+        "operationId" : "jsonKeys",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "instanceId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "pattern",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "limit",
+          "required" : false,
+          "schema" : {
+            "default" : 100,
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseJsonKeysView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "multi-model-controller" ]
+      }
+    },
+    "/api/v1/multimodel/json/numincrby" : {
+      "post" : {
+        "operationId" : "numIncrJson",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/JsonNumIncrRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseString"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "multi-model-controller" ]
+      }
+    },
+    "/api/v1/multimodel/json/set" : {
+      "put" : {
+        "operationId" : "setJson",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/JsonSetRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseVoid"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "multi-model-controller" ]
+      }
+    },
+    "/api/v1/multimodel/timeseries/add" : {
+      "post" : {
+        "operationId" : "addTimeSeriesPoint",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TimeSeriesAddRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseTimeSeriesPoint"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "multi-model-controller" ]
+      }
+    },
+    "/api/v1/multimodel/timeseries/incrby" : {
+      "post" : {
+        "operationId" : "incrTimeSeries",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/TimeSeriesIncrByRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseLong"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "multi-model-controller" ]
+      }
+    },
+    "/api/v1/multimodel/timeseries/keys" : {
+      "get" : {
+        "operationId" : "timeSeriesKeys",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "instanceId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseTimeSeriesKeysView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "multi-model-controller" ]
+      }
+    },
+    "/api/v1/multimodel/timeseries/range" : {
+      "get" : {
+        "operationId" : "queryTimeSeriesRange",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "instanceId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "key",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "from",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "to",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "aggregation",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "bucketMs",
+          "required" : false,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "count",
+          "required" : false,
+          "schema" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseTimeSeriesRangeView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "multi-model-controller" ]
+      }
+    },
+    "/api/v1/multimodel/vector/add" : {
+      "post" : {
+        "operationId" : "addVector",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/VectorAddRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseVoid"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "multi-model-controller" ]
+      }
+    },
+    "/api/v1/multimodel/vector/checkpoint" : {
+      "post" : {
+        "operationId" : "checkpointVector",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "instanceId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "collection",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseString"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "multi-model-controller" ]
+      }
+    },
+    "/api/v1/multimodel/vector/collection" : {
+      "delete" : {
+        "operationId" : "dropVectorCollection",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "instanceId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "collection",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseBoolean"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "multi-model-controller" ]
+      }
+    },
+    "/api/v1/multimodel/vector/collections" : {
+      "get" : {
+        "operationId" : "vectorCollections",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "instanceId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseVectorCollectionsView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "multi-model-controller" ]
+      }
+    },
+    "/api/v1/multimodel/vector/item" : {
+      "delete" : {
+        "operationId" : "deleteVector",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "instanceId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        }, {
+          "in" : "query",
+          "name" : "collection",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "type" : "string"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseBoolean"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "multi-model-controller" ]
+      }
+    },
+    "/api/v1/multimodel/vector/search" : {
+      "post" : {
+        "operationId" : "searchVector",
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/VectorSearchRequest"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseVectorSearchResultView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "multi-model-controller" ]
       }
     },
     "/api/v1/slowlog" : {

@@ -3,10 +3,11 @@ import type {
   AlertChannelView, AlertEvent, AlertRule, BackupRecord,
   BackupScheduleRequest, BackupScheduleRunResult, BackupScheduleView,
   CheckpointResult, CheckpointStatusView,
-  InstanceView, KeyDetail, KeyScanPage,
+  InstanceView, JsonKeysView, JsonQueryView, KeyDetail, KeyScanPage,
   LoginResponse, OpLog, OverviewView, PageResult, SlowLogView,
   SstableTableView, SystemInfo, TerminalHistory,
-  TerminalResult, TrendPoint, UserView, WebhookTestResult
+  TerminalResult, TimeSeriesKeysView, TimeSeriesPoint, TimeSeriesRangeView,
+  TrendPoint, UserView, VectorCollectionsView, VectorSearchResultView, WebhookTestResult
 } from './types'
 
 export const authApi = {
@@ -143,4 +144,48 @@ export const slowLogApi = {
     http.get<unknown, SlowLogView>('/slowlog', { params: { instanceId, limit } }),
   reset: (instanceId: number) =>
     http.post<unknown, void>('/slowlog/reset', null, { params: { instanceId } })
+}
+
+export const multiModelApi = {
+  vectorCollections: (instanceId: number) =>
+    http.get<unknown, VectorCollectionsView>('/multimodel/vector/collections', { params: { instanceId } }),
+  addVector: (payload: { instanceId: number; collection?: string; id: string; values: number[] }) =>
+    http.post<unknown, void>('/multimodel/vector/add', payload),
+  searchVector: (payload: { instanceId: number; collection?: string; vector: number[]; topK?: number }) =>
+    http.post<unknown, VectorSearchResultView>('/multimodel/vector/search', payload),
+  deleteVector: (instanceId: number, collection: string | undefined, id: string) =>
+    http.delete<unknown, boolean>('/multimodel/vector/item', { params: { instanceId, collection, id } }),
+  dropVectorCollection: (instanceId: number, collection: string) =>
+    http.delete<unknown, boolean>('/multimodel/vector/collection', { params: { instanceId, collection } }),
+  checkpointVector: (instanceId: number, collection?: string) =>
+    http.post<unknown, string>('/multimodel/vector/checkpoint', null, { params: { instanceId, collection } }),
+
+  timeSeriesKeys: (instanceId: number) =>
+    http.get<unknown, TimeSeriesKeysView>('/multimodel/timeseries/keys', { params: { instanceId } }),
+  addTimeSeriesPoint: (payload: { instanceId: number; key: string; timestamp?: number; value: number }) =>
+    http.post<unknown, TimeSeriesPoint>('/multimodel/timeseries/add', payload),
+  incrTimeSeries: (payload: { instanceId: number; key: string; delta: number; timestamp?: number }) =>
+    http.post<unknown, number>('/multimodel/timeseries/incrby', payload),
+  queryTimeSeriesRange: (params: {
+    instanceId: number
+    key: string
+    from?: string
+    to?: string
+    aggregation?: string
+    bucketMs?: number
+    count?: number
+  }) => http.get<unknown, TimeSeriesRangeView>('/multimodel/timeseries/range', { params }),
+
+  jsonKeys: (instanceId: number, pattern = '*', limit = 100) =>
+    http.get<unknown, JsonKeysView>('/multimodel/json/keys', { params: { instanceId, pattern, limit } }),
+  getJson: (instanceId: number, key: string, path = '$') =>
+    http.get<unknown, JsonQueryView>('/multimodel/json/get', { params: { instanceId, key, path } }),
+  setJson: (payload: { instanceId: number; key: string; path?: string; value: string }) =>
+    http.put<unknown, void>('/multimodel/json/set', payload),
+  deleteJson: (instanceId: number, key: string, path = '$') =>
+    http.delete<unknown, number>('/multimodel/json/del', { params: { instanceId, key, path } }),
+  numIncrJson: (payload: { instanceId: number; key: string; path: string; delta: number }) =>
+    http.post<unknown, string>('/multimodel/json/numincrby', payload),
+  arrAppendJson: (payload: { instanceId: number; key: string; path?: string; value: string }) =>
+    http.post<unknown, number>('/multimodel/json/arrappend', payload)
 }

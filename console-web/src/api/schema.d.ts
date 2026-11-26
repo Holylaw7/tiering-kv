@@ -564,6 +564,262 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/multimodel/json/arrappend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["arrAppendJson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/multimodel/json/del": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteJson"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/multimodel/json/get": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getJson"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/multimodel/json/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["jsonKeys"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/multimodel/json/numincrby": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["numIncrJson"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/multimodel/json/set": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setJson"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/multimodel/timeseries/add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["addTimeSeriesPoint"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/multimodel/timeseries/incrby": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["incrTimeSeries"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/multimodel/timeseries/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["timeSeriesKeys"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/multimodel/timeseries/range": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["queryTimeSeriesRange"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/multimodel/vector/add": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["addVector"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/multimodel/vector/checkpoint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["checkpointVector"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/multimodel/vector/collection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["dropVectorCollection"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/multimodel/vector/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["vectorCollections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/multimodel/vector/item": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteVector"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/multimodel/vector/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["searchVector"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/slowlog": {
         parameters: {
             query?: never;
@@ -823,6 +1079,12 @@ export interface components {
             data?: components["schemas"]["BackupScheduleView"];
             message?: string;
         };
+        ApiResponseBoolean: {
+            /** Format: int32 */
+            code?: number;
+            data?: boolean;
+            message?: string;
+        };
         ApiResponseCapacityView: {
             /** Format: int32 */
             code?: number;
@@ -845,6 +1107,18 @@ export interface components {
             /** Format: int32 */
             code?: number;
             data?: components["schemas"]["InstanceView"];
+            message?: string;
+        };
+        ApiResponseJsonKeysView: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["JsonKeysView"];
+            message?: string;
+        };
+        ApiResponseJsonQueryView: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["JsonQueryView"];
             message?: string;
         };
         ApiResponseKeyDetail: {
@@ -901,6 +1175,13 @@ export interface components {
             data?: components["schemas"]["LoginResponse"];
             message?: string;
         };
+        ApiResponseLong: {
+            /** Format: int32 */
+            code?: number;
+            /** Format: int64 */
+            data?: number;
+            message?: string;
+        };
         ApiResponseOverviewView: {
             /** Format: int32 */
             code?: number;
@@ -949,6 +1230,12 @@ export interface components {
             data?: components["schemas"]["SlowLogView"];
             message?: string;
         };
+        ApiResponseString: {
+            /** Format: int32 */
+            code?: number;
+            data?: string;
+            message?: string;
+        };
         ApiResponseSystemInfoView: {
             /** Format: int32 */
             code?: number;
@@ -961,10 +1248,40 @@ export interface components {
             data?: components["schemas"]["TerminalResult"];
             message?: string;
         };
+        ApiResponseTimeSeriesKeysView: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["TimeSeriesKeysView"];
+            message?: string;
+        };
+        ApiResponseTimeSeriesPoint: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["TimeSeriesPoint"];
+            message?: string;
+        };
+        ApiResponseTimeSeriesRangeView: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["TimeSeriesRangeView"];
+            message?: string;
+        };
         ApiResponseUserView: {
             /** Format: int32 */
             code?: number;
             data?: components["schemas"]["UserView"];
+            message?: string;
+        };
+        ApiResponseVectorCollectionsView: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["VectorCollectionsView"];
+            message?: string;
+        };
+        ApiResponseVectorSearchResultView: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["VectorSearchResultView"];
             message?: string;
         };
         ApiResponseView: {
@@ -1144,6 +1461,44 @@ export interface components {
             tlsEnabled?: boolean;
             tlsVerifyHostname?: boolean;
             version?: string;
+        };
+        JsonArrAppendRequest: {
+            /** Format: int64 */
+            instanceId: number;
+            key: string;
+            path?: string;
+            value: string;
+        };
+        JsonKeysView: {
+            keys?: string[];
+            message?: string;
+            supported?: boolean;
+        };
+        JsonNumIncrRequest: {
+            /** Format: double */
+            delta: number;
+            /** Format: int64 */
+            instanceId: number;
+            key: string;
+            path: string;
+        };
+        JsonQueryView: {
+            exists?: boolean;
+            key?: string;
+            message?: string;
+            objectKeys?: string[];
+            path?: string;
+            prettyJson?: string;
+            rawJson?: string;
+            supported?: boolean;
+            valueType?: string;
+        };
+        JsonSetRequest: {
+            /** Format: int64 */
+            instanceId: number;
+            key: string;
+            path?: string;
+            value: string;
         };
         KeyDetail: {
             key?: string;
@@ -1481,6 +1836,57 @@ export interface components {
             payload?: unknown;
             replyType?: string;
         };
+        TimeSeriesAddRequest: {
+            /** Format: int64 */
+            instanceId: number;
+            key: string;
+            /** Format: int64 */
+            timestamp?: number;
+            /** Format: double */
+            value: number;
+        };
+        TimeSeriesIncrByRequest: {
+            /** Format: double */
+            delta: number;
+            /** Format: int64 */
+            instanceId: number;
+            key: string;
+            /** Format: int64 */
+            timestamp?: number;
+        };
+        TimeSeriesKeysView: {
+            message?: string;
+            series?: components["schemas"]["TimeSeriesSummary"][];
+            supported?: boolean;
+        };
+        TimeSeriesPoint: {
+            /** Format: int64 */
+            timestamp?: number;
+            /** Format: double */
+            value?: number;
+        };
+        TimeSeriesRangeView: {
+            aggregation?: string;
+            /** Format: int64 */
+            bucketMs?: number;
+            key?: string;
+            message?: string;
+            points?: components["schemas"]["TimeSeriesPoint"][];
+            /** Format: double */
+            reducedValue?: number;
+            supported?: boolean;
+            /** Format: int64 */
+            totalLen?: number;
+        };
+        TimeSeriesSummary: {
+            key?: string;
+            /** Format: int64 */
+            latestTimestamp?: number;
+            /** Format: double */
+            latestValue?: number;
+            /** Format: int64 */
+            length?: number;
+        };
         TrendPoint: {
             /** Format: double */
             avgLatencyMs?: number;
@@ -1530,6 +1936,48 @@ export interface components {
             /** Format: int32 */
             status?: number;
             username?: string;
+        };
+        VectorAddRequest: {
+            collection?: string;
+            id: string;
+            /** Format: int64 */
+            instanceId: number;
+            values: number[];
+        };
+        VectorCollectionSummary: {
+            /** Format: int64 */
+            count?: number;
+            name?: string;
+        };
+        VectorCollectionsView: {
+            collections?: components["schemas"]["VectorCollectionSummary"][];
+            message?: string;
+            supported?: boolean;
+            /** Format: int64 */
+            totalVectors?: number;
+        };
+        VectorSearchHit: {
+            id?: string;
+            /** Format: double */
+            score?: number;
+        };
+        VectorSearchRequest: {
+            collection?: string;
+            /** Format: int64 */
+            instanceId: number;
+            /** Format: int32 */
+            topK?: number;
+            vector: number[];
+        };
+        VectorSearchResultView: {
+            collection?: string;
+            /** Format: int64 */
+            costMs?: number;
+            hits?: components["schemas"]["VectorSearchHit"][];
+            message?: string;
+            supported?: boolean;
+            /** Format: int32 */
+            topK?: number;
         };
         View: {
             /** Format: int64 */
@@ -2610,6 +3058,388 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    arrAppendJson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JsonArrAppendRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseLong"];
+                };
+            };
+        };
+    };
+    deleteJson: {
+        parameters: {
+            query: {
+                instanceId: number;
+                key: string;
+                path?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseLong"];
+                };
+            };
+        };
+    };
+    getJson: {
+        parameters: {
+            query: {
+                instanceId: number;
+                key: string;
+                path?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseJsonQueryView"];
+                };
+            };
+        };
+    };
+    jsonKeys: {
+        parameters: {
+            query: {
+                instanceId: number;
+                pattern?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseJsonKeysView"];
+                };
+            };
+        };
+    };
+    numIncrJson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JsonNumIncrRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseString"];
+                };
+            };
+        };
+    };
+    setJson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JsonSetRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    addTimeSeriesPoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimeSeriesAddRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseTimeSeriesPoint"];
+                };
+            };
+        };
+    };
+    incrTimeSeries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TimeSeriesIncrByRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseLong"];
+                };
+            };
+        };
+    };
+    timeSeriesKeys: {
+        parameters: {
+            query: {
+                instanceId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseTimeSeriesKeysView"];
+                };
+            };
+        };
+    };
+    queryTimeSeriesRange: {
+        parameters: {
+            query: {
+                instanceId: number;
+                key: string;
+                from?: string;
+                to?: string;
+                aggregation?: string;
+                bucketMs?: number;
+                count?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseTimeSeriesRangeView"];
+                };
+            };
+        };
+    };
+    addVector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VectorAddRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    checkpointVector: {
+        parameters: {
+            query: {
+                instanceId: number;
+                collection?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseString"];
+                };
+            };
+        };
+    };
+    dropVectorCollection: {
+        parameters: {
+            query: {
+                instanceId: number;
+                collection: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseBoolean"];
+                };
+            };
+        };
+    };
+    vectorCollections: {
+        parameters: {
+            query: {
+                instanceId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVectorCollectionsView"];
+                };
+            };
+        };
+    };
+    deleteVector: {
+        parameters: {
+            query: {
+                instanceId: number;
+                collection?: string;
+                id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseBoolean"];
+                };
+            };
+        };
+    };
+    searchVector: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VectorSearchRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVectorSearchResultView"];
                 };
             };
         };

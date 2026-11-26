@@ -79,4 +79,19 @@ class RespCodecTest {
         assertThatThrownBy(() -> parse(":abc\r\n"))
                 .isInstanceOf(RespException.class);
     }
+
+    @Test
+    void parsesResp2AndResp3DoublesAndResp3Null() throws IOException {
+        RespReply resp2Double = parse(":0.985\r\n");
+        assertThat(resp2Double).isInstanceOf(RespReply.Bulk.class);
+        assertThat(((RespReply.Bulk) resp2Double).utf8()).isEqualTo("0.985");
+
+        RespReply resp3Double = parse(",-3.25\r\n");
+        assertThat(resp3Double).isInstanceOf(RespReply.Bulk.class);
+        assertThat(((RespReply.Bulk) resp3Double).utf8()).isEqualTo("-3.25");
+
+        RespReply resp3Null = parse("_\r\n");
+        assertThat(resp3Null).isInstanceOf(RespReply.Bulk.class);
+        assertThat(((RespReply.Bulk) resp3Null).isNil()).isTrue();
+    }
 }

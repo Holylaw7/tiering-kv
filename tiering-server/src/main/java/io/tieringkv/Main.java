@@ -204,10 +204,12 @@ public final class Main {
         SlowLog slowLog = new SlowLog(
                 config.observability().slowLogThresholdMicros(),
                 config.observability().slowLogMaxLen());
+        VectorCollectionRegistry vectorRegistry = VectorCollectionRegistry.ofDefault(vectorStore);
+        vectorRegistry.configureCheckpoint(vectorDir);
         CommandEngine commandEngine = new CommandEngine(
                 CommandRegistry.createDefaultWithRuntime(
                         serverInfo::render, Map.copyOf(infoSections),
-                        VectorCollectionRegistry.ofDefault(vectorStore),
+                        vectorRegistry,
                         observability.multimodel(), observability.vector(),
                         aclPolicy, runtimeConfig, slowLog, snapshotCoordinator),
                 syncStorage, executor, memoryManager::isOverLimit, aclPolicy, slowLog);
