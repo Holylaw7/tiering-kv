@@ -29,9 +29,13 @@ import io.tieringkv.network.tcp.TieringKvServer;
 import io.tieringkv.security.AclPolicy;
 import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.storage.VectorIndexSyncStorageEngine;
+import io.tieringkv.storage.cache.ARCPolicy;
 import io.tieringkv.storage.cache.CacheConfig;
 import io.tieringkv.storage.cache.EvictionManager;
+import io.tieringkv.storage.cache.EvictionPolicy;
 import io.tieringkv.storage.cache.LFUPolicy;
+import io.tieringkv.storage.cache.SampledLfuPolicy;
+import io.tieringkv.storage.cache.SegmentLFUPolicy;
 import io.tieringkv.storage.cache.TrackingStorageEngine;
 import io.tieringkv.storage.cold.ColdMigration;
 import io.tieringkv.storage.cold.ColdStorageEngine;
@@ -130,10 +134,12 @@ public final class Main {
                 config.cache().evictionDecayIntervalMillis(),
                 CacheConfig.defaults().arcCapacity(),
                 config.cache().maxEvictionsPerCycle());
+        EvictionPolicy evictionPolicy = createEvictionPolicy(
+                config.cache(), memTable, tiering.migrationScheduler(), cacheConfig);
         EvictionManager evictionManager = new EvictionManager(
                 memTable,
                 memoryManager,
-                new LFUPolicy(cacheConfig.decayIntervalMillis()),
+                evictionPolicy,
                 new ColdMigration(cold),
                 walManager,
                 tiering.migrationScheduler(),
@@ -250,6 +256,27 @@ public final class Main {
         System.out.println("Tiering-KV listening on " + server.boundPort());
         Runtime.getRuntime().addShutdownHook(new Thread(shutdownManager::shutdown));
         server.awaitTermination();
+    }
+
+    static EvictionPolicy createEvictionPolicy(
+            TieringConfig.Cache cacheCfg,
+            MemTable memTable,
+            io.tieringkv.storage.tiering.MigrationScheduler migrationScheduler,
+            CacheConfig cacheConfig) {
+        String policy = cacheCfg.evictionPolicy() == null
+                ? "sampled-lfu"
+                : cacheCfg.evictionPolicy().trim().toLowerCase(java.util.Locale.ROOT);
+        return switch (policy) {
+            case "lfu" -> new LFUPolicy(cacheConfig.decayIntervalMillis());
+            case "segment-lfu" -> new SegmentLFUPolicy();
+            case "arc" -> new ARCPolicy(cacheConfig.arcCapacity());
+            default -> new SampledLfuPolicy(
+                    memTable,
+                    cacheConfig.decayIntervalMillis(),
+                    cacheCfg.evictionSamples(),
+                    System::currentTimeMillis,
+                    migrationScheduler == null ? null : key -> !migrationScheduler.contains(key));
+        };
     }
 
     static VectorIndexStore loadOrCreateVectorStore(Path checkpointFile, int maxLevel) {

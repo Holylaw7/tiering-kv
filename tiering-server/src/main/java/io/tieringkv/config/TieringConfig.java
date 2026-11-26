@@ -90,10 +90,25 @@ public record TieringConfig(
             int maxHotKeys,
             long hotKeyCacheTtlMillis,
             long evictionDecayIntervalMillis,
-            int maxEvictionsPerCycle) {
+            int maxEvictionsPerCycle,
+            String evictionPolicy,
+            int evictionSamples) {
         public Cache(int blockCacheCapacity, long hotKeyWindowMillis, long hotKeyThreshold) {
             this(blockCacheCapacity, hotKeyWindowMillis, hotKeyThreshold,
-                    1024, 500, 60_000, 1024);
+                    1024, 500, 60_000, 1024, "sampled-lfu", 16);
+        }
+
+        public Cache(
+                int blockCacheCapacity,
+                long hotKeyWindowMillis,
+                long hotKeyThreshold,
+                int maxHotKeys,
+                long hotKeyCacheTtlMillis,
+                long evictionDecayIntervalMillis,
+                int maxEvictionsPerCycle) {
+            this(blockCacheCapacity, hotKeyWindowMillis, hotKeyThreshold,
+                    maxHotKeys, hotKeyCacheTtlMillis, evictionDecayIntervalMillis,
+                    maxEvictionsPerCycle, "sampled-lfu", 16);
         }
     }
 
@@ -189,8 +204,16 @@ public record TieringConfig(
         if (vector.maxLevel() < 1) {
             throw new IllegalArgumentException("vector.max-level must be >= 1");
         }
-        if (cache.blockCacheCapacity() < 1 || cache.maxHotKeys() < 1 || cache.maxEvictionsPerCycle() < 1) {
+        if (cache.blockCacheCapacity() < 1 || cache.maxHotKeys() < 1
+                || cache.maxEvictionsPerCycle() < 1 || cache.evictionSamples() < 1) {
             throw new IllegalArgumentException("cache capacities must be >= 1");
+        }
+        String policy = cache.evictionPolicy() == null
+                ? ""
+                : cache.evictionPolicy().trim().toLowerCase(Locale.ROOT);
+        if (!policy.equals("sampled-lfu") && !policy.equals("lfu")
+                && !policy.equals("segment-lfu") && !policy.equals("arc")) {
+            throw new IllegalArgumentException("invalid cache.eviction-policy: " + cache.evictionPolicy());
         }
     }
 
@@ -263,7 +286,9 @@ public record TieringConfig(
                             num(cache.get("max-hot-keys"), base.cache().maxHotKeys()),
                             num(cache.get("hotkey-cache-ttl-ms"), base.cache().hotKeyCacheTtlMillis()),
                             num(cache.get("eviction-decay-interval-ms"), base.cache().evictionDecayIntervalMillis()),
-                            num(cache.get("max-evictions-per-cycle"), base.cache().maxEvictionsPerCycle())),
+                            num(cache.get("max-evictions-per-cycle"), base.cache().maxEvictionsPerCycle()),
+                            str(cache.get("eviction-policy"), base.cache().evictionPolicy()),
+                            num(cache.get("eviction-samples"), base.cache().evictionSamples())),
                     new Tiering(dbl(tiering.get("low-watermark"), base.tiering().lowWatermark()),
                             dbl(tiering.get("high-watermark"), base.tiering().highWatermark()),
                             dbl(tiering.get("critical-watermark"), base.tiering().criticalWatermark()),
@@ -294,6 +319,7 @@ public record TieringConfig(
                         + "server.auth=%s server.tls=%s storage.data-dir=%s vector.index-dir=%s "
                         + "shard-count=%d flush-workers=%d migration-workers=%d "
                         + "memory.limit=%d wal.fsync=%s cache.block-size=%d "
+                        + "cache.eviction-policy=%s cache.eviction-samples=%d "
                         + "hotkey-window=%d hotkey-threshold=%d watermarks=%.2f/%.2f/%.2f "
                         + "backpressure-timeout=%d drain-timeout=%d gc.batch-size=%d "
                         + "gc.worker-count=%d gc.max-memory=%d txn.ttl-seconds=%d "
@@ -303,6 +329,7 @@ public record TieringConfig(
                 server().tls().enabled(), storage().dataDir(), vector().indexDir(),
                 workers().shardCount(), workers().flushWorkers(), workers().migrationWorkers(),
                 memory().maxBytes(), wal().fsyncPolicy(), cache().blockCacheCapacity(),
+                cache().evictionPolicy(), cache().evictionSamples(),
                 cache().hotKeyWindowMillis(), cache().hotKeyThreshold(),
                 tiering().lowWatermark(), tiering().highWatermark(), tiering().criticalWatermark(),
                 tiering().backpressureTimeoutMillis(), tiering().drainTimeoutMillis(),

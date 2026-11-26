@@ -28,7 +28,34 @@ class TieringConfigTest {
         assertThat(config.server().tls().enabled()).isFalse();
         assertThat(config.wal().fsyncPolicy()).isEqualTo("EVERY_SEC");
         assertThat(config.cache().blockCacheCapacity()).isEqualTo(1024);
-        assertThat(config.describe()).contains("server.port=6379", "server.max-clients=10000");
+        assertThat(config.cache().evictionPolicy()).isEqualTo("sampled-lfu");
+        assertThat(config.cache().evictionSamples()).isEqualTo(16);
+        assertThat(config.describe()).contains(
+                "server.port=6379", "server.max-clients=10000", "cache.eviction-policy=sampled-lfu");
+    }
+
+    @Test
+    void validatesCustomEvictionPolicyAndRejectsUnknown() throws Exception {
+        Path custom = dir.resolve("eviction.yaml");
+        Files.writeString(custom, """
+                cache:
+                  eviction-policy: segment-lfu
+                  eviction-samples: 32
+                """);
+        TieringConfig cfg = TieringConfig.load(custom);
+        cfg.validate();
+        assertThat(cfg.cache().evictionPolicy()).isEqualTo("segment-lfu");
+        assertThat(cfg.cache().evictionSamples()).isEqualTo(32);
+
+        Path invalid = dir.resolve("invalid-eviction.yaml");
+        Files.writeString(invalid, """
+                cache:
+                  eviction-policy: unknown-policy
+                """);
+        TieringConfig bad = TieringConfig.load(invalid);
+        assertThatThrownBy(bad::validate)
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("eviction-policy");
     }
 
     @Test
