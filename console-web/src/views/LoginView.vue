@@ -119,7 +119,7 @@ function fillDemo() {
 
     <footer class="foot">
       <span>Tiering-KV Operations Console</span>
-      <span class="mono">Spring Boot 4 · Vue 3 · v6.0.0</span>
+      <span class="mono">Spring Boot 4 · Vue 3 · v6.1.0</span>
     </footer>
   </div>
 </template>
