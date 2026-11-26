@@ -1,7 +1,7 @@
 package io.tieringkv.webconsole.web;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import io.tieringkv.webconsole.domain.DbInstance;
 import io.tieringkv.webconsole.domain.Role;
 import io.tieringkv.webconsole.repository.DbInstanceRepository;
@@ -10,7 +10,7 @@ import io.tieringkv.webconsole.repository.UserRepository;
 import io.tieringkv.webconsole.support.TestUsers;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;

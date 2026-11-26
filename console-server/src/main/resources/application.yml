@@ -41,7 +41,7 @@ spring:
       enabled: false
   autoconfigure:
     # 关闭默认内存用户，认证完全由 JWT 过滤器承担
-    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
 
 console:
   bootstrap:

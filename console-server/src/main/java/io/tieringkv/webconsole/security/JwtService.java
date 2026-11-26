@@ -3,22 +3,51 @@ package io.tieringkv.webconsole.security;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.io.AbstractDeserializer;
+import io.jsonwebtoken.io.AbstractSerializer;
+import io.jsonwebtoken.io.Deserializer;
+import io.jsonwebtoken.io.Serializer;
 import io.jsonwebtoken.security.Keys;
 import io.tieringkv.webconsole.config.ConsoleProperties;
 import io.tieringkv.webconsole.domain.Role;
 import io.tieringkv.webconsole.domain.User;
 import org.springframework.stereotype.Service;
+import tools.jackson.core.StreamReadFeature;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import javax.crypto.SecretKey;
+import java.io.OutputStream;
+import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
+import java.util.Map;
 import java.util.Optional;
 
-/** JWT 签发与校验（HS256）。 */
+/** JWT 签发与校验（HS256，基于 Jackson 3 编解码，无 Jackson 2 传递依赖）。 */
 @Service
 public class JwtService {
+
+    private static final ObjectMapper JWT_MAPPER = JsonMapper.builder()
+            .disable(StreamReadFeature.AUTO_CLOSE_SOURCE)
+            .build();
+
+    private static final Serializer<Map<String, ?>> JWT_SERIALIZER = new AbstractSerializer<>() {
+        @Override
+        protected void doSerialize(Map<String, ?> map, OutputStream out) throws Exception {
+            out.write(JWT_MAPPER.writeValueAsBytes(map));
+        }
+    };
+
+    private static final Deserializer<Map<String, ?>> JWT_DESERIALIZER = new AbstractDeserializer<>() {
+        @Override
+        @SuppressWarnings("unchecked")
+        protected Map<String, ?> doDeserialize(Reader reader) {
+            return JWT_MAPPER.readValue(reader, Map.class);
+        }
+    };
 
     private final SecretKey key;
     private final Duration ttl;
@@ -40,6 +69,7 @@ public class JwtService {
     public String issue(User user) {
         Instant now = Instant.now();
         return Jwts.builder()
+                .json(JWT_SERIALIZER)
                 .subject(user.getUsername())
                 .claim("uid", user.getId())
                 .claim("role", user.getRole().name())
@@ -55,6 +85,7 @@ public class JwtService {
         }
         try {
             Claims claims = Jwts.parser()
+                    .json(JWT_DESERIALIZER)
                     .verifyWith(key)
                     .build()
                     .parseSignedClaims(token)

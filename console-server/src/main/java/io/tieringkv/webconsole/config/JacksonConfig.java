@@ -1,16 +1,17 @@
 package io.tieringkv.webconsole.config;
 
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateTimeDeserializer;
-import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateTimeSerializer;
-import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer;
+import org.springframework.boot.jackson.autoconfigure.JsonMapperBuilderCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import tools.jackson.databind.cfg.DateTimeFeature;
+import tools.jackson.databind.ext.javatime.deser.LocalDateTimeDeserializer;
+import tools.jackson.databind.ext.javatime.ser.LocalDateTimeSerializer;
+import tools.jackson.databind.module.SimpleModule;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
-/** 统一时间序列化格式：yyyy-MM-dd HH:mm:ss。 */
+/** 统一时间序列化格式：yyyy-MM-dd HH:mm:ss（Jackson 3 / Spring Boot 4）。 */
 @Configuration
 public class JacksonConfig {
 
@@ -18,11 +19,13 @@ public class JacksonConfig {
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     @Bean
-    public Jackson2ObjectMapperBuilderCustomizer localDateTimeCustomizer() {
+    public JsonMapperBuilderCustomizer localDateTimeCustomizer() {
         return builder -> {
-            builder.serializers(new LocalDateTimeSerializer(FORMATTER));
-            builder.deserializers(new LocalDateTimeDeserializer(FORMATTER));
-            builder.featuresToDisable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+            SimpleModule javaTimeModule = new SimpleModule("ConsoleLocalDateTimeModule");
+            javaTimeModule.addSerializer(LocalDateTime.class, new LocalDateTimeSerializer(FORMATTER));
+            javaTimeModule.addDeserializer(LocalDateTime.class, new LocalDateTimeDeserializer(FORMATTER));
+            builder.addModule(javaTimeModule)
+                    .disable(DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS);
         };
     }
 }
