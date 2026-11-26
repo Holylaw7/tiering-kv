@@ -1,19 +1,9 @@
-# Trivy 已知例外（ADR-0360 / TD-085）
+# Trivy 已知例外清单（ADR-0360 / TD-085）
 #
-# 发布门禁只拦 CRITICAL/HIGH；以下条目经评估后接受，待迁移 Spring Framework 7
-# （Spring Boot 4 / Jackson 3）时一并消除。
+# 当前有效例外条目数：0。
 #
-# spring-webmvc 6.2.19 上的两个 CRITICAL：
-#   CVE-2026-47884、CVE-2026-47890
-#   - 修复版本都只有 7.0.9（Spring Framework 7），6.2.x 线未回补。
-#   - 采用 Spring Framework 7 需升级 Spring Boot 4；Boot 4 切换为 Jackson 3
-#     （包名 com.fasterxml.jackson → tools.jackson），属控制面整体迁移，
-#     不在本阶段范围内（登记 TD-085）。
-#   - 暴露面评估：控制面内网单实例部署、无公网入口；Controller 映射全部为
-#     静态字面量（无动态映射/SpEL），实际攻击面极小。
-#   - 处置：接受并记录，跟踪上游 6.2.x 回补；迁移 Boot 4 时移除本例外。
-#
-# 说明：Trivy 会逐条抑制命中的 CVE，因此同一 package 上存在的多个 CVE
-# 必须逐个列出；早期只列了一条，导致"忽略掉 A、又冒出 B"的来回现象。
-CVE-2026-47884
-CVE-2026-47890
+# 历史记录：
+# - 原先登记于此的 spring-webmvc 6.2.19 两条 CRITICAL（CVE-2026-47884、CVE-2026-47890）
+#   已随控制面升级 Spring Boot 4.2.0 / Spring Framework 7.1.0 / Jackson 3.1.8（Track B1）
+#   彻底根治，TD-085 正式关闭，本清单不再抑制任何 CVE。
+# - 保留空文件以保持 release.yml 中 `trivyignores: .trivyignore` 路径契约稳定。

@@ -28,7 +28,7 @@ const channelDialogVisible = ref(false)
 const editingChannelId = ref<number | null>(null)
 const channelFormRef = ref<FormInstance>()
 const testingChannelId = ref<number | null>(null)
-const channelForm = reactive({
+const channelForm = ref({
   name: '',
   type: 'WEBHOOK',
   url: '',
@@ -77,27 +77,27 @@ async function loadChannels() {
 
 function openCreateChannel() {
   editingChannelId.value = null
-  Object.assign(channelForm, {
+  channelForm.value = {
     name: '',
     type: 'WEBHOOK',
     url: '',
     secret: '',
     silenceSeconds: 300,
     enabled: true
-  })
+  }
   channelDialogVisible.value = true
 }
 
 function openEditChannel(channel: AlertChannelView) {
   editingChannelId.value = channel.id
-  Object.assign(channelForm, {
+  channelForm.value = {
     name: channel.name,
     type: channel.type,
     url: channel.url,
     secret: '',
     silenceSeconds: channel.silenceSeconds,
     enabled: channel.enabled
-  })
+  }
   channelDialogVisible.value = true
 }
 
@@ -105,10 +105,10 @@ async function submitChannel() {
   const valid = await channelFormRef.value?.validate().catch(() => false)
   if (!valid) return
   if (editingChannelId.value) {
-    await alertApi.updateChannel(editingChannelId.value, { ...channelForm })
+    await alertApi.updateChannel(editingChannelId.value, { ...channelForm.value })
     ElMessage.success('通知渠道已更新')
   } else {
-    await alertApi.createChannel({ ...channelForm })
+    await alertApi.createChannel({ ...channelForm.value })
     ElMessage.success('通知渠道已创建')
   }
   channelDialogVisible.value = false
