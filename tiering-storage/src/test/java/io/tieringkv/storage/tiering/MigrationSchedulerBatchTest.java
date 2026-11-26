@@ -134,8 +134,9 @@ class MigrationSchedulerBatchTest {
                 tasks.add(task(memTable, "d" + i));
             }
             scheduler.submitBatch(tasks);
-            // 高水位：worker 应扩展（提交瞬间 pending>8 → max 4）
-            assertThat(pool.workers()).isGreaterThanOrEqualTo(4);
+            // 高水位：worker 应扩展（提交瞬间 pending>8 → max 4）；
+            // 若高速迁移在返回前瞬间排空并触发缩容，peakWorkers 仍确定性记录扩容峰值
+            assertThat(Math.max(pool.workers(), pool.peakWorkers())).isGreaterThanOrEqualTo(4);
             assertThat(pool.awaitIdle(10_000)).isTrue();
             assertThat(metrics.snapshot().migrationSuccess())
                     .isEqualTo(30);

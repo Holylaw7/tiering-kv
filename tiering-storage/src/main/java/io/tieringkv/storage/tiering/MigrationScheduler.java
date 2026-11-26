@@ -113,8 +113,8 @@ public final class MigrationScheduler implements AutoCloseable {
             metrics.migrationCompleted(false, 0);
             throw new IllegalStateException("migration log append failed", e);
         }
-        pool.execute(() -> run(task));
         adjustWorkers();
+        pool.execute(() -> run(task));
         return true;
     }
 
@@ -153,8 +153,8 @@ public final class MigrationScheduler implements AutoCloseable {
                         "migration log append failed", e);
             }
         }
-        pool.execute(() -> runBatch(accepted));
         adjustWorkers();
+        pool.execute(() -> runBatch(accepted));
         return accepted.size();
     }
 

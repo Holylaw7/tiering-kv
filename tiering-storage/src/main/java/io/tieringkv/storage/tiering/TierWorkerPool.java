@@ -14,11 +14,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class TierWorkerPool implements AutoCloseable {
 
     private final ThreadPoolExecutor executor;
+    private final AtomicInteger peakWorkers;
 
     public TierWorkerPool(int workers, String poolName) {
         if (workers <= 0) {
             throw new IllegalArgumentException("workers must be positive");
         }
+        this.peakWorkers = new AtomicInteger(workers);
         ThreadFactory factory = new ThreadFactory() {
             private final AtomicInteger sequence = new AtomicInteger();
 
@@ -49,8 +51,8 @@ public final class TierWorkerPool implements AutoCloseable {
         }
     }
 
-    /** 动态调整 worker 数（ADR-0325）：core/max 联动，立即生效。 */
-    public void adjust(int workers) {
+    /** 动态调整 worker 数（ADR-0325 / B2 同步加固）：core/max 联动，立即生效。 */
+    public synchronized void adjust(int workers) {
         if (workers <= 0) {
             throw new IllegalArgumentException(
                     "workers must be positive");
@@ -61,10 +63,15 @@ public final class TierWorkerPool implements AutoCloseable {
         }
         executor.setCorePoolSize(workers);
         executor.setMaximumPoolSize(workers);
+        peakWorkers.accumulateAndGet(workers, Math::max);
     }
 
     public int workers() {
         return executor.getMaximumPoolSize();
+    }
+
+    public int peakWorkers() {
+        return peakWorkers.get();
     }
 
     public int activeCount() {
