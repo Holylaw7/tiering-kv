@@ -7,7 +7,7 @@ package io.tieringkv;
 public final class ServerVersion {
 
     /** 与 pom revision 同步的源码版本。 */
-    public static final String SOURCE_VERSION = "5.4.0";
+    public static final String SOURCE_VERSION = "6.0.0";
 
     private ServerVersion() {
     }

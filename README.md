@@ -4,12 +4,12 @@
 > 内存/磁盘分层 + 分布式事务 + 多模型值 + 向量检索 + SQL + 云原生运行时，
 > 配套 **Vue 3 + Spring Boot 的 Web 运维管理平台**（前后端分离）。
 
-**版本：v5.4.0（2026-11-25）** · **约 6,738 个内核测试方法 + 78 项 Operator 测试 + 173 项控制面测试（JaCoCo 79.58%）+ 32 项 Vitest + 6 组 Playwright E2E + 双副本 HA 实时故障转移门禁 + 真实 kind Operator 6 阶段全生命周期 E2E / 0 failures**（内核测试口径见 [docs/testing/measurement-conventions.md](
+**版本：v6.0.0（2026-11-26）** · **约 6,738 个内核测试方法 + 78 项 Operator 测试 + 175 项控制面测试（JaCoCo 79.77%）+ 32 项 Vitest + 6 组 Playwright E2E + 双副本 HA 实时故障转移门禁 + 真实 kind Operator 6 阶段全生命周期 E2E / 0 failures**（内核测试口径见 [docs/testing/measurement-conventions.md](
 docs/testing/measurement-conventions.md)） ·
-技术债 **50/50 处置完成**（含 TD-081 集群复制原子操作，ADR-0352） ·
-JDK 21 · 真实 GitHub Runner 门禁全绿
-（build / test（三分片）/ transaction-e2e（含 `operator-kind-e2e`）/
-release：Benchmark + Trivy 0 漏洞 + 4 镜像 GHCR 发布）
+技术债 **全量清零**（含 `TD-085` 关闭、`.trivyignore` `0` 例外） ·
+JDK 21 · Spring Boot 4.2 / Jackson 3 · 真实 GitHub Runner 门禁全绿
+（build / test（三分片 + `security-scan` 零例外 Trivy）/ transaction-e2e（含 `operator-kind-e2e`）/
+release：Benchmark + Trivy 零例外 0 漏洞 + 4 镜像 GHCR 发布）
 
 ## 项目定位
 
@@ -42,8 +42,8 @@ redis-cli -p 6379 INFO vector        # 可观测性 sections：vector/replicatio
 
 ## Web 运维管理平台（前后端）
 
-`console-web`（Vue 3 + Vite + Element Plus 按需引入 + ECharts）与
-`console-server`（Spring Boot 3.5 + JPA + Flyway + MySQL 8）构成独立的**控制面**：
+`console-web`（Vue 3 + Vite + Element Plus 按需引入 + ECharts 6）与
+`console-server`（Spring Boot 4.2 + Jackson 3 + JPA + Flyway 12 + MySQL 8）构成独立的**控制面**：
 通过 RESP 协议（支持批量 Pipeline 与 TLS/自定义 CA）纳管内核实例，提供认证授权、
 指标看板、键空间浏览、在线终端、告警与 Webhook 推送、异步备份恢复与审计，不与数据面共享进程。
 
@@ -94,11 +94,12 @@ cd deploy/console && docker compose -f docker-compose.yml -f docker-compose.ha.y
 
 | 层级 | 命令 | 结果 |
 | --- | --- | --- |
-| 控制面测试与覆盖率门禁 | `cd console-server && mvn -B test org.jacoco:jacoco-maven-plugin:check` | 162 项测试 0 失败，JaCoCo 行覆盖率 76.67%（≥ 75% 门禁） |
+| 控制面测试与覆盖率门禁 | `cd console-server && mvn -B test org.jacoco:jacoco-maven-plugin:check` | 175 项测试 0 失败，JaCoCo 行覆盖率 79.77%（≥ 75% 门禁） |
 | 控制面静态缺陷扫描 | `cd console-server && mvn -B -DskipTests test-compile com.github.spotbugs:spotbugs-maven-plugin:check -Dspotbugs.threshold=High -Dspotbugs.failOnError=true` | SpotBugs High 0 缺陷 |
-| 前端质量、构建与单测 | `cd console-web && npm run lint && npm run build && npm test` | ESLint / `vue-tsc` / Vite 0 告警（首包 CSS 62.23 kB），29 项 Vitest 全绿 |
+| 前端质量、构建、单测与安全审计 | `cd console-web && npm run lint && npm run build && npm test && npm audit` | ESLint / `vue-tsc` / Vite 0 告警（首包 CSS 62.23 kB），32 项 Vitest 全绿，`npm audit` 0 漏洞 |
+| 零例外安全扫描（Trivy） | `trivy fs . --severity CRITICAL,HIGH --ignore-unfixed --ignorefile .trivyignore` | `.trivyignore` 0 有效例外，0 CRITICAL/HIGH |
 | OpenAPI 契约漂移校验 | `cd console-web && npm run gen:api && git diff --exit-code -- src/api/schema.d.ts ../docs/api/openapi.json` | 0 漂移 |
-| 全栈容器 E2E 回归 | `cd console-web && E2E_BASE_URL=http://127.0.0.1:8081 npm run test:e2e` | 5 组 Playwright 规范（6 项用例）全绿，4 容器均 `healthy` |
+| 全栈容器 E2E 回归 | `cd console-web && E2E_BASE_URL=http://127.0.0.1:8081 npm run test:e2e` | 6 组 Playwright 规范全绿，双副本 HA 故障转移与 S3/RustFS 门禁全绿 |
 | 负载演示 | `node scripts/demo-load.mjs --seconds 60 --conns 6` | 约 6.7 万 ops/s（本机） |
 
 分布式事务栈（coordinator/participant/metadata/gateway 五容器）：
@@ -158,6 +159,7 @@ kubectl apply -f deploy/operator/kind-cluster-sample.yaml
 | v5.2.0 | 2026-11-25 | 控制面 O1–O5 生产级增强：异步备份恢复与进度条、RESP 批量 Pipeline + TLS、双维度限流 + HMAC Webhook 告警、前端按需瘦身（CSS -83.3%）与 Dashboard 拆分、SpotBugs/JaCoCo/5 组 E2E 门禁与三镜像 GHCR 发布 |
 | v5.3.0 | 2026-11-25 | 控制面 S3/RustFS 真实对象存储 E2E 闭环（M2）、MySQL 租约锁 + DB 登录限流双副本无状态高可用与实时故障转移门禁（M3）、内核扩展 INFO 段落脱敏透出与系统页分栏观测面板（M4） |
 | v5.4.0 | 2026-11-25 | Kubernetes Operator 真实集群实战闭环（A1–A3）：CRD `status` 子资源与安全 Patch、TCP 探针与真实 RESP 备份 Job、`:8088` 健康服务与 Lease 选主、最小权限 RBAC、真实 `kind` 6 阶段全生命周期门禁 `operator-kind-e2e` 与 4 镜像 GHCR 发布 |
+| v6.0.0 | 2026-11-26 | 控制面底座现代化与零 CVE 例外清零（B1–B3）：Spring Boot 4.2.0 / Spring Framework 7.1.0 / Jackson 3.1.8 / springdoc 3.2.1 / jjwt 0.13.0（零 Jackson 2 `jackson-databind` 残留）、清空 `.trivyignore` 关闭 `TD-085` 并增设常驻 Trivy CI 门禁、`console-web` 升级 ECharts 6.1 / `vue-tsc` 3.3 实现 `npm audit` 全级别 0 漏洞、4 镜像 GHCR 发布 |
 | v5.0.3 | 2026-10-24 | 发布链路自动化：任意 v* 标签自动发版，门禁加控制面与前端作业（ADR-0360） |
 | v5.0.2 | 2026-10-24 | 版本号对齐：pom / 脚本 / 文档统一到 5.0.2，构建脚本不再写死构件名 |
 | v4.1.0 维护补丁 | 2026-08-16 | 生产链 TTL 修复（ADR-0351）+ 集群复制原子操作（ADR-0352，TD-081）+ 选举窗口/CI 稳定性加固（ADR-0353）+ RPC ERROR 帧 term 污染修复（ADR-0354）；技术债 50/50；约 6,738 个测试方法 / 14,957 次测试执行全绿 |

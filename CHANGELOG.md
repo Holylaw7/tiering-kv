@@ -3,6 +3,23 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [6.0.0] - 2026-11-26
+
+### Changed
+
+- **控制面底座现代化：Spring Boot 4.2 + Spring Framework 7 + Jackson 3（B1）**：
+  - `console-server` 升级至 `spring-boot-starter-parent:4.2.0`（Spring Framework `7.1.0`、Spring Security `7.2.0`、Tomcat `11.0.27`、Hibernate `7.4.15.Final`、Flyway `12.11.0`、Logback `1.6.6`、Jackson `3.1.8`）与 `springdoc-openapi-starter-webmvc-ui:3.2.1`，接入 Spring Boot 4 模块化 starter（`spring-boot-starter-flyway`、`spring-boot-starter-webmvc-test`、`spring-boot-starter-security-test`）并移除旧 Spring Boot 3.5 CVE 临时版本覆盖；
+  - `JacksonConfig` 迁移至 `JsonMapperBuilderCustomizer` + `tools.jackson.databind.*` + `DateTimeFeature.WRITE_DATES_AS_TIMESTAMPS`，严格保持 `yyyy-MM-dd HH:mm:ss` 与 `non_null` 输出契约；`SecurityConfig`、`AlertWebhookDispatcher`、`BackupService` 与 20 个控制面测试同步迁移至 Jackson 3 及 `org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc`，新增 `Jackson3AndJwtCompatTest`（控制面共 175 项测试，JaCoCo 行覆盖率 `79.77%`，OpenAPI 契约 `0` 漂移）；
+  - `JwtService` 升级 `jjwt:0.13.0` 并以原生 Jackson 3 `JsonMapper` 实现 `Serializer`/`Deserializer`，彻底移除 `jjwt-jackson`，产物 `BOOT-INF/lib` 实现 **0 个 Jackson 2 `jackson-databind` 残留**；`application.yml` 更新 `UserDetailsServiceAutoConfiguration` 至 Boot 4 新包路径。
+- **零 Trivy 例外清零（TD-085 正式关闭）与前端全零漏洞升级（B2）**：
+  - 清空 `.trivyignore`（移除原 `spring-webmvc 6.2.19` 的 `CVE-2026-47884` 与 `CVE-2026-47890`，有效例外条数归 **`0`**）；
+  - 在 `.github/workflows/test.yml` 新增常驻 **`security-scan`** 门禁（断言 `.trivyignore` 0 有效条目并运行 Trivy `CRITICAL,HIGH` 全仓与 JAR 扫描）及 `npm audit --audit-level=high` 校验；
+  - `console-web` 升级 `echarts@^6.1.0`、`vue-tsc@^3.3.14`、`mermaid@^12.3.0`、`typescript@~5.9.3`（并适配 `AlertsView.vue` `channelForm` ref），实现 **`npm audit` 全级别 `0 vulnerabilities`**（critical/high/moderate/low 全归零），Vite 构建 0 超限告警（`echarts` 块 `537.62 kB < 600 kB`）、Vitest `32/32` 与全量 Playwright E2E 全绿。
+
+### Fixed
+
+- **CI 洁净度归零**：移除 `.github/workflows/transaction-e2e.yml` 中 `operator-kind-e2e` 未使用的宿主机 `setup-java` Maven 缓存，消除 `Path Validation Error` 警告标注，全量工作流（`build` / `test` / `transaction-e2e` / `benchmark` / `release`）均达到 `attempt=1` 零注解通过；`scripts/kind-operator-e2e.sh` 镜像替换正则版本无关化。
+
 ## [5.4.0] - 2026-11-25
 
 ### Added
