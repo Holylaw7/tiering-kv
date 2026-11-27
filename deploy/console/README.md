@@ -53,3 +53,14 @@ docker compose up -d --build
 | `MYSQL_ROOT_PASSWORD` | `tk_root_pwd` | 强口令 + 独立业务账号 |
 | `CONSOLE_JWT_SECRET` | 占位值 | ≥32 字节随机串 |
 | `CONSOLE_BOOTSTRAP_INSTANCE` | 本机 | 指向真实数据面 |
+| `CONSOLE_WEBHOOK_BLOCK_PRIVATE_URLS` | dev:`false` / prod:`true` | 生产必须保持 `true`（IP 固定直连防 DNS Rebinding） |
+| `CONSOLE_WEBHOOK_ALLOWED_CIDRS` | 空 | 默认留空；仅在私有化网关必需时配置精确 IP/极小网段 |
+
+## Webhook 出站安全与运维权限边界
+
+1. **权限模型分离**：`console.security.webhook-allowed-cidrs`（`CONSOLE_WEBHOOK_ALLOWED_CIDRS`）属于**服务端部署配置**，没有任何 REST 接口允许修改，变更必须纳入部署配置审计；`OPS` 角色仅能管理告警渠道地址，无法扩大服务端出站白名单。
+2. **默认拒绝与最小放行**：生产环境默认拦截环回、私网（RFC 1918）、CGNAT（含 `100.100.100.200`）、链路本地与云元数据（`169.254.169.254`）及 IPv6 隧道地址；确有内网飞书/企微网关需求时，仅放行精确网关 IP（`/32`）或极小网段，**严禁配置过宽私网网段（如 `10.0.0.0/8`、`172.16.0.0/12`、`0.0.0.0/0`）**，`ProductionConfigGuard` 启动期会对 `/12` 及以上大网段输出告警。
+3. **白名单不豁免其他防线**：白名单仅允许命中目标通过私网拦截，不豁免 IP 固定建连（防 DNS Rebinding TOCTOU）、HTTP 3xx 重定向禁止、TLS SNI / X.509 证书校验以及云元数据保护（主机名白名单绝不允许解析到云元数据段）。
+4. **已知后续演进边界**：
+   - 应用层防护完成后，高安全生产集群仍应叠加 K8s `NetworkPolicy` / 云安全组做纵深出口隔离，并执行公网放行 / 私网拦截 / 云元数据拦截 / DNS 异常实测验证（Wave 3 `S2`）；
+   - 当前告警持续计时与静默窗口仍位于单机 JVM 内存，多副本 HA 故障转移状态持久化与并发防重发将在 Wave 2A（`H2` + Flyway `V13`）解决。

@@ -167,9 +167,41 @@ public class ProductionConfigGuard implements InitializingBean {
 
     private void checkWebhookSsrf(List<Finding> out) {
         ConsoleProperties.Security sec = properties.getSecurity();
-        if (sec != null && !sec.isBlockPrivateWebhookUrls()) {
+        if (sec == null) {
+            return;
+        }
+        if (!sec.isBlockPrivateWebhookUrls()) {
             out.add(new Finding("WARN", "console.security.block-private-webhook-urls",
                     "生产环境已关闭 Webhook 私网/元数据 SSRF 防护，建议开启并仅通过 webhook-allowed-cidrs 放行必要内网地址"));
+        }
+        List<String> allowed = sec.getWebhookAllowedCidrs();
+        if (allowed != null) {
+            for (String entry : allowed) {
+                if (isOverlyBroadCidr(entry)) {
+                    out.add(new Finding("WARN", "console.security.webhook-allowed-cidrs",
+                            "检测到过宽的 Webhook 白名单网段，生产环境禁止放行 /12 及以上大网段（如 10.0.0.0/8、0.0.0.0/0），请收敛为精确网关 IP 或极小网段"));
+                    break;
+                }
+            }
+        }
+    }
+
+    private static boolean isOverlyBroadCidr(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return false;
+        }
+        String trimmed = raw.trim();
+        int slash = trimmed.indexOf('/');
+        if (slash <= 0 || slash == trimmed.length() - 1) {
+            return false;
+        }
+        String addrPart = trimmed.substring(0, slash).trim();
+        try {
+            int prefixLen = Integer.parseInt(trimmed.substring(slash + 1).trim());
+            boolean isIpv6 = addrPart.contains(":");
+            return isIpv6 ? prefixLen <= 32 : prefixLen <= 12;
+        } catch (NumberFormatException ex) {
+            return false;
         }
     }
 

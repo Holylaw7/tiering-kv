@@ -342,5 +342,15 @@ class Wave1HardeningTest {
         ProductionConfigGuard guard = new ProductionConfigGuard(props, env);
         assertThat(guard.check()).anyMatch(f ->
                 "WARN".equals(f.level()) && "console.security.block-private-webhook-urls".equals(f.key()));
+
+        // 过宽白名单网段（如 10.0.0.0/8）触发 WARN，精确网关 /32 不触发
+        props.getSecurity().setBlockPrivateWebhookUrls(true);
+        props.getSecurity().setWebhookAllowedCidrs(List.of("10.0.0.0/8"));
+        assertThat(new ProductionConfigGuard(props, env).check()).anyMatch(f ->
+                "WARN".equals(f.level()) && "console.security.webhook-allowed-cidrs".equals(f.key()));
+
+        props.getSecurity().setWebhookAllowedCidrs(List.of("10.20.8.15/32"));
+        assertThat(new ProductionConfigGuard(props, env).check()).noneMatch(f ->
+                "console.security.webhook-allowed-cidrs".equals(f.key()));
     }
 }
