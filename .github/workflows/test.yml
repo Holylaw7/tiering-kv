@@ -501,15 +501,15 @@ jobs:
             live_body=$(docker exec "$replica" curl -fsS http://127.0.0.1:8080/actuator/health/liveness)
             ready_body=$(docker exec "$replica" curl -fsS http://127.0.0.1:8080/actuator/health/readiness)
             echo "Probe $replica liveness=$live_body readiness=$ready_body"
-            echo "$live_body" | grep -q '"UP"'
-            echo "$ready_body" | grep -q '"UP"'
+            grep -q '"UP"' <<< "$live_body"
+            grep -q '"UP"' <<< "$ready_body"
             prom_body=$(docker exec "$replica" curl -fsS -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8080/actuator/prometheus)
-            echo "$prom_body" | grep -q 'tieringkv_console_pool_max'
-            echo "$prom_body" | grep -q 'tieringkv_console_alerts_firing'
+            grep -q 'tieringkv_console_pool_max' <<< "$prom_body"
+            grep -q 'tieringkv_console_alerts_firing' <<< "$prom_body"
           done
           req_id_header=$(curl -fsS -D - -o /dev/null -H "Authorization: Bearer $TOKEN" -H "X-Request-Id: ha-smoke-trace-640" http://127.0.0.1:8081/api/v1/auth/me | tr -d '\r' | grep -i '^x-request-id:' || true)
           echo "HA X-Request-Id echo: $req_id_header"
-          echo "$req_id_header" | grep -qi 'ha-smoke-trace-640'
+          grep -qi 'ha-smoke-trace-640' <<< "$req_id_header"
 
           # 4. Stop current leader container -> verify Nginx HA failover + lease takeover by survivor
           if [[ "$leader_owner" == tk-console-1-* ]]; then
@@ -520,10 +520,10 @@ jobs:
             survivor_prefix="tk-console-1-"
           fi
           leader_prom=$(docker exec "$leader_container" curl -fsS -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8080/actuator/prometheus)
-          echo "$leader_prom" | grep -q 'tieringkv_instance_up'
-          echo "$leader_prom" | grep -q 'tieringkv_instance_memory_used_bytes'
-          echo "$leader_prom" | grep -q 'tieringkv_instance_cold_tables'
-          echo "$leader_prom" | grep -q 'tieringkv_instance_p99_latency_ms'
+          grep -q 'tieringkv_instance_up' <<< "$leader_prom"
+          grep -q 'tieringkv_instance_memory_used_bytes' <<< "$leader_prom"
+          grep -q 'tieringkv_instance_cold_tables' <<< "$leader_prom"
+          grep -q 'tieringkv_instance_p99_latency_ms' <<< "$leader_prom"
           echo "Verified Prometheus custom instance metrics on leader=$leader_container"
           echo "Stopping leader container: $leader_container (expecting takeover by ${survivor_prefix}*)"
           docker stop "$leader_container"
