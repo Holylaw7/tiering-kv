@@ -26,7 +26,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /** 告警规则与事件：阈值求值、触发/恢复闭环。 */
 @Service
@@ -38,26 +37,33 @@ public class AlertService {
     private final AlertEventRepository eventRepository;
     private final AuditService auditService;
     private final AlertWebhookDispatcher webhookDispatcher;
+    private final AlertStateStore stateStore;
     private ConsoleMetricsBinder metricsBinder;
-
-    /** ruleId:instanceId -> 首次满足时间（用于 durationSeconds 判定）。 */
-    private final Map<String, LocalDateTime> satisfiedSince = new ConcurrentHashMap<>();
 
     public AlertService(AlertRuleRepository ruleRepository,
                         AlertEventRepository eventRepository,
                         AuditService auditService) {
-        this(ruleRepository, eventRepository, auditService, null);
+        this(ruleRepository, eventRepository, auditService, null, AlertStateStore.inMemoryOnly(null));
+    }
+
+    public AlertService(AlertRuleRepository ruleRepository,
+                        AlertEventRepository eventRepository,
+                        AuditService auditService,
+                        AlertWebhookDispatcher webhookDispatcher) {
+        this(ruleRepository, eventRepository, auditService, webhookDispatcher, AlertStateStore.inMemoryOnly(null));
     }
 
     @Autowired
     public AlertService(AlertRuleRepository ruleRepository,
                         AlertEventRepository eventRepository,
                         AuditService auditService,
-                        AlertWebhookDispatcher webhookDispatcher) {
+                        AlertWebhookDispatcher webhookDispatcher,
+                        AlertStateStore stateStore) {
         this.ruleRepository = ruleRepository;
         this.eventRepository = eventRepository;
         this.auditService = auditService;
         this.webhookDispatcher = webhookDispatcher;
+        this.stateStore = stateStore == null ? AlertStateStore.inMemoryOnly(null) : stateStore;
     }
 
     @Autowired(required = false)
@@ -96,7 +102,7 @@ public class AlertService {
         AlertRule rule = ruleRepository.findById(id)
                 .orElseThrow(() -> BusinessException.notFound("规则不存在：" + id));
         ruleRepository.delete(rule);
-        satisfiedSince.keySet().removeIf(key -> key.startsWith(id + ":"));
+        runAfterCommit(() -> stateStore.clearForRule(id));
         auditService.record("ALERT_RULE_DELETE", rule.getName(), null, true);
     }
 
@@ -126,10 +132,10 @@ public class AlertService {
         event.setStatus(AlertStatus.RESOLVED);
         event.setResolvedAt(LocalDateTime.now());
         AlertEvent saved = eventRepository.save(event);
-        // 事务提交后再执行缓存失效、持续计时清理与异步 Webhook 推送，避免回滚导致幽灵通知或旧值回填缓存
+        // 事务提交后再执行持久化计时重置、缓存失效与异步 Webhook 推送，避免回滚导致幽灵通知或旧值回填缓存
         runAfterCommit(() -> {
             if (saved.getRuleId() != null && saved.getInstanceId() != null) {
-                satisfiedSince.remove(saved.getRuleId() + ":" + saved.getInstanceId());
+                stateStore.clearSatisfiedSince(saved.getRuleId(), saved.getInstanceId());
             }
             invalidateFiringMetrics();
             if (webhookDispatcher != null) {
@@ -173,10 +179,9 @@ public class AlertService {
                 log.warn("忽略不支持的告警运算符 rule={} operator={}", rule.getName(), rule.getOperator());
                 continue;
             }
-            String key = rule.getId() + ":" + instanceId;
             AlertEvent firing = firingByRule.get(rule.getId());
             if (hit) {
-                LocalDateTime since = satisfiedSince.computeIfAbsent(key, ignored -> now);
+                LocalDateTime since = stateStore.recordOrGetSatisfiedSince(rule.getId(), instanceId, now);
                 long lasted = Duration.between(since, now).getSeconds();
                 if (firing == null && lasted >= rule.getDurationSeconds()) {
                     AlertEvent saved = eventRepository.save(buildEvent(rule, instanceId, value, now));
@@ -189,7 +194,8 @@ public class AlertService {
                     });
                 }
             } else {
-                satisfiedSince.remove(key);
+                Long clearRuleId = rule.getId();
+                runAfterCommit(() -> stateStore.clearSatisfiedSince(clearRuleId, instanceId));
                 if (firing != null) {
                     firing.setStatus(AlertStatus.RESOLVED);
                     firing.setResolvedAt(now);

@@ -484,6 +484,9 @@ jobs:
 
           # 3. Single-leader monitor sampling without duplicate samples
           sleep 12
+          v13_tbl=$($MYSQL_CMD "SHOW TABLES LIKE 'alert_eval_state';")
+          echo "V13 alert_eval_state table check: $v13_tbl"
+          test "$v13_tbl" = "alert_eval_state"
           leader_owner=$($MYSQL_CMD "SELECT owner_id FROM console_lease WHERE lease_key='scheduler:monitor';")
           echo "Initial monitor leader owner_id=$leader_owner"
           test -n "$leader_owner"

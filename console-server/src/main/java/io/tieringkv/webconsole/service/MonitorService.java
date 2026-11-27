@@ -12,15 +12,26 @@ import io.tieringkv.webconsole.web.dto.LiveMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** 周期采集：INFO → 指标落库 → 告警求值。 */
 @Service
@@ -37,8 +48,11 @@ public class MonitorService {
     private final DbLeaseLockService leaseLockService;
     private final ConsoleProperties properties;
     private ConsoleMetricsBinder metricsBinder;
+    private Executor collectExecutor;
     private static final long STATUS_PERSIST_INTERVAL_MS = 60_000L;
-    private final Map<Long, Long> lastPersistedAt = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<Long, Long> lastPersistedAt = new ConcurrentHashMap<>();
+    /** 单实例在途采集去重集合：确保同一个慢实例最多占用 1 个工作线程，杜绝跨轮次堆积（Wave 2A H3）。 */
+    private final Set<Long> inFlightInstances = ConcurrentHashMap.newKeySet();
 
     public MonitorService(InstanceService instanceService, RespGateway gateway,
                           MetricPointRepository metricRepository,
@@ -68,27 +82,121 @@ public class MonitorService {
         this.metricsBinder = metricsBinder;
     }
 
-    /** 定时采集：多副本部署通过数据库租约锁选主，确保单周期仅主副本采集落库。 */
+    @Autowired(required = false)
+    void setCollectExecutor(@Qualifier("monitorCollectExecutor") Executor collectExecutor) {
+        this.collectExecutor = collectExecutor;
+    }
+
+    /** 定时采集：多副本通过数据库租约锁选主，多实例并行采集并严控时间预算（≤ 70% 租约 TTL）防脑裂（Wave 2A H3）。 */
     @Scheduled(fixedDelayString = "${console.metrics.interval-ms:5000}",
             initialDelayString = "${console.metrics.initial-delay-ms:3000}")
     public void scheduledCollect() {
-        if (leaseLockService != null) {
-            long intervalMs = properties != null && properties.getMetrics() != null
-                    ? properties.getMetrics().getIntervalMs()
-                    : 5000L;
-            // 租约 TTL 取 2 倍采样间隔：主副本每轮凭同一 owner_id 原地续租避免抖动，宕机后两轮内由备副本自动接管
-            Duration leaseTtl = Duration.ofMillis(Math.max(4000L, intervalMs * 2L));
-            if (!leaseLockService.tryAcquire(MONITOR_LEASE_KEY, leaseTtl)) {
-                return;
-            }
+        long intervalMs = properties != null && properties.getMetrics() != null
+                ? properties.getMetrics().getIntervalMs()
+                : 5000L;
+        // 租约 TTL 取 2 倍采样间隔：主副本每轮凭同一 owner_id 原地续租避免抖动，宕机后两轮内由备副本自动接管
+        Duration leaseTtl = Duration.ofMillis(Math.max(4000L, intervalMs * 2L));
+        if (leaseLockService != null && !leaseLockService.tryAcquire(MONITOR_LEASE_KEY, leaseTtl)) {
+            return;
         }
-        for (DbInstance instance : instanceService.enabled()) {
+        List<DbInstance> enabled = instanceService.enabled();
+        if (enabled.isEmpty()) {
+            return;
+        }
+        if (enabled.size() == 1 || collectExecutor == null) {
+            for (DbInstance instance : enabled) {
+                collectSafely(instance);
+            }
+            return;
+        }
+        long budgetMs = Math.max(2000L, (long) (leaseTtl.toMillis() * 0.7d));
+        record SubmittedTask(Long instanceId, AtomicBoolean started, CompletableFuture<Void> future) {
+        }
+        List<SubmittedTask> submitted = new ArrayList<>(enabled.size());
+        for (DbInstance instance : enabled) {
+            Long id = instance.getId();
+            if (id != null && !inFlightInstances.add(id)) {
+                log.debug("实例上一轮采集仍在执行，本轮跳过防止线程堆积 instance={}", instance.getName());
+                continue;
+            }
+            AtomicBoolean started = new AtomicBoolean(false);
             try {
-                collectOnce(instance);
-            } catch (RuntimeException ex) {
-                log.debug("采集失败 instance={} err={}", instance.getName(), ex.getMessage());
+                CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                    if (!started.compareAndSet(false, true)) {
+                        return;
+                    }
+                    try {
+                        collectSafely(instance);
+                    } finally {
+                        if (id != null) {
+                            inFlightInstances.remove(id);
+                        }
+                    }
+                }, collectExecutor);
+                submitted.add(new SubmittedTask(id, started, future));
+            } catch (RejectedExecutionException ex) {
+                if (id != null) {
+                    inFlightInstances.remove(id);
+                }
+                log.warn("监控采集线程池队列已满，跳过本轮实例采样 instance={}", instance.getName());
             }
         }
+        if (submitted.isEmpty()) {
+            return;
+        }
+        CompletableFuture<?> all = CompletableFuture.allOf(
+                submitted.stream().map(SubmittedTask::future).toArray(CompletableFuture[]::new));
+        try {
+            all.get(budgetMs, TimeUnit.MILLISECONDS);
+        } catch (TimeoutException ex) {
+            // 取消尚未开始的任务并释放其占位；已在阻塞读取 Socket 的线程保留占位直至 connectTimeoutMs+readTimeoutMs 有界退出
+            int unfinished = 0;
+            for (SubmittedTask task : submitted) {
+                if (!task.future().isDone()) {
+                    unfinished++;
+                    task.future().cancel(true);
+                    if (task.instanceId() != null && task.started().compareAndSet(false, true)) {
+                        inFlightInstances.remove(task.instanceId());
+                    }
+                }
+            }
+            log.warn("本轮监控并发采集达到租约预算 {} ms（总实例={}，未完成={}），提前结束等待以保障租约按期续期",
+                    budgetMs, enabled.size(), unfinished);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException ex) {
+            log.debug("并发采集存在单实例异常：{}", ex.getMessage());
+        }
+    }
+
+    int inFlightCount() {
+        return inFlightInstances.size();
+    }
+
+    private void collectSafely(DbInstance instance) {
+        try {
+            collectOnce(instance);
+        } catch (RuntimeException ex) {
+            log.debug("采集失败 instance={} err={}", instance.getName(), ex.getMessage());
+        }
+    }
+
+    /** 清理已删除实例的本地状态节流缓存（Wave 2A H4）。 */
+    public void evictInstanceState(Long instanceId) {
+        if (instanceId != null) {
+            lastPersistedAt.remove(instanceId);
+        }
+    }
+
+    /** 跨副本对账：移除数据库中已不存在的实例缓存项。 */
+    public int reconcileActiveInstances(Set<Long> activeIds) {
+        int removed = 0;
+        for (Long id : List.copyOf(lastPersistedAt.keySet())) {
+            if (!activeIds.contains(id) && lastPersistedAt.remove(id) != null) {
+                removed++;
+            }
+        }
+        return removed;
     }
 
     /** 采集单实例：写指标 + 更新状态 + 求值告警。 */

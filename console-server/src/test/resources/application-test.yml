@@ -27,6 +27,9 @@ console:
     dir: ./target/test-backups
     schedule:
       enabled: false
+  ha:
+    reconcile-interval-ms: 3600000
+    reconcile-initial-delay-ms: 3600000
 
 logging:
   level:

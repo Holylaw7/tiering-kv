@@ -26,17 +26,17 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 
 /**
- * O3-B：告警 Webhook 异步派发器。
+ * O3-B + Wave 2A H2：告警 Webhook 异步派发器。
  *
  * <p>具备三项可靠性边界：
  * <ul>
  *   <li>独立有界线程池异步发送，3 s 连接/读写超时 + 最多 2 次退避重试，绝不阻塞指标采集；</li>
  *   <li>配置签名密钥时自动附带 {@code X-TieringKV-Signature: sha256=...} HMAC-SHA256 签名；</li>
- *   <li>按 {@code channelId:ruleId:instanceId} 实施静默窗口去重，状态转为 RESOLVED 时立即豁免静默。</li>
+ *   <li>通过 {@link AlertStateStore} 基于 MySQL 原子条件更新/主键占位实施跨副本静默窗口与防重发控制，
+ *       状态转为 RESOLVED 时清除静默并保证同一恢复事件仅被单个副本推送一次。</li>
  * </ul>
  */
 @Service
@@ -52,23 +52,23 @@ public class AlertWebhookDispatcher {
     private final Executor executor;
     private final OutboundUrlGuard urlGuard;
     private final PinnedWebhookHttpClient httpClient;
-    private final Map<String, Instant> lastSentByKey = new ConcurrentHashMap<>();
+    private final AlertStateStore stateStore;
 
     public AlertWebhookDispatcher(AlertChannelRepository channelRepository,
                                   InstanceCredentialCipher cipher,
                                   ObjectMapper objectMapper,
                                   @Qualifier("alertWebhookExecutor") Executor executor) {
         this(channelRepository, cipher, objectMapper, executor,
-                OutboundUrlGuard.permissive(), new PinnedWebhookHttpClient());
+                OutboundUrlGuard.permissive(), new PinnedWebhookHttpClient(), AlertStateStore.inMemoryOnly(null));
     }
 
-    @Autowired
     public AlertWebhookDispatcher(AlertChannelRepository channelRepository,
                                   InstanceCredentialCipher cipher,
                                   ObjectMapper objectMapper,
                                   @Qualifier("alertWebhookExecutor") Executor executor,
                                   OutboundUrlGuard urlGuard) {
-        this(channelRepository, cipher, objectMapper, executor, urlGuard, new PinnedWebhookHttpClient());
+        this(channelRepository, cipher, objectMapper, executor, urlGuard,
+                new PinnedWebhookHttpClient(), AlertStateStore.inMemoryOnly(null));
     }
 
     public AlertWebhookDispatcher(AlertChannelRepository channelRepository,
@@ -77,12 +77,35 @@ public class AlertWebhookDispatcher {
                                   Executor executor,
                                   OutboundUrlGuard urlGuard,
                                   PinnedWebhookHttpClient httpClient) {
+        this(channelRepository, cipher, objectMapper, executor, urlGuard,
+                httpClient, AlertStateStore.inMemoryOnly(null));
+    }
+
+    @Autowired
+    public AlertWebhookDispatcher(AlertChannelRepository channelRepository,
+                                  InstanceCredentialCipher cipher,
+                                  ObjectMapper objectMapper,
+                                  @Qualifier("alertWebhookExecutor") Executor executor,
+                                  OutboundUrlGuard urlGuard,
+                                  AlertStateStore stateStore) {
+        this(channelRepository, cipher, objectMapper, executor, urlGuard,
+                new PinnedWebhookHttpClient(), stateStore);
+    }
+
+    public AlertWebhookDispatcher(AlertChannelRepository channelRepository,
+                                  InstanceCredentialCipher cipher,
+                                  ObjectMapper objectMapper,
+                                  Executor executor,
+                                  OutboundUrlGuard urlGuard,
+                                  PinnedWebhookHttpClient httpClient,
+                                  AlertStateStore stateStore) {
         this.channelRepository = channelRepository;
         this.cipher = cipher;
         this.objectMapper = objectMapper;
         this.executor = executor;
         this.urlGuard = urlGuard == null ? OutboundUrlGuard.strict() : urlGuard;
         this.httpClient = httpClient == null ? new PinnedWebhookHttpClient() : httpClient;
+        this.stateStore = stateStore == null ? AlertStateStore.inMemoryOnly(null) : stateStore;
     }
 
     /** 异步派发告警触发/恢复事件至所有启用中的 Webhook 渠道。 */
@@ -114,22 +137,14 @@ public class AlertWebhookDispatcher {
     }
 
     boolean shouldDeliver(AlertChannel channel, AlertEvent event) {
-        String key = channel.getId() + ":" + event.getRuleId() + ":" + event.getInstanceId();
-        Instant now = Instant.now();
-        if (event.getStatus() == AlertStatus.RESOLVED) {
-            lastSentByKey.remove(key);
-            return true;
-        }
-        int silence = Math.max(0, channel.getSilenceSeconds());
-        if (silence == 0) {
-            return true;
-        }
-        Instant previous = lastSentByKey.get(key);
-        if (previous != null && Duration.between(previous, now).getSeconds() < silence) {
-            return false;
-        }
-        lastSentByKey.put(key, now);
-        return true;
+        boolean resolved = event.getStatus() == AlertStatus.RESOLVED;
+        return stateStore.tryClaimWebhookDelivery(
+                channel.getId(),
+                event.getRuleId(),
+                event.getInstanceId(),
+                event.getId(),
+                channel.getSilenceSeconds(),
+                resolved);
     }
 
     private void deliverSafely(AlertChannel channel, Map<String, Object> payload) {

@@ -210,6 +210,24 @@ public class BackupService {
     private final java.util.concurrent.ConcurrentHashMap<Long, Object> instanceLocks =
             new java.util.concurrent.ConcurrentHashMap<>();
 
+    /** 清理已删除实例的本地锁条目，防止实例长期增删产生内存泄漏（Wave 2A H1/H4）。 */
+    public void evictInstanceLock(Long instanceId) {
+        if (instanceId != null) {
+            instanceLocks.remove(instanceId);
+        }
+    }
+
+    /** 跨副本对账：移除数据库中已不存在的实例本地锁对象。 */
+    public int reconcileInstanceLocks(java.util.Set<Long> activeIds) {
+        int removed = 0;
+        for (Long id : List.copyOf(instanceLocks.keySet())) {
+            if (!activeIds.contains(id) && instanceLocks.remove(id) != null) {
+                removed++;
+            }
+        }
+        return removed;
+    }
+
     /** 进度持久化节流阈值：每处理 500 键或间隔 ≥ 1 秒刷库一次，避免高频写库。 */
     private static final long PROGRESS_FLUSH_KEYS = 500L;
     private static final long PROGRESS_FLUSH_MS = 1_000L;

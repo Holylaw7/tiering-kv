@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -125,6 +126,11 @@ public class ConsoleMetricsBinder {
         }
         InstanceMetricState state = stateFor(instance);
         state.up.set(0);
+    }
+
+    /** 返回当前注册了 Prometheus 实例指标序列的实例 ID 集合（供 HA 跨副本对账清理）。 */
+    public Set<Long> registeredInstanceIds() {
+        return Set.copyOf(instanceStates.keySet());
     }
 
     /** 注销已删除实例的指标序列，防止 Prometheus 高基数与内存泄漏。 */

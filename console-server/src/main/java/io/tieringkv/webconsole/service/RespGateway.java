@@ -12,17 +12,25 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** 按实例维度的 RESP 访问网关（连接池 + 超时 + 口令）。 */
+/** 按实例维度的 RESP 访问网关（连接池 + 超时 + 口令 + 跨副本配置指纹自动驱逐）。 */
 @Service
 public class RespGateway {
 
+    private record PooledEntry(String fingerprint, RespClientPool pool) {
+    }
+
     private final ConsoleProperties properties;
     private final InstanceCredentialCipher cipher;
-    private final Map<Long, RespClientPool> pools = new ConcurrentHashMap<>();
+    private final Map<Long, PooledEntry> pools = new ConcurrentHashMap<>();
 
     public RespGateway(ConsoleProperties properties) {
         this(properties, new InstanceCredentialCipher((String) null));
@@ -97,10 +105,36 @@ public class RespGateway {
     }
 
     public void evict(Long instanceId) {
-        RespClientPool pool = pools.remove(instanceId);
-        if (pool != null) {
-            pool.close();
+        PooledEntry entry = pools.remove(instanceId);
+        if (entry != null) {
+            entry.pool().close();
         }
+    }
+
+    /** 返回当前本地已缓存连接池的实例 ID 集合（供 HA 周期对账使用）。 */
+    public Set<Long> cachedInstanceIds() {
+        return Set.copyOf(pools.keySet());
+    }
+
+    /** 若数据库中的实例已删除或连接参数（地址/口令/TLS）已变更，则驱逐本地陈旧连接池（Wave 2A H4）。 */
+    public boolean evictIfStale(Long instanceId, DbInstance liveInstance) {
+        if (liveInstance == null) {
+            PooledEntry removed = pools.remove(instanceId);
+            if (removed != null) {
+                removed.pool().close();
+                return true;
+            }
+            return false;
+        }
+        String expectedFp = connectionFingerprint(liveInstance);
+        PooledEntry current = pools.get(instanceId);
+        if (current != null && !current.fingerprint().equals(expectedFp)) {
+            if (pools.remove(instanceId, current)) {
+                current.pool().close();
+                return true;
+            }
+        }
+        return false;
     }
 
     public int poolCount() {
@@ -109,16 +143,16 @@ public class RespGateway {
 
     public int totalActiveConnections() {
         int sum = 0;
-        for (RespClientPool pool : pools.values()) {
-            sum += pool.activeCount();
+        for (PooledEntry entry : pools.values()) {
+            sum += entry.pool().activeCount();
         }
         return sum;
     }
 
     public long totalIdleConnections() {
         long sum = 0L;
-        for (RespClientPool pool : pools.values()) {
-            sum += pool.idleCount();
+        for (PooledEntry entry : pools.values()) {
+            sum += entry.pool().idleCount();
         }
         return sum;
     }
@@ -128,28 +162,63 @@ public class RespGateway {
             return properties.getPool().getMaxTotal();
         }
         int sum = 0;
-        for (RespClientPool pool : pools.values()) {
-            sum += pool.maxTotal();
+        for (PooledEntry entry : pools.values()) {
+            sum += entry.pool().maxTotal();
         }
         return sum;
     }
 
     public long totalBorrowTimeouts() {
         long sum = 0L;
-        for (RespClientPool pool : pools.values()) {
-            sum += pool.borrowTimeoutCount();
+        for (PooledEntry entry : pools.values()) {
+            sum += entry.pool().borrowTimeoutCount();
         }
         return sum;
     }
 
     private RespClientPool pool(DbInstance instance) {
+        String fp = connectionFingerprint(instance);
+        PooledEntry existing = pools.get(instance.getId());
+        if (existing != null && existing.fingerprint().equals(fp)) {
+            return existing.pool();
+        }
         ConsoleProperties.Pool cfg = properties.getPool();
-        return pools.computeIfAbsent(instance.getId(), key -> new RespClientPool(
-                () -> open(instance),
-                cfg.getMaxIdle(),
-                cfg.getMaxTotal(),
-                cfg.getBorrowTimeoutMs(),
-                cfg.getMaxIdleTimeMs()));
+        RespClientPool[] staleToClose = {null};
+        PooledEntry active = pools.compute(instance.getId(), (key, current) -> {
+            if (current != null && current.fingerprint().equals(fp)) {
+                return current;
+            }
+            if (current != null) {
+                staleToClose[0] = current.pool();
+            }
+            RespClientPool fresh = new RespClientPool(
+                    () -> open(instance),
+                    cfg.getMaxIdle(),
+                    cfg.getMaxTotal(),
+                    cfg.getBorrowTimeoutMs(),
+                    cfg.getMaxIdleTimeMs());
+            return new PooledEntry(fp, fresh);
+        });
+        if (staleToClose[0] != null) {
+            staleToClose[0].close();
+        }
+        return active.pool();
+    }
+
+    /** 基于连接参数计算 SHA-256 指纹：任意副本更新实例 host/port/password/TLS 后，对端副本借用连接即刻感知重建。 */
+    static String connectionFingerprint(DbInstance instance) {
+        String raw = (instance.getHost() == null ? "" : instance.getHost()) + "\0"
+                + instance.getPort() + "\0"
+                + instance.isTlsEnabled() + "\0"
+                + instance.isTlsVerifyHostname() + "\0"
+                + (instance.getPassword() == null ? "" : instance.getPassword()) + "\0"
+                + (instance.getTlsCaCert() == null ? "" : instance.getTlsCaCert());
+        try {
+            MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(sha256.digest(raw.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("SHA-256 不可用", ex);
+        }
     }
 
     private RespClient open(DbInstance instance) {
@@ -195,7 +264,7 @@ public class RespGateway {
 
     @PreDestroy
     public void shutdown() {
-        pools.values().forEach(RespClientPool::close);
+        pools.values().forEach(entry -> entry.pool().close());
         pools.clear();
     }
 }

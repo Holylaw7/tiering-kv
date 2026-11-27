@@ -2,6 +2,7 @@ package io.tieringkv.webconsole.service;
 
 import io.tieringkv.webconsole.common.BusinessException;
 import io.tieringkv.webconsole.domain.DbInstance;
+import io.tieringkv.webconsole.domain.InstanceDeletedEvent;
 import io.tieringkv.webconsole.domain.InstanceStatus;
 import io.tieringkv.webconsole.observability.ConsoleMetricsBinder;
 import io.tieringkv.webconsole.repository.DbInstanceRepository;
@@ -11,8 +12,11 @@ import io.tieringkv.webconsole.support.InfoParser;
 import io.tieringkv.webconsole.web.dto.InstanceRequest;
 import io.tieringkv.webconsole.web.dto.InstanceView;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -27,6 +31,7 @@ public class InstanceService {
     private final AuditService auditService;
     private final InstanceCredentialCipher cipher;
     private ConsoleMetricsBinder metricsBinder;
+    private ApplicationEventPublisher eventPublisher;
 
     public InstanceService(DbInstanceRepository repository, RespGateway gateway,
                            AuditService auditService) {
@@ -45,6 +50,11 @@ public class InstanceService {
     @Autowired(required = false)
     void setMetricsBinder(ConsoleMetricsBinder metricsBinder) {
         this.metricsBinder = metricsBinder;
+    }
+
+    @Autowired(required = false)
+    void setEventPublisher(ApplicationEventPublisher eventPublisher) {
+        this.eventPublisher = eventPublisher;
     }
 
     public List<InstanceView> list() {
@@ -152,6 +162,19 @@ public class InstanceService {
         gateway.evict(id);
         if (metricsBinder != null) {
             metricsBinder.unregisterInstance(id);
+        }
+        if (eventPublisher != null) {
+            ApplicationEventPublisher publisher = eventPublisher;
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        publisher.publishEvent(new InstanceDeletedEvent(id));
+                    }
+                });
+            } else {
+                publisher.publishEvent(new InstanceDeletedEvent(id));
+            }
         }
         auditService.record("INSTANCE_DELETE", instance.getName(), null, true);
     }

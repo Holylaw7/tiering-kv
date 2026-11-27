@@ -11,6 +11,8 @@ import io.tieringkv.webconsole.web.dto.WebhookTestResult;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.List;
 import java.util.Locale;
@@ -24,6 +26,7 @@ public class AlertChannelService {
     private final AlertWebhookDispatcher dispatcher;
     private final AuditService auditService;
     private final OutboundUrlGuard urlGuard;
+    private AlertStateStore stateStore;
 
     public AlertChannelService(AlertChannelRepository repository,
                                InstanceCredentialCipher cipher,
@@ -43,6 +46,11 @@ public class AlertChannelService {
         this.dispatcher = dispatcher;
         this.auditService = auditService;
         this.urlGuard = urlGuard == null ? OutboundUrlGuard.strict() : urlGuard;
+    }
+
+    @Autowired(required = false)
+    void setStateStore(AlertStateStore stateStore) {
+        this.stateStore = stateStore;
     }
 
     public List<AlertChannelView> list() {
@@ -102,6 +110,19 @@ public class AlertChannelService {
         AlertChannel channel = repository.findById(id)
                 .orElseThrow(() -> BusinessException.notFound("通知渠道不存在：" + id));
         repository.delete(channel);
+        if (stateStore != null) {
+            AlertStateStore store = stateStore;
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        store.clearForChannel(id);
+                    }
+                });
+            } else {
+                store.clearForChannel(id);
+            }
+        }
         auditService.record("ALERT_CHANNEL_DELETE", channel.getName(), null, true);
     }
 

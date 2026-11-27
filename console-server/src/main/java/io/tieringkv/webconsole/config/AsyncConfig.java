@@ -34,4 +34,19 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    /** Wave 2A H3：监控并发采集线程池，避免单个慢实例阻塞全量实例采样或拖垮租约续期。 */
+    @Bean(name = "monitorCollectExecutor")
+    public Executor monitorCollectExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(128);
+        executor.setThreadNamePrefix("monitor-collect-");
+        executor.setDaemon(true);
+        // 使用 AbortPolicy 显式抛出 RejectedExecutionException，防止 DiscardPolicy 让 CompletableFuture 永不完成
+        executor.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.AbortPolicy());
+        executor.initialize();
+        return executor;
+    }
 }

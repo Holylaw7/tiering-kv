@@ -26,6 +26,7 @@ public class RetentionService {
     private final ConsoleProperties properties;
     private final LoginAttemptRepository loginAttemptRepository;
     private final DbLeaseLockService leaseLockService;
+    private AlertStateStore alertStateStore;
 
     public RetentionService(MetricPointRepository metricRepository,
                             OpLogRepository opLogRepository,
@@ -46,7 +47,12 @@ public class RetentionService {
         this.leaseLockService = leaseLockService;
     }
 
-    /** 每小时清理一次：多副本由租约锁选主执行；指标按配置保留，审计保留 30 天，清理过期登录限流桶。 */
+    @Autowired(required = false)
+    void setAlertStateStore(AlertStateStore alertStateStore) {
+        this.alertStateStore = alertStateStore;
+    }
+
+    /** 每小时清理一次：多副本由租约锁选主执行；指标按配置保留，审计保留 30 天，清理过期登录限流桶与告警状态。 */
     @Scheduled(fixedDelayString = "${console.retention.interval-ms:3600000}",
             initialDelayString = "${console.retention.initial-delay-ms:300000}")
     @Transactional
@@ -60,9 +66,10 @@ public class RetentionService {
         int removedMetrics = metricRepository.deleteOlderThan(now.minusHours(hours));
         int removedLogs = opLogRepository.deleteOlderThan(now.minusDays(30));
         int removedAttempts = loginAttemptRepository == null ? 0 : loginAttemptRepository.deleteExpired(now);
-        if (removedMetrics > 0 || removedLogs > 0 || removedAttempts > 0) {
-            log.info("保留策略清理完成：指标 {} 行、审计 {} 行、限流窗口 {} 行",
-                    removedMetrics, removedLogs, removedAttempts);
+        int removedAlertStates = alertStateStore == null ? 0 : alertStateStore.purgeStaleBefore(now.minusDays(7));
+        if (removedMetrics > 0 || removedLogs > 0 || removedAttempts > 0 || removedAlertStates > 0) {
+            log.info("保留策略清理完成：指标 {} 行、审计 {} 行、限流窗口 {} 行、过期告警态 {} 行",
+                    removedMetrics, removedLogs, removedAttempts, removedAlertStates);
         }
     }
 }
