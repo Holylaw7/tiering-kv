@@ -3,6 +3,26 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [6.4.0] - 2026-11-27
+
+### Added
+
+- **备份完整性校验、Dry-Run 冲突预览与预恢复安全快照（D1）**：
+  - Flyway `V12__backup_integrity_and_audit_trace.sql` 为 `backup_record` 新增 `sha256`/`verify_status`/`verified_at`/`pre_restore_backup_id`，为 `op_log` 新增 `request_id` 及索引 `idx_op_log_request_id`；
+  - `BackupService` 导出期外包 `DigestOutputStream(SHA-256)` 零额外 I/O 落库精确摘要（Local + S3 双后端）；新增 `POST /api/v1/backups/{id}/verify`（全文件流式 SHA-256 + Gzip/JSONL 校验，单字节篡改即标记 `CORRUPTED`）、`POST /api/v1/backups/{id}/restore/preview`（100 键批量 RESP Pipeline `EXISTS` 只读冲突预检）及 `RestoreRequest(createSafetySnapshot)` 预恢复自动保护快照；
+  - 前端 `BackupsView.vue` 新增完整性列、短 SHA-256 Tooltip、「校验」按钮与两步「安全恢复向导」。
+- **键空间大键/前缀/TTL 诊断 + Prometheus 业务指标 + 全链路 Request-ID（D2）**：
+  - 新增 `KeyspaceAnalyzerService` 与 `POST /api/v1/keys/analyze`（受限 `SCAN` + 100 键批量 Pipeline 探测 `TYPE`/`TTL` 及各类型尺寸，产出类型分布、TTL 健康度、Top 前缀聚合、Top-N BigKeys 与优化建议），前端 `KeyspaceView.vue` 新增「大键 / 前缀 / TTL 诊断」页签及 `keyspaceAnalyzer.ts` 单测（Vitest `38/38`）；
+  - 新增零外部依赖 `ConsoleMetricsBinder` 与 `RespPoolHealthIndicator`，向 `/actuator/prometheus` 暴露被纳管实例指标（`tieringkv_instance_*`，支持实例注销防基数泄漏）、RESP 连接池水位/超时指标（`tieringkv_console_pool_*`）与告警/备份/恢复/审计计数指标；启用 Spring Boot 4 `/actuator/health/liveness` 与 `/actuator/health/readiness` 分离探针；
+  - 新增 `RequestCorrelationFilter`（支持 `X-Request-Id` 透传与 W3C `traceparent` 提取），贯穿 SLF4J MDC、`X-Request-Id` 响应头（CORS 放行）与 `op_log.request_id`，`AuditController`/`AuditView.vue` 支持按 `Request ID` 精确检索、复制与 CSV 导出（控制面 `203` 项测试，JaCoCo LINE `80.74%`，OpenAPI `0` 漂移）。
+- **标准 Helm v3 Chart、Grafana/Prometheus 观测包与 CycloneDX 1.5 SBOM（D3）**：
+  - 新增 `deploy/helm/tiering-kv/` 全栈 Chart（支持 `standalone`/`cluster` 数据面 ZGC StatefulSet、多副本 HA `console-server` 自动切换 DB 登录限流与 PDB、`console-web` + Ingress、可选 Operator、`ServiceMonitor` & `PrometheusRule`），同步刷新 `deploy/kubernetes/tiering-kv/` 镜像标签；
+  - 新增 `deploy/observability/` 观测资产包（10 面板 `grafana-dashboard.json`、10 条 `prometheus-alerts.yaml`、`README.md`）；
+  - 升级 `scripts/sbom.sh` 支持零依赖 CycloneDX 1.5 JSON 输出（`--cdx`），CI 新增 `helm-and-observability-lint` 门禁，发布流水线同步随 Release 上传 `tiering-kv-sbom.cdx.json`。
+- **第 9 组全栈 E2E 与 HA 观测指标门禁（D4）**：
+  - 新增 `console-web/e2e/integrity-and-analyzer.spec.ts` 端到端验证备份完整性校验、Dry-Run 冲突预览与保护快照恢复、键空间 BigKey/前缀/TTL 诊断及审计 `Request ID` 追踪；
+  - 扩充 `docker-compose-ha-smoke` 断言双副本 `liveness`/`readiness` 探针、`tieringkv_*` Prometheus 指标与 `X-Request-Id` 代理回写。
+
 ## [6.3.0] - 2026-11-26
 
 ### Changed

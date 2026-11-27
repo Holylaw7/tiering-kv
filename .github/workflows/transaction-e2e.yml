@@ -166,8 +166,8 @@ jobs:
         run: |
           mvn -q -DskipTests package
           for i in 1 2 3; do
-            if docker build -t ghcr.io/holylaw7/tiering-kv:v6.3.0 -f deploy/Dockerfile .; then
-              kind load docker-image ghcr.io/holylaw7/tiering-kv:v6.3.0 --name tiering-kv
+            if docker build -t ghcr.io/holylaw7/tiering-kv:v6.4.0 -f deploy/Dockerfile .; then
+              kind load docker-image ghcr.io/holylaw7/tiering-kv:v6.4.0 --name tiering-kv
               exit 0
             fi
             echo "docker build attempt ${i}/3 failed, retrying in 10s..." >&2

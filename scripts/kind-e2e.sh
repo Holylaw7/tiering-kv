@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 # 用法：TIERINGKV_KIND_CLUSTER=true scripts/kind-e2e.sh run
 
 CLUSTER=${TIERINGKV_KIND_CLUSTER_NAME:-tiering-kv}
-IMAGE=${TIERINGKV_IMAGE:-ghcr.io/holylaw7/tiering-kv:v6.3.0}
+IMAGE=${TIERINGKV_IMAGE:-ghcr.io/holylaw7/tiering-kv:v6.4.0}
 
 case "${1:-run}" in
   run)

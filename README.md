@@ -4,12 +4,12 @@
 > 内存/磁盘分层 + 分布式事务 + 多模型值 + 向量检索 + SQL + 云原生运行时，
 > 配套 **Vue 3 + Spring Boot 的 Web 运维管理平台**（前后端分离）。
 
-**版本：v6.3.0（2026-11-26）** · **约 6,770+ 个内核测试方法 + 78 项 Operator 测试 + 194 项控制面测试（JaCoCo 80.48%）+ 36 项 Vitest + 8 组 Playwright E2E + 双副本 HA 实时故障转移与跨副本 JWT 吊销门禁 + 真实 kind Operator 6 阶段全生命周期 E2E / 0 failures**（内核测试口径见 [docs/testing/measurement-conventions.md](
+**版本：v6.4.0（2026-11-27）** · **约 6,770+ 个内核测试方法 + 78 项 Operator 测试 + 203 项控制面测试（JaCoCo 80.74%）+ 38 项 Vitest + 9 组 Playwright E2E + Helm/观测包/CycloneDX SBOM 门禁 + 双副本 HA 实时故障转移/探针/Prometheus 指标与跨副本 JWT 吊销门禁 + 真实 kind Operator 6 阶段全生命周期 E2E / 0 failures**（内核测试口径见 [docs/testing/measurement-conventions.md](
 docs/testing/measurement-conventions.md)） ·
 技术债 **全量清零**（含 `TD-085` 关闭、`.trivyignore` `0` 例外） ·
 JDK 21 · Spring Boot 4.2 / Jackson 3 · 真实 GitHub Runner 门禁全绿
-（build / test（三分片 + `security-scan` 零例外 Trivy）/ transaction-e2e（含 `operator-kind-e2e`）/
-release：Benchmark + Trivy 零例外 0 漏洞 + 4 镜像 GHCR 发布）
+（build / test（三分片 + `helm-and-observability-lint` + `security-scan` 零例外 Trivy）/ transaction-e2e（含 `operator-kind-e2e`）/
+release：Benchmark + Trivy 零例外 0 漏洞 + 4 镜像 GHCR + CycloneDX 1.5 SBOM 发布）
 
 ## 项目定位
 
@@ -55,12 +55,13 @@ redis-cli -p 6379 INFO vector        # 可观测性 sections：vector/replicatio
 | 总览 | 5s 采集 INFO，QPS/延迟/连接数/键数/内存水位趋势图，防重入轮询（后台标签页自动暂停）、`ResizeObserver` 容器自适应重绘与 SSTable 清单抽屉 |
 | 拓扑 | `/#/topology` 解析 `# Cluster`/`# Transaction`/`# Persistence` 与 16384 HashSlot ECharts 分布图，纯 JDK 21 `HttpClient` 零依赖桥接 K8s Operator（在线扩缩容、滚动升级、按需备份） |
 | 实例 | 纳管、探测连通性与版本、有界连接池复用、RESP TLS 加密传输与自定义 CA PEM 校验、口令静态加密且不回显 |
-| 键空间 | SCAN 游标分页与批量 Pipeline 元数据/值读取、类型识别（string/hash/list/set/zset/json/stream）、值查看与改写、TTL |
+| 键空间 | SCAN 游标分页与批量 Pipeline 元数据/值读取、类型识别（string/hash/list/set/zset/json/stream）、值查看与改写、TTL；内置只读「大键 / 前缀 / TTL 诊断」分析器（Top-N BigKeys、命名空间前缀柱图、TTL 健康度分桶与优化建议） |
 | 多模型 | `/#/multimodel` 多模型工作台：Vector HNSW 集合管理/Top-K 相似度检索/索引落盘、TimeSeries 时序 ECharts 折线图与 7 种桶聚合、JSONPath 查询/字段下钻与原地编辑（标准 Redis 自动降级） |
 | 终端 | 任意命令直连执行、危险命令拦截、历史回放 |
 | 告警 | 阈值 + 持续时长规则、触发/恢复闭环、Webhook 异步推送（HMAC-SHA256 签名 + 静默窗口 + 5xx 重试）、事件人工处置 |
-| 备份 | 异步逻辑备份与恢复（100 键批量 Pipeline + 实时进度条 + 同实例并发 `409` 保护）、定时备份策略（Cron + 逻辑/物理双模式 + 多副本 HA 单活调度与留存清理）、ADMIN/OPS 权限下载、单机/分布式物理 Checkpoint（`BGSAVE`） |
-| 审计 | 操作留痕（动作/对象/来源 IP/成败），按条件检索与 CSV 导出 |
+| 备份 | 异步逻辑备份与恢复（100 键批量 Pipeline + 实时进度条 + 同实例并发 `409` 保护）、流式 SHA-256 摘要与归档完整性校验、两步「安全恢复向导」（Dry-Run 冲突预检 + 预恢复自动保护快照）、定时备份策略（Cron + 逻辑/物理双模式 + HA 单活调度与留存清理）、ADMIN/OPS 下载与物理 Checkpoint（`BGSAVE`） |
+| 审计 | 操作留痕（动作/对象/来源 IP/`Request ID` 全链路追踪/成败），支持 W3C `traceparent` / `X-Request-Id` 串联、按条件检索与 CSV 导出 |
+| 可观测 | Micrometer `/actuator/prometheus` 暴露被纳管实例水位/QPS/P99/冷层 SSTable、RESP 连接池治理与告警/备份/审计计数；Spring Boot 4 `liveness`/`readiness` 探针 + 开箱即用 Grafana 看板与 Prometheus 告警包（`deploy/observability/`） |
 
 本地一键启动（Windows，PowerShell）：
 
@@ -96,12 +97,13 @@ cd deploy/console && docker compose -f docker-compose.yml -f docker-compose.ha.y
 
 | 层级 | 命令 | 结果 |
 | --- | --- | --- |
-| 控制面测试与覆盖率门禁 | `cd console-server && mvn -B test org.jacoco:jacoco-maven-plugin:check` | 194 项测试 0 失败，JaCoCo 行覆盖率 80.48%（≥ 75% 门禁） |
+| 控制面测试与覆盖率门禁 | `cd console-server && mvn -B test org.jacoco:jacoco-maven-plugin:check` | 203 项测试 0 失败，JaCoCo 行覆盖率 80.74%（≥ 75% 门禁） |
 | 控制面静态缺陷扫描 | `cd console-server && mvn -B -DskipTests test-compile com.github.spotbugs:spotbugs-maven-plugin:check -Dspotbugs.threshold=High -Dspotbugs.failOnError=true` | SpotBugs High 0 缺陷 |
-| 前端质量、构建、单测与安全审计 | `cd console-web && npm run lint && npm run build && npm test && npm audit` | ESLint / `vue-tsc` / Vite 0 告警，36 项 Vitest 全绿，`npm audit` 0 漏洞 |
+| 前端质量、构建、单测与安全审计 | `cd console-web && npm run lint && npm run build && npm test && npm audit` | ESLint / `vue-tsc` / Vite 0 告警，38 项 Vitest 全绿，`npm audit` 0 漏洞 |
 | 零例外安全扫描（Trivy） | `trivy fs . --severity CRITICAL,HIGH --ignore-unfixed --ignorefile .trivyignore` | `.trivyignore` 0 有效例外，0 CRITICAL/HIGH |
+| Helm / 观测包 / CycloneDX SBOM 校验 | `helm lint deploy/helm/tiering-kv --strict && bash scripts/sbom.sh --cdx --offline` | 单机/多副本 HA/集群三套模板、10 面板 Grafana、10 条告警规则与 CycloneDX 1.5 SBOM 全绿 |
 | OpenAPI 契约漂移校验 | `cd console-web && npm run gen:api && git diff --exit-code -- src/api/schema.d.ts ../docs/api/openapi.json` | 0 漂移 |
-| 全栈容器 E2E 回归 | `cd console-web && E2E_BASE_URL=http://127.0.0.1:8081 npm run test:e2e` | 8 组 Playwright 规范全绿，双副本 HA 故障转移与跨副本 JWT 吊销、S3/RustFS 门禁全绿 |
+| 全栈容器 E2E 回归 | `cd console-web && E2E_BASE_URL=http://127.0.0.1:8081 npm run test:e2e` | 9 组 Playwright 规范全绿，双副本 HA 故障转移/探针/Prometheus 指标与跨副本 JWT 吊销、S3/RustFS 门禁全绿 |
 | 负载演示 | `node scripts/demo-load.mjs --seconds 60 --conns 6` | 约 6.7 万 ops/s（本机） |
 
 分布式事务栈（coordinator/participant/metadata/gateway 五容器）：
@@ -168,6 +170,7 @@ kubectl apply -f deploy/operator/kind-cluster-sample.yaml
 | v6.1.0 | 2026-11-26 | 分布式运维全链路与安全闭环（A1–A3）：分布式 Gateway 全面支持 `SCAN`/`DBSIZE`/`SLOWLOG`/`BGSAVE`/`LASTSAVE` 与 `INFO # Cluster/# Transaction/# Persistence`，Participant 物理快照原子落盘与重启恢复（`operator-kind-e2e` Stage 5 硬断言真实 `DBSIZE>=1` & `BGSAVE`）；控制面 Flyway V11 定时备份策略（Cron + 逻辑/物理双模式 + HA 单活调度与留存清理）及 JWT `token_version` 跨副本即时吊销；7 组 Playwright E2E 与 4 镜像 GHCR 发布 |
 | v6.2.0 | 2026-11-26 | 控制面多模型工作台与集群拓扑/K8s 桥接（C1–C3）：`RespCodec` 兼容 RESP2/RESP3 浮点与 `VECTOR.CHECKPOINT` 落盘接线，落地 `/#/multimodel`（Vector HNSW + TimeSeries ECharts 6 + JSONPath）与 `/#/topology`（16384 HashSlot 分布 + 2PC 事务面板 + 纯 JDK 21 `HttpClient` 零依赖 K8s Operator 桥接）；新增 Flyway 多副本冷启动 MySQL 咨询锁；194 项控制面测试（JaCoCo 80.48%）、8 组 Playwright E2E 与 4 镜像 GHCR 发布 |
 | v6.3.0 | 2026-11-26 | 高性能内核专版（Path B：B1–B4）：零分配 RESP + Linux 原生 Epoll + 批冲刷 + 去争用分片调度（消除 c=200 倒挂、P=16 651k/681k rps）；24-bit 内联 Morris-LFU + `SampledLfuPolicy` + Generational ZGC（63 万键存活堆 `-65.5%`、8 线程读 `9.13×`）；WAL Group Commit（`avgBatch=12.31`）+ 16 分片 S3-FIFO + 并发冷读 + FastRange Bloom；HNSW 扁平图 + SQ8 + FMA 核（20K×64D P99 `0.847→0.322ms`，SQ8 内存 `-69%~75%`）；0 CVE 例外与 4 镜像 GHCR 发布 |
+| v6.4.0 | 2026-11-27 | 企业级运维闭环与云原生标准交付（D1–D4）：Flyway V12 备份流式 SHA-256 摘要/归档完整性校验/Dry-Run 冲突预览与预恢复保护快照；键空间只读 BigKey/前缀/TTL 诊断分析器；零依赖 Micrometer/Prometheus 自定义业务指标（实例水位/RESP 连接池/告警/备份/审计）+ Spring Boot 4 `liveness`/`readiness` 探针 + W3C `traceparent`/`X-Request-Id` 全链路审计追踪；标准 Helm v3 全栈 Chart + Grafana/Prometheus 观测包 + CycloneDX 1.5 SBOM 交付；203 项控制面测试（JaCoCo 80.74%）、38 项 Vitest、9 组 Playwright E2E、4 镜像 GHCR 与 SBOM 资产发布 |
 | v5.0.3 | 2026-10-24 | 发布链路自动化：任意 v* 标签自动发版，门禁加控制面与前端作业（ADR-0360） |
 | v5.0.2 | 2026-10-24 | 版本号对齐：pom / 脚本 / 文档统一到 5.0.2，构建脚本不再写死构件名 |
 | v4.1.0 维护补丁 | 2026-08-16 | 生产链 TTL 修复（ADR-0351）+ 集群复制原子操作（ADR-0352，TD-081）+ 选举窗口/CI 稳定性加固（ADR-0353）+ RPC ERROR 帧 term 污染修复（ADR-0354）；技术债 50/50；约 6,738 个测试方法 / 14,957 次测试执行全绿 |
