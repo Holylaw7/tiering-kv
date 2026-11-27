@@ -122,6 +122,50 @@ export interface KeyDetail {
   value: unknown
 }
 
+export interface AnalyzeKeyspaceRequest {
+  pattern?: string
+  maxKeys?: number
+  delimiter?: string
+  topN?: number
+}
+
+export interface PrefixStat {
+  prefix: string
+  keyCount: number
+  totalSizeUnits: number
+  sharePercent: number
+}
+
+export interface BigKeyEntry {
+  key: string
+  type: string
+  sizeUnits: number
+  unitLabel: string
+  ttl: number
+}
+
+export interface TtlDistribution {
+  noExpire: number
+  under1h: number
+  between1hAnd24h: number
+  over24h: number
+}
+
+export interface KeyspaceAnalysisView {
+  instanceId: number
+  pattern: string
+  delimiter: string
+  scannedKeys: number
+  totalDbSize: number
+  truncated: boolean
+  durationMs: number
+  typeDistribution: Record<string, number>
+  ttlDistribution: TtlDistribution
+  topPrefixes: PrefixStat[]
+  bigKeys: BigKeyEntry[]
+  recommendations: string[]
+}
+
 export interface TerminalResult {
   replyType: string
   payload: unknown
@@ -305,6 +349,7 @@ export interface OpLog {
   ip?: string
   success: boolean
   createdAt: string
+  requestId?: string
 }
 
 export interface SystemInfo {

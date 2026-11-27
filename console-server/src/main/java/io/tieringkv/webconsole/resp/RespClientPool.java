@@ -8,6 +8,7 @@ import java.util.IdentityHashMap;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 
 /**
@@ -27,6 +28,7 @@ public final class RespClientPool implements AutoCloseable {
     private final Semaphore permits;
     private final Deque<IdleEntry> idle = new ArrayDeque<>();
     private final Set<RespClient> borrowed = Collections.newSetFromMap(new IdentityHashMap<>());
+    private final AtomicLong borrowTimeouts = new AtomicLong();
     private volatile boolean closed;
 
     public RespClientPool(Supplier<RespClient> factory, int maxIdle) {
@@ -55,6 +57,7 @@ public final class RespClientPool implements AutoCloseable {
             throw new RespException("等待连接池许可被中断");
         }
         if (!acquired) {
+            borrowTimeouts.incrementAndGet();
             throw new RespException("实例连接池已满（maxTotal=" + maxTotal + "），借用超时");
         }
 
@@ -149,6 +152,14 @@ public final class RespClientPool implements AutoCloseable {
         synchronized (idle) {
             return idle.size();
         }
+    }
+
+    public int maxTotal() {
+        return maxTotal;
+    }
+
+    public long borrowTimeoutCount() {
+        return borrowTimeouts.get();
     }
 
     @Override

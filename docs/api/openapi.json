@@ -209,6 +209,25 @@
         "required" : [ "level", "metric", "name", "operator", "threshold" ],
         "type" : "object"
       },
+      "AnalyzeRequest" : {
+        "properties" : {
+          "delimiter" : {
+            "type" : "string"
+          },
+          "maxKeys" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "pattern" : {
+            "type" : "string"
+          },
+          "topN" : {
+            "format" : "int32",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseAlertChannelView" : {
         "properties" : {
           "code" : {
@@ -487,6 +506,21 @@
           },
           "data" : {
             "$ref" : "#/components/schemas/KeyScanPage"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "ApiResponseKeyspaceAnalysisView" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/KeyspaceAnalysisView"
           },
           "message" : {
             "type" : "string"
@@ -1182,6 +1216,28 @@
         },
         "type" : "object"
       },
+      "BigKeyEntry" : {
+        "properties" : {
+          "key" : {
+            "type" : "string"
+          },
+          "sizeUnits" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "ttl" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "type" : {
+            "type" : "string"
+          },
+          "unitLabel" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "CapacityView" : {
         "properties" : {
           "activeReservations" : {
@@ -1823,6 +1879,64 @@
         },
         "type" : "object"
       },
+      "KeyspaceAnalysisView" : {
+        "properties" : {
+          "bigKeys" : {
+            "items" : {
+              "$ref" : "#/components/schemas/BigKeyEntry"
+            },
+            "type" : "array"
+          },
+          "delimiter" : {
+            "type" : "string"
+          },
+          "durationMs" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "instanceId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "pattern" : {
+            "type" : "string"
+          },
+          "recommendations" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "scannedKeys" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "topPrefixes" : {
+            "items" : {
+              "$ref" : "#/components/schemas/PrefixStat"
+            },
+            "type" : "array"
+          },
+          "totalDbSize" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "truncated" : {
+            "type" : "boolean"
+          },
+          "ttlDistribution" : {
+            "$ref" : "#/components/schemas/TtlDistribution"
+          },
+          "typeDistribution" : {
+            "additionalProperties" : {
+              "format" : "int64",
+              "type" : "integer"
+            },
+            "type" : "object"
+          }
+        },
+        "type" : "object"
+      },
       "LiveMetrics" : {
         "properties" : {
           "activeRequests" : {
@@ -2242,6 +2356,26 @@
           },
           "lastStatus" : {
             "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "PrefixStat" : {
+        "properties" : {
+          "keyCount" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "prefix" : {
+            "type" : "string"
+          },
+          "sharePercent" : {
+            "format" : "double",
+            "type" : "number"
+          },
+          "totalSizeUnits" : {
+            "format" : "int64",
+            "type" : "integer"
           }
         },
         "type" : "object"
@@ -2867,6 +3001,27 @@
         },
         "type" : "object"
       },
+      "TtlDistribution" : {
+        "properties" : {
+          "between1hAnd24h" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "noExpire" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "over24h" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "under1h" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        },
+        "type" : "object"
+      },
       "UserCreateRequest" : {
         "properties" : {
           "email" : {
@@ -3481,6 +3636,13 @@
           }
         }, {
           "in" : "query",
+          "name" : "requestId",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
+          }
+        }, {
+          "in" : "query",
           "name" : "from",
           "required" : false,
           "schema" : {
@@ -3552,6 +3714,13 @@
           "required" : false,
           "schema" : {
             "type" : "boolean"
+          }
+        }, {
+          "in" : "query",
+          "name" : "requestId",
+          "required" : false,
+          "schema" : {
+            "type" : "string"
           }
         }, {
           "in" : "query",
@@ -4524,6 +4693,42 @@
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/ApiResponseVoid"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "keyspace-controller" ]
+      }
+    },
+    "/api/v1/keys/analyze" : {
+      "post" : {
+        "operationId" : "analyze",
+        "parameters" : [ {
+          "in" : "query",
+          "name" : "instanceId",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/AnalyzeRequest"
+              }
+            }
+          }
+        },
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseKeyspaceAnalysisView"
                 }
               }
             },

@@ -1,11 +1,11 @@
 import http from './http'
 import type {
-  AlertChannelView, AlertEvent, AlertRule, BackupRecord,
+  AlertChannelView, AlertEvent, AlertRule, AnalyzeKeyspaceRequest, BackupRecord,
   BackupScheduleRequest, BackupScheduleRunResult, BackupScheduleView, BackupVerifyResult,
   CheckpointResult, CheckpointStatusView, ClusterTopologyView,
   InstanceView, JsonKeysView, JsonQueryView,
   K8sBackupTriggerResult, K8sClusterListView, K8sClusterSummary,
-  KeyDetail, KeyScanPage,
+  KeyDetail, KeyScanPage, KeyspaceAnalysisView,
   LoginResponse, OpLog, OverviewView, PageResult, RestorePreviewView, RestoreRequest, SlowLogView,
   SstableTableView, SystemInfo, TerminalHistory,
   TerminalResult, TimeSeriesKeysView, TimeSeriesPoint, TimeSeriesRangeView,
@@ -64,7 +64,9 @@ export const keyspaceApi = {
   putHashField: (instanceId: number, key: string, field: string, value: string) =>
     http.put<unknown, void>('/keys/hash-field', { key, field, value }, { params: { instanceId } }),
   removeHashField: (instanceId: number, key: string, field: string) =>
-    http.delete<unknown, void>('/keys/hash-field', { params: { instanceId, key, field } })
+    http.delete<unknown, void>('/keys/hash-field', { params: { instanceId, key, field } }),
+  analyze: (instanceId: number, payload?: AnalyzeKeyspaceRequest) =>
+    http.post<unknown, KeyspaceAnalysisView>('/keys/analyze', payload ?? null, { params: { instanceId } })
 }
 
 export const terminalApi = {
@@ -124,6 +126,7 @@ export interface AuditQuery {
   action?: string
   username?: string
   success?: boolean
+  requestId?: string
   from?: string
   to?: string
   page?: number

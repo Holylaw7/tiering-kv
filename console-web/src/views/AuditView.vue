@@ -9,6 +9,7 @@ import PageToolbar from '@/components/PageToolbar.vue'
 
 const AUDIT_ACTIONS = [
   'LOGIN',
+  'LOGOUT',
   'PASSWORD_CHANGE',
   'INSTANCE_CREATE',
   'KEY_SET',
@@ -18,6 +19,8 @@ const AUDIT_ACTIONS = [
   'TERMINAL_BLOCKED',
   'SLOWLOG_RESET',
   'CREATE_BACKUP',
+  'VERIFY_BACKUP',
+  'CREATE_SAFETY_SNAPSHOT',
   'RESTORE_BACKUP',
   'DOWNLOAD_BACKUP',
   'BACKUP_CHECKPOINT',
@@ -40,6 +43,7 @@ const page = ref(1)
 const size = ref(20)
 const action = ref('')
 const username = ref('')
+const requestId = ref('')
 const result = ref<string>('')
 const range = ref<[string, string] | null>(null)
 const loading = ref(false)
@@ -49,11 +53,22 @@ function query(pageNo = page.value) {
   return {
     action: action.value || undefined,
     username: username.value || undefined,
+    requestId: requestId.value.trim() || undefined,
     success: result.value === '' ? undefined : result.value === 'true',
     from: range.value?.[0] ? `${range.value[0]}T00:00:00` : undefined,
     to: range.value?.[1] ? `${range.value[1]}T23:59:59` : undefined,
     page: pageNo,
     size: size.value
+  }
+}
+
+async function copyRequestId(id: string) {
+  try {
+    await navigator.clipboard.writeText(id)
+    ElMessage.success('已复制 Request ID')
+  } catch {
+    requestId.value = id
+    ElMessage.info('已填入筛选框')
   }
 }
 
@@ -71,6 +86,7 @@ async function load() {
 function reset() {
   action.value = ''
   username.value = ''
+  requestId.value = ''
   result.value = ''
   range.value = null
   page.value = 1
@@ -120,6 +136,7 @@ onMounted(load)
           @keyup.enter="load"
         />
         <el-input v-model="username" placeholder="操作人" clearable class="f-user" @keyup.enter="load" />
+        <el-input v-model="requestId" placeholder="Request ID" clearable class="f-req mono" @keyup.enter="load" />
         <el-select v-model="result" placeholder="结果" clearable class="f-result">
           <el-option label="成功" value="true" />
           <el-option label="失败" value="false" />
@@ -148,7 +165,22 @@ onMounted(load)
         </el-table-column>
         <el-table-column prop="target" label="对象" min-width="200" show-overflow-tooltip />
         <el-table-column prop="detail" label="详情" min-width="180" show-overflow-tooltip />
-        <el-table-column prop="ip" label="来源 IP" width="140" />
+        <el-table-column prop="ip" label="来源 IP" width="136" />
+        <el-table-column label="Request ID" width="150">
+          <template #default="{ row }">
+            <el-tooltip v-if="row.requestId" :content="`${row.requestId}（点击复制）`" placement="top">
+              <el-button
+                link
+                size="small"
+                class="mono req-link"
+                @click="copyRequestId(row.requestId)"
+              >
+                {{ row.requestId.length > 14 ? `${row.requestId.slice(0, 14)}…` : row.requestId }}
+              </el-button>
+            </el-tooltip>
+            <span v-else class="muted">—</span>
+          </template>
+        </el-table-column>
         <el-table-column label="结果" width="94">
           <template #default="{ row }">
             <StatusBadge
@@ -178,7 +210,20 @@ onMounted(load)
 }
 
 .f-user {
-  width: 130px;
+  width: 124px;
+}
+
+.f-req {
+  width: 156px;
+}
+
+.req-link {
+  font-size: 11.5px;
+  padding: 0;
+}
+
+.muted {
+  color: var(--text-3);
 }
 
 .f-result {
