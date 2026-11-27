@@ -14,6 +14,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Tiering-KV Operator（ADR-0322 M4 / v5.4.0 A2 生产运行态加固）：
@@ -24,6 +26,8 @@ import java.util.concurrent.locks.ReentrantLock;
  * （{@code OPERATOR_HEALTH_PORT=8088}）与 {@code SIGTERM} 优雅停机。</p>
  */
 public final class TieringKVOperator implements AutoCloseable {
+
+    private static final Logger log = LoggerFactory.getLogger(TieringKVOperator.class);
 
     public static final String FINALIZER = K8sActionApplier.FINALIZER;
     private static final long RESYNC_INITIAL_DELAY_SECONDS = 2;
@@ -114,13 +118,12 @@ public final class TieringKVOperator implements AutoCloseable {
         }
         boolean acquired = leaderElector.tryAcquireOrRenew();
         if (acquired && !watching.get()) {
-            System.out.println("[operator] acquired leadership lease="
-                    + leaderElector.leaseName() + " identity="
-                    + leaderElector.identity());
+            log.info("[operator] acquired leadership lease={} identity={}",
+                    leaderElector.leaseName(), leaderElector.identity());
             startWatching();
         } else if (!acquired && watching.get()) {
-            System.err.println("[operator] lost leadership lease="
-                    + leaderElector.leaseName() + ", pausing reconcile");
+            log.warn("[operator] lost leadership lease={}, pausing reconcile",
+                    leaderElector.leaseName());
             stopWatching();
         }
     }
@@ -175,8 +178,7 @@ public final class TieringKVOperator implements AutoCloseable {
         try {
             reconcileNow(resource);
         } catch (RuntimeException failure) {
-            System.err.println("[operator] event reconcile failed: "
-                    + failure.getMessage());
+            log.error("[operator] event reconcile failed: {}", failure.getMessage(), failure);
         }
     }
 
@@ -230,8 +232,7 @@ public final class TieringKVOperator implements AutoCloseable {
                 reconcileSafely(resource);
             }
         } catch (RuntimeException failure) {
-            System.err.println("[operator] resync failed: "
-                    + failure.getMessage());
+            log.error("[operator] resync failed: {}", failure.getMessage(), failure);
         }
     }
 
@@ -373,14 +374,12 @@ public final class TieringKVOperator implements AutoCloseable {
         try (operator) {
             if (healthServer != null) {
                 healthServer.start();
-                System.out.println("Tiering-KV Operator health server on :"
-                        + healthServer.boundPort());
+                log.info("Tiering-KV Operator health server on :{}", healthServer.boundPort());
             }
             operator.start();
-            System.out.println("Tiering-KV Operator watching tieringkvclusters"
-                    + (watchNs == null || watchNs.isBlank()
-                            ? " (all namespaces)" : " (namespace=" + watchNs + ")")
-                    + (leaderElection ? " [leader-election=enabled]" : ""));
+            log.info("Tiering-KV Operator watching tieringkvclusters (scope={}) [leader-election={}]",
+                    watchNs == null || watchNs.isBlank() ? "all-namespaces" : watchNs,
+                    leaderElection ? "enabled" : "disabled");
             operator.awaitStopped();
         } finally {
             if (healthServer != null) {

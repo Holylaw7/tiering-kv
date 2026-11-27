@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, Finished, FolderAdd, Refresh, VideoPlay } from '@element-plus/icons-vue'
+import { Finished, FolderAdd, Refresh } from '@element-plus/icons-vue'
 import { backupApi } from '@/api'
 import type {
   BackupRecord,
-  BackupScheduleMode,
+  BackupScheduleRequest,
   BackupScheduleView,
   CheckpointStatusView,
   RestorePreviewView
@@ -13,10 +13,11 @@ import type {
 import { useInstanceStore } from '@/stores/instance'
 import { useAuthStore } from '@/stores/auth'
 import { formatBytes } from '@/utils/format'
-import EmptyState from '@/components/EmptyState.vue'
 import StatCard from '@/components/StatCard.vue'
 import StatusBadge from '@/components/StatusBadge.vue'
-import PageToolbar from '@/components/PageToolbar.vue'
+import BackupSchedulePanel from '@/components/backups/BackupSchedulePanel.vue'
+import BackupRecordTable from '@/components/backups/BackupRecordTable.vue'
+import RestorePreviewDialog from '@/components/backups/RestorePreviewDialog.vue'
 
 const store = useInstanceStore()
 const auth = useAuthStore()
@@ -29,135 +30,17 @@ const checkpointStatus = ref<CheckpointStatusView | null>(null)
 const checkpointError = ref('')
 const statusFilter = ref('')
 
-// 定时备份策略对话框（ref 避免 Volar 3.3 深模板 reactive 收窄退化）
 const scheduleDialogVisible = ref(false)
 const scheduleSaving = ref(false)
 const runningScheduleId = ref<number | null>(null)
-const editingScheduleId = ref<number | null>(null)
-const scheduleForm = ref<{
-  instanceId: number | undefined
-  name: string
-  cronExpression: string
-  mode: BackupScheduleMode
-  retentionCount: number
-  enabled: boolean
-}>({
-  instanceId: undefined,
-  name: '',
-  cronExpression: '0 2 * * *',
-  mode: 'LOGICAL',
-  retentionCount: 7,
-  enabled: true
-})
 
-const CRON_PRESETS = [
-  { label: '每天 02:00', value: '0 2 * * *' },
-  { label: '每 6 小时', value: '0 */6 * * *' },
-  { label: '每小时整点', value: '0 * * * *' },
-  { label: '每周日 03:00', value: '0 3 * * SUN' }
-] as const
-
-const enabledScheduleCount = computed(() => schedules.value.filter((s) => s.enabled).length)
-
-function openCreateSchedule() {
-  editingScheduleId.value = null
-  scheduleForm.value = {
-    instanceId: store.selectedId ?? store.list[0]?.id,
-    name: '',
-    cronExpression: '0 2 * * *',
-    mode: 'LOGICAL',
-    retentionCount: 7,
-    enabled: true
-  }
-  scheduleDialogVisible.value = true
-}
-
-function openEditSchedule(row: BackupScheduleView) {
-  editingScheduleId.value = row.id
-  scheduleForm.value = {
-    instanceId: row.instanceId,
-    name: row.name,
-    cronExpression: row.cronExpression,
-    mode: row.mode,
-    retentionCount: row.retentionCount,
-    enabled: row.enabled
-  }
-  scheduleDialogVisible.value = true
-}
-
-async function saveSchedule() {
-  const f = scheduleForm.value
-  if (!f.instanceId) {
-    ElMessage.warning('请选择目标实例')
-    return
-  }
-  if (!f.name.trim()) {
-    ElMessage.warning('请填写策略名称')
-    return
-  }
-  if (!f.cronExpression.trim()) {
-    ElMessage.warning('请填写 Cron 表达式')
-    return
-  }
-  scheduleSaving.value = true
-  try {
-    const payload = {
-      instanceId: f.instanceId,
-      name: f.name.trim(),
-      cronExpression: f.cronExpression.trim(),
-      mode: f.mode,
-      retentionCount: f.retentionCount,
-      enabled: f.enabled
-    }
-    if (editingScheduleId.value) {
-      await backupApi.updateSchedule(editingScheduleId.value, payload)
-      ElMessage.success('定时备份策略已更新')
-    } else {
-      await backupApi.createSchedule(payload)
-      ElMessage.success('定时备份策略已创建')
-    }
-    scheduleDialogVisible.value = false
-    await load()
-  } finally {
-    scheduleSaving.value = false
-  }
-}
-
-async function toggleSchedule(row: BackupScheduleView) {
-  await backupApi.updateSchedule(row.id, {
-    instanceId: row.instanceId,
-    name: row.name,
-    cronExpression: row.cronExpression,
-    mode: row.mode,
-    retentionCount: row.retentionCount,
-    enabled: !row.enabled
-  })
-  ElMessage.success(!row.enabled ? '策略已启用' : '策略已停用')
-  await load()
-}
-
-async function removeSchedule(row: BackupScheduleView) {
-  await ElMessageBox.confirm(`确认删除定时策略「${row.name}」？`, '删除策略', { type: 'warning' })
-  await backupApi.removeSchedule(row.id)
-  ElMessage.success('策略已删除')
-  await load()
-}
-
-async function runScheduleNow(row: BackupScheduleView) {
-  runningScheduleId.value = row.id
-  try {
-    const result = await backupApi.runScheduleNow(row.id)
-    ElMessage.success(result.message || '策略已触发执行')
-    await load()
-    if (result.backupRecordId) {
-      startPolling(result.backupRecordId)
-    } else if (row.mode === 'CHECKPOINT' && checkpointStatus.value?.inProgress) {
-      pollCheckpointCompletion()
-    }
-  } finally {
-    runningScheduleId.value = null
-  }
-}
+const verifyingId = ref<number | null>(null)
+const restoreDialogVisible = ref(false)
+const restorePreviewLoading = ref(false)
+const restoreSubmitting = ref(false)
+const restoreTarget = ref<BackupRecord | null>(null)
+const restorePreview = ref<RestorePreviewView | null>(null)
+const restoreCreateSafetySnapshot = ref(true)
 
 const filteredRows = computed(() => {
   if (!statusFilter.value) return rows.value
@@ -209,14 +92,6 @@ let pollTimer: number | undefined
 let restorePollTimer: number | undefined
 let checkpointPollTimer: number | undefined
 
-function restorePercent(row: BackupRecord): number {
-  const total = Math.max(1, row.keyCount || 0)
-  const done = Math.max(0, row.restoredKeys || 0)
-  if (row.restoreStatus === 'SUCCEEDED') return 100
-  return Math.min(99, Math.round((done / total) * 100))
-}
-
-/** 轮询备份状态（TD-091 + O1-B）：实时刷新导出进度与终态。 */
 function startPolling(recordId: number) {
   if (pollTimer) {
     window.clearInterval(pollTimer)
@@ -247,7 +122,6 @@ function startPolling(recordId: number) {
   }, 2000)
 }
 
-/** 轮询异步恢复进度与终态（O1-B）：避免大库恢复击穿 HTTP 超时。 */
 function startRestorePolling(recordId: number) {
   if (restorePollTimer) {
     window.clearInterval(restorePollTimer)
@@ -308,6 +182,59 @@ function pollCheckpointCompletion() {
   }, 1000)
 }
 
+async function saveSchedule(editingId: number | null, payload: BackupScheduleRequest) {
+  scheduleSaving.value = true
+  try {
+    if (editingId) {
+      await backupApi.updateSchedule(editingId, payload)
+      ElMessage.success('定时备份策略已更新')
+    } else {
+      await backupApi.createSchedule(payload)
+      ElMessage.success('定时备份策略已创建')
+    }
+    scheduleDialogVisible.value = false
+    await load()
+  } finally {
+    scheduleSaving.value = false
+  }
+}
+
+async function toggleSchedule(row: BackupScheduleView) {
+  await backupApi.updateSchedule(row.id, {
+    instanceId: row.instanceId,
+    name: row.name,
+    cronExpression: row.cronExpression,
+    mode: row.mode,
+    retentionCount: row.retentionCount,
+    enabled: !row.enabled
+  })
+  ElMessage.success(!row.enabled ? '策略已启用' : '策略已停用')
+  await load()
+}
+
+async function removeSchedule(row: BackupScheduleView) {
+  await ElMessageBox.confirm(`确认删除定时策略「${row.name}」？`, '删除策略', { type: 'warning' })
+  await backupApi.removeSchedule(row.id)
+  ElMessage.success('策略已删除')
+  await load()
+}
+
+async function runScheduleNow(row: BackupScheduleView) {
+  runningScheduleId.value = row.id
+  try {
+    const result = await backupApi.runScheduleNow(row.id)
+    ElMessage.success(result.message || '策略已触发执行')
+    await load()
+    if (result.backupRecordId) {
+      startPolling(result.backupRecordId)
+    } else if (row.mode === 'CHECKPOINT' && checkpointStatus.value?.inProgress) {
+      pollCheckpointCompletion()
+    }
+  } finally {
+    runningScheduleId.value = null
+  }
+}
+
 async function triggerCheckpoint() {
   if (!store.selectedId) {
     ElMessage.warning('请先选择实例')
@@ -349,14 +276,6 @@ async function create() {
     creating.value = false
   }
 }
-
-const verifyingId = ref<number | null>(null)
-const restoreDialogVisible = ref(false)
-const restorePreviewLoading = ref(false)
-const restoreSubmitting = ref(false)
-const restoreTarget = ref<BackupRecord | null>(null)
-const restorePreview = ref<RestorePreviewView | null>(null)
-const restoreCreateSafetySnapshot = ref(true)
 
 async function verifyBackup(row: BackupRecord) {
   verifyingId.value = row.id
@@ -412,23 +331,6 @@ async function confirmRestore() {
   } finally {
     restoreSubmitting.value = false
   }
-}
-
-function verifyBadgeLabel(status?: string): string {
-  if (status === 'VERIFIED') return '已校验'
-  if (status === 'CORRUPTED') return '已损坏'
-  return '未校验'
-}
-
-function verifyBadgeTone(status?: string): 'success' | 'danger' | 'neutral' {
-  if (status === 'VERIFIED') return 'success'
-  if (status === 'CORRUPTED') return 'danger'
-  return 'neutral'
-}
-
-function shortHash(hash?: string): string {
-  if (!hash) return '—'
-  return hash.length > 10 ? `${hash.slice(0, 10)}…` : hash
 }
 
 async function remove(row: BackupRecord) {
@@ -536,398 +438,43 @@ onUnmounted(stopPolling)
       </el-button>
     </div>
 
-    <div class="panel schedules-panel">
-      <PageToolbar :meta="`定时备份策略 · 已启用 ${enabledScheduleCount} / ${schedules.length} 条（多副本 HA 租约单活调度）`">
-        <el-button v-if="auth.canOperate" type="primary" plain @click="openCreateSchedule">
-          <el-icon><Calendar /></el-icon> 新建定时策略
-        </el-button>
-      </PageToolbar>
+    <BackupSchedulePanel
+      v-model:dialog-visible="scheduleDialogVisible"
+      :schedules="schedules"
+      :instances="store.list"
+      :selected-instance-id="store.selectedId"
+      :can-operate="auth.canOperate"
+      :saving="scheduleSaving"
+      :running-schedule-id="runningScheduleId"
+      @save="saveSchedule"
+      @toggle="toggleSchedule"
+      @remove="removeSchedule"
+      @run-now="runScheduleNow"
+    />
 
-      <el-table :data="schedules" size="small">
-        <template #empty>
-          <EmptyState
-            title="暂无定时备份策略"
-            description="点击「新建定时策略」配置 Cron 周期备份（支持逻辑导出与物理 BGSAVE 及留存份数自动清理）。"
-          />
-        </template>
-        <el-table-column prop="name" label="策略名称" min-width="150" />
-        <el-table-column label="目标实例" width="136">
-          <template #default="{ row }">
-            <span class="mono">{{ row.instanceName }} (#{{ row.instanceId }})</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="Cron 表达式" width="150">
-          <template #default="{ row }">
-            <span class="mono">{{ row.cronExpression }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="模式" width="116">
-          <template #default="{ row }">
-            <StatusBadge
-              :label="row.mode === 'CHECKPOINT' ? '物理 BGSAVE' : '逻辑导出'"
-              :tone="row.mode === 'CHECKPOINT' ? 'accent' : 'neutral'"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column label="保留份数" width="88" align="right">
-          <template #default="{ row }">
-            <span class="num">{{ row.retentionCount }} 份</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="90">
-          <template #default="{ row }">
-            <StatusBadge
-              :label="row.enabled ? '已启用' : '已停用'"
-              :tone="row.enabled ? 'success' : 'neutral'"
-              dot
-            />
-          </template>
-        </el-table-column>
-        <el-table-column label="最近结果" min-width="160">
-          <template #default="{ row }">
-            <el-tooltip v-if="row.lastMessage" :content="row.lastMessage" placement="top">
-              <StatusBadge
-                :label="row.lastStatus || '未执行'"
-                :tone="row.lastStatus === 'SUCCESS' ? 'success' : row.lastStatus === 'FAILED' ? 'danger' : 'warn'"
-                dot
-                mono
-              />
-            </el-tooltip>
-            <span v-else class="muted">尚未执行</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="下次计划执行" width="170">
-          <template #default="{ row }">
-            <span class="mono">{{ row.nextRunAt || '—' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="230">
-          <template #default="{ row }">
-            <el-button
-              v-if="auth.canOperate"
-              link
-              type="primary"
-              size="small"
-              :loading="runningScheduleId === row.id"
-              @click="runScheduleNow(row as BackupScheduleView)"
-            >
-              <el-icon><VideoPlay /></el-icon> 立即执行
-            </el-button>
-            <el-button
-              v-if="auth.canOperate"
-              link
-              type="primary"
-              size="small"
-              @click="openEditSchedule(row as BackupScheduleView)"
-            >
-              编辑
-            </el-button>
-            <el-button
-              v-if="auth.canOperate"
-              link
-              size="small"
-              @click="toggleSchedule(row as BackupScheduleView)"
-            >
-              {{ row.enabled ? '停用' : '启用' }}
-            </el-button>
-            <el-button
-              v-if="auth.canOperate"
-              link
-              type="danger"
-              size="small"
-              @click="removeSchedule(row as BackupScheduleView)"
-            >
-              删除
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </div>
+    <BackupRecordTable
+      v-model:status-filter="statusFilter"
+      :rows="rows"
+      :filtered-rows="filteredRows"
+      :can-operate="auth.canOperate"
+      :is-admin="auth.isAdmin"
+      :verifying-id="verifyingId"
+      @refresh="load"
+      @verify="verifyBackup"
+      @download="download"
+      @restore="openRestoreWizard"
+      @remove="remove"
+    />
 
-    <div class="panel">
-      <PageToolbar :meta="`展示 ${filteredRows.length} / ${rows.length} 条 · 恢复采用合并式幂等回放`">
-        <el-select v-model="statusFilter" placeholder="全部状态" clearable style="width: 140px">
-          <el-option value="SUCCESS" label="SUCCESS（成功）" />
-          <el-option value="RUNNING" label="RUNNING（进行中）" />
-          <el-option value="FAILED" label="FAILED（失败）" />
-        </el-select>
-        <el-button @click="load">
-          <el-icon><Refresh /></el-icon> 刷新列表
-        </el-button>
-      </PageToolbar>
-
-      <el-table :data="filteredRows" size="small">
-        <template #empty>
-          <EmptyState title="还没有备份" description="点击右上角「立即备份」为该实例创建第一份快照。" />
-        </template>
-        <el-table-column prop="fileName" label="文件名" min-width="240">
-          <template #default="{ row }">
-            <span class="mono">{{ row.fileName }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="格式" width="90">
-          <template #default="{ row }">
-            <StatusBadge
-              :label="row.fileName.endsWith('.gz') ? 'GZIP' : 'JSONL'"
-              :tone="row.fileName.endsWith('.gz') ? 'accent' : 'neutral'"
-              mono
-            />
-          </template>
-        </el-table-column>
-        <el-table-column label="实例" width="84">
-          <template #default="{ row }"><span class="mono">#{{ row.instanceId }}</span></template>
-        </el-table-column>
-        <el-table-column label="键数" width="96" align="right">
-          <template #default="{ row }"><span class="num">{{ row.keyCount }}</span></template>
-        </el-table-column>
-        <el-table-column label="大小" width="108" align="right">
-          <template #default="{ row }"><span class="num">{{ formatBytes(row.sizeBytes) }}</span></template>
-        </el-table-column>
-        <el-table-column label="状态" width="140">
-          <template #default="{ row }">
-            <StatusBadge
-              :label="row.status"
-              :tone="row.status === 'SUCCESS' ? 'success' : row.status === 'FAILED' ? 'danger' : 'warn'"
-              dot
-              mono
-            />
-            <div v-if="row.status === 'RUNNING'" class="progress-hint mono">
-              已导出 {{ row.processedKeys ?? 0 }} 键
-            </div>
-          </template>
-        </el-table-column>
-        <el-table-column label="完整性" width="136">
-          <template #default="{ row }">
-            <el-tooltip
-              v-if="row.sha256"
-              :content="`SHA-256: ${row.sha256}${row.verifiedAt ? ' · 校验于 ' + row.verifiedAt : ''}`"
-              placement="top"
-            >
-              <div>
-                <StatusBadge
-                  :label="verifyBadgeLabel(row.verifyStatus)"
-                  :tone="verifyBadgeTone(row.verifyStatus)"
-                  dot
-                />
-                <div class="progress-hint mono">{{ shortHash(row.sha256) }}</div>
-              </div>
-            </el-tooltip>
-            <StatusBadge
-              v-else
-              :label="verifyBadgeLabel(row.verifyStatus)"
-              :tone="verifyBadgeTone(row.verifyStatus)"
-              dot
-            />
-          </template>
-        </el-table-column>
-        <el-table-column label="恢复进度" width="176">
-          <template #default="{ row }">
-            <div v-if="row.restoreStatus === 'RESTORING'" class="restore-progress">
-              <el-progress :percentage="restorePercent(row as BackupRecord)" :stroke-width="6" />
-              <span class="progress-hint mono">{{ row.restoredKeys ?? 0 }} / {{ row.keyCount }}</span>
-            </div>
-            <div v-else-if="row.restoreStatus === 'SUCCEEDED'">
-              <StatusBadge
-                :label="`已恢复 ${row.restoredKeys ?? 0} 键`"
-                tone="success"
-                dot
-              />
-              <div v-if="row.preRestoreBackupId" class="progress-hint mono">
-                保护快照 #{{ row.preRestoreBackupId }}
-              </div>
-            </div>
-            <el-tooltip
-              v-else-if="row.restoreStatus === 'FAILED'"
-              :content="row.restoreMessage || '恢复中断'"
-              placement="top"
-            >
-              <StatusBadge
-                :label="`失败 (${row.restoredKeys ?? 0}/${row.keyCount})`"
-                tone="danger"
-                dot
-              />
-            </el-tooltip>
-            <span v-else class="muted">—</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="createdAt" label="创建时间" width="176" />
-        <el-table-column label="操作" width="236">
-          <template #default="{ row }">
-            <el-button
-              v-if="auth.canOperate"
-              link
-              type="primary"
-              size="small"
-              :loading="verifyingId === row.id"
-              :disabled="row.status !== 'SUCCESS'"
-              @click="verifyBackup(row as BackupRecord)"
-            >
-              校验
-            </el-button>
-            <el-button v-if="auth.canOperate" link type="primary" size="small" :disabled="row.status !== 'SUCCESS'" @click="download(row as BackupRecord)">
-              下载
-            </el-button>
-            <el-button
-              v-if="auth.isAdmin"
-              link
-              type="warning"
-              size="small"
-              :disabled="row.status !== 'SUCCESS' || row.restoreStatus === 'RESTORING'"
-              @click="openRestoreWizard(row as BackupRecord)"
-            >
-              恢复
-            </el-button>
-            <el-button
-              v-if="auth.canOperate"
-              link
-              type="danger"
-              size="small"
-              :disabled="row.status === 'RUNNING' || row.restoreStatus === 'RESTORING'"
-              @click="remove(row as BackupRecord)"
-            >
-              删除
-            </el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </div>
-
-    <el-dialog
-      v-model="scheduleDialogVisible"
-      :title="editingScheduleId ? '编辑定时备份策略' : '新建定时备份策略'"
-      width="500px"
-    >
-      <el-form label-width="104px" @submit.prevent>
-        <el-form-item label="策略名称">
-          <el-input v-model="scheduleForm.name" placeholder="例如：每日凌晨逻辑备份" maxlength="128" />
-        </el-form-item>
-        <el-form-item label="目标实例">
-          <el-select v-model="scheduleForm.instanceId" placeholder="选择实例" style="width: 100%">
-            <el-option
-              v-for="inst in store.list"
-              :key="inst.id"
-              :label="`${inst.name} (${inst.host}:${inst.port})`"
-              :value="inst.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="Cron 表达式">
-          <el-input v-model="scheduleForm.cronExpression" placeholder="支持 5 段 Unix 或 6 段 Spring Cron" />
-          <div class="preset-row">
-            <el-button
-              v-for="preset in CRON_PRESETS"
-              :key="preset.value"
-              size="small"
-              text
-              bg
-              @click="scheduleForm.cronExpression = preset.value"
-            >
-              {{ preset.label }}
-            </el-button>
-          </div>
-        </el-form-item>
-        <el-form-item label="备份模式">
-          <el-radio-group v-model="scheduleForm.mode">
-            <el-radio value="LOGICAL">逻辑导出（SCAN + GZIP）</el-radio>
-            <el-radio value="CHECKPOINT">物理快照（BGSAVE）</el-radio>
-          </el-radio-group>
-        </el-form-item>
-        <el-form-item label="保留份数">
-          <el-input-number v-model="scheduleForm.retentionCount" :min="1" :max="365" />
-          <span class="muted" style="margin-left: 8px">超出后自动按安全认领协议清理旧备份</span>
-        </el-form-item>
-        <el-form-item label="启用策略">
-          <el-switch v-model="scheduleForm.enabled" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="scheduleDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="scheduleSaving" @click="saveSchedule">保存</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog
+    <RestorePreviewDialog
       v-model="restoreDialogVisible"
-      title="安全恢复向导（Dry-Run 冲突预览）"
-      width="560px"
-    >
-      <div v-loading="restorePreviewLoading" class="restore-wizard">
-        <div v-if="restoreTarget" class="wizard-meta">
-          <span>目标归档：</span>
-          <span class="mono">{{ restoreTarget.fileName }}</span>
-          <StatusBadge
-            :label="verifyBadgeLabel(restorePreview?.verifyStatus ?? restoreTarget.verifyStatus)"
-            :tone="verifyBadgeTone(restorePreview?.verifyStatus ?? restoreTarget.verifyStatus)"
-            dot
-          />
-        </div>
-
-        <el-alert
-          v-if="restorePreview?.warning"
-          :type="restorePreview.verifyStatus === 'CORRUPTED' || !restorePreview.archiveReadable ? 'error' : 'warning'"
-          :title="restorePreview.warning"
-          :closable="false"
-          show-icon
-          style="margin: 12px 0"
-        />
-
-        <div v-if="restorePreview" class="preview-grid">
-          <div class="preview-stat">
-            <span class="preview-label">归档总键数</span>
-            <strong class="num">{{ restorePreview.totalKeys }}</strong>
-          </div>
-          <div class="preview-stat preview-conflict">
-            <span class="preview-label">覆盖冲突键</span>
-            <strong class="num">{{ restorePreview.conflictKeys }}</strong>
-          </div>
-          <div class="preview-stat preview-new">
-            <span class="preview-label">预计新增键</span>
-            <strong class="num">{{ restorePreview.newKeys }}</strong>
-          </div>
-          <div class="preview-stat">
-            <span class="preview-label">已过期跳过</span>
-            <strong class="num">{{ restorePreview.expiredKeys }}</strong>
-          </div>
-        </div>
-
-        <div v-if="restorePreview && Object.keys(restorePreview.typeBreakdown).length > 0" class="preview-section">
-          <div class="preview-section-title">数据类型分布</div>
-          <div class="chip-row">
-            <StatusBadge
-              v-for="(cnt, typeName) in restorePreview.typeBreakdown"
-              :key="typeName"
-              :label="`${typeName}: ${cnt}`"
-              tone="neutral"
-              mono
-            />
-          </div>
-        </div>
-
-        <div v-if="restorePreview && restorePreview.sampleConflicts.length > 0" class="preview-section">
-          <div class="preview-section-title">将被覆盖的冲突键样例（最多展示 20 条）</div>
-          <div class="conflict-list mono">
-            <span v-for="k in restorePreview.sampleConflicts" :key="k" class="conflict-key">{{ k }}</span>
-          </div>
-        </div>
-
-        <div class="safety-option">
-          <el-checkbox v-model="restoreCreateSafetySnapshot">
-            恢复前自动创建安全保护快照（强烈推荐，失败或误覆盖时可回滚至保护点）
-          </el-checkbox>
-        </div>
-      </div>
-      <template #footer>
-        <el-button @click="restoreDialogVisible = false">取消</el-button>
-        <el-button
-          type="warning"
-          :loading="restoreSubmitting"
-          :disabled="restorePreviewLoading || !restorePreview?.archiveReadable"
-          @click="confirmRestore"
-        >
-          确认执行恢复
-        </el-button>
-      </template>
-    </el-dialog>
+      v-model:create-safety-snapshot="restoreCreateSafetySnapshot"
+      :target="restoreTarget"
+      :preview="restorePreview"
+      :preview-loading="restorePreviewLoading"
+      :submitting="restoreSubmitting"
+      @confirm="confirmRestore"
+    />
   </div>
 </template>
 
@@ -947,17 +494,6 @@ onUnmounted(stopPolling)
   flex-wrap: wrap;
   padding: 12px 16px;
   margin-bottom: 14px;
-}
-
-.schedules-panel {
-  margin-bottom: 14px;
-}
-
-.preset-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
 }
 
 .checkpoint-meta {
@@ -980,98 +516,5 @@ onUnmounted(stopPolling)
 .muted {
   font-size: var(--text-xs);
   color: var(--text-3);
-}
-
-.progress-hint {
-  margin-top: 2px;
-  font-size: 11px;
-  color: var(--text-3);
-}
-
-.restore-progress {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.wizard-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  font-size: var(--text-sm);
-  color: var(--text-2);
-}
-
-.preview-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin: 12px 0;
-}
-
-.preview-stat {
-  padding: 10px 12px;
-  border: 1px solid var(--border-1);
-  border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.preview-label {
-  font-size: var(--text-xs);
-  color: var(--text-3);
-}
-
-.preview-conflict strong {
-  color: var(--warn);
-}
-
-.preview-new strong {
-  color: var(--success);
-}
-
-.preview-section {
-  margin-top: 12px;
-}
-
-.preview-section-title {
-  font-size: var(--text-xs);
-  color: var(--text-3);
-  margin-bottom: 6px;
-}
-
-.chip-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.conflict-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  max-height: 110px;
-  overflow-y: auto;
-  padding: 8px;
-  border: 1px solid var(--border-1);
-  border-radius: var(--radius-sm);
-  background: var(--bg-subtle);
-}
-
-.conflict-key {
-  font-size: var(--text-xs);
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-1);
-}
-
-.safety-option {
-  margin-top: 14px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border-1);
 }
 </style>

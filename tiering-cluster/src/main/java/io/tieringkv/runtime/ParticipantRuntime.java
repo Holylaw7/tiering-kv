@@ -21,10 +21,13 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Participant 运行时（ADR-0093 / v6.1.0 A1）：托管 Region 事务参与者与原子快照落盘/恢复。 */
 public final class ParticipantRuntime {
 
+    private static final Logger log = LoggerFactory.getLogger(ParticipantRuntime.class);
     private static final int SNAPSHOT_MAGIC = 0x544B5653; // "TKVS"
     private static final int SNAPSHOT_VERSION = 1;
 
@@ -33,7 +36,7 @@ public final class ParticipantRuntime {
 
     public static void start(Map<String, String> options) throws Exception {
         RunningParticipant running = startServer(options);
-        System.out.printf("ParticipantRuntime %s region=%s listening on %d data=%s restored=%d%n",
+        log.info("ParticipantRuntime {} region={} listening on {} data={} restored={}",
                 running.nodeId(), running.regionId(), running.boundPort(),
                 running.snapshotFile().getParent(), running.restoredEntries());
         Runtime.getRuntime().addShutdownHook(new Thread(running::close));

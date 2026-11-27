@@ -30,6 +30,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 多 Region 集群节点入口（Phase 16 + M2-A1）：单 JVM 运行多个 Raft 组，
@@ -41,6 +43,8 @@ import java.util.function.Supplier;
  * [--password secret] [--data ./data]
  */
 public final class ClusterMain {
+
+    private static final Logger log = LoggerFactory.getLogger(ClusterMain.class);
 
     private ClusterMain() {
     }
@@ -126,7 +130,7 @@ public final class ClusterMain {
         }
 
         OpsLogger.startup("cluster-node", nodeId);
-        System.out.printf("Tiering-KV cluster node %s listening on %d, groups=%s, respPort=%d, data=%s%n",
+        log.info("Tiering-KV cluster node {} listening on {}, groups={}, respPort={}, data={}",
                 nodeId, endpoint.boundPort(), groups,
                 respServer == null ? -1 : respServer.boundPort(), dataDir);
         return new RunningClusterNode(nodeId, endpoint, manager, storage, shardExecutor, respServer);

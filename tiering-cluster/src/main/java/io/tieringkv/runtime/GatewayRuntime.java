@@ -25,6 +25,8 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Redis RESP 网关运行时（ADR-0093 + M2-A1）：
@@ -32,6 +34,8 @@ import java.util.function.Supplier;
  * 经 {@link CoordinatorStorageEngine} 将请求路由至多 Region 分布式事务协调器。
  */
 public final class GatewayRuntime {
+
+    private static final Logger log = LoggerFactory.getLogger(GatewayRuntime.class);
 
     private GatewayRuntime() {
     }
@@ -47,8 +51,7 @@ public final class GatewayRuntime {
         int port = TxnRuntimeMain.port(options, "gateway-port", 6379);
         String password = options.get("password");
         RunningGateway gateway = startServer(coordinator, port, password);
-        System.out.printf("GatewayRuntime %s ready on %d%n",
-                coordinator.nodeId(), gateway.port());
+        log.info("GatewayRuntime {} ready on {}", coordinator.nodeId(), gateway.port());
         Runtime.getRuntime().addShutdownHook(new Thread(gateway::close));
         gateway.awaitTermination();
     }

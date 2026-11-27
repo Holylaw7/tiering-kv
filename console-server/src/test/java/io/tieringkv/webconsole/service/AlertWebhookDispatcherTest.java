@@ -107,6 +107,20 @@ class AlertWebhookDispatcherTest {
         }
     }
 
+    @Test
+    void redactUrlStripsCredentialsPathsAndQueryTokens() {
+        assertThat(AlertWebhookDispatcher.redactUrl(
+                "https://user:pass@oapi.dingtalk.com:8443/robot/send?access_token=top-secret#frag"))
+                .isEqualTo("https://oapi.dingtalk.com:8443");
+        assertThat(AlertWebhookDispatcher.redactUrl(
+                "https://hooks.slack.com/services/T000/B000/SECRET_TOKEN"))
+                .isEqualTo("https://hooks.slack.com");
+        assertThat(AlertWebhookDispatcher.redactUrl(" ")).isEqualTo("<empty>");
+        assertThat(AlertWebhookDispatcher.redactUrl(null)).isEqualTo("<empty>");
+        assertThat(AlertWebhookDispatcher.redactUrl("not a valid uri ::")).isEqualTo("<redacted>");
+        assertThat(AlertWebhookDispatcher.redactUrl("relative/path")).isEqualTo("<redacted>");
+    }
+
     private AlertEvent sampleEvent(AlertStatus status) {
         AlertEvent ev = new AlertEvent();
         ev.setId(101L);

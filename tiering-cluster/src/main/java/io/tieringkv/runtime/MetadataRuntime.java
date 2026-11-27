@@ -13,16 +13,20 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Metadata 运行时（ADR-0093）：托管事务元数据（Raft 待网络化，TD-047）。 */
 public final class MetadataRuntime {
+
+    private static final Logger log = LoggerFactory.getLogger(MetadataRuntime.class);
 
     private MetadataRuntime() {
     }
 
     public static void start(Map<String, String> options) throws Exception {
         RunningMetadata running = startServer(options);
-        System.out.printf("MetadataRuntime %s listening on %d data=%s%n",
+        log.info("MetadataRuntime {} listening on {} data={}",
                 running.nodeId(), running.boundPort(), running.dataDir());
         Runtime.getRuntime().addShutdownHook(new Thread(running::close));
         new CountDownLatch(1).await();

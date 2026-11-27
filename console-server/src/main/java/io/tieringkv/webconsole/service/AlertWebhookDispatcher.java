@@ -150,8 +150,28 @@ public class AlertWebhookDispatcher {
     private void deliverSafely(AlertChannel channel, Map<String, Object> payload) {
         WebhookTestResult result = deliverOnceWithRetry(channel, payload);
         if (!result.delivered()) {
-            log.warn("告警 Webhook 推送失败 channel={} url={} status={} msg={}",
-                    channel.getName(), channel.getUrl(), result.statusCode(), result.message());
+            log.warn("告警 Webhook 推送失败 channel={} target={} status={} msg={}",
+                    channel.getName(), redactUrl(channel.getUrl()), result.statusCode(), result.message());
+        }
+    }
+
+    /** 日志脱敏：仅保留 scheme://host[:port]，剥离路径令牌、查询参数与凭据段，避免泄露 Webhook 密钥。 */
+    static String redactUrl(String rawUrl) {
+        if (rawUrl == null || rawUrl.isBlank()) {
+            return "<empty>";
+        }
+        try {
+            java.net.URI uri = java.net.URI.create(rawUrl.trim());
+            String scheme = uri.getScheme();
+            String host = uri.getHost();
+            if (scheme == null || host == null) {
+                return "<redacted>";
+            }
+            return uri.getPort() > 0
+                    ? scheme + "://" + host + ":" + uri.getPort()
+                    : scheme + "://" + host;
+        } catch (IllegalArgumentException ex) {
+            return "<redacted>";
         }
     }
 

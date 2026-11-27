@@ -58,9 +58,13 @@ import java.util.Map;
 import java.util.function.Supplier;
 import io.tieringkv.storage.memory.MemoryManager;
 import io.tieringkv.storage.memory.MemTable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Tiering-KV 入口：默认监听 0.0.0.0:6379。 */
 public final class Main {
+
+    private static final Logger log = LoggerFactory.getLogger(Main.class);
 
     private Main() {
     }
@@ -81,7 +85,7 @@ public final class Main {
         Path configPath = Path.of(cli.getOrDefault("config", "config/application.yaml"));
         TieringConfig config = TieringConfig.load(configPath);
         config.validate();
-        System.out.println("effective configuration: " + config.describe());
+        log.info("effective configuration: {}", config.describe());
         TieringConfig.Server srv = config.server();
         ServerConfig.TlsConfig tlsConfig = srv.tls() != null && srv.tls().enabled()
                 ? new ServerConfig.TlsConfig(
@@ -111,7 +115,7 @@ public final class Main {
         } else {
             stats = walManager.recover(memTable);
         }
-        System.out.printf("WAL recovery: shards=%d backend=%s preallocate=%s scanned=%d applied=%d segments=%d%n",
+        log.info("WAL recovery: shards={} backend={} preallocate={} scanned={} applied={} segments={}",
                 walManager.shardCount(), walManager.activeIoBackend(), walManager.preallocateEnabled(),
                 stats.recordsScanned(), stats.recordsApplied(), stats.segmentsReplayed());
         MemoryPool memoryPool = new MemoryPool();
@@ -181,7 +185,7 @@ public final class Main {
                 tieredStorage, vectorStore, observability.vector());
         int rehydrated = syncStorage.rehydrateFromStorage();
         if (rehydrated > 0) {
-            System.out.printf("Vector index rehydrated: entries=%d total=%d%n", rehydrated, vectorStore.size());
+            log.info("Vector index rehydrated: entries={} total={}", rehydrated, vectorStore.size());
         }
         java.util.concurrent.ScheduledExecutorService vectorCheckpointer = startVectorCheckpointer(
                 vectorStore, vectorDir, vectorCheckpointFile, config.vector().checkpointIntervalMillis());
@@ -244,8 +248,8 @@ public final class Main {
                     slowLog,
                     walManager);
             managementHttp.start();
-            System.out.println("Tiering-KV management HTTP listening on " + managementHttp.boundPort()
-                    + " (/healthz, /readyz, /metrics)");
+            log.info("Tiering-KV management HTTP listening on {} (/healthz, /readyz, /metrics)",
+                    managementHttp.boundPort());
         }
         AutoCloseable vectorCloser = () -> {
             if (vectorCheckpointer != null) {
@@ -260,7 +264,7 @@ public final class Main {
                 server, metrics, walManager, memTable, config.tiering().drainTimeoutMillis(),
                 managementHttp, snapshotCoordinator, vectorCloser, executor, tiering, cold, walManager);
         server.start();
-        System.out.println("Tiering-KV listening on " + server.boundPort());
+        log.info("Tiering-KV listening on {}", server.boundPort());
         Runtime.getRuntime().addShutdownHook(new Thread(shutdownManager::shutdown));
         server.awaitTermination();
     }
@@ -290,11 +294,10 @@ public final class Main {
         if (checkpointFile != null && java.nio.file.Files.exists(checkpointFile)) {
             try {
                 VectorIndexStore loaded = VectorIndexStore.load(checkpointFile);
-                System.out.printf("Vector checkpoint loaded: entries=%d file=%s%n",
-                        loaded.size(), checkpointFile);
+                log.info("Vector checkpoint loaded: entries={} file={}", loaded.size(), checkpointFile);
                 return loaded;
             } catch (Exception ex) {
-                System.err.printf("Vector checkpoint load failed (%s), rebuilding from storage: %s%n",
+                log.warn("Vector checkpoint load failed ({}), rebuilding from storage: {}",
                         checkpointFile, ex.getMessage());
             }
         }

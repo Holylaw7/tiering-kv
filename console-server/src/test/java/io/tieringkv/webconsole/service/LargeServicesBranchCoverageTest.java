@@ -2,16 +2,11 @@ package io.tieringkv.webconsole.service;
 
 import io.tieringkv.webconsole.common.BusinessException;
 import io.tieringkv.webconsole.config.ConsoleProperties;
-import io.tieringkv.webconsole.domain.BackupRecord;
 import io.tieringkv.webconsole.domain.BackupSchedule;
 import io.tieringkv.webconsole.domain.BackupScheduleMode;
-import io.tieringkv.webconsole.domain.BackupStatus;
-import io.tieringkv.webconsole.domain.BackupVerifyStatus;
 import io.tieringkv.webconsole.domain.DbInstance;
 import io.tieringkv.webconsole.domain.OpLog;
-import io.tieringkv.webconsole.domain.RestoreStatus;
 import io.tieringkv.webconsole.observability.ConsoleMetricsBinder;
-import io.tieringkv.webconsole.repository.BackupRecordRepository;
 import io.tieringkv.webconsole.repository.BackupScheduleRepository;
 import io.tieringkv.webconsole.repository.ConsoleLeaseRepository;
 import io.tieringkv.webconsole.repository.DbInstanceRepository;
@@ -36,29 +31,18 @@ import io.tieringkv.webconsole.web.dto.MultiModelDtos.TimeSeriesIncrByRequest;
 import io.tieringkv.webconsole.web.dto.MultiModelDtos.VectorAddRequest;
 import io.tieringkv.webconsole.web.dto.MultiModelDtos.VectorSearchRequest;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import tools.jackson.databind.ObjectMapper;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
-import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.Arrays;
-import java.util.HexFormat;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.Executor;
-import java.util.zip.GZIPOutputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
@@ -68,7 +52,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * Wave 2B（T2）：大类核心分支覆盖强化测试（MultiModelService & BackupService 异常与边界全覆盖）。
+ * Wave 2B（T2）：大类核心分支覆盖强化测试（MultiModelService、KeyspaceAnalyzerService 与调度/租约边界）；
+ * 原 BackupService 巨型测试已随 Wave 3B M2 拆分为 5 个独立协作者与门面黑盒测试类。
  */
 class LargeServicesBranchCoverageTest {
 
@@ -279,284 +264,7 @@ class LargeServicesBranchCoverageTest {
         assertThat(svc.arrAppendJson(new JsonArrAppendRequest(1L, "doc", "$.arr", "2"))).isEqualTo(5L);
     }
 
-    // ==================== 2. BackupService ====================
-
-    @Test
-    void backupServiceCoversExportRestoreVerifyPreviewDownloadAndCheckpointBranches(@TempDir Path dir) throws Exception {
-        BackupRecordRepository repo = mock(BackupRecordRepository.class);
-        InstanceService instSvc = mock(InstanceService.class);
-        KeyspaceService ksSvc = mock(KeyspaceService.class);
-        RespGateway gateway = mock(RespGateway.class);
-        AuditService audit = mock(AuditService.class);
-        BackupCapacityService capSvc = mock(BackupCapacityService.class);
-        DbLeaseLockService leaseSvc = mock(DbLeaseLockService.class);
-        ConsoleMetricsBinder binder = mock(ConsoleMetricsBinder.class);
-
-        ConsoleProperties props = new ConsoleProperties();
-        props.getBackup().setDir(dir.toString());
-        props.getBackup().setCompress(false);
-        LocalBackupStorageBackend storage = new LocalBackupStorageBackend(props);
-        Executor direct = Runnable::run;
-
-        BackupService svc = new BackupService(
-                repo, instSvc, ksSvc, gateway, MAPPER, props, storage, direct, audit, capSvc, leaseSvc);
-        svc.setMetricsBinder(binder);
-
-        DbInstance inst = sampleInstance(1L, "bk-node");
-        when(instSvc.require(1L)).thenReturn(inst);
-        when(leaseSvc.tryAcquire(anyString(), any())).thenReturn(true);
-        when(repo.save(any(BackupRecord.class))).thenAnswer(inv -> {
-            BackupRecord r = inv.getArgument(0);
-            if (r.getId() == null) {
-                r.setId(100L);
-            }
-            return r;
-        });
-
-        // 1. export 冲突矩阵：跨副本锁失败 / 活跃 RESTORING / 活跃 RUNNING / 僵尸清理 + 配额预留失败
-        when(leaseSvc.tryAcquire(anyString(), any())).thenReturn(false);
-        assertThatThrownBy(() -> svc.export(1L))
-                .isInstanceOf(BusinessException.class).hasMessageContaining("正在提交");
-
-        when(leaseSvc.tryAcquire(anyString(), any())).thenReturn(true);
-        BackupRecord freshRestoring = new BackupRecord();
-        freshRestoring.setId(11L);
-        freshRestoring.setRestoreStatus(RestoreStatus.RESTORING);
-        freshRestoring.setRestoreStartedAt(LocalDateTime.now());
-        when(repo.findFirstByInstanceIdAndRestoreStatusOrderByRestoreStartedAtDesc(1L, RestoreStatus.RESTORING))
-                .thenReturn(Optional.of(freshRestoring));
-        assertThatThrownBy(() -> svc.export(1L))
-                .isInstanceOf(BusinessException.class).hasMessageContaining("正在恢复");
-
-        // 僵尸 RESTORING + 活跃 RUNNING
-        freshRestoring.setRestoreStartedAt(LocalDateTime.now().minusHours(2));
-        BackupRecord freshRunning = new BackupRecord();
-        freshRunning.setId(12L);
-        freshRunning.setStatus(BackupStatus.RUNNING);
-        freshRunning.setCreatedAt(LocalDateTime.now());
-        when(repo.findFirstByInstanceIdAndStatusOrderByCreatedAtDesc(1L, BackupStatus.RUNNING))
-                .thenReturn(Optional.of(freshRunning));
-        assertThatThrownBy(() -> svc.export(1L))
-                .isInstanceOf(BusinessException.class).hasMessageContaining("已有备份任务");
-        assertThat(freshRestoring.getRestoreStatus()).isEqualTo(RestoreStatus.FAILED);
-
-        // 僵尸 RUNNING + capacityService.reserve 失败
-        freshRunning.setCreatedAt(LocalDateTime.now().minusHours(3));
-        doThrow(BusinessException.badRequest("磁盘空间不足")).when(capSvc).reserve(eq(1L), anyLong(), anyLong());
-        assertThatThrownBy(() -> svc.export(1L))
-                .isInstanceOf(BusinessException.class).hasMessageContaining("磁盘空间不足");
-        assertThat(freshRunning.getStatus()).isEqualTo(BackupStatus.FAILED);
-
-        // 2. runExport: 不存在记录 / SCAN 失败 / maxKeys 超限触发 FAILED
-        when(repo.findById(999L)).thenReturn(Optional.empty());
-        svc.runExport(999L);
-
-        BackupRecord rec = new BackupRecord();
-        rec.setId(20L);
-        rec.setInstanceId(1L);
-        rec.setFileName("exp-fail.jsonl");
-        when(repo.findById(20L)).thenReturn(Optional.of(rec));
-        when(gateway.execute(eq(inst), eq("SCAN"), any(), any(), any(), any(), any()))
-                .thenReturn(new RespReply.Error("ERR scan failed"));
-        svc.runExport(20L);
-        assertThat(rec.getStatus()).isEqualTo(BackupStatus.FAILED);
-        verify(binder).recordBackup("FAILED");
-
-        // maxKeys=1 超限中止
-        props.getBackup().setMaxKeys(1L);
-        when(gateway.execute(eq(inst), eq("SCAN"), any(), any(), any(), any(), any()))
-                .thenReturn(new RespReply.Array(List.of(
-                        new RespReply.Bulk("0".getBytes(StandardCharsets.UTF_8)),
-                        new RespReply.Array(List.of(
-                                new RespReply.Bulk("k1".getBytes(StandardCharsets.UTF_8)),
-                                new RespReply.Bulk("k2".getBytes(StandardCharsets.UTF_8)))))));
-        when(ksSvc.inspectBatch(eq(inst), any())).thenReturn(List.of(
-                new KeyEntry("k1", "none", -2),
-                new KeyEntry("k2", "string", -1)));
-        when(ksSvc.readValuesBatch(eq(inst), any())).thenReturn(Arrays.asList(null, "v2"));
-        svc.runExport(20L);
-        assertThat(rec.getStatus()).isEqualTo(BackupStatus.FAILED);
-        assertThat(rec.getMessage()).contains("超过配置上限");
-        props.getBackup().setMaxKeys(0L);
-
-        // 3. verify: 404 / 非 SUCCESS / 文件缺失 / 损坏条目 / SHA 不匹配 / 历史补录 / GZIP 通过
-        when(repo.findById(404L)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> svc.verify(404L)).isInstanceOf(BusinessException.class);
-
-        BackupRecord failedRec = new BackupRecord();
-        failedRec.setId(21L);
-        failedRec.setStatus(BackupStatus.FAILED);
-        when(repo.findById(21L)).thenReturn(Optional.of(failedRec));
-        assertThatThrownBy(() -> svc.verify(21L)).isInstanceOf(BusinessException.class).hasMessageContaining("仅成功的备份");
-
-        BackupRecord missingFile = new BackupRecord();
-        missingFile.setId(22L);
-        missingFile.setInstanceId(1L);
-        missingFile.setStatus(BackupStatus.SUCCESS);
-        missingFile.setFileName("no-such-file.jsonl");
-        when(repo.findById(22L)).thenReturn(Optional.of(missingFile));
-        assertThatThrownBy(() -> svc.verify(22L)).isInstanceOf(BusinessException.class).hasMessageContaining("不存在");
-
-        // 写明文合法归档 + 缺字段损坏归档 + gzip 归档
-        String validContent = "\n{\"key\":\"k1\",\"type\":\"string\",\"ttl\":60,\"value\":\"v1\"}\n";
-        writePublished(storage, "ok.jsonl", validContent.getBytes(StandardCharsets.UTF_8));
-        BackupRecord legacyOk = new BackupRecord();
-        legacyOk.setId(23L);
-        legacyOk.setInstanceId(1L);
-        legacyOk.setStatus(BackupStatus.SUCCESS);
-        legacyOk.setFileName("ok.jsonl");
-        when(repo.findById(23L)).thenReturn(Optional.of(legacyOk));
-        var legacyRes = svc.verify(23L);
-        assertThat(legacyRes.status()).isEqualTo(BackupVerifyStatus.VERIFIED);
-        assertThat(legacyOk.getSha256()).isNotBlank();
-
-        // SHA 篡改检测
-        legacyOk.setSha256("0000000000000000000000000000000000000000000000000000000000000000");
-        assertThat(svc.verify(23L).status()).isEqualTo(BackupVerifyStatus.CORRUPTED);
-
-        // 缺少 key/type 的损坏归档
-        writePublished(storage, "bad.jsonl", "{\"key\":null,\"type\":\"\"}\n".getBytes(StandardCharsets.UTF_8));
-        BackupRecord badRec = new BackupRecord();
-        badRec.setId(24L);
-        badRec.setInstanceId(1L);
-        badRec.setStatus(BackupStatus.SUCCESS);
-        badRec.setFileName("bad.jsonl");
-        when(repo.findById(24L)).thenReturn(Optional.of(badRec));
-        assertThat(svc.verify(24L).status()).isEqualTo(BackupVerifyStatus.CORRUPTED);
-
-        // GZIP 归档 + 匹配 SHA
-        ByteArrayOutputStream gzBuf = new ByteArrayOutputStream();
-        try (GZIPOutputStream gz = new GZIPOutputStream(gzBuf)) {
-            gz.write(validContent.getBytes(StandardCharsets.UTF_8));
-        }
-        byte[] gzBytes = gzBuf.toByteArray();
-        writePublished(storage, "ok.jsonl.gz", gzBytes);
-        BackupRecord gzRec = new BackupRecord();
-        gzRec.setId(25L);
-        gzRec.setInstanceId(1L);
-        gzRec.setStatus(BackupStatus.SUCCESS);
-        gzRec.setFileName("ok.jsonl.gz");
-        gzRec.setSha256(HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(gzBytes)));
-        when(repo.findById(25L)).thenReturn(Optional.of(gzRec));
-        assertThat(svc.verify(25L).status()).isEqualTo(BackupVerifyStatus.VERIFIED);
-
-        // 4. previewRestore: 非法状态 / 过期+冲突+未知类型 / CORRUPTED 告警 / 管线数量不匹配
-        assertThatThrownBy(() -> svc.previewRestore(21L)).isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> svc.previewRestore(22L)).isInstanceOf(BusinessException.class);
-
-        String previewData = "\n"
-                + "{\"key\":\"k1\",\"type\":\"string\",\"ttl\":-1,\"value\":\"v1\"}\n"
-                + "{\"key\":\"k2\",\"type\":\"\",\"ttl\":-1,\"value\":\"v2\"}\n"
-                + "{\"key\":\"exp\",\"type\":\"string\",\"ttl\":-2,\"value\":\"gone\"}\n";
-        writePublished(storage, "prev.jsonl", previewData.getBytes(StandardCharsets.UTF_8));
-        BackupRecord prevRec = new BackupRecord();
-        prevRec.setId(26L);
-        prevRec.setInstanceId(1L);
-        prevRec.setStatus(BackupStatus.SUCCESS);
-        prevRec.setVerifyStatus(BackupVerifyStatus.VERIFIED);
-        prevRec.setFileName("prev.jsonl");
-        when(repo.findById(26L)).thenReturn(Optional.of(prevRec));
-        when(gateway.executeBatch(eq(inst), any())).thenReturn(List.of(new RespReply.Integer(1), new RespReply.Integer(0)));
-        var pv = svc.previewRestore(26L);
-        assertThat(pv.archiveReadable()).isTrue();
-        assertThat(pv.conflictKeys()).isEqualTo(1L);
-        assertThat(pv.expiredKeys()).isEqualTo(1L);
-        assertThat(pv.warning()).contains("同名键");
-
-        prevRec.setVerifyStatus(BackupVerifyStatus.CORRUPTED);
-        assertThat(svc.previewRestore(26L).warning()).contains("CORRUPTED");
-
-        when(gateway.executeBatch(eq(inst), any())).thenReturn(List.of()); // mismatch -> archiveReadable=false
-        assertThat(svc.previewRestore(26L).archiveReadable()).isFalse();
-
-        // 5. runRestore: 全数据类型（string/hash/list/set/zset/json/unknown/null/ttl>0）+ 批次失败
-        String multiTypeData = "\n"
-                + "{\"key\":null,\"type\":\"string\",\"ttl\":-1,\"value\":\"skip\"}\n"
-                + "{\"key\":\"s1\",\"type\":\"string\",\"ttl\":30,\"value\":\"v1\"}\n"
-                + "{\"key\":\"h1\",\"type\":\"hash\",\"ttl\":-1,\"value\":{\"f\":\"1\"}}\n"
-                + "{\"key\":\"h0\",\"type\":\"hash\",\"ttl\":-1,\"value\":{}}\n"
-                + "{\"key\":\"l1\",\"type\":\"list\",\"ttl\":-1,\"value\":[\"a\"]}\n"
-                + "{\"key\":\"st1\",\"type\":\"set\",\"ttl\":-1,\"value\":[\"b\"]}\n"
-                + "{\"key\":\"z1\",\"type\":\"zset\",\"ttl\":-1,\"value\":[{\"member\":\"m\",\"score\":\"1.5\"}]}\n"
-                + "{\"key\":\"j1\",\"type\":\"json\",\"ttl\":-1,\"value\":{\"x\":1}}\n"
-                + "{\"key\":\"u1\",\"type\":\"unknown\",\"ttl\":-1,\"value\":\"ignored\"}\n";
-        writePublished(storage, "multi.jsonl", multiTypeData.getBytes(StandardCharsets.UTF_8));
-        BackupRecord mr = new BackupRecord();
-        mr.setId(27L);
-        mr.setInstanceId(1L);
-        mr.setFileName("multi.jsonl");
-        when(repo.findById(27L)).thenReturn(Optional.of(mr));
-        when(gateway.executeBatch(eq(inst), any())).thenAnswer(inv -> {
-            List<?> cmds = inv.getArgument(1);
-            return cmds.stream().map(ignored -> (RespReply) new RespReply.Simple("OK")).toList();
-        });
-        assertThat(svc.runRestore(27L)).isEqualTo(9L);
-        assertThat(mr.getRestoreStatus()).isEqualTo(RestoreStatus.SUCCEEDED);
-
-        // mid-batch RESP Error -> BatchRestoreFailure
-        when(gateway.executeBatch(eq(inst), any())).thenAnswer(inv -> {
-            List<?> cmds = inv.getArgument(1);
-            List<RespReply> reps = new java.util.ArrayList<>();
-            for (int i = 0; i < cmds.size(); i++) {
-                reps.add(i == 2 ? new RespReply.Error("ERR oom") : new RespReply.Simple("OK"));
-            }
-            return reps;
-        });
-        svc.runRestore(27L);
-        assertThat(mr.getRestoreStatus()).isEqualTo(RestoreStatus.FAILED);
-        assertThat(mr.getRestoreMessage()).contains("ERR oom");
-
-        // 6. openDownload & checkpoint / checkpointStatus 全分支
-        assertThatThrownBy(() -> svc.openDownload(404L)).isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> svc.openDownload(22L)).isInstanceOf(BusinessException.class);
-        try (var dl = svc.openDownload(23L).inputStream()) {
-            assertThat(dl.readAllBytes()).isNotEmpty();
-        }
-
-        when(gateway.execute(inst, "BGSAVE")).thenReturn(new RespReply.Simple("Background saving started"));
-        when(gateway.execute(inst, "LASTSAVE")).thenReturn(new RespReply.Integer(1700000000L));
-        assertThat(svc.triggerCheckpoint(1L).triggered()).isTrue();
-
-        when(gateway.execute(inst, "BGSAVE")).thenReturn(new RespReply.Error("ERR Background save already in progress"));
-        assertThat(svc.triggerCheckpoint(1L).triggered()).isFalse();
-
-        when(gateway.execute(inst, "BGSAVE")).thenReturn(new RespReply.Error("ERR unknown command 'BGSAVE'"));
-        assertThatThrownBy(() -> svc.triggerCheckpoint(1L)).isInstanceOf(BusinessException.class);
-
-        when(gateway.execute(inst, "BGSAVE")).thenReturn(new RespReply.Error("ERR disk full"));
-        assertThatThrownBy(() -> svc.triggerCheckpoint(1L)).isInstanceOf(BusinessException.class);
-
-        when(gateway.execute(inst, "BGSAVE")).thenReturn(new RespReply.Integer(1));
-        assertThatThrownBy(() -> svc.triggerCheckpoint(1L)).isInstanceOf(BusinessException.class);
-
-        doThrow(new IOException("io")).when(gateway).execute(inst, "BGSAVE");
-        assertThatThrownBy(() -> svc.triggerCheckpoint(1L)).isInstanceOf(BusinessException.class);
-
-        doReturn(new RespReply.Error("ERR unknown command")).when(gateway).execute(inst, "LASTSAVE");
-        assertThat(svc.checkpointStatus(1L).supported()).isFalse();
-
-        doReturn(new RespReply.Error("ERR auth")).when(gateway).execute(inst, "LASTSAVE");
-        assertThatThrownBy(() -> svc.checkpointStatus(1L)).isInstanceOf(BusinessException.class);
-
-        doThrow(new IOException("io")).when(gateway).execute(inst, "LASTSAVE");
-        assertThatThrownBy(() -> svc.checkpointStatus(1L)).isInstanceOf(BusinessException.class);
-
-        doReturn(new RespReply.Integer(100L)).when(gateway).execute(inst, "LASTSAVE");
-        when(gateway.execute(inst, "INFO", "persistence")).thenReturn(new RespReply.Bulk((
-                "# Persistence\r\nrdb_bgsave_in_progress:1\r\nrdb_last_save_time:200\r\n"
-                        + "rdb_last_bgsave_status:ok\r\nrdb_last_bgsave_time_sec:bad\r\n"
-                        + "rdb_last_bgsave_duration_ms:150\r\n").getBytes(StandardCharsets.UTF_8)));
-        var cs = svc.checkpointStatus(1L);
-        assertThat(cs.supported()).isTrue();
-        assertThat(cs.inProgress()).isTrue();
-        assertThat(cs.lastSaveTime()).isEqualTo(200L);
-        assertThat(cs.lastDurationSeconds()).isEqualTo(-1L);
-
-        when(gateway.execute(inst, "INFO", "persistence")).thenThrow(new IOException("ignored"));
-        assertThat(svc.checkpointStatus(1L).lastSaveTime()).isEqualTo(100L);
-    }
-
-    // ==================== 3. KeyspaceAnalyzerService ====================
+    // ==================== 2. KeyspaceAnalyzerService ====================
 
     @Test
     void keyspaceAnalyzerServiceCoversScanErrorsAllTypesJsonFallbackAndRecommendations() throws Exception {
@@ -805,13 +513,6 @@ class LargeServicesBranchCoverageTest {
         realLease.release(" ");
         doThrow(new RuntimeException("release err")).when(leaseRepo).release(eq("k1"), anyString());
         realLease.release("k1"); // 吞并异常仅 WARN
-    }
-
-    private static void writePublished(LocalBackupStorageBackend storage, String name, byte[] data) throws IOException {
-        try (OutputStream out = storage.openTempOutput(name)) {
-            out.write(data);
-        }
-        storage.publish(name);
     }
 
     private static DbInstance sampleInstance(Long id, String name) {

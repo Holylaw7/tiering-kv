@@ -24,16 +24,20 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** 协调器运行时（ADR-0093）：Router + 远程 participant + 远程 metadata。 */
 public final class CoordinatorRuntime {
+
+    private static final Logger log = LoggerFactory.getLogger(CoordinatorRuntime.class);
 
     private CoordinatorRuntime() {
     }
 
     public static void start(Map<String, String> options) throws Exception {
         RuntimeCoordinator coordinator = RuntimeCoordinator.start(options);
-        System.out.printf("CoordinatorRuntime %s ready on %d regions=%d%n",
+        log.info("CoordinatorRuntime {} ready on {} regions={}",
                 coordinator.nodeId(), coordinator.endpoint().boundPort(),
                 coordinator.regions().size());
         new CountDownLatch(1).await();

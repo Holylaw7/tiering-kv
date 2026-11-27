@@ -11,6 +11,8 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    BackupRecordTable: typeof import('./components/backups/BackupRecordTable.vue')['default']
+    BackupSchedulePanel: typeof import('./components/backups/BackupSchedulePanel.vue')['default']
     ChartPanel: typeof import('./components/ChartPanel.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElAutocomplete: typeof import('element-plus/es')['ElAutocomplete']
@@ -48,14 +50,18 @@ declare module 'vue' {
     ElTooltip: typeof import('element-plus/es')['ElTooltip']
     EmptyState: typeof import('./components/EmptyState.vue')['default']
     InstanceSummaryStrip: typeof import('./components/dashboard/InstanceSummaryStrip.vue')['default']
+    JsonTab: typeof import('./components/multimodel/JsonTab.vue')['default']
     PageToolbar: typeof import('./components/PageToolbar.vue')['default']
+    RestorePreviewDialog: typeof import('./components/backups/RestorePreviewDialog.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SstableInventoryDrawer: typeof import('./components/dashboard/SstableInventoryDrawer.vue')['default']
     StatCard: typeof import('./components/StatCard.vue')['default']
     StatusBadge: typeof import('./components/StatusBadge.vue')['default']
     TieringMemoryPanel: typeof import('./components/dashboard/TieringMemoryPanel.vue')['default']
+    TimeSeriesTab: typeof import('./components/multimodel/TimeSeriesTab.vue')['default']
     TrendChartsGrid: typeof import('./components/dashboard/TrendChartsGrid.vue')['default']
+    VectorTab: typeof import('./components/multimodel/VectorTab.vue')['default']
   }
   export interface GlobalDirectives {
     vLoading: typeof import('element-plus/es')['ElLoadingDirective']

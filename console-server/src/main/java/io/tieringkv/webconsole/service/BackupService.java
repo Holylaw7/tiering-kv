@@ -1,74 +1,60 @@
 package io.tieringkv.webconsole.service;
 
-import tools.jackson.databind.ObjectMapper;
 import io.tieringkv.webconsole.common.BusinessException;
 import io.tieringkv.webconsole.config.ConsoleProperties;
 import io.tieringkv.webconsole.domain.BackupRecord;
 import io.tieringkv.webconsole.domain.BackupStatus;
 import io.tieringkv.webconsole.domain.BackupVerifyStatus;
-import io.tieringkv.webconsole.domain.DbInstance;
 import io.tieringkv.webconsole.domain.RestoreStatus;
 import io.tieringkv.webconsole.observability.ConsoleMetricsBinder;
 import io.tieringkv.webconsole.repository.BackupRecordRepository;
-import io.tieringkv.webconsole.repository.BackupReservationRepository;
-import io.tieringkv.webconsole.resp.RespClient;
-import io.tieringkv.webconsole.resp.RespReply;
-import io.tieringkv.webconsole.support.InfoParser;
-import io.tieringkv.webconsole.support.Text;
-import io.tieringkv.webconsole.web.dto.KeyEntry;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.ObjectMapper;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.PushbackInputStream;
-import java.nio.charset.StandardCharsets;
-import java.security.DigestInputStream;
-import java.security.DigestOutputStream;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.HexFormat;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
-import java.util.zip.GZIPInputStream;
-import java.util.zip.GZIPOutputStream;
 
-/** 逻辑备份：SCAN 流式导出（支持 .jsonl.gz 压缩与可配置键数），按类型幂等回放恢复。 */
+/**
+ * 逻辑备份与物理快照统一门面（Wave 3B M2）：
+ * 负责实例级并发互斥（本地锁 + 跨副本 DB 租约锁）、任务状态占位、异步调度与下载入口；
+ * 流式导出、管线恢复、完整性校验/干跑预览及物理 Checkpoint 委派至四个单一职责协作 Bean（严格单向依赖，零循环）。
+ */
 @Service
 public class BackupService {
 
-    private static final Logger log = LoggerFactory.getLogger(BackupService.class);
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+    private static final long STALE_RUNNING_MINUTES = 30;
+    private static final long STALE_RESTORING_MINUTES = 30;
+    private static final Duration INSTANCE_OP_LEASE_TTL = Duration.ofSeconds(15);
 
     private final BackupRecordRepository repository;
     private final InstanceService instanceService;
-    private final KeyspaceService keyspaceService;
-    private final RespGateway gateway;
-    private final ObjectMapper objectMapper;
     private final ConsoleProperties properties;
     private final BackupStorageBackend storageBackend;
     private final Executor executor;
     private final AuditService auditService;
     private final BackupCapacityService capacityService;
     private final DbLeaseLockService leaseLockService;
-    private ConsoleMetricsBinder metricsBinder;
+    private final BackupExportExecutor exportExecutor;
+    private final BackupRestoreExecutor restoreExecutor;
+    private final BackupVerificationService verificationService;
+    private final BackupCheckpointService checkpointService;
+
+    /**
+     * 同一实例的“检查 + 落库”本地快速互斥锁（TD-101）；跨副本临界区由 {@link DbLeaseLockService} 兜底。
+     */
+    private final ConcurrentHashMap<Long, Object> instanceLocks = new ConcurrentHashMap<>();
 
     public BackupService(BackupRecordRepository repository, InstanceService instanceService,
                          KeyspaceService keyspaceService, RespGateway gateway,
@@ -92,7 +78,6 @@ public class BackupService {
                 storageBackend, executor, auditService, capacityService, null);
     }
 
-    @Autowired
     public BackupService(BackupRecordRepository repository, InstanceService instanceService,
                          KeyspaceService keyspaceService, RespGateway gateway,
                          ObjectMapper objectMapper, ConsoleProperties properties,
@@ -101,22 +86,48 @@ public class BackupService {
                          AuditService auditService,
                          BackupCapacityService capacityService,
                          DbLeaseLockService leaseLockService) {
+        this(repository, instanceService, properties, storageBackend, executor, auditService,
+                capacityService, leaseLockService,
+                new BackupExportExecutor(repository, instanceService, keyspaceService, gateway,
+                        objectMapper, properties, storageBackend, capacityService),
+                new BackupRestoreExecutor(repository, instanceService, gateway,
+                        objectMapper, storageBackend, auditService),
+                new BackupVerificationService(repository, instanceService, gateway,
+                        objectMapper, storageBackend, auditService),
+                new BackupCheckpointService(instanceService, gateway, auditService));
+    }
+
+    @Autowired
+    public BackupService(BackupRecordRepository repository,
+                         InstanceService instanceService,
+                         ConsoleProperties properties,
+                         BackupStorageBackend storageBackend,
+                         @Qualifier("backupExecutor") Executor executor,
+                         AuditService auditService,
+                         BackupCapacityService capacityService,
+                         DbLeaseLockService leaseLockService,
+                         BackupExportExecutor exportExecutor,
+                         BackupRestoreExecutor restoreExecutor,
+                         BackupVerificationService verificationService,
+                         BackupCheckpointService checkpointService) {
         this.repository = repository;
         this.instanceService = instanceService;
-        this.keyspaceService = keyspaceService;
-        this.gateway = gateway;
-        this.objectMapper = objectMapper;
         this.properties = properties;
         this.storageBackend = storageBackend;
         this.executor = executor;
         this.auditService = auditService;
         this.capacityService = capacityService;
         this.leaseLockService = leaseLockService;
+        this.exportExecutor = exportExecutor;
+        this.restoreExecutor = restoreExecutor;
+        this.verificationService = verificationService;
+        this.checkpointService = checkpointService;
     }
 
     @Autowired(required = false)
     void setMetricsBinder(ConsoleMetricsBinder metricsBinder) {
-        this.metricsBinder = metricsBinder;
+        this.exportExecutor.setMetricsBinder(metricsBinder);
+        this.restoreExecutor.setMetricsBinder(metricsBinder);
     }
 
     /** 备份条目（JSONL 一行）。 */
@@ -178,37 +189,11 @@ public class BackupService {
     public record RestoreRequest(boolean createSafetySnapshot) {
     }
 
-    private record WriteSnapshotResult(long keyCount, String sha256) {
-    }
-
-    private static final int MAX_SAMPLE_CONFLICTS = 20;
-
     public List<BackupRecord> list(Long instanceId) {
         return instanceId == null
                 ? repository.findAllByOrderByCreatedAtDesc()
                 : repository.findByInstanceIdOrderByCreatedAtDesc(instanceId);
     }
-
-    /** 并发备份冲突时返回 409（TD-091）。 */
-    private static final long STALE_RUNNING_MINUTES = 30;
-
-    /**
-     * 提交一次逻辑导出（TD-091）：
-     * <ul>
-     *   <li>同一实例已有 RUNNING 记录 → {@code 409}；超过 30 分钟的僵尸任务视为失效；</li>
-     *   <li>立即返回 RUNNING 记录，实际导出在 {@code backupExecutor} 中异步执行；</li>
-     *   <li>前端轮询 {@code GET /backups} 观察状态变化。</li>
-     * </ul>
-     */
-    /**
-     * 同一实例的"检查 + 落库"必须原子（TD-101）。
-     *
-     * <p>此前两个同时到达的请求都会读到"无 RUNNING 记录"，双双返回 200，
-     * 导致同一实例并行跑两个导出任务（Phase 10 实测 5/5 轮复现）。
-     * 这里按实例加锁，把检查与插入合并为一个临界区；导出仍在锁外提交给线程池。
-     */
-    private final java.util.concurrent.ConcurrentHashMap<Long, Object> instanceLocks =
-            new java.util.concurrent.ConcurrentHashMap<>();
 
     /** 清理已删除实例的本地锁条目，防止实例长期增删产生内存泄漏（Wave 2A H1/H4）。 */
     public void evictInstanceLock(Long instanceId) {
@@ -218,7 +203,7 @@ public class BackupService {
     }
 
     /** 跨副本对账：移除数据库中已不存在的实例本地锁对象。 */
-    public int reconcileInstanceLocks(java.util.Set<Long> activeIds) {
+    public int reconcileInstanceLocks(Set<Long> activeIds) {
         int removed = 0;
         for (Long id : List.copyOf(instanceLocks.keySet())) {
             if (!activeIds.contains(id) && instanceLocks.remove(id) != null) {
@@ -228,21 +213,11 @@ public class BackupService {
         return removed;
     }
 
-    /** 进度持久化节流阈值：每处理 500 键或间隔 ≥ 1 秒刷库一次，避免高频写库。 */
-    private static final long PROGRESS_FLUSH_KEYS = 500L;
-    private static final long PROGRESS_FLUSH_MS = 1_000L;
-
-    /** RESP Pipeline 导出/恢复每批键数上限（O2-A），在吞吐与单批内存占用间平衡。 */
-    private static final int PIPELINE_BATCH_SIZE = 100;
-
-    /** 恢复超过该时长仍未结束，视为进程崩溃遗留的僵尸状态（ADR-0366）。 */
-    private static final long STALE_RESTORING_MINUTES = 30;
-    private static final Duration INSTANCE_OP_LEASE_TTL = Duration.ofSeconds(15);
-
     private static String instanceLeaseKey(Long instanceId) {
         return "backup-op:instance:" + instanceId;
     }
 
+    /** 提交一次异步逻辑导出（TD-091 / TD-101）。 */
     public BackupRecord export(Long instanceId) {
         instanceService.require(instanceId);
         Object lock = instanceLocks.computeIfAbsent(instanceId, key -> new Object());
@@ -255,7 +230,8 @@ public class BackupService {
                 repository.findFirstByInstanceIdAndRestoreStatusOrderByRestoreStartedAtDesc(
                                 instanceId, RestoreStatus.RESTORING)
                         .ifPresent(restoring -> {
-                            if (isFresh(restoring.getRestoreStartedAt(), STALE_RESTORING_MINUTES)) {
+                            if (BackupSnapshotSupport.isFresh(
+                                    restoring.getRestoreStartedAt(), STALE_RESTORING_MINUTES)) {
                                 throw BusinessException.conflict(
                                         "该实例正在恢复（备份 id=" + restoring.getId() + "），请稍后再试");
                             }
@@ -280,7 +256,7 @@ public class BackupService {
 
                 BackupRecord record = new BackupRecord();
                 record.setInstanceId(instanceId);
-                String unique = java.util.UUID.randomUUID().toString().substring(0, 8);
+                String unique = UUID.randomUUID().toString().substring(0, 8);
                 String ext = properties.getBackup().isCompress() ? ".jsonl.gz" : ".jsonl";
                 record.setFileName("backup-" + instanceId + "-" + LocalDateTime.now().format(STAMP) + "-" + unique + ext);
                 record.setStatus(BackupStatus.RUNNING);
@@ -299,148 +275,29 @@ public class BackupService {
             capacityService.reserve(instanceId, recordId, capacityService.estimate(instanceId));
         } catch (RuntimeException ex) {
             created.setStatus(BackupStatus.FAILED);
-            created.setMessage(truncate(ex.getMessage()));
+            created.setMessage(BackupSnapshotSupport.truncate(ex.getMessage()));
             created.setFinishedAt(LocalDateTime.now());
             repository.save(created);
             throw ex;
         }
         // 备份是可恢复数据的敏感操作，必须留痕（Phase 11 P1）
-        auditService.record("CREATE_BACKUP", instanceName(instanceId), created.getFileName(), true);
+        auditService.record("CREATE_BACKUP",
+                BackupSnapshotSupport.instanceName(instanceService, instanceId), created.getFileName(), true);
         executor.execute(() -> runExport(recordId));
         return created;
     }
 
     /** 异步执行体：可单独调用以便测试与重试。 */
     public void runExport(Long recordId) {
-        BackupRecord record = repository.findById(recordId).orElse(null);
-        if (record == null) {
-            return;
-        }
-        DbInstance instance = instanceService.require(record.getInstanceId());
-        String fileName = record.getFileName();
-        long written = 0;
-        try {
-            WriteSnapshotResult snapshotResult = writeSnapshot(instance, record, fileName);
-            long keys = snapshotResult.keyCount();
-            written = storageBackend.publish(fileName);
-            record.setKeyCount(keys);
-            record.setProcessedKeys(keys);
-            record.setSizeBytes(written);
-            record.setSha256(snapshotResult.sha256());
-            record.setVerifyStatus(BackupVerifyStatus.VERIFIED);
-            record.setVerifiedAt(LocalDateTime.now());
-            record.setStatus(BackupStatus.SUCCESS);
-            record.setMessage("导出 " + keys + " 个键");
-        } catch (IOException | RuntimeException ex) {
-            // 磁盘写满、只读、进程级异常：临时文件必须清掉，记录必须失败
-            storageBackend.deleteTempQuietly(fileName);
-            record.setStatus(BackupStatus.FAILED);
-            record.setMessage(truncate(ex.getMessage()));
-            log.error("备份失败 instance={}", instance.getName(), ex);
-        } finally {
-            capacityService.release(recordId, written);
-        }
-        record.setFinishedAt(LocalDateTime.now());
-        repository.save(record);
-        if (metricsBinder != null && record.getStatus() != null) {
-            metricsBinder.recordBackup(record.getStatus().name());
-        }
+        exportExecutor.runExport(recordId);
     }
 
-    private WriteSnapshotResult writeSnapshot(DbInstance instance, BackupRecord record, String fileName)
-            throws IOException {
-        long count = 0;
-        long lastProgressFlushAt = System.currentTimeMillis();
-        String cursor = "0";
-        int scanCount = Math.max(50, properties.getBackup().getScanCount());
-        long maxKeys = properties.getBackup().getMaxKeys();
-        boolean compress = fileName.endsWith(".gz");
-        MessageDigest digest = sha256Digest();
-        try (OutputStream rawOut = storageBackend.openTempOutput(fileName);
-             DigestOutputStream digestOut = new DigestOutputStream(rawOut, digest);
-             OutputStream dataOut = compress ? new GZIPOutputStream(digestOut, 8192) : digestOut;
-             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(dataOut, StandardCharsets.UTF_8))) {
-            do {
-                RespReply reply = gateway.execute(instance, "SCAN", cursor, "MATCH", "*",
-                        "COUNT", String.valueOf(scanCount));
-                if (reply instanceof RespReply.Error error) {
-                    throw new IOException("SCAN 失败：" + error.message());
-                }
-                if (!(reply instanceof RespReply.Array array) || array.items().size() < 2) {
-                    throw new IOException("SCAN 返回结构异常");
-                }
-                cursor = text(array.items().get(0));
-                if (array.items().get(1) instanceof RespReply.Array keyArray && !keyArray.isNil()) {
-                    List<String> pageKeys = new ArrayList<>(keyArray.items().size());
-                    for (RespReply item : keyArray.items()) {
-                        String key = Text.decode(
-                                item instanceof RespReply.Bulk bulk ? bulk.value() : null);
-                        if (key != null) {
-                            pageKeys.add(key);
-                        }
-                    }
-                    for (int offset = 0; offset < pageKeys.size(); offset += PIPELINE_BATCH_SIZE) {
-                        int end = Math.min(offset + PIPELINE_BATCH_SIZE, pageKeys.size());
-                        List<String> batchKeys = pageKeys.subList(offset, end);
-                        List<KeyEntry> metas = keyspaceService.inspectBatch(instance, batchKeys);
-                        List<Object> values = keyspaceService.readValuesBatch(instance, metas);
-                        for (int i = 0; i < metas.size(); i++) {
-                            KeyEntry meta = metas.get(i);
-                            if ("none".equals(meta.type())) {
-                                continue;
-                            }
-                            Object val = i < values.size() ? values.get(i) : null;
-                            writer.write(objectMapper.writeValueAsString(
-                                    new SnapshotEntry(meta.key(), meta.type(), meta.ttl(), val)));
-                            writer.newLine();
-                            count++;
-                            if (maxKeys > 0 && count >= maxKeys) {
-                                throw new IllegalStateException("备份键数超过配置上限 " + maxKeys + "，已中止以避免生成不完整备份");
-                            }
-                        }
-                        long now = System.currentTimeMillis();
-                        if (count > 0 && (count % PROGRESS_FLUSH_KEYS < PIPELINE_BATCH_SIZE
-                                || (now - lastProgressFlushAt) >= PROGRESS_FLUSH_MS)) {
-                            record.setProcessedKeys(count);
-                            repository.save(record);
-                            lastProgressFlushAt = now;
-                        }
-                    }
-                }
-            } while (!"0".equals(cursor));
-        }
-        String sha256 = HexFormat.of().formatHex(digest.digest());
-        return new WriteSnapshotResult(count, sha256);
-    }
-
-    private String instanceName(Long instanceId) {
-        try {
-            return instanceService.require(instanceId).getName();
-        } catch (RuntimeException ex) {
-            return "instance#" + instanceId;
-        }
-    }
-
-    /**
-     * 提交一次异步恢复任务（ADR-0366 + O1-B）。
-     *
-     * <p>四道约束：
-     * <ol>
-     *   <li><b>实例级互斥</b>：与导出共用同一把按实例锁，且恢复期间导出、另一次恢复均返回 409；</li>
-     *   <li><b>异步防超时</b>：锁内落库 {@link RestoreStatus#RESTORING} 后立即返回记录，
-     *       实际回放提交至 {@code backupExecutor}，避免大库恢复击穿 HTTP 超时；</li>
-     *   <li><b>状态隔离</b>：恢复状态写入 {@code restoreStatus}，不污染备份记录自身的 {@code status}；</li>
-     *   <li><b>进度与异常安全</b>：按批节流更新 {@code restoredKeys}，失败时标记 {@link RestoreStatus#FAILED}
-     *       并保留部分已回放键数，绝不把失败标成 SUCCEEDED。</li>
-     * </ol>
-     */
+    /** 提交一次异步恢复任务（ADR-0366 + O1-B）。 */
     public BackupRecord restore(Long recordId) {
         return restore(recordId, false);
     }
 
-    /**
-     * 提交一次异步恢复任务，可选先在目标实例创建预恢复安全保护快照（v6.4.0 D1）。
-     */
+    /** 提交一次异步恢复任务，可选先在目标实例创建预恢复安全保护快照（v6.4.0 D1）。 */
     public BackupRecord restore(Long recordId, boolean createSafetySnapshot) {
         BackupRecord record = repository.findById(recordId)
                 .orElseThrow(() -> BusinessException.notFound("备份记录不存在：" + recordId));
@@ -465,7 +322,8 @@ public class BackupService {
                 repository.findFirstByInstanceIdAndRestoreStatusOrderByRestoreStartedAtDesc(
                                 instanceId, RestoreStatus.RESTORING)
                         .ifPresent(restoring -> {
-                            if (isFresh(restoring.getRestoreStartedAt(), STALE_RESTORING_MINUTES)) {
+                            if (BackupSnapshotSupport.isFresh(
+                                    restoring.getRestoreStartedAt(), STALE_RESTORING_MINUTES)) {
                                 throw BusinessException.conflict(
                                         "该实例正在恢复（备份 id=" + restoring.getId() + "），请稍后再试");
                             }
@@ -477,7 +335,7 @@ public class BackupService {
                 // 备份进行中：恢复会与导出争用同一实例，返回 409
                 repository.findFirstByInstanceIdAndStatusOrderByCreatedAtDesc(instanceId, BackupStatus.RUNNING)
                         .ifPresent(running -> {
-                            if (isFresh(running.getCreatedAt(), STALE_RUNNING_MINUTES)) {
+                            if (BackupSnapshotSupport.isFresh(running.getCreatedAt(), STALE_RUNNING_MINUTES)) {
                                 throw BusinessException.conflict(
                                         "该实例正在备份（id=" + running.getId() + "），请稍后再试");
                             }
@@ -485,7 +343,7 @@ public class BackupService {
                 if (createSafetySnapshot) {
                     BackupRecord safety = new BackupRecord();
                     safety.setInstanceId(instanceId);
-                    String unique = java.util.UUID.randomUUID().toString().substring(0, 8);
+                    String unique = UUID.randomUUID().toString().substring(0, 8);
                     String ext = properties.getBackup().isCompress() ? ".jsonl.gz" : ".jsonl";
                     safety.setFileName("pre-restore-" + instanceId + "-"
                             + LocalDateTime.now().format(STAMP) + "-" + unique + ext);
@@ -518,14 +376,15 @@ public class BackupService {
                 capacityService.reserve(instanceId, safetyId, capacityService.estimate(instanceId));
             } catch (RuntimeException ex) {
                 safetyRecord.setStatus(BackupStatus.FAILED);
-                safetyRecord.setMessage(truncate(ex.getMessage()));
+                safetyRecord.setMessage(BackupSnapshotSupport.truncate(ex.getMessage()));
                 safetyRecord.setFinishedAt(LocalDateTime.now());
                 repository.save(safetyRecord);
-                finishRestore(saved, RestoreStatus.FAILED, 0L,
-                        truncate("恢复前保护快照容量预留失败：" + ex.getMessage()));
+                restoreExecutor.finishRestore(saved, RestoreStatus.FAILED, 0L,
+                        BackupSnapshotSupport.truncate("恢复前保护快照容量预留失败：" + ex.getMessage()));
                 throw ex;
             }
-            auditService.record("CREATE_SAFETY_SNAPSHOT", instanceName(instanceId),
+            auditService.record("CREATE_SAFETY_SNAPSHOT",
+                    BackupSnapshotSupport.instanceName(instanceService, instanceId),
                     "beforeRestore=" + recordId + " file=" + safetyRecord.getFileName(), true);
             executor.execute(() -> runSafetySnapshotThenRestore(safetyId, recordId, instanceId, record.getFileName()));
         } else {
@@ -544,469 +403,33 @@ public class BackupService {
                 String reason = finishedSafety != null && finishedSafety.getMessage() != null
                         ? finishedSafety.getMessage()
                         : "未知原因";
-                finishRestore(target, RestoreStatus.FAILED, 0L,
-                        truncate("恢复前保护快照创建失败，已中止恢复：" + reason));
+                restoreExecutor.finishRestore(target, RestoreStatus.FAILED, 0L,
+                        BackupSnapshotSupport.truncate("恢复前保护快照创建失败，已中止恢复：" + reason));
             }
-            auditService.record("RESTORE_BACKUP", instanceName(instanceId),
+            auditService.record("RESTORE_BACKUP",
+                    BackupSnapshotSupport.instanceName(instanceService, instanceId),
                     "file=" + targetFileName + " aborted=safety_snapshot_failed", false);
             return;
         }
         runRestore(targetRecordId);
     }
 
-    /**
-     * 校验逻辑备份归档的 SHA-256 摘要与 Gzip/JSONL 结构完整性（v6.4.0 D1）。
-     */
+    /** 校验逻辑备份归档的 SHA-256 摘要与 Gzip/JSONL 结构完整性（v6.4.0 D1）。 */
     public BackupVerifyResult verify(Long recordId) {
-        BackupRecord record = repository.findById(recordId)
-                .orElseThrow(() -> BusinessException.notFound("备份记录不存在：" + recordId));
-        if (record.getStatus() != BackupStatus.SUCCESS) {
-            throw BusinessException.badRequest("仅成功的备份可校验完整性");
-        }
-        String fileName = record.getFileName();
-        storageBackend.validateFileName(fileName);
-        if (!storageBackend.exists(fileName)) {
-            throw BusinessException.notFound("备份文件不存在：" + fileName);
-        }
-
-        MessageDigest digest = sha256Digest();
-        long validEntries = 0L;
-        long totalBytes = 0L;
-        String parseError = null;
-        try (InputStream raw = new BufferedInputStream(storageBackend.openInput(fileName));
-             DigestInputStream digestIn = new DigestInputStream(raw, digest)) {
-            CountingInputStream counter = new CountingInputStream(digestIn);
-            try {
-                validEntries = validateArchiveEntries(counter);
-            } catch (IOException | RuntimeException ex) {
-                parseError = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
-            }
-            byte[] drainBuf = new byte[4096];
-            while (counter.read(drainBuf) != -1) {
-                // 完整消耗尾部字节，确保全文件 SHA-256 计算覆盖末尾篡改
-            }
-            totalBytes = counter.bytesRead();
-        } catch (IOException ex) {
-            parseError = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
-        }
-
-        String actualSha256 = HexFormat.of().formatHex(digest.digest());
-        String expectedSha256 = record.getSha256();
-        LocalDateTime now = LocalDateTime.now();
-        BackupVerifyStatus status;
-        String message;
-        if (parseError != null) {
-            status = BackupVerifyStatus.CORRUPTED;
-            message = truncate("归档解压或结构解析失败：" + parseError);
-        } else if (expectedSha256 != null && !expectedSha256.isBlank()
-                && !expectedSha256.equalsIgnoreCase(actualSha256)) {
-            status = BackupVerifyStatus.CORRUPTED;
-            message = "SHA-256 摘要不匹配：归档可能已被篡改或损坏";
-        } else if (expectedSha256 == null || expectedSha256.isBlank()) {
-            status = BackupVerifyStatus.VERIFIED;
-            record.setSha256(actualSha256);
-            message = "历史归档结构校验通过并补录 SHA-256，共 " + validEntries + " 条记录";
-        } else {
-            status = BackupVerifyStatus.VERIFIED;
-            message = "SHA-256 摘要与归档结构均校验通过，共 " + validEntries + " 条记录";
-        }
-
-        record.setVerifyStatus(status);
-        record.setVerifiedAt(now);
-        repository.save(record);
-        boolean ok = status == BackupVerifyStatus.VERIFIED;
-        auditService.record("VERIFY_BACKUP", instanceName(record.getInstanceId()),
-                "file=" + fileName + " status=" + status + " entries=" + validEntries, ok);
-        return new BackupVerifyResult(
-                record.getId(), fileName, status,
-                expectedSha256 != null && !expectedSha256.isBlank() ? expectedSha256 : actualSha256,
-                actualSha256, validEntries, totalBytes, now, message);
+        return verificationService.verify(recordId);
     }
 
-    /**
-     * 恢复前只读 Dry-Run 冲突预览（v6.4.0 D1）：
-     * 基于 RESP Pipeline 批量 EXISTS 统计将被覆盖的冲突键、新增键与数据类型分布，零写操作。
-     */
+    /** 恢复前只读 Dry-Run 冲突预览（v6.4.0 D1）。 */
     public RestorePreviewView previewRestore(Long recordId) {
-        BackupRecord record = repository.findById(recordId)
-                .orElseThrow(() -> BusinessException.notFound("备份记录不存在：" + recordId));
-        if (record.getStatus() != BackupStatus.SUCCESS) {
-            throw BusinessException.badRequest("仅成功的备份可预览恢复");
-        }
-        DbInstance instance = instanceService.require(record.getInstanceId());
-        String fileName = record.getFileName();
-        storageBackend.validateFileName(fileName);
-        if (!storageBackend.exists(fileName)) {
-            throw BusinessException.notFound("备份文件已丢失：" + fileName);
-        }
-
-        long totalKeys = 0L;
-        long conflictKeys = 0L;
-        long newKeys = 0L;
-        long expiredKeys = 0L;
-        Map<String, Long> typeBreakdown = new LinkedHashMap<>();
-        List<String> sampleConflicts = new ArrayList<>(MAX_SAMPLE_CONFLICTS);
-        List<String> batchKeys = new ArrayList<>(PIPELINE_BATCH_SIZE);
-
-        try (BufferedReader reader = openSnapshotReader(fileName)) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (line.isBlank()) {
-                    continue;
-                }
-                SnapshotEntry entry = objectMapper.readValue(line, SnapshotEntry.class);
-                totalKeys++;
-                if (entry.key() == null || entry.value() == null || entry.ttl() == -2L) {
-                    expiredKeys++;
-                    continue;
-                }
-                String type = entry.type() == null || entry.type().isBlank() ? "unknown" : entry.type();
-                typeBreakdown.merge(type, 1L, Long::sum);
-                batchKeys.add(entry.key());
-                if (batchKeys.size() >= PIPELINE_BATCH_SIZE) {
-                    long conflicts = probeConflictsBatch(instance, batchKeys, sampleConflicts);
-                    conflictKeys += conflicts;
-                    newKeys += batchKeys.size() - conflicts;
-                    batchKeys.clear();
-                }
-            }
-            if (!batchKeys.isEmpty()) {
-                long conflicts = probeConflictsBatch(instance, batchKeys, sampleConflicts);
-                conflictKeys += conflicts;
-                newKeys += batchKeys.size() - conflicts;
-                batchKeys.clear();
-            }
-        } catch (IOException | RuntimeException ex) {
-            String reason = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
-            return new RestorePreviewView(
-                    record.getId(), fileName, record.getVerifyStatus(), false,
-                    totalKeys, conflictKeys, newKeys, expiredKeys,
-                    typeBreakdown, sampleConflicts,
-                    truncate("归档读取或解析失败，无法预览：" + reason));
-        }
-
-        String warning = null;
-        if (record.getVerifyStatus() == BackupVerifyStatus.CORRUPTED) {
-            warning = "该归档完整性状态为 CORRUPTED，强烈建议重新校验或更换正常备份后再恢复";
-        } else if (conflictKeys > 0) {
-            warning = "目标实例已存在 " + conflictKeys + " 个同名键将被覆盖，建议勾选「恢复前自动创建保护快照」";
-        }
-        return new RestorePreviewView(
-                record.getId(), fileName, record.getVerifyStatus(), true,
-                totalKeys, conflictKeys, newKeys, expiredKeys,
-                typeBreakdown, sampleConflicts, warning);
+        return verificationService.previewRestore(recordId);
     }
 
-    private long probeConflictsBatch(DbInstance instance, List<String> keys,
-                                     List<String> sampleConflicts) throws IOException {
-        List<List<byte[]>> commands = new ArrayList<>(keys.size());
-        for (String key : keys) {
-            commands.add(RespClient.commandBytes("EXISTS", key));
-        }
-        List<RespReply> replies = gateway.executeBatch(instance, commands);
-        if (replies.size() != keys.size()) {
-            throw new IOException("管线 EXISTS 预览返回条目数不匹配：期望 "
-                    + keys.size() + "，实际 " + replies.size());
-        }
-        long conflicts = 0L;
-        for (int i = 0; i < keys.size(); i++) {
-            RespReply reply = replies.get(i);
-            if (reply instanceof RespReply.Integer integer && integer.value() > 0L) {
-                conflicts++;
-                if (sampleConflicts.size() < MAX_SAMPLE_CONFLICTS) {
-                    sampleConflicts.add(keys.get(i));
-                }
-            }
-        }
-        return conflicts;
-    }
-
-    private long validateArchiveEntries(InputStream nonClosingTarget) throws IOException {
-        long validEntries = 0L;
-        PushbackInputStream pb = new PushbackInputStream(new NonClosingInputStream(nonClosingTarget), 2);
-        byte[] header = new byte[2];
-        int read = pb.read(header);
-        if (read > 0) {
-            pb.unread(header, 0, read);
-        }
-        boolean gzip = read == 2 && (header[0] & 0xff) == 0x1f && (header[1] & 0xff) == 0x8b;
-        try (InputStream decoded = gzip ? new GZIPInputStream(pb, 8192) : pb;
-             BufferedReader reader = new BufferedReader(new InputStreamReader(decoded, StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (line.isBlank()) {
-                    continue;
-                }
-                SnapshotEntry entry = objectMapper.readValue(line, SnapshotEntry.class);
-                if (entry.key() == null || entry.type() == null || entry.type().isBlank()) {
-                    throw new IOException("归档条目缺少必填字段 key/type");
-                }
-                validEntries++;
-            }
-        }
-        return validEntries;
-    }
-
-    private static MessageDigest sha256Digest() {
-        try {
-            return MessageDigest.getInstance("SHA-256");
-        } catch (NoSuchAlgorithmException ex) {
-            throw new IllegalStateException("JDK 缺少 SHA-256 算法实现", ex);
-        }
-    }
-
-    private static final class CountingInputStream extends FilterInputStream {
-        private long count;
-
-        CountingInputStream(InputStream in) {
-            super(in);
-        }
-
-        @Override
-        public int read() throws IOException {
-            int b = super.read();
-            if (b != -1) {
-                count++;
-            }
-            return b;
-        }
-
-        @Override
-        public int read(byte[] b, int off, int len) throws IOException {
-            int n = super.read(b, off, len);
-            if (n > 0) {
-                count += n;
-            }
-            return n;
-        }
-
-        long bytesRead() {
-            return count;
-        }
-    }
-
-    private static final class NonClosingInputStream extends FilterInputStream {
-        NonClosingInputStream(InputStream in) {
-            super(in);
-        }
-
-        @Override
-        public void close() {
-            // 保留外层 DigestInputStream 供尾部排空计算完整文件 SHA-256
-        }
-    }
-
-    private boolean acquireInstanceLeaseOrConflict(String leaseKey) {
-        if (leaseLockService == null) {
-            return false;
-        }
-        if (!leaseLockService.tryAcquire(leaseKey, INSTANCE_OP_LEASE_TTL)) {
-            throw BusinessException.conflict("该实例正在提交备份或恢复任务，请稍后再试");
-        }
-        return true;
-    }
-
-    /** 恢复异步执行体（O1-B + O2-A）：使用 RESP Pipeline 批回放并按节流刷新 restoredKeys。 */
+    /** 恢复异步执行体（O1-B + O2-A）。 */
     public long runRestore(Long recordId) {
-        BackupRecord record = repository.findById(recordId).orElse(null);
-        if (record == null) {
-            return 0L;
-        }
-        DbInstance instance = instanceService.require(record.getInstanceId());
-        long restored = 0;
-        long lastProgressFlushAt = System.currentTimeMillis();
-        long lastFlushedCount = 0;
-        List<SnapshotEntry> batch = new ArrayList<>(PIPELINE_BATCH_SIZE);
-        try (BufferedReader reader = openSnapshotReader(record.getFileName())) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                if (line.isBlank()) {
-                    continue;
-                }
-                SnapshotEntry entry;
-                try {
-                    entry = objectMapper.readValue(line, SnapshotEntry.class);
-                } catch (Exception parseEx) {
-                    // 先提交此前已解析合法批次，保证部分恢复计数与文件行顺序一致
-                    if (!batch.isEmpty()) {
-                        restored += restoreBatch(instance, batch);
-                        batch.clear();
-                    }
-                    throw parseEx;
-                }
-                batch.add(entry);
-                if (batch.size() >= PIPELINE_BATCH_SIZE) {
-                    restored += restoreBatch(instance, batch);
-                    batch.clear();
-                    long now = System.currentTimeMillis();
-                    if ((restored - lastFlushedCount) >= PROGRESS_FLUSH_KEYS
-                            || (now - lastProgressFlushAt) >= PROGRESS_FLUSH_MS) {
-                        record.setRestoredKeys(restored);
-                        repository.save(record);
-                        lastFlushedCount = restored;
-                        lastProgressFlushAt = now;
-                    }
-                }
-            }
-            if (!batch.isEmpty()) {
-                restored += restoreBatch(instance, batch);
-                batch.clear();
-            }
-            finishRestore(record, RestoreStatus.SUCCEEDED, restored, null);
-            auditService.record("RESTORE_BACKUP", instance.getName(),
-                    "file=" + record.getFileName() + " restored=" + restored, true);
-            return restored;
-        } catch (BatchRestoreFailure failure) {
-            restored += failure.succeededInBatch();
-            String reason = failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
-            finishRestore(record, RestoreStatus.FAILED, restored,
-                    truncate("已回放 " + restored + " 个键，恢复中断：" + reason));
-            auditService.record("RESTORE_BACKUP", instance.getName(),
-                    "file=" + record.getFileName() + " restored=" + restored + " result=failed", false);
-            log.error("恢复批次失败 recordId={} instance={} restored={}", recordId, instance.getName(), restored, failure);
-            return restored;
-        } catch (Exception ex) {
-            // 异常安全：已写入的部分保留，状态明确标失败，并记录"恢复了多少"
-            String reason = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
-            finishRestore(record, RestoreStatus.FAILED, restored,
-                    truncate("已回放 " + restored + " 个键，恢复中断：" + reason));
-            auditService.record("RESTORE_BACKUP", instance.getName(),
-                    "file=" + record.getFileName() + " restored=" + restored + " result=failed", false);
-            log.error("恢复失败 recordId={} instance={} restored={}", recordId, instance.getName(), restored, ex);
-            return restored;
-        }
+        return restoreExecutor.runRestore(recordId);
     }
 
-    private static final class BatchRestoreFailure extends IOException {
-        private final long succeededInBatch;
-
-        BatchRestoreFailure(long succeededInBatch, String message) {
-            super(message);
-            this.succeededInBatch = succeededInBatch;
-        }
-
-        long succeededInBatch() {
-            return succeededInBatch;
-        }
-    }
-
-    /** 批次管线回放（O2-A）：将多条键恢复命令合并为单次 executeBatch，并按条目顺序核验应答。 */
-    private long restoreBatch(DbInstance instance, List<SnapshotEntry> entries) throws IOException {
-        List<List<byte[]>> commands = new ArrayList<>(entries.size() * 3);
-        List<String> ops = new ArrayList<>(entries.size() * 3);
-        int[] entryEndIndex = new int[entries.size()];
-        for (int i = 0; i < entries.size(); i++) {
-            appendRestoreCommands(entries.get(i), commands, ops);
-            entryEndIndex[i] = commands.size();
-        }
-        if (commands.isEmpty()) {
-            return entries.size();
-        }
-        List<RespReply> replies = gateway.executeBatch(instance, commands);
-        if (replies.size() != commands.size()) {
-            throw new BatchRestoreFailure(0, "管线恢复应答数量不匹配：期望 "
-                    + commands.size() + "，实际 " + replies.size());
-        }
-        long okEntries = 0;
-        int start = 0;
-        for (int i = 0; i < entries.size(); i++) {
-            int end = entryEndIndex[i];
-            for (int c = start; c < end; c++) {
-                RespReply reply = replies.get(c);
-                if (reply instanceof RespReply.Error error) {
-                    throw new BatchRestoreFailure(okEntries, ops.get(c) + " 失败：" + error.message());
-                }
-            }
-            okEntries++;
-            start = end;
-        }
-        return okEntries;
-    }
-
-    @SuppressWarnings("unchecked")
-    private void appendRestoreCommands(SnapshotEntry entry, List<List<byte[]>> commands, List<String> ops)
-            throws IOException {
-        String key = entry.key();
-        if (key == null || entry.value() == null) {
-            return;
-        }
-        commands.add(RespClient.commandBytes("DEL", key));
-        ops.add("DEL");
-        switch (entry.type()) {
-            case "string" -> {
-                commands.add(RespClient.commandBytes("SET", key, String.valueOf(entry.value())));
-                ops.add("SET");
-            }
-            case "hash" -> {
-                Map<String, String> hash = (Map<String, String>) entry.value();
-                List<byte[]> args = new ArrayList<>(2 + hash.size() * 2);
-                args.add("HSET".getBytes(StandardCharsets.UTF_8));
-                args.add(key.getBytes(StandardCharsets.UTF_8));
-                hash.forEach((field, value) -> {
-                    args.add(field.getBytes(StandardCharsets.UTF_8));
-                    args.add(String.valueOf(value).getBytes(StandardCharsets.UTF_8));
-                });
-                if (args.size() > 2) {
-                    commands.add(args);
-                    ops.add("HSET");
-                }
-            }
-            case "list" -> {
-                List<String> list = (List<String>) entry.value();
-                for (String item : list) {
-                    commands.add(RespClient.commandBytes("RPUSH", key, item));
-                    ops.add("RPUSH");
-                }
-            }
-            case "set" -> {
-                List<String> set = (List<String>) entry.value();
-                for (String item : set) {
-                    commands.add(RespClient.commandBytes("SADD", key, item));
-                    ops.add("SADD");
-                }
-            }
-            case "zset" -> {
-                List<Map<String, String>> scored = (List<Map<String, String>>) entry.value();
-                for (Map<String, String> pair : scored) {
-                    commands.add(RespClient.commandBytes("ZADD", key,
-                            pair.getOrDefault("score", "0"), pair.getOrDefault("member", "")));
-                    ops.add("ZADD");
-                }
-            }
-            case "json" -> {
-                String json = entry.value() instanceof String raw
-                        ? raw
-                        : objectMapper.writeValueAsString(entry.value());
-                commands.add(RespClient.commandBytes("JSON.SET", key, "$", json));
-                ops.add("JSON.SET");
-            }
-            default -> log.debug("跳过不支持的类型恢复：{} ({})", key, entry.type());
-        }
-        if (entry.ttl() > 0) {
-            commands.add(RespClient.commandBytes("EXPIRE", key, String.valueOf(entry.ttl())));
-            ops.add("EXPIRE");
-        }
-    }
-
-    /** 写终态并落库；无论成功失败都必须执行，避免实例停留在 RESTORING。 */
-    private void finishRestore(BackupRecord record, RestoreStatus status, long restored, String message) {
-        record.setRestoreStatus(status);
-        record.setRestoreFinishedAt(LocalDateTime.now());
-        record.setRestoredKeys(restored);
-        record.setRestoreMessage(message);
-        repository.save(record);
-        if (metricsBinder != null && status != null) {
-            metricsBinder.recordRestore(status.name());
-        }
-    }
-
-    private static boolean isFresh(LocalDateTime time, long minutes) {
-        return time != null && time.isAfter(LocalDateTime.now().minusMinutes(minutes));
-    }
-
-    /**
-     * 流式下载入口（Phase 11 P1 + N1-A）：先校验并打开输入流，再写审计留痕。
-     */
+    /** 流式下载入口（Phase 11 P1 + N1-A）：先校验并打开输入流，再写审计留痕。 */
     public DownloadStream openDownload(Long recordId) {
         BackupRecord record = repository.findById(recordId)
                 .orElseThrow(() -> BusinessException.notFound("备份记录不存在：" + recordId));
@@ -1020,134 +443,28 @@ public class BackupService {
         } catch (IOException ex) {
             throw BusinessException.upstream("读取备份文件失败：" + ex.getMessage());
         }
-        String target = instanceName(record.getInstanceId());
+        String target = BackupSnapshotSupport.instanceName(instanceService, record.getInstanceId());
         auditService.record("DOWNLOAD_BACKUP", target, record.getFileName(), true);
         return new DownloadStream(record.getFileName(), stream);
     }
 
     /** 触发数据面异步物理快照 BGSAVE（WAL + Cold SSTable + 向量索引），结果记入审计。 */
     public CheckpointResult triggerCheckpoint(Long instanceId) {
-        DbInstance instance = instanceService.require(instanceId);
-        try {
-            RespReply reply = gateway.execute(instance, "BGSAVE");
-            if (reply instanceof RespReply.Simple simple) {
-                long lastSave = queryLastSaveQuietly(instance);
-                auditService.record("BACKUP_CHECKPOINT", instance.getName(), simple.value(), true);
-                return new CheckpointResult(true, simple.value(), lastSave);
-            }
-            if (reply instanceof RespReply.Error error) {
-                String msg = error.message() == null ? "" : error.message();
-                String lower = msg.toLowerCase(Locale.ROOT);
-                auditService.record("BACKUP_CHECKPOINT", instance.getName(), truncate(msg), false);
-                if (lower.contains("already in progress")) {
-                    return new CheckpointResult(false, msg, queryLastSaveQuietly(instance));
-                }
-                if (lower.contains("unknown command")) {
-                    throw BusinessException.badRequest("目标实例不支持 BGSAVE 命令：" + msg);
-                }
-                throw BusinessException.upstream("触发物理快照失败：" + msg);
-            }
-            auditService.record("BACKUP_CHECKPOINT", instance.getName(), "BGSAVE 返回异常响应类型", false);
-            throw BusinessException.upstream("BGSAVE 返回异常响应类型");
-        } catch (BusinessException ex) {
-            throw ex;
-        } catch (IOException | RuntimeException ex) {
-            auditService.record("BACKUP_CHECKPOINT", instance.getName(), truncate(ex.getMessage()), false);
-            throw BusinessException.upstream("触发 BGSAVE 失败：" + ex.getMessage());
-        }
+        return checkpointService.triggerCheckpoint(instanceId);
     }
 
     /** 查询实例最近一次物理快照状态（LASTSAVE + INFO persistence），兼容旧版数据面降级。 */
     public CheckpointStatusView checkpointStatus(Long instanceId) {
-        DbInstance instance = instanceService.require(instanceId);
-        long lastSave = 0L;
-        try {
-            RespReply lastReply = gateway.execute(instance, "LASTSAVE");
-            if (lastReply instanceof RespReply.Integer integer) {
-                lastSave = integer.value();
-            } else if (lastReply instanceof RespReply.Error err) {
-                String msg = err.message() == null ? "" : err.message();
-                if (msg.toLowerCase(Locale.ROOT).contains("unknown command")) {
-                    return new CheckpointStatusView(false, false, 0L, "unsupported", -1L, 0L, null);
-                }
-                throw BusinessException.upstream("查询 LASTSAVE 失败：" + msg);
-            }
-        } catch (IOException ex) {
-            throw BusinessException.upstream("查询 LASTSAVE 失败：" + ex.getMessage());
-        }
-
-        boolean inProgress = false;
-        String lastStatus = "ok";
-        long lastDurationSeconds = -1L;
-        long lastDurationMillis = 0L;
-        String lastError = null;
-        try {
-            RespReply infoReply = gateway.execute(instance, "INFO", "persistence");
-            if (infoReply instanceof RespReply.Bulk bulk) {
-                Map<String, String> section = InfoParser.parse(bulk.utf8())
-                        .getOrDefault("Persistence", Map.of());
-                if (!section.isEmpty()) {
-                    inProgress = "1".equals(section.get("rdb_bgsave_in_progress"));
-                    long infoLastSave = parseLongOrDefault(section.get("rdb_last_save_time"), 0L);
-                    if (infoLastSave > lastSave) {
-                        lastSave = infoLastSave;
-                    }
-                    lastStatus = section.getOrDefault("rdb_last_bgsave_status", "ok");
-                    lastDurationSeconds = parseLongOrDefault(section.get("rdb_last_bgsave_time_sec"), -1L);
-                    lastDurationMillis = parseLongOrDefault(section.get("rdb_last_bgsave_duration_ms"), 0L);
-                    lastError = section.get("rdb_last_bgsave_error");
-                }
-            }
-        } catch (IOException | RuntimeException ex) {
-            log.debug("读取 INFO persistence 失败，保留 LASTSAVE={}", lastSave, ex);
-        }
-
-        return new CheckpointStatusView(true, inProgress, lastSave, lastStatus,
-                lastDurationSeconds, lastDurationMillis, lastError);
+        return checkpointService.checkpointStatus(instanceId);
     }
 
-    private long queryLastSaveQuietly(DbInstance instance) {
-        try {
-            RespReply reply = gateway.execute(instance, "LASTSAVE");
-            return reply instanceof RespReply.Integer integer ? integer.value() : 0L;
-        } catch (IOException | RuntimeException ex) {
-            return 0L;
+    private boolean acquireInstanceLeaseOrConflict(String leaseKey) {
+        if (leaseLockService == null) {
+            return false;
         }
-    }
-
-    private static long parseLongOrDefault(String raw, long fallback) {
-        if (raw == null || raw.isBlank()) {
-            return fallback;
+        if (!leaseLockService.tryAcquire(leaseKey, INSTANCE_OP_LEASE_TTL)) {
+            throw BusinessException.conflict("该实例正在提交备份或恢复任务，请稍后再试");
         }
-        try {
-            return Long.parseLong(raw.trim());
-        } catch (NumberFormatException ex) {
-            return fallback;
-        }
-    }
-
-    /** 自动识别 GZIP 魔数（0x1F 0x8B），兼容明文 .jsonl 与压缩 .jsonl.gz。 */
-    private BufferedReader openSnapshotReader(String fileName) throws IOException {
-        InputStream raw = new BufferedInputStream(storageBackend.openInput(fileName));
-        PushbackInputStream pb = new PushbackInputStream(raw, 2);
-        byte[] header = new byte[2];
-        int read = pb.read(header);
-        if (read > 0) {
-            pb.unread(header, 0, read);
-        }
-        boolean gzip = read == 2 && (header[0] & 0xff) == 0x1f && (header[1] & 0xff) == 0x8b;
-        InputStream decoded = gzip ? new GZIPInputStream(pb, 8192) : pb;
-        return new BufferedReader(new InputStreamReader(decoded, StandardCharsets.UTF_8));
-    }
-
-    private static String text(RespReply reply) {
-        return reply instanceof RespReply.Bulk bulk ? Text.decode(bulk.value()) : null;
-    }
-
-    private static String truncate(String message) {
-        if (message == null) {
-            return null;
-        }
-        return message.length() > 240 ? message.substring(0, 240) : message;
+        return true;
     }
 }
