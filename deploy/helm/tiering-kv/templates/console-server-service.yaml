@@ -1,0 +1,18 @@
+{{- if .Values.consoleServer.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "tiering-kv.fullname" . }}-console-server
+  labels:
+    {{- include "tiering-kv.labels" . | nindent 4 }}
+    app.kubernetes.io/component: console-server
+spec:
+  type: {{ .Values.consoleServer.service.type }}
+  selector:
+    {{- include "tiering-kv.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: console-server
+  ports:
+    - name: http
+      port: {{ .Values.consoleServer.service.port }}
+      targetPort: http
+{{- end }}

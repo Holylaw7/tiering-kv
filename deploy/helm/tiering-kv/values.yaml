@@ -1,0 +1,177 @@
+# Tiering-KV Helm v3 Chart 默认配置（支持单机与集群数据面、多副本 HA 控制面、可选 Operator 与可观测包）
+# 生产部署前请务必替换 consoleServer.security.* 与 consoleServer.database.password（或使用 existingSecret）
+
+nameOverride: ""
+fullnameOverride: ""
+
+global:
+  imagePullPolicy: IfNotPresent
+  imagePullSecrets: []
+
+tieringKv:
+  enabled: true
+  # 数据面运行模式：standalone（默认，单机分层存储 io.tieringkv.Main）| cluster（分布式元数据+存储+网关 TxnRuntimeMain）
+  mode: standalone
+  replicaCount: 1
+  image:
+    repository: ghcr.io/holylaw7/tiering-kv
+    tag: v6.3.0
+  # JDK 21 分代 ZGC + Netty 池化内存，保证低尾延迟
+  javaOpts: "-XX:+UseZGC -XX:+ZGenerational -Dio.netty.allocator.type=pooled -Xmx1g"
+  ports:
+    resp: 6379
+    management: 9100
+    raftMetadata: 7300
+    raftStorage: 7100
+    gatewayRpc: 7201
+  terminationGracePeriodSeconds: 60
+  persistence:
+    enabled: true
+    storageClassName: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 20Gi
+  config:
+    memoryLimitBytes: 1073741824
+    shardCount: 16
+    flushWorkers: 1
+    migrationWorkers: 2
+    walFsyncPolicy: EVERY_SEC
+    lowWatermark: 0.70
+    highWatermark: 0.85
+    criticalWatermark: 0.95
+    evictionPolicy: sampled-lfu
+    slowlogThresholdMicros: 10000
+    slowlogMaxLen: 128
+  # 仅在 mode=cluster 时生效
+  cluster:
+    metadataReplicas: 3
+    storageReplicas: 3
+    gatewayReplicas: 2
+    metadataStorageSize: 10Gi
+    storageSize: 100Gi
+    pdbMinAvailable: 2
+  resources:
+    requests:
+      cpu: 250m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+consoleServer:
+  enabled: true
+  # 设为 >=2 时自动启用多副本 HA：CONSOLE_LOGIN_ATTEMPT_STORE=db 并自动渲染 PodDisruptionBudget
+  replicaCount: 1
+  image:
+    repository: ghcr.io/holylaw7/tiering-kv-console-server
+    tag: v6.3.0
+  javaOpts: "-XX:MaxRAMPercentage=75"
+  service:
+    type: ClusterIP
+    port: 8080
+  database:
+    url: "jdbc:mysql://tiering-kv-mysql:3306/tiering_console?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
+    username: "root"
+    # 生产部署必须通过 --set 或 consoleServer.security.existingSecret 注入真实口令
+    password: ""
+  security:
+    # 若已通过外部 Secret（如 ExternalSecrets / SealedSecrets）创建，请填入 Secret 名称以跳过内置 Secret 渲染
+    existingSecret: ""
+    # 生产部署必须注入至少 32 字符的高熵 JWT 密钥（或通过 existingSecret 提供）
+    jwtSecret: ""
+    adminUsername: "admin"
+    adminPassword: ""
+    # 留空兼容开发态明文；生产建议注入 32 字节 Base64 AES-256-GCM 密钥并开启 requireEncryptionInProd
+    encryptionKey: ""
+    requireEncryptionInProd: false
+    # 留空时按 replicaCount 自动决策（>=2 -> db，1 -> memory）；亦可显式设为 db 或 memory
+    loginAttemptStore: ""
+    trustedProxies: "127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    corsAllowedOrigins: "http://localhost:8081,http://127.0.0.1:8081"
+  backup:
+    # 多副本 HA 强烈建议使用 s3（兼容 RustFS / MinIO / AWS S3）
+    storageType: local
+    dir: /app/backups
+    s3:
+      endpoint: "http://tiering-kv-s3:9000"
+      region: "us-east-1"
+      bucket: "tiering-backups"
+      prefix: "backups/"
+      accessKey: ""
+      secretKey: ""
+      pathStyle: true
+      autoCreateBucket: true
+  # 留空时自动指向同 Chart 渲染的数据面 Service
+  bootstrapInstance: ""
+  kubernetes:
+    enabled: false
+    namespace: ""
+  pdb:
+    enabled: true
+    minAvailable: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+consoleWeb:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ghcr.io/holylaw7/tiering-kv-console-web
+    tag: v6.3.0
+  service:
+    type: ClusterIP
+    port: 80
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts:
+      - host: tiering-kv.local
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 128Mi
+
+operator:
+  enabled: false
+  replicaCount: 1
+  image:
+    repository: ghcr.io/holylaw7/tiering-kv-operator
+    tag: v6.3.0
+  healthPort: 8088
+  leaderElection: true
+  leaseName: tiering-kv-operator-leader
+  rbac:
+    create: true
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+observability:
+  serviceMonitor:
+    enabled: false
+    interval: 15s
+    scrapeTimeout: 10s
+    labels: {}
+    # 若 Prometheus 抓取需要 JWT 认证的 /actuator/prometheus，可配置挂载 ADMIN Bearer Token 的 Secret
+    consoleBearerTokenSecret: {}
+  prometheusRule:
+    enabled: false
+    labels: {}

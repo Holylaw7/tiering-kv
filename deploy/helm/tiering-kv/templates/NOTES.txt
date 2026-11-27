@@ -1,0 +1,23 @@
+Tiering-KV ({{ .Chart.AppVersion }}) has been deployed to namespace {{ .Release.Namespace }}.
+
+{{- if .Values.consoleWeb.enabled }}
+1. Access the Operations Console UI:
+   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "tiering-kv.fullname" . }}-console-web 8081:{{ .Values.consoleWeb.service.port }}
+   Open http://127.0.0.1:8081
+{{- end }}
+
+{{- if .Values.tieringKv.enabled }}
+2. Connect to the Tiering-KV RESP data plane:
+{{- if eq .Values.tieringKv.mode "cluster" }}
+   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "tiering-kv.fullname" . }}-gateway 6379:{{ .Values.tieringKv.ports.resp }}
+{{- else }}
+   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "tiering-kv.fullname" . }}-core 6379:{{ .Values.tieringKv.ports.resp }}
+{{- end }}
+{{- end }}
+
+{{- if and .Values.consoleServer.enabled (ge (int .Values.consoleServer.replicaCount) 2) }}
+3. High-Availability Mode Active:
+   - consoleServer.replicaCount = {{ .Values.consoleServer.replicaCount }}
+   - CONSOLE_LOGIN_ATTEMPT_STORE automatically switched to "{{ include "tiering-kv.loginAttemptStore" . }}"
+   - Ensure backup storage is configured with shared S3 (consoleServer.backup.storageType=s3) for cross-replica restores.
+{{- end }}

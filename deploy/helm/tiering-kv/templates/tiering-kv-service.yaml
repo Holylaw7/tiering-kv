@@ -1,0 +1,75 @@
+{{- if .Values.tieringKv.enabled }}
+{{- $full := include "tiering-kv.fullname" . }}
+{{- if eq .Values.tieringKv.mode "cluster" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $full }}-meta
+  labels:
+    {{- include "tiering-kv.labels" . | nindent 4 }}
+    app.kubernetes.io/component: metadata
+spec:
+  clusterIP: None
+  selector:
+    {{- include "tiering-kv.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: metadata
+  ports:
+    - name: raft-rpc
+      port: {{ .Values.tieringKv.ports.raftMetadata }}
+      targetPort: raft-rpc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $full }}-storage
+  labels:
+    {{- include "tiering-kv.labels" . | nindent 4 }}
+    app.kubernetes.io/component: storage
+spec:
+  clusterIP: None
+  selector:
+    {{- include "tiering-kv.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: storage
+  ports:
+    - name: raft-rpc
+      port: {{ .Values.tieringKv.ports.raftStorage }}
+      targetPort: raft-rpc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $full }}-gateway
+  labels:
+    {{- include "tiering-kv.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "tiering-kv.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+  ports:
+    - name: resp
+      port: {{ .Values.tieringKv.ports.resp }}
+      targetPort: resp
+{{- else }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $full }}-core
+  labels:
+    {{- include "tiering-kv.labels" . | nindent 4 }}
+    app.kubernetes.io/component: core
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "tiering-kv.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: core
+  ports:
+    - name: resp
+      port: {{ .Values.tieringKv.ports.resp }}
+      targetPort: resp
+    - name: management
+      port: {{ .Values.tieringKv.ports.management }}
+      targetPort: management
+{{- end }}
+{{- end }}

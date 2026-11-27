@@ -6,6 +6,7 @@ cd "$(dirname "$0")/.."
 # 用法：TIERINGKV_KIND_CLUSTER=true scripts/kind-e2e.sh run
 
 CLUSTER=${TIERINGKV_KIND_CLUSTER_NAME:-tiering-kv}
+IMAGE=${TIERINGKV_IMAGE:-ghcr.io/holylaw7/tiering-kv:v6.3.0}
 
 case "${1:-run}" in
   run)
@@ -14,7 +15,7 @@ case "${1:-run}" in
     if ! kind get clusters | grep -qx "$CLUSTER"; then
       kind create cluster --name "$CLUSTER"
     fi
-    kind load docker-image ghcr.io/holylaw7/tiering-kv:v3.7.0 \
+    kind load docker-image "$IMAGE" \
       --name "$CLUSTER"
     kubectl create namespace tiering-kv || true
     kubectl -n tiering-kv create secret generic tiering-kv-secrets \

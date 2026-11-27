@@ -1,0 +1,280 @@
+{
+  "uid": "tiering-kv-overview",
+  "title": "Tiering-KV Operations & Tiered Storage Overview",
+  "description": "Out-of-the-box Grafana dashboard wired to Tiering-KV Console Micrometer/Prometheus custom metrics (v6.4.0).",
+  "tags": ["tiering-kv", "storage", "redis", "prometheus"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "editable": true,
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "label": "Prometheus",
+        "hide": 0,
+        "refresh": 1
+      },
+      {
+        "name": "instance",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "${datasource}" },
+        "label": "Instance",
+        "query": "label_values(tieringkv_instance_up, instance_name)",
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".*",
+        "refresh": 2
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Online Managed Instances",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(tieringkv_instance_up{instance_name=~\"$instance\"})",
+          "legendFormat": "Online"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Firing Console Alerts",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "tieringkv_console_alerts_firing",
+          "legendFormat": "Firing"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 1 },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Total Keys (Selected Instances)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(tieringkv_instance_keys_total{instance_name=~\"$instance\"})",
+          "legendFormat": "Keys"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short" }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Aggregate Throughput (ops/s)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(tieringkv_instance_ops_per_sec{instance_name=~\"$instance\"})",
+          "legendFormat": "OPS"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ops" }
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Hot-Tier Memory Utilization Ratio",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "tieringkv_instance_memory_ratio{instance_name=~\"$instance\"}",
+          "legendFormat": "{{instance_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 0.85 },
+              { "color": "red", "value": 0.95 }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Hot-Tier Used Memory (Bytes) & Cold SSTables",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "tieringkv_instance_memory_used_bytes{instance_name=~\"$instance\"}",
+          "legendFormat": "{{instance_name}} mem"
+        },
+        {
+          "refId": "B",
+          "expr": "tieringkv_instance_cold_tables{instance_name=~\"$instance\"}",
+          "legendFormat": "{{instance_name}} cold SSTables"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "bytes" },
+        "overrides": [
+          {
+            "matcher": { "id": "byFrameRefID", "options": "B" },
+            "properties": [
+              { "id": "unit", "value": "short" },
+              { "id": "custom.axisPlacement", "value": "right" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Operations / sec per Instance",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "tieringkv_instance_ops_per_sec{instance_name=~\"$instance\"}",
+          "legendFormat": "{{instance_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ops" }
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Command P99 Latency (ms)",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "tieringkv_instance_p99_latency_ms{instance_name=~\"$instance\"}",
+          "legendFormat": "{{instance_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ms" }
+      }
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Control-Plane RESP Connection Pool Watermark",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "tieringkv_console_pool_active",
+          "legendFormat": "Active"
+        },
+        {
+          "refId": "B",
+          "expr": "tieringkv_console_pool_idle",
+          "legendFormat": "Idle"
+        },
+        {
+          "refId": "C",
+          "expr": "tieringkv_console_pool_max",
+          "legendFormat": "Max Capacity"
+        },
+        {
+          "refId": "D",
+          "expr": "increase(tieringkv_console_pool_borrow_timeouts_total[5m])",
+          "legendFormat": "Borrow Timeouts (5m)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short" }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Backups, Restores & Audited Operations",
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (increase(tieringkv_console_backups_total[1h]))",
+          "legendFormat": "Backup {{status}} (1h)"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (status) (increase(tieringkv_console_restores_total[1h]))",
+          "legendFormat": "Restore {{status}} (1h)"
+        },
+        {
+          "refId": "C",
+          "expr": "sum by (action, success) (increase(tieringkv_console_audit_events_total[15m]))",
+          "legendFormat": "Audit {{action}} ok={{success}} (15m)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short" }
+      }
+    }
+  ]
+}

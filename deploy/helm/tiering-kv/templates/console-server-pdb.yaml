@@ -1,0 +1,15 @@
+{{- if and .Values.consoleServer.enabled .Values.consoleServer.pdb.enabled (gt (int .Values.consoleServer.replicaCount) 1) }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "tiering-kv.fullname" . }}-console-server
+  labels:
+    {{- include "tiering-kv.labels" . | nindent 4 }}
+    app.kubernetes.io/component: console-server
+spec:
+  minAvailable: {{ .Values.consoleServer.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "tiering-kv.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: console-server
+{{- end }}

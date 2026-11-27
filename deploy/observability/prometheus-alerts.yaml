@@ -1,0 +1,90 @@
+# Tiering-KV 标准 Prometheus 告警规则集（对接 Console /actuator/prometheus 自定义指标）
+groups:
+  - name: tiering-kv.rules
+    rules:
+      - alert: TieringKVInstanceDown
+        expr: tieringkv_instance_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Tiering-KV 实例离线（{{ $labels.instance_name }}）"
+          description: "被纳管实例 {{ $labels.instance_name }} (id={{ $labels.instance_id }}) 连续 1 分钟探测不可达。"
+
+      - alert: TieringKVMemoryHighWatermark
+        expr: tieringkv_instance_memory_ratio >= 0.85
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tiering-KV 热层内存达到高水位（{{ $labels.instance_name }}）"
+          description: "实例 {{ $labels.instance_name }} 热层内存使用率持续超过 85%，请关注冷热降级与大键治理。"
+
+      - alert: TieringKVMemoryCriticalWatermark
+        expr: tieringkv_instance_memory_ratio >= 0.95
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Tiering-KV 热层内存达到临界水位（{{ $labels.instance_name }}）"
+          description: "实例 {{ $labels.instance_name }} 热层内存使用率持续超过 95%，存在写入背压风险。"
+
+      - alert: TieringKVHighP99Latency
+        expr: tieringkv_instance_p99_latency_ms > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tiering-KV 命令 P99 延迟偏高（{{ $labels.instance_name }}）"
+          description: "实例 {{ $labels.instance_name }} 命令 P99 延迟超过 50ms 持续 5 分钟。"
+
+      - alert: TieringKVRespPoolBorrowTimeout
+        expr: increase(tieringkv_console_pool_borrow_timeouts_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "控制面 RESP 连接池发生借用超时"
+          description: "近 5 分钟内控制面 RESP 连接池出现借用超时，请排查下游实例阻塞或调大 CONSOLE_POOL_MAX_TOTAL。"
+
+      - alert: TieringKVRespPoolExhausted
+        expr: tieringkv_console_pool_max > 0 and (tieringkv_console_pool_active / tieringkv_console_pool_max) >= 0.9
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "控制面 RESP 连接池活跃占用 >= 90%"
+          description: "控制面 RESP 连接池活跃连接数接近上限，可能引发接口排队超时。"
+
+      - alert: TieringKVBackupFailed
+        expr: increase(tieringkv_console_backups_total{status="FAILED"}[15m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tiering-KV 逻辑备份执行失败"
+          description: "近 15 分钟内存在状态为 FAILED 的备份任务，请查看控制台备份页与后端日志。"
+
+      - alert: TieringKVRestoreFailed
+        expr: increase(tieringkv_console_restores_total{status="FAILED"}[15m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Tiering-KV 逻辑恢复执行失败"
+          description: "近 15 分钟内存在状态为 FAILED 的恢复任务，请检查目标实例状态及预恢复保护快照。"
+
+      - alert: TieringKVBackupArchiveCorrupted
+        expr: increase(tieringkv_console_audit_events_total{action="BACKUP_VERIFY",success="false"}[15m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "检测到备份归档完整性校验失败（CORRUPTED）"
+          description: "近 15 分钟内发生 BACKUP_VERIFY 失败事件，备份归档可能已被篡改或静默损坏。"
+
+      - alert: TieringKVActiveAlertsSpike
+        expr: tieringkv_console_alerts_firing >= 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "控制台同时存在 >= 5 条活跃告警"
+          description: "请及时登录 Tiering-KV Operations Console 排查未确认的告警事件。"

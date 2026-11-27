@@ -1,0 +1,94 @@
+{{- if .Values.tieringKv.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "tiering-kv.fullname" . }}-config
+  labels:
+    {{- include "tiering-kv.labels" . | nindent 4 }}
+    app.kubernetes.io/component: data-plane
+data:
+  application.yaml: |
+    server:
+      host: 0.0.0.0
+      port: {{ .Values.tieringKv.ports.resp }}
+      max-clients: 10000
+      timeout-seconds: 0
+      tls:
+        enabled: false
+    worker:
+      shard-count: {{ .Values.tieringKv.config.shardCount }}
+      flush-workers: {{ .Values.tieringKv.config.flushWorkers }}
+      migration-workers: {{ .Values.tieringKv.config.migrationWorkers }}
+    memory:
+      limit: {{ .Values.tieringKv.config.memoryLimitBytes }}
+    wal:
+      fsync-policy: {{ .Values.tieringKv.config.walFsyncPolicy }}
+      max-segment-bytes: 67108864
+    cache:
+      block-size: 1024
+      hotkey-window-ms: 1000
+      hotkey-threshold: 1000
+      max-hot-keys: 1024
+      hotkey-cache-ttl-ms: 500
+      eviction-decay-interval-ms: 60000
+      max-evictions-per-cycle: 1024
+      eviction-policy: {{ .Values.tieringKv.config.evictionPolicy }}
+      eviction-samples: 16
+    storage:
+      data-dir: /app/data
+    tiering:
+      low-watermark: {{ .Values.tieringKv.config.lowWatermark }}
+      high-watermark: {{ .Values.tieringKv.config.highWatermark }}
+      critical-watermark: {{ .Values.tieringKv.config.criticalWatermark }}
+      max-entry-count: 1000000
+    observability:
+      management-port: {{ .Values.tieringKv.ports.management }}
+      slowlog-threshold-micros: {{ .Values.tieringKv.config.slowlogThresholdMicros }}
+      slowlog-max-len: {{ .Values.tieringKv.config.slowlogMaxLen }}
+{{- if eq .Values.tieringKv.mode "cluster" }}
+  regions.conf: |
+    {{- $full := include "tiering-kv.fullname" . }}
+    {{- range $i, $_ := until (int .Values.tieringKv.cluster.storageReplicas) }}
+    {{ $full }}-storage-{{ $i }} r{{ add $i 1 }}
+    {{- end }}
+  start.sh: |
+    #!/bin/sh
+    set -e
+    ROLE=${ROLE:?missing ROLE}
+    NODE_ID=${POD_NAME:?missing POD_NAME}
+    RPC_PORT=${RPC_PORT:-7300}
+    DATA_DIR=${DATA_DIR:-/data}
+    case "$ROLE" in
+      metadata)
+        exec java $JAVA_OPTS -cp /app/tiering-kv.jar \
+          io.tieringkv.runtime.TxnRuntimeMain \
+          --role metadata --node-id "$NODE_ID" \
+          --rpc-port "$RPC_PORT" --data-dir "$DATA_DIR"
+        ;;
+      participant)
+        REGION_ID=$(awk -v name="$NODE_ID" '$1 == name {print $2}' /etc/tiering-kv/regions.conf)
+        if [ -z "$REGION_ID" ]; then
+          REGION_ID="r${NODE_ID##*-}"
+        fi
+        exec java $JAVA_OPTS -cp /app/tiering-kv.jar \
+          io.tieringkv.runtime.TxnRuntimeMain \
+          --role participant --node-id "$NODE_ID" \
+          --region-id "$REGION_ID" --rpc-port "$RPC_PORT" \
+          --data-dir "$DATA_DIR"
+        ;;
+      gateway)
+        exec java $JAVA_OPTS -cp /app/tiering-kv.jar \
+          io.tieringkv.runtime.TxnRuntimeMain \
+          --role gateway --node-id "$NODE_ID" \
+          --rpc-port "$RPC_PORT" --gateway-port "${GATEWAY_PORT:-6379}" \
+          --metadata-node "$METADATA_SERVICE" \
+          --metadata-port "${METADATA_PORT:-7300}" \
+          --regions "$REGIONS"
+        ;;
+      *)
+        echo "unknown role $ROLE" >&2
+        exit 1
+        ;;
+    esac
+{{- end }}
+{{- end }}

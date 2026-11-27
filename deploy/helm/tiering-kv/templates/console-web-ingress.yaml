@@ -1,0 +1,37 @@
+{{- if and .Values.consoleWeb.enabled .Values.consoleWeb.ingress.enabled }}
+{{- $full := include "tiering-kv.fullname" . }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $full }}-console-web
+  labels:
+    {{- include "tiering-kv.labels" . | nindent 4 }}
+    app.kubernetes.io/component: console-web
+  {{- with .Values.consoleWeb.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.consoleWeb.ingress.className }}
+  ingressClassName: {{ .Values.consoleWeb.ingress.className | quote }}
+  {{- end }}
+  {{- if .Values.consoleWeb.ingress.tls }}
+  tls:
+    {{- toYaml .Values.consoleWeb.ingress.tls | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.consoleWeb.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ $full }}-console-web
+                port:
+                  number: {{ $.Values.consoleWeb.service.port }}
+          {{- end }}
+    {{- end }}
+{{- end }}
