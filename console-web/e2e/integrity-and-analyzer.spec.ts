@@ -36,10 +36,15 @@ test.describe('Backup Integrity, Keyspace Analyzer & Request-ID Trace E2E (v6.4.
     let createdBackupId: number | undefined
 
     try {
-      // 2. 构造多类型测试键（4KB 大字符串永久键、Hash 键、短期/长期 TTL 键）
+      // 2. 构造多类型测试键（4KB 大字符串通过键写入接口避免终端 512 字符上限，其余走终端命令）
       const bigPayload = 'B'.repeat(4096)
+      const putBigRes = await request.put(`${baseURL}/api/v1/keys?instanceId=${instanceId}`, {
+        headers: authHeaders,
+        data: { key: bigKey, value: bigPayload }
+      })
+      expect(putBigRes.ok()).toBeTruthy()
+
       const cmds = [
-        `SET ${bigKey} ${bigPayload}`,
         `HSET ${hashKey} name alice role admin tier hot`,
         `SET ${cacheKey1} orig-cache-1 EX 3600`,
         `SET ${cacheKey2} orig-cache-2 EX 3600`,
@@ -52,6 +57,7 @@ test.describe('Backup Integrity, Keyspace Analyzer & Request-ID Trace E2E (v6.4.
           data: { instanceId, command }
         })
         expect(execRes.ok()).toBeTruthy()
+        expect((await execRes.json()).data.error).toBe(false)
       }
 
       // 3. 触发逻辑备份并等待 SUCCESS，断言 SHA-256 摘要与 VERIFIED 状态
@@ -201,7 +207,7 @@ test.describe('Backup Integrity, Keyspace Analyzer & Request-ID Trace E2E (v6.4.
       await bigKeyRow.getByRole('button', { name: '查看详情' }).click()
       const drawer = page.locator('.el-drawer')
       await expect(drawer).toBeVisible()
-      await expect(drawer).toContainText(bigKey)
+      await expect(drawer).toContainText(bigKey, { timeout: 10_000 })
       await page.keyboard.press('Escape')
 
       // 6. 审计日志 -> 按 Request ID 精确筛选，验证全链路追踪闭环
@@ -210,7 +216,13 @@ test.describe('Backup Integrity, Keyspace Analyzer & Request-ID Trace E2E (v6.4.
       await expect(page.locator('.el-table__header')).toContainText('Request ID')
 
       await page.getByPlaceholder('Request ID').fill(traceId)
-      await page.getByRole('button', { name: '查询', exact: true }).click()
+      const [auditRes] = await Promise.all([
+        page.waitForResponse(
+          (res) => res.url().includes('/api/v1/audit') && res.url().includes(encodeURIComponent(traceId))
+        ),
+        page.getByRole('button', { name: '查询', exact: true }).click()
+      ])
+      expect(auditRes.status()).toBe(200)
       await expect(page.locator('.el-table__body')).toContainText('LOGIN', { timeout: 10_000 })
       await expect(page.locator('.el-table__body')).toContainText(traceId.slice(0, 14))
     } finally {
