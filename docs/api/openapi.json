@@ -284,6 +284,21 @@
         },
         "type" : "object"
       },
+      "ApiResponseBackupVerifyResult" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/BackupVerifyResult"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseBoolean" : {
         "properties" : {
           "code" : {
@@ -708,6 +723,21 @@
         },
         "type" : "object"
       },
+      "ApiResponseRestorePreviewView" : {
+        "properties" : {
+          "code" : {
+            "format" : "int32",
+            "type" : "integer"
+          },
+          "data" : {
+            "$ref" : "#/components/schemas/RestorePreviewView"
+          },
+          "message" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
       "ApiResponseRetentionView" : {
         "properties" : {
           "code" : {
@@ -951,6 +981,10 @@
           "message" : {
             "type" : "string"
           },
+          "preRestoreBackupId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
           "processedKeys" : {
             "format" : "int64",
             "type" : "integer"
@@ -974,12 +1008,23 @@
             "format" : "int64",
             "type" : "integer"
           },
+          "sha256" : {
+            "type" : "string"
+          },
           "sizeBytes" : {
             "format" : "int64",
             "type" : "integer"
           },
           "status" : {
             "enum" : [ "RUNNING", "SUCCESS", "FAILED" ],
+            "type" : "string"
+          },
+          "verifiedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          },
+          "verifyStatus" : {
+            "enum" : [ "UNVERIFIED", "VERIFIED", "CORRUPTED" ],
             "type" : "string"
           }
         },
@@ -1094,6 +1139,43 @@
             "type" : "integer"
           },
           "updatedAt" : {
+            "format" : "date-time",
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "BackupVerifyResult" : {
+        "properties" : {
+          "actualSha256" : {
+            "type" : "string"
+          },
+          "backupId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expectedSha256" : {
+            "type" : "string"
+          },
+          "fileName" : {
+            "type" : "string"
+          },
+          "message" : {
+            "type" : "string"
+          },
+          "sizeBytes" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "status" : {
+            "enum" : [ "UNVERIFIED", "VERIFIED", "CORRUPTED" ],
+            "type" : "string"
+          },
+          "validEntries" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "verifiedAt" : {
             "format" : "date-time",
             "type" : "string"
           }
@@ -1987,6 +2069,9 @@
           "ip" : {
             "type" : "string"
           },
+          "requestId" : {
+            "type" : "string"
+          },
           "success" : {
             "type" : "boolean"
           },
@@ -2221,6 +2306,65 @@
           "slotPercent" : {
             "format" : "double",
             "type" : "number"
+          }
+        },
+        "type" : "object"
+      },
+      "RestorePreviewView" : {
+        "properties" : {
+          "archiveReadable" : {
+            "type" : "boolean"
+          },
+          "backupId" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "conflictKeys" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "expiredKeys" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "fileName" : {
+            "type" : "string"
+          },
+          "newKeys" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "sampleConflicts" : {
+            "items" : {
+              "type" : "string"
+            },
+            "type" : "array"
+          },
+          "totalKeys" : {
+            "format" : "int64",
+            "type" : "integer"
+          },
+          "typeBreakdown" : {
+            "additionalProperties" : {
+              "format" : "int64",
+              "type" : "integer"
+            },
+            "type" : "object"
+          },
+          "verifyStatus" : {
+            "enum" : [ "UNVERIFIED", "VERIFIED", "CORRUPTED" ],
+            "type" : "string"
+          },
+          "warning" : {
+            "type" : "string"
+          }
+        },
+        "type" : "object"
+      },
+      "RestoreRequest" : {
+        "properties" : {
+          "createSafetySnapshot" : {
+            "type" : "boolean"
           }
         },
         "type" : "object"
@@ -3903,12 +4047,75 @@
             "type" : "integer"
           }
         } ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/RestoreRequest"
+              }
+            }
+          }
+        },
         "responses" : {
           "200" : {
             "content" : {
               "*/*" : {
                 "schema" : {
                   "$ref" : "#/components/schemas/ApiResponseBackupRecord"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "backup-controller" ]
+      }
+    },
+    "/api/v1/backups/{id}/restore/preview" : {
+      "post" : {
+        "operationId" : "previewRestore",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseRestorePreviewView"
+                }
+              }
+            },
+            "description" : "OK"
+          }
+        },
+        "tags" : [ "backup-controller" ]
+      }
+    },
+    "/api/v1/backups/{id}/verify" : {
+      "post" : {
+        "operationId" : "verify",
+        "parameters" : [ {
+          "in" : "path",
+          "name" : "id",
+          "required" : true,
+          "schema" : {
+            "format" : "int64",
+            "type" : "integer"
+          }
+        } ],
+        "responses" : {
+          "200" : {
+            "content" : {
+              "*/*" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ApiResponseBackupVerifyResult"
                 }
               }
             },

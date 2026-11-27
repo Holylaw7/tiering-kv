@@ -77,7 +77,16 @@ test.describe('Console Core Smoke Flow', () => {
     await page.locator('.sidebar').getByText('备份恢复').click()
     const backupRow = page.locator('.el-table__row', { hasText: 'SUCCESS' }).first()
     await backupRow.getByRole('button', { name: '恢复', exact: true }).click()
-    await page.locator('.el-message-box__btns .el-button--primary').click()
+    const wizard = page.getByRole('dialog', { name: /安全恢复向导/ })
+    await expect(wizard).toBeVisible()
+    await expect(wizard).toContainText('归档总键数', { timeout: 15_000 })
+    const safetyCheckbox = wizard.getByRole('checkbox')
+    if (await safetyCheckbox.isChecked()) {
+      await safetyCheckbox.uncheck()
+    }
+    const confirmBtn = wizard.getByRole('button', { name: '确认执行恢复' })
+    await expect(confirmBtn).toBeEnabled({ timeout: 15_000 })
+    await confirmBtn.click()
     await expect(page.getByText(/已恢复 \d+ 个键/)).toBeVisible({ timeout: 15_000 })
 
     // 清理测试备份与测试键

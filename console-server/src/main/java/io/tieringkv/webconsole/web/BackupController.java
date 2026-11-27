@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -50,8 +51,25 @@ public class BackupController {
 
     @PostMapping("/{id}/restore")
     @PreAuthorize("hasRole('ADMIN')")
-    public ApiResponse<BackupRecord> restore(@PathVariable Long id) {
-        return ApiResponse.ok(backupService.restore(id));
+    public ApiResponse<BackupRecord> restore(
+            @PathVariable Long id,
+            @RequestBody(required = false) BackupService.RestoreRequest request) {
+        boolean safetySnapshot = request != null && request.createSafetySnapshot();
+        return ApiResponse.ok(backupService.restore(id, safetySnapshot));
+    }
+
+    /** 校验备份归档 SHA-256 摘要与 Gzip/JSONL 结构完整性（v6.4.0 D1）。 */
+    @PostMapping("/{id}/verify")
+    @PreAuthorize("hasAnyRole('ADMIN','OPS')")
+    public ApiResponse<BackupService.BackupVerifyResult> verify(@PathVariable Long id) {
+        return ApiResponse.ok(backupService.verify(id));
+    }
+
+    /** 恢复前只读 Dry-Run 冲突预览（基于 RESP Pipeline EXISTS，不修改任何键值，v6.4.0 D1）。 */
+    @PostMapping("/{id}/restore/preview")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ApiResponse<BackupService.RestorePreviewView> previewRestore(@PathVariable Long id) {
+        return ApiResponse.ok(backupService.previewRestore(id));
     }
 
     @GetMapping("/{id}/download")

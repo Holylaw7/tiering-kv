@@ -43,6 +43,10 @@ public class OpLog {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
+    /** 请求链路关联 ID（X-Request-Id / traceparent，v6.4.0 D1/D2）。 */
+    @Column(name = "request_id", length = 64)
+    private String requestId;
+
     @PrePersist
     void onCreate() {
         this.createdAt = LocalDateTime.now();
@@ -118,5 +122,13 @@ public class OpLog {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getRequestId() {
+        return requestId;
+    }
+
+    public void setRequestId(String requestId) {
+        this.requestId = requestId;
     }
 }
