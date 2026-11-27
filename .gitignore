@@ -41,6 +41,10 @@ config/local/
 *.tmp
 *.swp
 
+# ---- Python ----
+__pycache__/
+*.py[cod]
+
 # ---- Web 控制台平台 ----
 console-server/target/
 console-server/logs/
