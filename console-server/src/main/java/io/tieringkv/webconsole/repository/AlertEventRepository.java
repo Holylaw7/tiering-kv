@@ -19,6 +19,8 @@ public interface AlertEventRepository extends JpaRepository<AlertEvent, Long> {
 
     Page<AlertEvent> findByStatusOrderByFiredAtDesc(AlertStatus status, Pageable pageable);
 
+    List<AlertEvent> findByInstanceIdAndStatusOrderByFiredAtDesc(Long instanceId, AlertStatus status);
+
     Optional<AlertEvent> findFirstByRuleIdAndInstanceIdAndStatusOrderByFiredAtDesc(
             Long ruleId, Long instanceId, AlertStatus status);
 

@@ -40,11 +40,30 @@ const channelForm = ref({
 const metrics = [
   { value: 'qps', label: 'QPS', unit: '' },
   { value: 'avg_latency_ms', label: '平均延迟', unit: 'ms' },
+  { value: 'latency_p99_ms', label: 'P99 延迟', unit: 'ms' },
   { value: 'used_memory_ratio', label: '内存水位', unit: '0-1' },
+  { value: 'tiering_cold_sstable_count', label: '冷层 SSTable 数', unit: '' },
+  { value: 'tiering_block_cache_hit_rate', label: 'BlockCache 命中率', unit: '0-1' },
+  { value: 'tiering_migration_failed', label: '冷迁移失败数', unit: '' },
   { value: 'connections', label: '连接数', unit: '' },
   { value: 'errors', label: '错误数', unit: '' },
   { value: 'total_keys', label: '键总数', unit: '' }
 ]
+
+function operatorSymbol(op: string): string {
+  switch (op) {
+    case 'GT':
+      return '>'
+    case 'GTE':
+      return '≥'
+    case 'LT':
+      return '<'
+    case 'LTE':
+      return '≤'
+    default:
+      return op
+  }
+}
 
 const form = reactive({
   name: '',
@@ -299,7 +318,7 @@ onMounted(async () => {
             <el-table-column prop="metric" label="指标" width="150" />
             <el-table-column label="条件" width="140">
               <template #default="{ row }">
-                <span class="mono">{{ row.metric }} {{ row.operator === 'GT' ? '>' : '<' }} {{ row.threshold }}</span>
+                <span class="mono">{{ row.metric }} {{ operatorSymbol(row.operator) }} {{ row.threshold }}</span>
               </template>
             </el-table-column>
             <el-table-column label="持续" width="90">
@@ -388,9 +407,11 @@ onMounted(async () => {
         </el-form-item>
         <el-form-item label="条件">
           <div style="display: flex; gap: 10px">
-            <el-select v-model="form.operator" style="width: 100px">
+            <el-select v-model="form.operator" style="width: 118px">
               <el-option value="GT" label="大于" />
+              <el-option value="GTE" label="大于等于" />
               <el-option value="LT" label="小于" />
+              <el-option value="LTE" label="小于等于" />
             </el-select>
             <el-input-number v-model="form.threshold" :step="0.1" controls-position="right" style="flex: 1" />
           </div>

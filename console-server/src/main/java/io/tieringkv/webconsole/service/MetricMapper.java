@@ -41,8 +41,14 @@ public final class MetricMapper {
         return point;
     }
 
-    /** 告警规则可引用的指标字典。 */
+    /** 告警规则可引用的基础指标字典。 */
     public static Map<String, Double> metricDictionary(MetricPoint point) {
+        return metricDictionary(point, null);
+    }
+
+    /** 告警规则可引用的完整指标字典（含冷热分层与 P99 尾延迟扩展指标）。 */
+    public static Map<String, Double> metricDictionary(MetricPoint point,
+                                                       Map<String, Map<String, String>> sections) {
         Map<String, Double> metrics = new LinkedHashMap<>();
         metrics.put("qps", value(point.getQps()));
         metrics.put("ops_per_sec", value(point.getOpsPerSec()));
@@ -57,7 +63,25 @@ public final class MetricMapper {
         long max = point.getMaxMemory() == null ? 0 : point.getMaxMemory();
         long used = point.getUsedMemory() == null ? 0 : point.getUsedMemory();
         metrics.put("used_memory_ratio", max <= 0 ? 0 : (double) used / max);
+        if (sections != null && !sections.isEmpty()) {
+            Map<String, String> flat = InfoParser.flatten(sections);
+            putIfNumeric(metrics, "tiering_cold_sstable_count", flat.get("tiering_cold_sstable_count"));
+            putIfNumeric(metrics, "tiering_block_cache_hit_rate", flat.get("tiering_block_cache_hit_rate"));
+            putIfNumeric(metrics, "latency_p99_ms", flat.get("latency_p99_ms"));
+            putIfNumeric(metrics, "tiering_migration_failed", flat.get("tiering_migration_failed"));
+        }
         return metrics;
+    }
+
+    private static void putIfNumeric(Map<String, Double> target, String key, String raw) {
+        if (raw == null || raw.isBlank()) {
+            return;
+        }
+        try {
+            target.put(key, Double.parseDouble(raw.trim()));
+        } catch (NumberFormatException ignored) {
+            // 非法数值字段跳过，避免误报
+        }
     }
 
     private static double value(Number number) {

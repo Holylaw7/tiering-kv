@@ -4,13 +4,14 @@ import io.tieringkv.webconsole.common.BusinessException;
 import io.tieringkv.webconsole.domain.AlertChannel;
 import io.tieringkv.webconsole.repository.AlertChannelRepository;
 import io.tieringkv.webconsole.security.InstanceCredentialCipher;
+import io.tieringkv.webconsole.security.OutboundUrlGuard;
 import io.tieringkv.webconsole.web.dto.AlertChannelRequest;
 import io.tieringkv.webconsole.web.dto.AlertChannelView;
 import io.tieringkv.webconsole.web.dto.WebhookTestResult;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.net.URI;
 import java.util.List;
 import java.util.Locale;
 
@@ -22,15 +23,26 @@ public class AlertChannelService {
     private final InstanceCredentialCipher cipher;
     private final AlertWebhookDispatcher dispatcher;
     private final AuditService auditService;
+    private final OutboundUrlGuard urlGuard;
 
     public AlertChannelService(AlertChannelRepository repository,
                                InstanceCredentialCipher cipher,
                                AlertWebhookDispatcher dispatcher,
                                AuditService auditService) {
+        this(repository, cipher, dispatcher, auditService, OutboundUrlGuard.strict());
+    }
+
+    @Autowired
+    public AlertChannelService(AlertChannelRepository repository,
+                               InstanceCredentialCipher cipher,
+                               AlertWebhookDispatcher dispatcher,
+                               AuditService auditService,
+                               OutboundUrlGuard urlGuard) {
         this.repository = repository;
         this.cipher = cipher;
         this.dispatcher = dispatcher;
         this.auditService = auditService;
+        this.urlGuard = urlGuard == null ? OutboundUrlGuard.strict() : urlGuard;
     }
 
     public List<AlertChannelView> list() {
@@ -43,7 +55,7 @@ public class AlertChannelService {
         if (repository.findByName(name).isPresent()) {
             throw BusinessException.conflict("通知渠道名称已存在：" + name);
         }
-        String url = validateUrl(request.url());
+        String url = urlGuard.validateForRegistration(request.url());
         AlertChannel channel = new AlertChannel();
         channel.setName(name);
         channel.setType(normalizeType(request.type()));
@@ -70,7 +82,7 @@ public class AlertChannelService {
                 });
         channel.setName(name);
         channel.setType(normalizeType(request.type()));
-        channel.setUrl(validateUrl(request.url()));
+        channel.setUrl(urlGuard.validateForRegistration(request.url()));
         if (request.secret() != null && !request.secret().isBlank()) {
             channel.setSecret(cipher.encrypt(request.secret().trim()));
         }
@@ -111,20 +123,5 @@ public class AlertChannelService {
             throw BusinessException.badRequest("暂仅支持 WEBHOOK 类型渠道");
         }
         return upper;
-    }
-
-    private static String validateUrl(String raw) {
-        String trimmed = raw == null ? "" : raw.trim();
-        try {
-            URI uri = URI.create(trimmed);
-            String scheme = uri.getScheme();
-            if (scheme == null || (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))
-                    || uri.getHost() == null || uri.getHost().isBlank()) {
-                throw BusinessException.badRequest("Webhook URL 必须为合法的 http/https 地址");
-            }
-            return trimmed;
-        } catch (IllegalArgumentException ex) {
-            throw BusinessException.badRequest("Webhook URL 格式非法：" + ex.getMessage());
-        }
     }
 }

@@ -15,11 +15,11 @@ public record AlertRuleRequest(
         String name,
         Long instanceId,
         @NotBlank(message = "指标不能为空")
-        @Pattern(regexp = "qps|ops_per_sec|avg_latency_ms|connections|active_requests|errors|used_memory|max_memory|used_memory_ratio|total_keys|uptime_seconds",
+        @Pattern(regexp = "qps|ops_per_sec|avg_latency_ms|latency_p99_ms|connections|active_requests|errors|used_memory|max_memory|used_memory_ratio|total_keys|uptime_seconds|tiering_cold_sstable_count|tiering_block_cache_hit_rate|tiering_migration_failed",
                 message = "不支持的指标")
         String metric,
         @NotBlank(message = "比较符不能为空")
-        @Pattern(regexp = "GT|LT", message = "比较符只能是 GT 或 LT")
+        @Pattern(regexp = "GT|GTE|LT|LTE", message = "比较符只能是 GT、GTE、LT 或 LTE")
         String operator,
         @NotNull(message = "阈值不能为空")
         Double threshold,

@@ -1,5 +1,6 @@
 package io.tieringkv.webconsole.repository;
 
+import io.tieringkv.webconsole.domain.Role;
 import io.tieringkv.webconsole.domain.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -13,6 +14,8 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUsername(String username);
 
     boolean existsByUsername(String username);
+
+    long countByRoleAndStatus(Role role, int status);
 
     Page<User> findByUsernameContainingOrderByIdAsc(String keyword, Pageable pageable);
 }

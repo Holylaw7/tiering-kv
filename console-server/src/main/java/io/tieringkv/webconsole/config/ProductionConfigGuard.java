@@ -72,6 +72,7 @@ public class ProductionConfigGuard implements InitializingBean {
         checkDatabase(out);
         checkAdmin(out);
         checkEncryptionKey(out);
+        checkWebhookSsrf(out);
         checkSpringDoc(out);
         checkBackupStorage(out);
         if (out.stream().noneMatch(f -> "FATAL".equals(f.level()))) {
@@ -162,6 +163,14 @@ public class ProductionConfigGuard implements InitializingBean {
             return;
         }
         out.add(new Finding("INFO", key, "已配置"));
+    }
+
+    private void checkWebhookSsrf(List<Finding> out) {
+        ConsoleProperties.Security sec = properties.getSecurity();
+        if (sec != null && !sec.isBlockPrivateWebhookUrls()) {
+            out.add(new Finding("WARN", "console.security.block-private-webhook-urls",
+                    "生产环境已关闭 Webhook 私网/元数据 SSRF 防护，建议开启并仅通过 webhook-allowed-cidrs 放行必要内网地址"));
+        }
     }
 
     private void checkSpringDoc(List<Finding> out) {

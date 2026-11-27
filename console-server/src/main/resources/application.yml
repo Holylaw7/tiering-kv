@@ -101,6 +101,10 @@ console:
     login-attempt-store: ${CONSOLE_LOGIN_ATTEMPT_STORE:memory}
     # 受信任反向代理列表（仅当直连对端命中时才采信 X-Forwarded-For）
     trusted-proxies: ${CONSOLE_TRUSTED_PROXIES:127.0.0.1,::1,0:0:0:0:0:0:0:1}
+    # 是否拦截指向环回、内网及云元数据端点的 Webhook URL（防 SSRF）
+    block-private-webhook-urls: ${CONSOLE_WEBHOOK_BLOCK_PRIVATE_URLS:true}
+    # 私有化部署放行的内网 Webhook 目标 IP/CIDR/主机名白名单（逗号分隔）
+    webhook-allowed-cidrs: ${CONSOLE_WEBHOOK_ALLOWED_CIDRS:}
   terminal:
     # 危险命令黑名单（逗号分隔，命中直接拒绝）
     blocked-commands: ${CONSOLE_BLOCKED_COMMANDS:FLUSHALL,FLUSHDB,SHUTDOWN,DEBUG}

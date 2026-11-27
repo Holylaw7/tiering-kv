@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -108,11 +109,16 @@ public class MonitorService {
         metricRepository.save(point);
         markStatus(instance, InstanceStatus.UP,
                 InfoParser.get(sections, "Server", "redis_version"));
-        alertService.evaluate(instance.getId(), MetricMapper.metricDictionary(point), now);
+        alertService.evaluate(instance.getId(), MetricMapper.metricDictionary(point, sections), now);
         if (metricsBinder != null) {
             Map<String, String> flat = InfoParser.flatten(sections);
-            long coldTables = parseLong(flat.getOrDefault("cold_tables", flat.get("cold_table_count")));
-            double p99 = parseDouble(flat.get("p99_latency_ms"));
+            long coldTables = parseLong(firstNonNull(
+                    flat.get("tiering_cold_sstable_count"),
+                    flat.get("cold_tables"),
+                    flat.get("cold_table_count")));
+            double p99 = parseDouble(firstNonNull(
+                    flat.get("latency_p99_ms"),
+                    flat.get("p99_latency_ms")));
             metricsBinder.recordInstanceUp(instance, point, coldTables, p99);
         }
         return point;
@@ -216,12 +222,32 @@ public class MonitorService {
         }
     }
 
-    /** 仪表盘聚合用：按实例返回最新一条采样。 */
+    private static String firstNonNull(String... candidates) {
+        for (String candidate : candidates) {
+            if (candidate != null && !candidate.isBlank()) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    /** 仪表盘聚合用：批量单次 SQL 按实例返回最新一条采样，消除 N+1 查询。 */
     public Map<Long, MetricPoint> latestByInstance() {
+        List<DbInstance> enabled = instanceService.enabled();
         Map<Long, MetricPoint> result = new LinkedHashMap<>();
-        for (DbInstance instance : instanceService.enabled()) {
-            metricRepository.findFirstByInstanceIdOrderByCollectedAtDesc(instance.getId())
-                    .ifPresent(point -> result.put(instance.getId(), point));
+        if (enabled.isEmpty()) {
+            return result;
+        }
+        List<Long> ids = enabled.stream().map(DbInstance::getId).toList();
+        Map<Long, MetricPoint> fetched = new LinkedHashMap<>();
+        for (MetricPoint point : metricRepository.findLatestByInstanceIds(ids)) {
+            fetched.put(point.getInstanceId(), point);
+        }
+        for (DbInstance instance : enabled) {
+            MetricPoint point = fetched.get(instance.getId());
+            if (point != null) {
+                result.put(instance.getId(), point);
+            }
         }
         return result;
     }

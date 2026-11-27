@@ -5,19 +5,26 @@ import io.tieringkv.webconsole.common.PageResult;
 import io.tieringkv.webconsole.domain.AlertEvent;
 import io.tieringkv.webconsole.domain.AlertRule;
 import io.tieringkv.webconsole.domain.AlertStatus;
+import io.tieringkv.webconsole.observability.ConsoleMetricsBinder;
 import io.tieringkv.webconsole.repository.AlertEventRepository;
 import io.tieringkv.webconsole.repository.AlertRuleRepository;
 import io.tieringkv.webconsole.web.dto.AlertRuleRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -25,10 +32,13 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class AlertService {
 
+    private static final Logger log = LoggerFactory.getLogger(AlertService.class);
+
     private final AlertRuleRepository ruleRepository;
     private final AlertEventRepository eventRepository;
     private final AuditService auditService;
     private final AlertWebhookDispatcher webhookDispatcher;
+    private ConsoleMetricsBinder metricsBinder;
 
     /** ruleId:instanceId -> 首次满足时间（用于 durationSeconds 判定）。 */
     private final Map<String, LocalDateTime> satisfiedSince = new ConcurrentHashMap<>();
@@ -48,6 +58,11 @@ public class AlertService {
         this.eventRepository = eventRepository;
         this.auditService = auditService;
         this.webhookDispatcher = webhookDispatcher;
+    }
+
+    @Autowired(required = false)
+    void setMetricsBinder(ConsoleMetricsBinder metricsBinder) {
+        this.metricsBinder = metricsBinder;
     }
 
     public List<AlertRule> rules() {
@@ -110,7 +125,17 @@ public class AlertService {
         }
         event.setStatus(AlertStatus.RESOLVED);
         event.setResolvedAt(LocalDateTime.now());
-        eventRepository.save(event);
+        AlertEvent saved = eventRepository.save(event);
+        // 事务提交后再执行缓存失效、持续计时清理与异步 Webhook 推送，避免回滚导致幽灵通知或旧值回填缓存
+        runAfterCommit(() -> {
+            if (saved.getRuleId() != null && saved.getInstanceId() != null) {
+                satisfiedSince.remove(saved.getRuleId() + ":" + saved.getInstanceId());
+            }
+            invalidateFiringMetrics();
+            if (webhookDispatcher != null) {
+                webhookDispatcher.dispatchAsync(saved);
+            }
+        });
         auditService.record("ALERT_RESOLVE", event.getRuleName(), "event=" + eventId, true);
     }
 
@@ -123,10 +148,19 @@ public class AlertService {
                 LocalDate.now().atStartOfDay());
     }
 
-    /** 采集后求值：满足阈值（且超过持续时长）→ 触发；不满足 → 恢复。 */
+    /** 采集后求值：批量预加载实例 FIRING 事件消除 N+1；运算符白名单判定；满足持续时长→触发，不满足→恢复。 */
     @Transactional
     public void evaluate(Long instanceId, Map<String, Double> metrics, LocalDateTime now) {
-        for (AlertRule rule : ruleRepository.findByEnabledTrue()) {
+        List<AlertRule> enabledRules = ruleRepository.findByEnabledTrue();
+        if (enabledRules.isEmpty()) {
+            return;
+        }
+        Map<Long, AlertEvent> firingByRule = new HashMap<>();
+        for (AlertEvent active : eventRepository.findByInstanceIdAndStatusOrderByFiredAtDesc(
+                instanceId, AlertStatus.FIRING)) {
+            firingByRule.putIfAbsent(active.getRuleId(), active);
+        }
+        for (AlertRule rule : enabledRules) {
             if (rule.getInstanceId() != null && !rule.getInstanceId().equals(instanceId)) {
                 continue;
             }
@@ -134,22 +168,25 @@ public class AlertService {
             if (value == null) {
                 continue;
             }
+            Boolean hit = matchesThreshold(rule.getOperator(), value, rule.getThreshold());
+            if (hit == null) {
+                log.warn("忽略不支持的告警运算符 rule={} operator={}", rule.getName(), rule.getOperator());
+                continue;
+            }
             String key = rule.getId() + ":" + instanceId;
-            boolean hit = "GT".equalsIgnoreCase(rule.getOperator())
-                    ? value > rule.getThreshold()
-                    : value < rule.getThreshold();
-            AlertEvent firing = eventRepository
-                    .findFirstByRuleIdAndInstanceIdAndStatusOrderByFiredAtDesc(
-                            rule.getId(), instanceId, AlertStatus.FIRING)
-                    .orElse(null);
+            AlertEvent firing = firingByRule.get(rule.getId());
             if (hit) {
                 LocalDateTime since = satisfiedSince.computeIfAbsent(key, ignored -> now);
                 long lasted = Duration.between(since, now).getSeconds();
                 if (firing == null && lasted >= rule.getDurationSeconds()) {
                     AlertEvent saved = eventRepository.save(buildEvent(rule, instanceId, value, now));
-                    if (webhookDispatcher != null) {
-                        webhookDispatcher.dispatchAsync(saved);
-                    }
+                    firingByRule.put(rule.getId(), saved);
+                    runAfterCommit(() -> {
+                        invalidateFiringMetrics();
+                        if (webhookDispatcher != null) {
+                            webhookDispatcher.dispatchAsync(saved);
+                        }
+                    });
                 }
             } else {
                 satisfiedSince.remove(key);
@@ -157,11 +194,47 @@ public class AlertService {
                     firing.setStatus(AlertStatus.RESOLVED);
                     firing.setResolvedAt(now);
                     AlertEvent resolved = eventRepository.save(firing);
-                    if (webhookDispatcher != null) {
-                        webhookDispatcher.dispatchAsync(resolved);
-                    }
+                    firingByRule.remove(rule.getId());
+                    runAfterCommit(() -> {
+                        invalidateFiringMetrics();
+                        if (webhookDispatcher != null) {
+                            webhookDispatcher.dispatchAsync(resolved);
+                        }
+                    });
                 }
             }
+        }
+    }
+
+    static Boolean matchesThreshold(String operator, double value, double threshold) {
+        if (operator == null) {
+            return null;
+        }
+        return switch (operator.trim().toUpperCase(Locale.ROOT)) {
+            case "GT" -> value > threshold;
+            case "GTE" -> value >= threshold;
+            case "LT" -> value < threshold;
+            case "LTE" -> value <= threshold;
+            default -> null;
+        };
+    }
+
+    private void invalidateFiringMetrics() {
+        if (metricsBinder != null) {
+            metricsBinder.invalidateFiringAlertCache();
+        }
+    }
+
+    private static void runAfterCommit(Runnable action) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    action.run();
+                }
+            });
+        } else {
+            action.run();
         }
     }
 

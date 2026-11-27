@@ -5,6 +5,19 @@ import { useAuthStore } from '../stores/auth'
 export const TOKEN_KEY = 'tk_console_token'
 export const USER_KEY = 'tk_console_user'
 
+const UNAUTHORIZED_COOLDOWN_MS = 1500
+let handlingUnauthorized = false
+let unauthorizedTimer: ReturnType<typeof setTimeout> | null = null
+
+/** 测试辅助：重置 401 防重弹窗锁。 */
+export function resetUnauthorizedGuard() {
+  handlingUnauthorized = false
+  if (unauthorizedTimer !== null) {
+    clearTimeout(unauthorizedTimer)
+    unauthorizedTimer = null
+  }
+}
+
 const http: AxiosInstance = axios.create({
   baseURL: '/api/v1',
   timeout: 20000
@@ -35,16 +48,23 @@ http.interceptors.response.use(
     const status = error?.response?.status
     const message = error?.response?.data?.message || error.message || '网络异常'
     if (status === 401) {
-      try {
-        useAuthStore().logout()
-      } catch {
-        localStorage.removeItem(TOKEN_KEY)
-        localStorage.removeItem(USER_KEY)
+      if (!handlingUnauthorized) {
+        handlingUnauthorized = true
+        try {
+          useAuthStore().logout()
+        } catch {
+          localStorage.removeItem(TOKEN_KEY)
+          localStorage.removeItem(USER_KEY)
+        }
+        if (location.hash !== '#/login') {
+          location.hash = '#/login'
+        }
+        ElMessage.warning('登录已过期，请重新登录')
+        unauthorizedTimer = setTimeout(() => {
+          handlingUnauthorized = false
+          unauthorizedTimer = null
+        }, UNAUTHORIZED_COOLDOWN_MS)
       }
-      if (location.hash !== '#/login') {
-        location.hash = '#/login'
-      }
-      ElMessage.warning('登录已过期，请重新登录')
     } else {
       ElMessage.error(message)
     }

@@ -519,6 +519,8 @@ jobs:
           leader_prom=$(docker exec "$leader_container" curl -fsS -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8080/actuator/prometheus)
           echo "$leader_prom" | grep -q 'tieringkv_instance_up'
           echo "$leader_prom" | grep -q 'tieringkv_instance_memory_used_bytes'
+          echo "$leader_prom" | grep -q 'tieringkv_instance_cold_tables'
+          echo "$leader_prom" | grep -q 'tieringkv_instance_p99_latency_ms'
           echo "Verified Prometheus custom instance metrics on leader=$leader_container"
           echo "Stopping leader container: $leader_container (expecting takeover by ${survivor_prefix}*)"
           docker stop "$leader_container"

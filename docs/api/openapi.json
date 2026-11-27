@@ -188,7 +188,7 @@
           },
           "metric" : {
             "minLength" : 1,
-            "pattern" : "qps|ops_per_sec|avg_latency_ms|connections|active_requests|errors|used_memory|max_memory|used_memory_ratio|total_keys|uptime_seconds",
+            "pattern" : "qps|ops_per_sec|avg_latency_ms|latency_p99_ms|connections|active_requests|errors|used_memory|max_memory|used_memory_ratio|total_keys|uptime_seconds|tiering_cold_sstable_count|tiering_block_cache_hit_rate|tiering_migration_failed",
             "type" : "string"
           },
           "name" : {
@@ -198,7 +198,7 @@
           },
           "operator" : {
             "minLength" : 1,
-            "pattern" : "GT|LT",
+            "pattern" : "GT|GTE|LT|LTE",
             "type" : "string"
           },
           "threshold" : {

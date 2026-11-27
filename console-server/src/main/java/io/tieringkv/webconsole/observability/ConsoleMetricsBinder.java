@@ -16,6 +16,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -29,10 +31,16 @@ import java.util.concurrent.atomic.AtomicReference;
 @Component
 public class ConsoleMetricsBinder {
 
+    private static final long FIRING_CACHE_TTL_NANOS = TimeUnit.SECONDS.toNanos(5);
+
     private final MeterRegistry registry;
     private final RespGateway gateway;
     private final AlertEventRepository alertEventRepository;
     private final Map<Long, InstanceMetricState> instanceStates = new ConcurrentHashMap<>();
+    private final AtomicLong cachedFiringAlerts = new AtomicLong(0L);
+    private final AtomicLong lastFiringRefreshNanos = new AtomicLong(0L);
+    private final AtomicBoolean firingCacheValid = new AtomicBoolean(false);
+    private final AtomicBoolean firingRefreshInProgress = new AtomicBoolean(false);
 
     public ConsoleMetricsBinder(MeterRegistry registry,
                                 RespGateway gateway,
@@ -61,12 +69,31 @@ public class ConsoleMetricsBinder {
                 .register(registry);
     }
 
+    /** 活跃告警数带 5s 短缓存与防惊群刷新，避免高频 Prometheus 抓取同步打爆数据库。 */
     private double firingAlertCount() {
-        try {
-            return alertEventRepository.countByStatus(AlertStatus.FIRING);
-        } catch (RuntimeException ignored) {
-            return Double.NaN;
+        long now = System.nanoTime();
+        boolean valid = firingCacheValid.get();
+        boolean stale = !valid || (now - lastFiringRefreshNanos.get()) >= FIRING_CACHE_TTL_NANOS;
+        if (stale && firingRefreshInProgress.compareAndSet(false, true)) {
+            try {
+                long count = alertEventRepository.countByStatus(AlertStatus.FIRING);
+                cachedFiringAlerts.set(count);
+                lastFiringRefreshNanos.set(System.nanoTime());
+                firingCacheValid.set(true);
+            } catch (RuntimeException ignored) {
+                if (!valid) {
+                    return Double.NaN;
+                }
+            } finally {
+                firingRefreshInProgress.set(false);
+            }
         }
+        return cachedFiringAlerts.get();
+    }
+
+    /** 告警触发或恢复时立即失效缓存，确保本节点下次抓取看到最新计数。 */
+    public void invalidateFiringAlertCache() {
+        firingCacheValid.set(false);
     }
 
     /** 刷新单个在线实例的观测指标（由 MonitorService 周期采集调用）。 */

@@ -406,6 +406,10 @@ public class ConsoleProperties {
         /** 允许采信 X-Forwarded-For 头的受信任代理 IP 或网段（默认仅本机回环）。 */
         private List<String> trustedProxies = new ArrayList<>(
                 List.of("127.0.0.1", "::1", "0:0:0:0:0:0:0:1"));
+        /** 是否拦截指向环回、内网及云元数据端点的 Webhook URL（默认开启防 SSRF）。 */
+        private boolean blockPrivateWebhookUrls = true;
+        /** 私有化部署显式放行的 Webhook 目标 IP、CIDR 或主机名白名单。 */
+        private List<String> webhookAllowedCidrs = new ArrayList<>();
 
         public String getEncryptionKey() { return encryptionKey; }
         public void setEncryptionKey(String encryptionKey) { this.encryptionKey = encryptionKey; }
@@ -419,6 +423,15 @@ public class ConsoleProperties {
         public void setLoginAttemptStore(String loginAttemptStore) { this.loginAttemptStore = loginAttemptStore; }
         public List<String> getTrustedProxies() { return trustedProxies; }
         public void setTrustedProxies(List<String> trustedProxies) { this.trustedProxies = trustedProxies; }
+        public boolean isBlockPrivateWebhookUrls() { return blockPrivateWebhookUrls; }
+        public void setBlockPrivateWebhookUrls(boolean blockPrivateWebhookUrls) {
+            this.blockPrivateWebhookUrls = blockPrivateWebhookUrls;
+        }
+        public List<String> getWebhookAllowedCidrs() { return webhookAllowedCidrs; }
+        public void setWebhookAllowedCidrs(List<String> webhookAllowedCidrs) {
+            this.webhookAllowedCidrs = webhookAllowedCidrs == null
+                    ? new ArrayList<>() : new ArrayList<>(webhookAllowedCidrs);
+        }
     }
 
     /** Kubernetes Operator 无依赖 REST 桥接配置（v6.2.0 C2，纯 JDK HttpClient）。 */

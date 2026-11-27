@@ -132,9 +132,7 @@ public class UserService {
             return;
         }
         boolean stillAdmin = newRole == Role.ADMIN;
-        long admins = userRepository.findAll().stream()
-                .filter(u -> u.getRole() == Role.ADMIN && u.getStatus() == 1)
-                .count();
+        long admins = userRepository.countByRoleAndStatus(Role.ADMIN, 1);
         if (!stillAdmin && admins <= 1) {
             throw BusinessException.badRequest("系统必须保留至少一个启用的管理员");
         }

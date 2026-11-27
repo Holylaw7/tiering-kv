@@ -1,23 +1,23 @@
 package io.tieringkv.webconsole.service;
 
 import tools.jackson.databind.ObjectMapper;
+import io.tieringkv.webconsole.common.BusinessException;
 import io.tieringkv.webconsole.domain.AlertChannel;
 import io.tieringkv.webconsole.domain.AlertEvent;
 import io.tieringkv.webconsole.domain.AlertStatus;
 import io.tieringkv.webconsole.repository.AlertChannelRepository;
 import io.tieringkv.webconsole.security.InstanceCredentialCipher;
+import io.tieringkv.webconsole.security.OutboundUrlGuard;
+import io.tieringkv.webconsole.security.PinnedWebhookHttpClient;
 import io.tieringkv.webconsole.web.dto.WebhookTestResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.time.Duration;
@@ -50,20 +50,39 @@ public class AlertWebhookDispatcher {
     private final InstanceCredentialCipher cipher;
     private final ObjectMapper objectMapper;
     private final Executor executor;
-    private final HttpClient httpClient;
+    private final OutboundUrlGuard urlGuard;
+    private final PinnedWebhookHttpClient httpClient;
     private final Map<String, Instant> lastSentByKey = new ConcurrentHashMap<>();
 
     public AlertWebhookDispatcher(AlertChannelRepository channelRepository,
                                   InstanceCredentialCipher cipher,
                                   ObjectMapper objectMapper,
                                   @Qualifier("alertWebhookExecutor") Executor executor) {
+        this(channelRepository, cipher, objectMapper, executor,
+                OutboundUrlGuard.permissive(), new PinnedWebhookHttpClient());
+    }
+
+    @Autowired
+    public AlertWebhookDispatcher(AlertChannelRepository channelRepository,
+                                  InstanceCredentialCipher cipher,
+                                  ObjectMapper objectMapper,
+                                  @Qualifier("alertWebhookExecutor") Executor executor,
+                                  OutboundUrlGuard urlGuard) {
+        this(channelRepository, cipher, objectMapper, executor, urlGuard, new PinnedWebhookHttpClient());
+    }
+
+    public AlertWebhookDispatcher(AlertChannelRepository channelRepository,
+                                  InstanceCredentialCipher cipher,
+                                  ObjectMapper objectMapper,
+                                  Executor executor,
+                                  OutboundUrlGuard urlGuard,
+                                  PinnedWebhookHttpClient httpClient) {
         this.channelRepository = channelRepository;
         this.cipher = cipher;
         this.objectMapper = objectMapper;
         this.executor = executor;
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(TIMEOUT)
-                .build();
+        this.urlGuard = urlGuard == null ? OutboundUrlGuard.strict() : urlGuard;
+        this.httpClient = httpClient == null ? new PinnedWebhookHttpClient() : httpClient;
     }
 
     /** 异步派发告警触发/恢复事件至所有启用中的 Webhook 渠道。 */
@@ -130,39 +149,42 @@ public class AlertWebhookDispatcher {
             return new WebhookTestResult(false, 0, "序列化载荷失败：" + ex.getMessage(),
                     System.currentTimeMillis() - start);
         }
+        byte[] bodyBytes = body.getBytes(StandardCharsets.UTF_8);
         String signature = computeSignature(cipher.decrypt(channel.getSecret()), body);
+        Map<String, String> extraHeaders = signature == null
+                ? Map.of()
+                : Map.of("X-TieringKV-Signature", "sha256=" + signature);
 
         int lastStatus = 0;
         String lastMessage = "未知错误";
         for (int attempt = 0; attempt <= RETRY_BACKOFF_MS.length; attempt++) {
+            OutboundUrlGuard.VerifiedTarget target;
             try {
-                HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(channel.getUrl()))
-                        .timeout(TIMEOUT)
-                        .header("Content-Type", "application/json; charset=UTF-8")
-                        .header("User-Agent", "TieringKV-Console-Webhook/1.0")
-                        .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8));
-                if (signature != null) {
-                    builder.header("X-TieringKV-Signature", "sha256=" + signature);
-                }
-                HttpResponse<String> response = httpClient.send(
-                        builder.build(), HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-                lastStatus = response.statusCode();
+                // 每次尝试单次解析并固定目标 IP，由 PinnedWebhookHttpClient 直连该 IP（零二次 DNS 查询）
+                target = urlGuard.resolveForDelivery(channel.getUrl());
+            } catch (BusinessException ex) {
+                return new WebhookTestResult(false, 0, ex.getMessage(),
+                        System.currentTimeMillis() - start);
+            }
+            try {
+                lastStatus = httpClient.postJson(target, bodyBytes, extraHeaders, TIMEOUT);
                 if (lastStatus >= 200 && lastStatus < 300) {
                     return new WebhookTestResult(true, lastStatus, "HTTP " + lastStatus,
                             System.currentTimeMillis() - start);
+                }
+                if (lastStatus >= 300 && lastStatus < 400) {
+                    lastMessage = "对端返回 HTTP " + lastStatus + "（重定向已禁止）";
+                    break;
                 }
                 lastMessage = "对端返回 HTTP " + lastStatus;
                 // 仅对 5xx 服务端异常重试；4xx 立即返回
                 if (lastStatus < 500) {
                     break;
                 }
-            } catch (InterruptedException ex) {
-                Thread.currentThread().interrupt();
-                lastMessage = "推送被中断";
-                break;
             } catch (Exception ex) {
                 lastStatus = 0;
-                lastMessage = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
+                // 收敛网络错误文案，避免暴露底层主机或端口探测细节
+                lastMessage = "网络投递失败（" + ex.getClass().getSimpleName() + "）";
             }
             if (attempt < RETRY_BACKOFF_MS.length) {
                 try {

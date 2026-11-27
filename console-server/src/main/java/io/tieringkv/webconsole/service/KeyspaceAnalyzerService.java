@@ -6,6 +6,7 @@ import io.tieringkv.webconsole.resp.RespClient;
 import io.tieringkv.webconsole.resp.RespReply;
 import io.tieringkv.webconsole.support.Text;
 import io.tieringkv.webconsole.web.dto.KeyEntry;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -17,13 +18,17 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 键空间大键 / 命名空间前缀 / TTL 健康度只读诊断分析器（v6.4.0 D2）。
  *
  * <p>基于有界 {@code SCAN} 游标采样与 100 键批量 RESP Pipeline（一次 RTT 打包
  * {@code TYPE}/{@code TTL} 与按类型的尺寸命令 {@code STRLEN}/{@code HLEN}/{@code LLEN}/
- * {@code SCARD}/{@code ZCARD}/{@code XLEN}），对在线业务实例零阻塞。
+ * {@code SCARD}/{@code ZCARD}/{@code XLEN}/{@code JSON.STRLEN}），配合并发限流与时间预算，
+ * 对在线业务实例与控制面内存均保持有界可控。
  */
 @Service
 public class KeyspaceAnalyzerService {
@@ -36,19 +41,35 @@ public class KeyspaceAnalyzerService {
     static final int MAX_PREFIXES = 15;
     static final int SCAN_COUNT = 200;
     static final int PIPELINE_BATCH = 100;
+    static final int JSON_FALLBACK_BATCH = 10;
+    static final int MAX_CONCURRENT_ANALYSES = 2;
+    static final long DEFAULT_TIME_BUDGET_MS = 15_000L;
     static final long BIG_STRING_WARN_BYTES = 65_536L;
     static final long BIG_COLLECTION_WARN_ITEMS = 1_000L;
 
     private final InstanceService instanceService;
     private final KeyspaceService keyspaceService;
     private final RespGateway gateway;
+    private final Semaphore concurrencyLimiter;
+    private final long timeBudgetMs;
 
+    @Autowired
     public KeyspaceAnalyzerService(InstanceService instanceService,
                                    KeyspaceService keyspaceService,
                                    RespGateway gateway) {
+        this(instanceService, keyspaceService, gateway, MAX_CONCURRENT_ANALYSES, DEFAULT_TIME_BUDGET_MS);
+    }
+
+    KeyspaceAnalyzerService(InstanceService instanceService,
+                            KeyspaceService keyspaceService,
+                            RespGateway gateway,
+                            int maxConcurrent,
+                            long timeBudgetMs) {
         this.instanceService = instanceService;
         this.keyspaceService = keyspaceService;
         this.gateway = gateway;
+        this.concurrencyLimiter = new Semaphore(Math.max(1, maxConcurrent));
+        this.timeBudgetMs = Math.max(1L, timeBudgetMs);
     }
 
     /** 诊断请求参数（全字段可选，缺失自动使用安全默认值）。 */
@@ -108,6 +129,17 @@ public class KeyspaceAnalyzerService {
 
     public KeyspaceAnalysisView analyze(Long instanceId, AnalyzeRequest request) {
         DbInstance instance = instanceService.require(instanceId);
+        if (!concurrencyLimiter.tryAcquire()) {
+            throw BusinessException.tooManyRequests("已有键空间诊断任务正在执行，请稍后再试");
+        }
+        try {
+            return runAnalyze(instanceId, instance, request);
+        } finally {
+            concurrencyLimiter.release();
+        }
+    }
+
+    private KeyspaceAnalysisView runAnalyze(Long instanceId, DbInstance instance, AnalyzeRequest request) {
         String pattern = request != null && request.pattern() != null && !request.pattern().isBlank()
                 ? request.pattern().trim() : "*";
         int maxKeys = clamp(request != null ? request.maxKeys() : null,
@@ -118,12 +150,19 @@ public class KeyspaceAnalyzerService {
                 DEFAULT_TOP_N, 5, MAX_TOP_N);
 
         long startedAt = System.nanoTime();
+        long deadlineNanos = startedAt + TimeUnit.MILLISECONDS.toNanos(timeBudgetMs);
         long dbSize = queryDbSizeQuietly(instance);
         Set<String> sampledKeys = new LinkedHashSet<>();
         boolean truncated = false;
+        AtomicBoolean timedOut = new AtomicBoolean(false);
         String cursor = "0";
         try {
             do {
+                if (System.nanoTime() >= deadlineNanos) {
+                    truncated = true;
+                    timedOut.set(true);
+                    break;
+                }
                 RespReply reply = gateway.execute(instance, "SCAN", cursor,
                         "MATCH", pattern, "COUNT", String.valueOf(SCAN_COUNT));
                 if (reply instanceof RespReply.Error error) {
@@ -164,10 +203,18 @@ public class KeyspaceAnalyzerService {
         long scannedLive = 0L;
 
         for (int offset = 0; offset < keysList.size(); offset += PIPELINE_BATCH) {
+            if (System.nanoTime() >= deadlineNanos) {
+                truncated = true;
+                timedOut.set(true);
+                break;
+            }
             int end = Math.min(offset + PIPELINE_BATCH, keysList.size());
             List<String> batch = keysList.subList(offset, end);
             List<KeyEntry> metas = keyspaceService.inspectBatch(instance, batch);
-            long[] sizes = probeSizesBatch(instance, metas);
+            long[] sizes = probeSizesBatch(instance, metas, deadlineNanos, timedOut);
+            if (timedOut.get()) {
+                truncated = true;
+            }
             for (int i = 0; i < metas.size(); i++) {
                 KeyEntry meta = metas.get(i);
                 String type = meta.type() == null ? "none" : meta.type().toLowerCase(Locale.ROOT);
@@ -222,7 +269,10 @@ public class KeyspaceAnalyzerService {
                 .toList();
 
         TtlDistribution ttlDist = new TtlDistribution(noExpire, under1h, between1hAnd24h, over24h);
-        List<String> recommendations = buildRecommendations(scannedLive, ttlDist, topPrefixes, bigKeys);
+        List<String> recommendations = new ArrayList<>(buildRecommendations(scannedLive, ttlDist, topPrefixes, bigKeys));
+        if (timedOut.get()) {
+            recommendations.add("诊断已触及单次时间预算（" + timeBudgetMs + " ms）并提前截断，建议缩小匹配前缀或降低采样上限后复检。");
+        }
         long durationMs = Math.max(1L, (System.nanoTime() - startedAt) / 1_000_000L);
         long effectiveDbSize = dbSize >= 0L ? dbSize : scannedLive;
 
@@ -231,7 +281,8 @@ public class KeyspaceAnalyzerService {
                 durationMs, typeCounts, ttlDist, topPrefixes, bigKeys, recommendations);
     }
 
-    private long[] probeSizesBatch(DbInstance instance, List<KeyEntry> metas) {
+    private long[] probeSizesBatch(DbInstance instance, List<KeyEntry> metas,
+                                   long deadlineNanos, AtomicBoolean timedOut) {
         long[] sizes = new long[metas.size()];
         List<List<byte[]>> commands = new ArrayList<>();
         List<Integer> slotIndices = new ArrayList<>();
@@ -247,22 +298,75 @@ public class KeyspaceAnalyzerService {
         if (commands.isEmpty()) {
             return sizes;
         }
+        List<Integer> jsonFallbackSlots = new ArrayList<>();
         try {
             List<RespReply> replies = gateway.executeBatch(instance, commands);
             int limit = Math.min(replies.size(), slotIndices.size());
             for (int i = 0; i < limit; i++) {
                 RespReply reply = replies.get(i);
                 int slot = slotIndices.get(i);
-                if (reply instanceof RespReply.Integer integer) {
-                    sizes[slot] = Math.max(0L, integer.value());
-                } else if (reply instanceof RespReply.Bulk bulk && bulk.value() != null) {
-                    sizes[slot] = bulk.value().length;
+                long parsed = extractSize(reply);
+                if (parsed >= 0L) {
+                    sizes[slot] = parsed;
+                } else if (reply instanceof RespReply.Error
+                        && "json".equalsIgnoreCase(metas.get(slot).type())) {
+                    jsonFallbackSlots.add(slot);
                 }
+            }
+            if (!jsonFallbackSlots.isEmpty()) {
+                probeJsonFallback(instance, metas, jsonFallbackSlots, sizes, deadlineNanos, timedOut);
             }
         } catch (IOException ex) {
             throw BusinessException.upstream("键空间批量尺寸探测失败：" + ex.getMessage());
         }
         return sizes;
+    }
+
+    /** 仅在内核不支持 JSON.STRLEN 时，以 10 键小批次降级探测 JSON 大小，防止 100 键大 JSON 同时打爆堆内存。 */
+    private void probeJsonFallback(DbInstance instance, List<KeyEntry> metas,
+                                   List<Integer> slots, long[] sizes,
+                                   long deadlineNanos, AtomicBoolean timedOut) throws IOException {
+        for (int offset = 0; offset < slots.size(); offset += JSON_FALLBACK_BATCH) {
+            if (System.nanoTime() >= deadlineNanos) {
+                timedOut.set(true);
+                break;
+            }
+            int end = Math.min(offset + JSON_FALLBACK_BATCH, slots.size());
+            List<Integer> chunk = slots.subList(offset, end);
+            List<List<byte[]>> fallbackCmds = new ArrayList<>(chunk.size());
+            for (int slot : chunk) {
+                fallbackCmds.add(RespClient.commandBytes("JSON.GET", metas.get(slot).key(), "$"));
+            }
+            List<RespReply> replies = gateway.executeBatch(instance, fallbackCmds);
+            int limit = Math.min(replies.size(), chunk.size());
+            for (int i = 0; i < limit; i++) {
+                long parsed = extractSize(replies.get(i));
+                if (parsed >= 0L) {
+                    sizes[chunk.get(i)] = parsed;
+                }
+            }
+        }
+    }
+
+    private static long extractSize(RespReply reply) {
+        if (reply instanceof RespReply.Integer integer) {
+            return Math.max(0L, integer.value());
+        }
+        if (reply instanceof RespReply.Bulk bulk && bulk.value() != null) {
+            return bulk.value().length;
+        }
+        if (reply instanceof RespReply.Array array && !array.isNil()) {
+            long sum = 0L;
+            boolean any = false;
+            for (RespReply item : array.items()) {
+                if (item instanceof RespReply.Integer integer) {
+                    sum += Math.max(0L, integer.value());
+                    any = true;
+                }
+            }
+            return any ? sum : -1L;
+        }
+        return -1L;
     }
 
     private static List<byte[]> sizeCommandFor(String key, String type) {
@@ -273,7 +377,7 @@ public class KeyspaceAnalyzerService {
             case "set" -> RespClient.commandBytes("SCARD", key);
             case "zset" -> RespClient.commandBytes("ZCARD", key);
             case "stream" -> RespClient.commandBytes("XLEN", key);
-            case "json" -> RespClient.commandBytes("JSON.GET", key, "$");
+            case "json" -> RespClient.commandBytes("JSON.STRLEN", key, "$");
             default -> null;
         };
     }
