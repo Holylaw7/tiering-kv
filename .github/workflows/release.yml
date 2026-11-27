@@ -165,11 +165,13 @@ jobs:
           docker push ghcr.io/holylaw7/tiering-kv-operator:${GITHUB_REF_NAME}
           docker push ghcr.io/holylaw7/tiering-kv-console-server:${GITHUB_REF_NAME}
           docker push ghcr.io/holylaw7/tiering-kv-console-web:${GITHUB_REF_NAME}
-      - name: Checksums
+      - name: Checksums and CycloneDX SBOM
         run: |
           find . -path '*/target/*.jar' ! -path './console-web/*' ! -name 'original-*' -exec sha256sum {} + > target-checksums.sha256
           mkdir -p target && mv target-checksums.sha256 target/checksums.sha256
           cat target/checksums.sha256
+          chmod +x scripts/sbom.sh
+          bash scripts/sbom.sh --cdx target/tiering-kv-sbom.cdx.json
       - name: Generate release notes
         run: |
           chmod +x scripts/release-notes.sh
@@ -178,4 +180,6 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           body_path: release-notes.md
-          files: target/checksums.sha256
+          files: |
+            target/checksums.sha256
+            target/tiering-kv-sbom.cdx.json

@@ -1,0 +1,142 @@
+{{- if .Values.consoleServer.enabled }}
+{{- $full := include "tiering-kv.fullname" . }}
+{{- $secretName := include "tiering-kv.consoleSecretName" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $full }}-console-server
+  labels:
+    {{- include "tiering-kv.labels" . | nindent 4 }}
+    app.kubernetes.io/component: console-server
+spec:
+  replicas: {{ .Values.consoleServer.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "tiering-kv.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: console-server
+  template:
+    metadata:
+      labels:
+        {{- include "tiering-kv.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: console-server
+    spec:
+      terminationGracePeriodSeconds: 30
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: console-server
+          image: "{{ .Values.consoleServer.image.repository }}:{{ .Values.consoleServer.image.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: JAVA_OPTS
+              value: {{ .Values.consoleServer.javaOpts | quote }}
+            - name: CONSOLE_DB_URL
+              value: {{ .Values.consoleServer.database.url | quote }}
+            - name: CONSOLE_DB_USER
+              value: {{ .Values.consoleServer.database.username | quote }}
+            - name: CONSOLE_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: db-password
+            - name: CONSOLE_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: jwt-secret
+            - name: CONSOLE_ADMIN_USERNAME
+              value: {{ .Values.consoleServer.security.adminUsername | quote }}
+            - name: CONSOLE_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: admin-password
+            - name: CONSOLE_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: encryption-key
+            - name: CONSOLE_REQUIRE_ENCRYPTION_IN_PROD
+              value: {{ .Values.consoleServer.security.requireEncryptionInProd | quote }}
+            - name: CONSOLE_LOGIN_ATTEMPT_STORE
+              value: {{ include "tiering-kv.loginAttemptStore" . | quote }}
+            - name: CONSOLE_TRUSTED_PROXIES
+              value: {{ .Values.consoleServer.security.trustedProxies | quote }}
+            - name: CONSOLE_CORS
+              value: {{ .Values.consoleServer.security.corsAllowedOrigins | quote }}
+            - name: CONSOLE_BACKUP_STORAGE
+              value: {{ .Values.consoleServer.backup.storageType | quote }}
+            - name: CONSOLE_BACKUP_DIR
+              value: {{ .Values.consoleServer.backup.dir | quote }}
+            {{- if eq .Values.consoleServer.backup.storageType "s3" }}
+            - name: CONSOLE_BACKUP_S3_ENDPOINT
+              value: {{ .Values.consoleServer.backup.s3.endpoint | quote }}
+            - name: CONSOLE_BACKUP_S3_REGION
+              value: {{ .Values.consoleServer.backup.s3.region | quote }}
+            - name: CONSOLE_BACKUP_S3_BUCKET
+              value: {{ .Values.consoleServer.backup.s3.bucket | quote }}
+            - name: CONSOLE_BACKUP_S3_PREFIX
+              value: {{ .Values.consoleServer.backup.s3.prefix | quote }}
+            - name: CONSOLE_BACKUP_S3_PATH_STYLE
+              value: {{ .Values.consoleServer.backup.s3.pathStyle | quote }}
+            - name: CONSOLE_BACKUP_S3_AUTO_CREATE_BUCKET
+              value: {{ .Values.consoleServer.backup.s3.autoCreateBucket | quote }}
+            - name: CONSOLE_BACKUP_S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: s3-access-key
+            - name: CONSOLE_BACKUP_S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: s3-secret-key
+            {{- end }}
+            - name: CONSOLE_BOOTSTRAP_INSTANCE
+              value: {{ include "tiering-kv.bootstrapInstance" . | quote }}
+            - name: CONSOLE_K8S_ENABLED
+              value: {{ .Values.consoleServer.kubernetes.enabled | quote }}
+            {{- if .Values.consoleServer.kubernetes.enabled }}
+            - name: CONSOLE_K8S_NAMESPACE
+              value: {{ default .Release.Namespace .Values.consoleServer.kubernetes.namespace | quote }}
+            {{- end }}
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            timeoutSeconds: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: backups
+              mountPath: {{ .Values.consoleServer.backup.dir }}
+          resources:
+            {{- toYaml .Values.consoleServer.resources | nindent 12 }}
+      volumes:
+        - name: backups
+          emptyDir: {}
+{{- end }}

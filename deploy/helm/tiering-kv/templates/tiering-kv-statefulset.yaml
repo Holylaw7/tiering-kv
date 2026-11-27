@@ -1,0 +1,320 @@
+{{- if .Values.tieringKv.enabled }}
+{{- $full := include "tiering-kv.fullname" . }}
+{{- if eq .Values.tieringKv.mode "cluster" }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $full }}-meta
+  labels:
+    {{- include "tiering-kv.labels" . | nindent 4 }}
+    app.kubernetes.io/component: metadata
+spec:
+  serviceName: {{ $full }}-meta
+  replicas: {{ .Values.tieringKv.cluster.metadataReplicas }}
+  selector:
+    matchLabels:
+      {{- include "tiering-kv.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: metadata
+  template:
+    metadata:
+      labels:
+        {{- include "tiering-kv.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: metadata
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.tieringKv.terminationGracePeriodSeconds }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: metadata
+          image: "{{ .Values.tieringKv.image.repository }}:{{ .Values.tieringKv.image.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["/bin/sh", "/etc/tiering-kv/start.sh"]
+          env:
+            - name: JAVA_OPTS
+              value: {{ .Values.tieringKv.javaOpts | quote }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: ROLE
+              value: metadata
+            - name: RPC_PORT
+              value: {{ .Values.tieringKv.ports.raftMetadata | quote }}
+            - name: DATA_DIR
+              value: /data
+          ports:
+            - name: raft-rpc
+              containerPort: {{ .Values.tieringKv.ports.raftMetadata }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/tiering-kv
+              readOnly: true
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            tcpSocket:
+              port: raft-rpc
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: raft-rpc
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.tieringKv.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $full }}-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          {{- toYaml .Values.tieringKv.persistence.accessModes | nindent 10 }}
+        {{- if .Values.tieringKv.persistence.storageClassName }}
+        storageClassName: {{ .Values.tieringKv.persistence.storageClassName | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.tieringKv.cluster.metadataStorageSize }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $full }}-storage
+  labels:
+    {{- include "tiering-kv.labels" . | nindent 4 }}
+    app.kubernetes.io/component: storage
+spec:
+  serviceName: {{ $full }}-storage
+  replicas: {{ .Values.tieringKv.cluster.storageReplicas }}
+  selector:
+    matchLabels:
+      {{- include "tiering-kv.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: storage
+  template:
+    metadata:
+      labels:
+        {{- include "tiering-kv.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: storage
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.tieringKv.terminationGracePeriodSeconds }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: storage
+          image: "{{ .Values.tieringKv.image.repository }}:{{ .Values.tieringKv.image.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["/bin/sh", "/etc/tiering-kv/start.sh"]
+          env:
+            - name: JAVA_OPTS
+              value: {{ .Values.tieringKv.javaOpts | quote }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: ROLE
+              value: participant
+            - name: RPC_PORT
+              value: {{ .Values.tieringKv.ports.raftStorage | quote }}
+            - name: DATA_DIR
+              value: /data
+          ports:
+            - name: raft-rpc
+              containerPort: {{ .Values.tieringKv.ports.raftStorage }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/tiering-kv
+              readOnly: true
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            tcpSocket:
+              port: raft-rpc
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: raft-rpc
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.tieringKv.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $full }}-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          {{- toYaml .Values.tieringKv.persistence.accessModes | nindent 10 }}
+        {{- if .Values.tieringKv.persistence.storageClassName }}
+        storageClassName: {{ .Values.tieringKv.persistence.storageClassName | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.tieringKv.cluster.storageSize }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $full }}-gateway
+  labels:
+    {{- include "tiering-kv.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+spec:
+  replicas: {{ .Values.tieringKv.cluster.gatewayReplicas }}
+  selector:
+    matchLabels:
+      {{- include "tiering-kv.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: gateway
+  template:
+    metadata:
+      labels:
+        {{- include "tiering-kv.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: gateway
+    spec:
+      terminationGracePeriodSeconds: 30
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: gateway
+          image: "{{ .Values.tieringKv.image.repository }}:{{ .Values.tieringKv.image.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["/bin/sh", "/etc/tiering-kv/start.sh"]
+          env:
+            - name: JAVA_OPTS
+              value: {{ .Values.tieringKv.javaOpts | quote }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: ROLE
+              value: gateway
+            - name: RPC_PORT
+              value: {{ .Values.tieringKv.ports.gatewayRpc | quote }}
+            - name: GATEWAY_PORT
+              value: {{ .Values.tieringKv.ports.resp | quote }}
+            - name: METADATA_SERVICE
+              value: {{ $full }}-meta
+            - name: METADATA_PORT
+              value: {{ .Values.tieringKv.ports.raftMetadata | quote }}
+            - name: REGIONS
+              value: "{{- range $i, $_ := until (int .Values.tieringKv.cluster.storageReplicas) }}{{- if gt $i 0 }},{{- end }}r{{ add $i 1 }}@{{ $full }}-storage-{{ $i }}.{{ $full }}-storage:{{ $.Values.tieringKv.ports.raftStorage }}{{- end }}"
+          ports:
+            - name: resp
+              containerPort: {{ .Values.tieringKv.ports.resp }}
+          readinessProbe:
+            tcpSocket:
+              port: resp
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: resp
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /etc/tiering-kv
+              readOnly: true
+          resources:
+            {{- toYaml .Values.tieringKv.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $full }}-config
+{{- else }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $full }}-core
+  labels:
+    {{- include "tiering-kv.labels" . | nindent 4 }}
+    app.kubernetes.io/component: core
+spec:
+  serviceName: {{ $full }}-core
+  replicas: {{ .Values.tieringKv.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "tiering-kv.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: core
+  template:
+    metadata:
+      labels:
+        {{- include "tiering-kv.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: core
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.tieringKv.terminationGracePeriodSeconds }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: tiering-kv
+          image: "{{ .Values.tieringKv.image.repository }}:{{ .Values.tieringKv.image.tag }}"
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["sh", "-c", "exec java $JAVA_OPTS -cp /app/tiering-kv.jar io.tieringkv.Main"]
+          workingDir: /app
+          env:
+            - name: JAVA_OPTS
+              value: {{ .Values.tieringKv.javaOpts | quote }}
+          ports:
+            - name: resp
+              containerPort: {{ .Values.tieringKv.ports.resp }}
+            - name: management
+              containerPort: {{ .Values.tieringKv.ports.management }}
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: management
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: management
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          volumeMounts:
+            - name: config
+              mountPath: /app/config
+              readOnly: true
+            - name: data
+              mountPath: /app/data
+          resources:
+            {{- toYaml .Values.tieringKv.resources | nindent 12 }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $full }}-config
+        {{- if not .Values.tieringKv.persistence.enabled }}
+        - name: data
+          emptyDir: {}
+        {{- end }}
+  {{- if .Values.tieringKv.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          {{- toYaml .Values.tieringKv.persistence.accessModes | nindent 10 }}
+        {{- if .Values.tieringKv.persistence.storageClassName }}
+        storageClassName: {{ .Values.tieringKv.persistence.storageClassName | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.tieringKv.persistence.size }}
+  {{- end }}
+{{- end }}
+{{- end }}

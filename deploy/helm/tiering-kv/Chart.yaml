@@ -1,0 +1,18 @@
+apiVersion: v2
+name: tiering-kv
+description: Tiering-KV tiered-storage KV engine, operations console, and Kubernetes Operator
+type: application
+version: 6.3.0
+appVersion: "6.3.0"
+home: https://github.com/Holylaw7/tiering-kv
+sources:
+  - https://github.com/Holylaw7/tiering-kv
+keywords:
+  - kv
+  - redis
+  - tiered-storage
+  - lsm
+  - raft
+  - kubernetes
+maintainers:
+  - name: Tiering-KV Maintainers

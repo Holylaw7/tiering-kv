@@ -133,6 +133,102 @@ jobs:
           CONSOLE_ADMIN_PASSWORD=ci-admin-pass-123 \
           docker compose -f deploy/console/docker-compose.yml -f deploy/console/docker-compose.prod.yml config --quiet
 
+  helm-and-observability-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Ensure Helm v3 is available
+        run: |
+          if ! command -v helm >/dev/null 2>&1; then
+            curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+          fi
+          helm version
+      - name: Lint and template-validate Helm Chart across standalone, HA and cluster profiles
+        run: |
+          set -euo pipefail
+          helm lint deploy/helm/tiering-kv --strict
+
+          helm template tk-standalone deploy/helm/tiering-kv > /tmp/helm-standalone.yaml
+          helm template tk-ha deploy/helm/tiering-kv \
+            --set consoleServer.replicaCount=2 \
+            --set consoleServer.backup.storageType=s3 \
+            --set consoleWeb.ingress.enabled=true \
+            --set operator.enabled=true \
+            --set observability.serviceMonitor.enabled=true \
+            --set observability.prometheusRule.enabled=true > /tmp/helm-ha.yaml
+          helm template tk-cluster deploy/helm/tiering-kv \
+            --set tieringKv.mode=cluster > /tmp/helm-cluster.yaml
+
+          python3 - <<'PY'
+          import yaml
+
+          def load_docs(path):
+              with open(path, encoding="utf-8") as f:
+                  docs = [d for d in yaml.safe_load_all(f) if d]
+              assert docs, f"No documents rendered in {path}"
+              return docs
+
+          standalone = load_docs("/tmp/helm-standalone.yaml")
+          ha = load_docs("/tmp/helm-ha.yaml")
+          cluster = load_docs("/tmp/helm-cluster.yaml")
+
+          standalone_kinds = {(d["kind"], d["metadata"]["name"]) for d in standalone}
+          assert ("StatefulSet", "tk-standalone-tiering-kv-core") in standalone_kinds
+          assert ("Deployment", "tk-standalone-tiering-kv-console-server") in standalone_kinds
+          assert ("Deployment", "tk-standalone-tiering-kv-console-web") in standalone_kinds
+
+          ha_kinds = {d["kind"] for d in ha}
+          for expected in ("PodDisruptionBudget", "Ingress", "ServiceMonitor", "PrometheusRule", "ClusterRole"):
+              assert expected in ha_kinds, f"Missing {expected} in HA Helm output"
+
+          console_dep = next(d for d in ha if d["kind"] == "Deployment" and d["metadata"]["name"].endswith("-console-server"))
+          container = console_dep["spec"]["template"]["spec"]["containers"][0]
+          envs = {e["name"]: e.get("value") for e in container["env"]}
+          assert envs.get("CONSOLE_LOGIN_ATTEMPT_STORE") == "db", f"Expected db login store in HA, got {envs.get('CONSOLE_LOGIN_ATTEMPT_STORE')}"
+          assert container["livenessProbe"]["httpGet"]["path"] == "/actuator/health/liveness"
+          assert container["readinessProbe"]["httpGet"]["path"] == "/actuator/health/readiness"
+
+          cluster_names = {(d["kind"], d["metadata"]["name"]) for d in cluster}
+          assert ("StatefulSet", "tk-cluster-tiering-kv-meta") in cluster_names
+          assert ("StatefulSet", "tk-cluster-tiering-kv-storage") in cluster_names
+          assert ("Deployment", "tk-cluster-tiering-kv-gateway") in cluster_names
+          print(f"Helm template validation OK: standalone={len(standalone)}, ha={len(ha)}, cluster={len(cluster)} manifests")
+          PY
+      - name: Validate Grafana dashboard, Prometheus alert rules and CycloneDX SBOM
+        run: |
+          set -euo pipefail
+          bash scripts/sbom.sh --cdx --offline target/tiering-kv-sbom.cdx.json
+          python3 - <<'PY'
+          import json
+          import yaml
+
+          with open("deploy/observability/grafana-dashboard.json", encoding="utf-8") as f:
+              dash = json.load(f)
+          assert dash["schemaVersion"] >= 36
+          assert len(dash["panels"]) >= 8
+          exprs = [t["expr"] for p in dash["panels"] for t in p.get("targets", [])]
+          assert exprs and all("tieringkv_" in e for e in exprs), "All dashboard targets must query tieringkv_* metrics"
+
+          with open("deploy/observability/prometheus-alerts.yaml", encoding="utf-8") as f:
+              alerts = yaml.safe_load(f)
+          groups = alerts.get("groups", [])
+          assert groups and len(groups[0].get("rules", [])) >= 8
+          for rule in groups[0]["rules"]:
+              assert rule.get("alert") and rule.get("expr")
+              assert rule.get("labels", {}).get("severity") in ("warning", "critical")
+              assert rule.get("annotations", {}).get("summary")
+
+          with open("target/tiering-kv-sbom.cdx.json", encoding="utf-8") as f:
+              sbom = json.load(f)
+          assert sbom["bomFormat"] == "CycloneDX"
+          assert sbom["specVersion"] == "1.5"
+          assert len(sbom["components"]) >= 50, f"Unexpectedly small SBOM: {len(sbom['components'])}"
+          for c in sbom["components"]:
+              assert c.get("name") and c.get("version") and c.get("purl")
+          print(f"Observability & CycloneDX SBOM OK: panels={len(dash['panels'])}, alerts={len(groups[0]['rules'])}, sbom_components={len(sbom['components'])}")
+          PY
+
   spotbugs-high:
     runs-on: ubuntu-latest
     timeout-minutes: 15
