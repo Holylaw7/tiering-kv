@@ -25,6 +25,23 @@ public final class HotKeyStorageEngine extends AbstractStorageDecorator {
     }
 
     @Override
+    public long applyWriteBatch(int shardHint, java.util.List<io.tieringkv.storage.WriteOp> ops) {
+        boolean hadCached = !cache.isEmpty();
+        if (hadCached) {
+            for (int i = 0; i < ops.size(); i++) {
+                cache.invalidate(ops.get(i).key());
+            }
+        }
+        long deletedMask = delegate.applyWriteBatch(shardHint, ops);
+        if (hadCached || !cache.isEmpty()) {
+            for (int i = 0; i < ops.size(); i++) {
+                cache.invalidate(ops.get(i).key());
+            }
+        }
+        return deletedMask;
+    }
+
+    @Override
     public byte[] get(byte[] key) {
         return cache.get(key, System.currentTimeMillis());
     }

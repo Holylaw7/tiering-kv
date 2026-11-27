@@ -5,6 +5,7 @@ import com.sun.net.httpserver.HttpServer;
 import io.tieringkv.cache.block.CacheStatistics;
 import io.tieringkv.monitor.MetricsRegistry;
 import io.tieringkv.storage.tiering.StorageMetrics;
+import io.tieringkv.storage.wal.WALManager;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -28,6 +29,7 @@ public final class ManagementHttpServer implements AutoCloseable {
     private final Supplier<CacheStatistics.Snapshot> cacheStats;
     private final ObservabilityRegistry observability;
     private final SlowLog slowLog;
+    private final WALManager walManager;
 
     public ManagementHttpServer(String host,
                                 int port,
@@ -36,11 +38,23 @@ public final class ManagementHttpServer implements AutoCloseable {
                                 Supplier<CacheStatistics.Snapshot> cacheStats,
                                 ObservabilityRegistry observability,
                                 SlowLog slowLog) throws IOException {
+        this(host, port, metrics, storageMetrics, cacheStats, observability, slowLog, null);
+    }
+
+    public ManagementHttpServer(String host,
+                                int port,
+                                MetricsRegistry metrics,
+                                StorageMetrics storageMetrics,
+                                Supplier<CacheStatistics.Snapshot> cacheStats,
+                                ObservabilityRegistry observability,
+                                SlowLog slowLog,
+                                WALManager walManager) throws IOException {
         this.metrics = metrics;
         this.storageMetrics = storageMetrics;
         this.cacheStats = cacheStats;
         this.observability = observability;
         this.slowLog = slowLog;
+        this.walManager = walManager;
         this.server = HttpServer.create(new InetSocketAddress(host, port), 32);
         this.executor = Executors.newFixedThreadPool(2, r -> {
             Thread t = new Thread(r, "tiering-mgmt-http");
@@ -111,6 +125,23 @@ public final class ManagementHttpServer implements AutoCloseable {
         }
         if (slowLog != null) {
             gauge(sb, "tieringkv_slowlog_entries", "Current slowlog buffered entries", slowLog.len());
+        }
+        if (walManager != null) {
+            long batches = walManager.groupCommitBatches();
+            long records = walManager.groupCommitRecords();
+            double avgBatch = batches == 0 ? 0.0 : (double) records / batches;
+            gauge(sb, "tieringkv_wal_shards", "Active WAL shard count", walManager.shardCount());
+            sb.append("# HELP tieringkv_wal_io_backend Active WAL I/O backend indicator\n");
+            sb.append("# TYPE tieringkv_wal_io_backend gauge\n");
+            sb.append("tieringkv_wal_io_backend{backend=\"").append(walManager.activeIoBackend())
+                    .append("\",preallocate=\"").append(walManager.preallocateEnabled()).append("\"} 1\n");
+            counter(sb, "tieringkv_wal_write_batches_total", "Total WAL write batches submitted", batches);
+            counter(sb, "tieringkv_wal_write_records_total", "Total WAL records written", records);
+            gauge(sb, "tieringkv_wal_avg_batch_size", "Average WAL records per write batch", avgBatch);
+            counter(sb, "tieringkv_wal_write_bytes_total", "Total WAL bytes written", walManager.totalBytesWritten());
+            counter(sb, "tieringkv_wal_fsync_total", "Total WAL fdatasync/fsync invocations", walManager.totalFsyncCount());
+            gauge(sb, "tieringkv_wal_fsync_max_ms", "Max WAL fsync duration in ms",
+                    walManager.maxFsyncNanos() / 1_000_000.0);
         }
         if (observability != null) {
             String extra = observability.prometheusText();

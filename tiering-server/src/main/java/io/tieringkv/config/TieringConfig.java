@@ -80,7 +80,16 @@ public record TieringConfig(
     public record Memory(long maxBytes) {
     }
 
-    public record Wal(String fsyncPolicy, long maxSegmentBytes) {
+    public record Wal(
+            String fsyncPolicy,
+            long maxSegmentBytes,
+            int shardCount,
+            String ioMode,
+            boolean preallocate,
+            int batchMaxEntries) {
+        public Wal(String fsyncPolicy, long maxSegmentBytes) {
+            this(fsyncPolicy, maxSegmentBytes, 16, "auto", true, 64);
+        }
     }
 
     public record Cache(
@@ -195,6 +204,19 @@ public record TieringConfig(
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("invalid wal.fsync-policy: " + wal.fsyncPolicy(), e);
         }
+        if (wal.shardCount() < 1 || wal.shardCount() > WALConfig.MAX_SHARDS
+                || (wal.shardCount() & (wal.shardCount() - 1)) != 0) {
+            throw new IllegalArgumentException(
+                    "wal.shards must be a power of two in [1, " + WALConfig.MAX_SHARDS + "], got: " + wal.shardCount());
+        }
+        try {
+            WALConfig.IoMode.valueOf(wal.ioMode().trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException | NullPointerException e) {
+            throw new IllegalArgumentException("invalid wal.io-mode: " + wal.ioMode(), e);
+        }
+        if (wal.batchMaxEntries() < 1) {
+            throw new IllegalArgumentException("wal.batch-max-entries must be >= 1");
+        }
         if (tiering.lowWatermark() <= 0
                 || tiering.lowWatermark() >= tiering.highWatermark()
                 || tiering.highWatermark() >= tiering.criticalWatermark()
@@ -279,7 +301,11 @@ public record TieringConfig(
                             num(workers.get("migration-workers"), base.workers().migrationWorkers())),
                     new Memory(num(memory.get("limit"), base.memory().maxBytes())),
                     new Wal(str(wal.get("fsync-policy"), base.wal().fsyncPolicy()),
-                            num(wal.get("max-segment-bytes"), base.wal().maxSegmentBytes())),
+                            num(wal.get("max-segment-bytes"), base.wal().maxSegmentBytes()),
+                            num(wal.get("shards"), base.wal().shardCount()),
+                            str(wal.get("io-mode"), base.wal().ioMode()),
+                            bool(wal.get("preallocate"), base.wal().preallocate()),
+                            num(wal.get("batch-max-entries"), base.wal().batchMaxEntries())),
                     new Cache(num(cache.get("block-size"), base.cache().blockCacheCapacity()),
                             num(cache.get("hotkey-window-ms"), base.cache().hotKeyWindowMillis()),
                             num(cache.get("hotkey-threshold"), base.cache().hotKeyThreshold()),
@@ -318,7 +344,8 @@ public record TieringConfig(
                 "server.host=%s server.port=%d server.max-clients=%d server.timeout-seconds=%d "
                         + "server.auth=%s server.tls=%s storage.data-dir=%s vector.index-dir=%s "
                         + "shard-count=%d flush-workers=%d migration-workers=%d "
-                        + "memory.limit=%d wal.fsync=%s cache.block-size=%d "
+                        + "memory.limit=%d wal.fsync=%s wal.shards=%d wal.io-mode=%s wal.preallocate=%s "
+                        + "wal.batch-max=%d cache.block-size=%d "
                         + "cache.eviction-policy=%s cache.eviction-samples=%d "
                         + "hotkey-window=%d hotkey-threshold=%d watermarks=%.2f/%.2f/%.2f "
                         + "backpressure-timeout=%d drain-timeout=%d gc.batch-size=%d "
@@ -328,7 +355,8 @@ public record TieringConfig(
                 (server().password() != null && !server().password().isBlank()) ? "enabled" : "disabled",
                 server().tls().enabled(), storage().dataDir(), vector().indexDir(),
                 workers().shardCount(), workers().flushWorkers(), workers().migrationWorkers(),
-                memory().maxBytes(), wal().fsyncPolicy(), cache().blockCacheCapacity(),
+                memory().maxBytes(), wal().fsyncPolicy(), wal().shardCount(), wal().ioMode(),
+                wal().preallocate(), wal().batchMaxEntries(), cache().blockCacheCapacity(),
                 cache().evictionPolicy(), cache().evictionSamples(),
                 cache().hotKeyWindowMillis(), cache().hotKeyThreshold(),
                 tiering().lowWatermark(), tiering().highWatermark(), tiering().criticalWatermark(),

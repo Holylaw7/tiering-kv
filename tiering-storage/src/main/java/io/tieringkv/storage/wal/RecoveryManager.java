@@ -13,8 +13,10 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * 崩溃恢复引擎（ADR-0016）：按 segment 序号扫描 → 校验 → 重放 → 截断损坏尾部。
- * 中段损坏时停止后续重放；PUT 按绝对过期点判定（宕机期间过期的键不复活）。
+ * 崩溃恢复引擎（ADR-0016 + v6.5.0 预分配零尾兼容）：
+ * 按 segment 序号扫描 → 校验 → 重放 → 按需截断损坏尾部。
+ * 中段损坏时停止后续重放；PUT 按绝对过期点判定（宕机期间过期的键不复活）；
+ * 预分配 / O_DIRECT 段的干净零填充尾区自动跳过且不破坏预分配物理块。
  */
 public final class RecoveryManager {
 
@@ -30,17 +32,25 @@ public final class RecoveryManager {
 
     public RecoveryStats recoverFrom(
             MemTable memTable, long startSequence, long startOffset) throws IOException {
+        return recoverDirectory(config.directory(), memTable, startSequence, startOffset);
+    }
+
+    static RecoveryStats recoverDirectory(
+            Path directory, MemTable memTable, long startSequence, long startOffset) throws IOException {
+        if (!Files.exists(directory)) {
+            return new RecoveryStats(0, 0, 0, 0, null);
+        }
         long scanned = 0;
         long applied = 0;
         long segmentsReplayed = 0;
         long corruptedDiscarded = 0;
         Path lastGoodPath = null;
 
-        for (long sequence : listSegments(config.directory())) {
+        for (long sequence : listSegments(directory)) {
             if (sequence < startSequence) {
                 continue;
             }
-            Path path = config.directory().resolve(String.format("%06d.log", sequence));
+            Path path = directory.resolve(String.format("%06d.log", sequence));
             long skip = sequence == startSequence ? startOffset : 0;
             try (WALReader reader = new WALReader(path, skip)) {
                 segmentsReplayed++;
@@ -54,8 +64,11 @@ public final class RecoveryManager {
                         break;
                     }
                     if (entry == null) {
-                        // 干净 EOF 时为无操作；截断尾部时回退到最后有效偏移
-                        truncateTail(path, reader.offset());
+                        // 命中预分配 / O_DIRECT 全 0 尾区时为干净逻辑 EOF，保留预分配块不截断；
+                        // 其余情况（非零残尾）按需回退到最后有效偏移
+                        if (!reader.reachedZeroTail()) {
+                            truncateTail(path, reader.offset());
+                        }
                         break;
                     }
                     scanned++;
@@ -107,6 +120,9 @@ public final class RecoveryManager {
 
     static List<Long> listSegments(Path directory) throws IOException {
         List<Long> sequences = new ArrayList<>();
+        if (!Files.exists(directory)) {
+            return sequences;
+        }
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(directory, "*.log")) {
             for (Path path : stream) {
                 String name = path.getFileName().toString();

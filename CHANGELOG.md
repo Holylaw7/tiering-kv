@@ -3,6 +3,16 @@
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Changed
+
+- **高管线写路径深度优化（Phase 1–3：Sharded WAL + 连续写批聚合 + 分块预分配/`fdatasync`/`O_DIRECT`，见 [docs/benchmark/v6.5.0-wal-write-path-report.md](docs/benchmark/v6.5.0-wal-write-path-report.md)）**：
+  - **Phase 1（16 分片 Sharded WAL + 零分配直写 + `Checkpoint v2` 无锁低水位）**：新增 `WalShardRouter`（与 `ShardRouter` 同源 FNV-1a 路由）与 `WALShard`（每分片独占 64 KB 堆外暂存缓冲 `stageBuffer` 消除 `EVERY_SEC/NO` 无自旋 `parkNanos` 风暴与微批次 `pwrite64` 系统调用放大；`ALWAYS` 采用 64 次自旋 + 50 µs 短退避 Group Commit）；`WALRecord.encodeInto` + `ThreadLocal<CRC32C>` 实现写路径零堆分配；`CheckpointManager` 升级 `VERSION=2`（分片低水位向量 + 整文件尾部 CRC32C，兼容 v1），`ShardedRecoveryManager` 支持旧版单 WAL 自动无损迁移、16 线程并行恢复及 `wal.shards` 变更归并重分片；
+  - **Phase 2（`ShardWorker` 连续写批聚合 + 全存储装饰链透传）**：新增 `BatchableShardTask` 与 `WriteOp`，`ShardWorker` 将 `drainTo(64)` 中的连续 `SET`/`DEL` 聚合成单次 `StorageEngine.applyWriteBatch`（256-bit 位图严格升序加锁无死锁，遇读/读改写命令立即刷出保线性一致，OOM 拒 `SET` 放行 `DEL`）；`VectorIndexSyncStorageEngine` 无向量时跳过前置全栈 `delegate.get(key)`；
+  - **Phase 3（4 MB 分块预分配 + `fdatasync` + 纯 Java 21 `O_DIRECT` + 可观测性）**：`LogSegment` 移除 `BufferedOutputStream`，支持 4 MB 分块预分配、`force(false)`（`fdatasync`）与 Linux `ExtendedOpenOption.DIRECT` 4 KB 对齐尾页覆写（不支持挂载自动回退 NIO）；`WALReader` 识别预分配全零尾为干净逻辑 EOF；`config/application.yaml` 与 `TieringConfig` 新增 `wal.shards`/`io-mode`/`preallocate`/`batch-max-entries`；`deploy/console/docker-compose.yml` 拆出 `core-wal:/app/data/wal` 独立卷；`INFO persistence` 与 `/metrics` 暴露 `tieringkv_wal_*` 指标；
+  - **同机容器实测收益**：`SET c=50, P=16`（`WAL EVERY_SEC`）由 `90,539 rps`（P50 `9.167 ms`）跃升至 **`376,648 rps`（4.16×，P50 降至 `1.039 ms` / -88.7%，达同窗无持久化 Redis 7 的 55.4%）**；强持久化 `WAL ALWAYS` 由 `6,154 rps` 跃升至 **`126,582 rps`（20.57×，P50 降 96.2%）**，开启 `O_DIRECT` 下 max 长尾收敛 `10.4×`（`208.3 ms → 20.1 ms`）；零分配写使 63 万键容器 RSS（`-Xmx2g` 默认 / ZGC 软上限调优）进一步降至 **`931.1 MiB`（-33.2%） / `641.7 MiB`（较 `v5.0.0` 降 53.4%）**；新增 `ShardedWalAndCheckpointV2Test` 与 `ShardWriteBatchingIntegrationTest` 全绿。
+
 ## [6.4.0] - 2026-11-27
 
 ### Added

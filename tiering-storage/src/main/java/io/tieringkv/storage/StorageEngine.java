@@ -96,4 +96,24 @@ public interface StorageEngine {
         }
         return applyBatch(new BatchWriteRequest(converted));
     }
+
+    /**
+     * 同分片零拷贝批量写（v6.5.0 Phase 2）：按顺序执行最多 64 条同分片 PUT/DELETE，
+     * 返回 64-bit 掩码（bit i == 1 表示第 i 条 DELETE 实际移除了已存在键）。
+     * 默认逐条回退至 put/delete；WALStorageEngine 与外层装饰器覆写为单次批量路径。
+     */
+    default long applyWriteBatch(int shardHint, List<WriteOp> ops) {
+        long deletedMask = 0L;
+        for (int i = 0; i < ops.size(); i++) {
+            WriteOp op = ops.get(i);
+            if (op.delete()) {
+                if (delete(op.key()) && i < 64) {
+                    deletedMask |= (1L << i);
+                }
+            } else {
+                put(op.key(), op.value(), op.ttlMillis());
+            }
+        }
+        return deletedMask;
+    }
 }

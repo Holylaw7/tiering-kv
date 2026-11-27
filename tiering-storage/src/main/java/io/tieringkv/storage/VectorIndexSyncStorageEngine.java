@@ -42,16 +42,45 @@ public final class VectorIndexSyncStorageEngine extends AbstractStorageDecorator
 
     @Override
     public void put(byte[] key, byte[] value) {
-        byte[] old = delegate.get(key);
+        byte[] old = vectorStore.size() > 0 ? delegate.get(key) : null;
         delegate.put(key, value);
         syncValueChange(key, old, value);
     }
 
     @Override
     public void put(byte[] key, byte[] value, long ttlMillis) {
-        byte[] old = delegate.get(key);
+        byte[] old = vectorStore.size() > 0 ? delegate.get(key) : null;
         delegate.put(key, value, ttlMillis);
         syncValueChange(key, old, value);
+    }
+
+    @Override
+    public long applyWriteBatch(int shardHint, java.util.List<WriteOp> ops) {
+        if (vectorStore.size() == 0) {
+            boolean hasVector = false;
+            for (int i = 0; i < ops.size(); i++) {
+                WriteOp op = ops.get(i);
+                if (!op.delete() && isVector(op.value())) {
+                    hasVector = true;
+                    break;
+                }
+            }
+            if (!hasVector) {
+                return delegate.applyWriteBatch(shardHint, ops);
+            }
+        }
+        long deletedMask = 0L;
+        for (int i = 0; i < ops.size(); i++) {
+            WriteOp op = ops.get(i);
+            if (op.delete()) {
+                if (delete(op.key()) && i < 64) {
+                    deletedMask |= (1L << i);
+                }
+            } else {
+                put(op.key(), op.value(), op.ttlMillis());
+            }
+        }
+        return deletedMask;
     }
 
     @Override
@@ -78,7 +107,7 @@ public final class VectorIndexSyncStorageEngine extends AbstractStorageDecorator
 
     @Override
     public boolean delete(byte[] key) {
-        byte[] value = delegate.get(key);
+        byte[] value = vectorStore.size() > 0 ? delegate.get(key) : null;
         boolean removed = delegate.delete(key);
         if (removed && value != null
                 && TypedValueCodec.typeOf(value) == ValueType.VECTOR) {

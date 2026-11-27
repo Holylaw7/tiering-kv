@@ -9,19 +9,40 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
-/** WAL 段管理（ADR-0014）：wal/%06d.log 命名、按序号升序枚举、轮转。 */
+/**
+ * WAL 段管理（ADR-0014 + v6.5.0 预分配与 O_DIRECT 支持）：
+ * 负责单目录内 {@code %06d.log} 命名、升序枚举、轮转与关闭。
+ */
 public final class SegmentManager implements AutoCloseable {
 
+    private static final long MAX_PREALLOC_BYTES = 64L * 1024 * 1024;
+
     private final Path directory;
+    private final WALConfig.IoMode ioMode;
+    private final long preallocateBytes;
     private LogSegment current;
     private long nextSequence;
 
     public SegmentManager(Path directory) throws IOException {
+        this(directory, WALConfig.IoMode.NIO, 0L);
+    }
+
+    public SegmentManager(WALConfig shardConfig) throws IOException {
+        this(shardConfig.directory(),
+                shardConfig.ioMode(),
+                shardConfig.preallocateSegments()
+                        ? Math.min(shardConfig.maxSegmentBytes(), MAX_PREALLOC_BYTES)
+                        : 0L);
+    }
+
+    public SegmentManager(Path directory, WALConfig.IoMode ioMode, long preallocateBytes) throws IOException {
         this.directory = directory;
+        this.ioMode = ioMode == null ? WALConfig.IoMode.NIO : ioMode;
+        this.preallocateBytes = Math.max(0L, preallocateBytes);
         Files.createDirectories(directory);
         List<Long> existing = listSegments();
         long start = existing.isEmpty() ? 1 : existing.get(existing.size() - 1);
-        this.current = LogSegment.openOrCreate(directory, start);
+        this.current = LogSegment.openOrCreate(directory, start, this.ioMode, this.preallocateBytes);
         this.nextSequence = start + 1;
     }
 
@@ -29,11 +50,11 @@ public final class SegmentManager implements AutoCloseable {
         return current;
     }
 
-    /** 强制关闭当前段并创建下一序号段。 */
+    /** 强制刷盘关闭当前段并创建下一序号段。 */
     public void rotate() throws IOException {
-        current.force();
+        current.forceMetadata();
         current.close();
-        current = LogSegment.openOrCreate(directory, nextSequence++);
+        current = LogSegment.openOrCreate(directory, nextSequence++, ioMode, preallocateBytes);
     }
 
     public List<Long> listSegments() throws IOException {
@@ -50,6 +71,14 @@ public final class SegmentManager implements AutoCloseable {
 
     public Path segmentPath(long sequence) {
         return directory.resolve(String.format(Locale.ROOT, "%06d.log", sequence));
+    }
+
+    public String activeIoBackend() {
+        return current == null ? "nio" : current.ioBackendName();
+    }
+
+    public boolean isPreallocated() {
+        return current != null && current.isPreallocated();
     }
 
     @Override

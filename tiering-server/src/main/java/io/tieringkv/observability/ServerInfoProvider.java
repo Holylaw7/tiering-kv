@@ -5,6 +5,7 @@ import io.tieringkv.lifecycle.PhysicalSnapshotCoordinator;
 import io.tieringkv.monitor.MetricsRegistry;
 import io.tieringkv.storage.memory.MemoryManager;
 import io.tieringkv.storage.tiering.StorageMetrics;
+import io.tieringkv.storage.wal.WALManager;
 
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
@@ -35,6 +36,7 @@ public final class ServerInfoProvider {
     private final Supplier<CacheStatistics.Snapshot> cacheStats;
     private final Runnable refreshGauges;
     private final PhysicalSnapshotCoordinator snapshotCoordinator;
+    private final WALManager walManager;
 
     public ServerInfoProvider(MetricsRegistry metrics,
                               MemoryManager memory,
@@ -69,6 +71,21 @@ public final class ServerInfoProvider {
                               Supplier<CacheStatistics.Snapshot> cacheStats,
                               Runnable refreshGauges,
                               PhysicalSnapshotCoordinator snapshotCoordinator) {
+        this(metrics, memory, keyCount, port, version, storageMetrics, cacheStats,
+                refreshGauges, snapshotCoordinator, null);
+    }
+
+    /** v6.5.0 完整构造：在 `# Persistence` 中附加 Sharded WAL 后端、分片与刷盘统计。 */
+    public ServerInfoProvider(MetricsRegistry metrics,
+                              MemoryManager memory,
+                              Supplier<Long> keyCount,
+                              int port,
+                              String version,
+                              StorageMetrics storageMetrics,
+                              Supplier<CacheStatistics.Snapshot> cacheStats,
+                              Runnable refreshGauges,
+                              PhysicalSnapshotCoordinator snapshotCoordinator,
+                              WALManager walManager) {
         if (metrics == null) {
             throw new IllegalArgumentException("metrics required");
         }
@@ -84,6 +101,7 @@ public final class ServerInfoProvider {
         this.cacheStats = cacheStats;
         this.refreshGauges = refreshGauges;
         this.snapshotCoordinator = snapshotCoordinator;
+        this.walManager = walManager;
     }
 
     /** 单个 section 的提供者（INFO &lt;section&gt; 使用）。 */
@@ -273,6 +291,23 @@ public final class ServerInfoProvider {
         if (s.lastError() != null && !s.lastError().isBlank()) {
             String safeErr = s.lastError().replace('\r', ' ').replace('\n', ' ');
             sb.append("rdb_last_bgsave_error:").append(safeErr).append("\r\n");
+        }
+        if (walManager != null) {
+            long batches = walManager.groupCommitBatches();
+            long records = walManager.groupCommitRecords();
+            double avgBatch = batches == 0 ? 0.0 : (double) records / batches;
+            sb.append("wal_shards:").append(walManager.shardCount()).append("\r\n")
+                    .append("wal_io_backend:").append(walManager.activeIoBackend()).append("\r\n")
+                    .append("wal_preallocate:").append(walManager.preallocateEnabled() ? 1 : 0).append("\r\n")
+                    .append("wal_fsync_policy:").append(walManager.fsyncPolicy().name()).append("\r\n")
+                    .append("wal_write_batches:").append(batches).append("\r\n")
+                    .append("wal_write_records:").append(records).append("\r\n")
+                    .append("wal_avg_batch_size:").append(String.format(Locale.ROOT, "%.2f", avgBatch)).append("\r\n")
+                    .append("wal_bytes_written:").append(walManager.totalBytesWritten()).append("\r\n")
+                    .append("wal_fsync_count:").append(walManager.totalFsyncCount()).append("\r\n")
+                    .append("wal_fsync_max_ms:")
+                    .append(String.format(Locale.ROOT, "%.3f", walManager.maxFsyncNanos() / 1_000_000.0))
+                    .append("\r\n");
         }
         return sb.toString();
     }

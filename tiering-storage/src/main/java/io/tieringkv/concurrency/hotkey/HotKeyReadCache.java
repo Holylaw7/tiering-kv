@@ -67,13 +67,18 @@ public final class HotKeyReadCache {
         }
     }
 
+    public boolean isEmpty() {
+        return cache.isEmpty();
+    }
+
     public void clear() {
         cache.clear();
     }
 
     public void invalidate(byte[] key) {
-        ByteBuffer wrapped = ByteBuffer.wrap(key);
-        cache.remove(wrapped);
+        if (!cache.isEmpty()) {
+            cache.remove(ByteBuffer.wrap(key));
+        }
         detector.invalidate(key);
     }
 

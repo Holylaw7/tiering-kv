@@ -26,6 +26,23 @@ public final class TieringStorageEngine extends AbstractStorageDecorator {
     }
 
     @Override
+    public long applyWriteBatch(int shardHint, java.util.List<io.tieringkv.storage.WriteOp> ops) {
+        boolean hasPut = false;
+        for (int i = 0; i < ops.size(); i++) {
+            if (!ops.get(i).delete()) {
+                hasPut = true;
+                break;
+            }
+        }
+        if (hasPut && !controller.awaitWritable()) {
+            throw new BackpressureException("memory critical: writes limited");
+        }
+        long deletedMask = delegate.applyWriteBatch(shardHint, ops);
+        controller.onWriteCompleted();
+        return deletedMask;
+    }
+
+    @Override
     public boolean delete(byte[] key) {
         boolean removed = delegate.delete(key);
         controller.onWriteCompleted();

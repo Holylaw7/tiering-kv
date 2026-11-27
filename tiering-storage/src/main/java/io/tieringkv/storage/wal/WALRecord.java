@@ -4,7 +4,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
 /**
- * WAL 记录编解码（ADR-0015）：
+ * WAL 记录编解码（ADR-0015 / v6.5.0 零分配直编扩展）：
  *
  * <pre>
  * [MAGIC 4B][VERSION 1B][TYPE 1B][TIMESTAMP 8B]
@@ -21,28 +21,61 @@ public final class WALRecord {
     public static final int HEADER_SIZE = 38;
     public static final int CHECKSUM_SIZE = 8;
 
+    private static final byte[] EMPTY = new byte[0];
+
     private WALRecord() {
+    }
+
+    /** 计算一条记录编码后的精确字节长度。 */
+    public static int encodedSize(byte[] key, byte[] value) {
+        int valLen = value == null ? 0 : value.length;
+        return HEADER_SIZE + key.length + valLen + CHECKSUM_SIZE;
+    }
+
+    /**
+     * 零堆分配直写编码（v6.5.0）：直接向复用堆外/堆内 ByteBuffer 写入单条完整记录及 CRC32C。
+     * 调用方需确保 {@code dst.remaining() >= encodedSize(key, value)} 且 {@code dst.order() == BIG_ENDIAN}。
+     *
+     * @return 实际写入的总字节数
+     */
+    public static int encodeInto(
+            WALEntry.Operation operation,
+            long timestamp,
+            byte[] key,
+            byte[] value,
+            long ttlMillis,
+            long version,
+            ByteBuffer dst) {
+        byte[] val = (operation == WALEntry.Operation.PUT && value != null) ? value : EMPTY;
+        int startPos = dst.position();
+        int payloadLength = HEADER_SIZE + key.length + val.length;
+        dst.putInt(MAGIC);
+        dst.put(VERSION);
+        dst.put(operation == WALEntry.Operation.PUT ? TYPE_PUT : TYPE_DELETE);
+        dst.putLong(timestamp);
+        dst.putInt(key.length);
+        dst.putInt(val.length);
+        dst.putLong(version);
+        dst.putLong(ttlMillis);
+        dst.put(key);
+        if (val.length > 0) {
+            dst.put(val);
+        }
+        long crc = ChecksumValidator.crc32c(dst, startPos, payloadLength);
+        dst.putLong(crc);
+        return payloadLength + CHECKSUM_SIZE;
     }
 
     public static byte[] encode(WALEntry entry) {
         byte[] key = entry.key();
-        byte[] value = entry.value() == null ? new byte[0] : entry.value();
-        int payloadLength = HEADER_SIZE + key.length + value.length;
-        ByteBuffer buffer = ByteBuffer.allocate(payloadLength + CHECKSUM_SIZE)
-                .order(ByteOrder.BIG_ENDIAN);
-        buffer.putInt(MAGIC);
-        buffer.put(VERSION);
-        buffer.put(entry.operation() == WALEntry.Operation.PUT ? TYPE_PUT : TYPE_DELETE);
-        buffer.putLong(entry.timestamp());
-        buffer.putInt(key.length);
-        buffer.putInt(value.length);
-        buffer.putLong(entry.version());
-        buffer.putLong(entry.ttlMillis());
-        buffer.put(key);
-        buffer.put(value);
-        long crc = ChecksumValidator.crc32c(buffer.array(), payloadLength);
-        buffer.putLong(crc);
-        return buffer.array();
+        byte[] value = (entry.operation() == WALEntry.Operation.PUT && entry.value() != null)
+                ? entry.value() : EMPTY;
+        int totalLength = HEADER_SIZE + key.length + value.length + CHECKSUM_SIZE;
+        byte[] out = new byte[totalLength];
+        ByteBuffer buffer = ByteBuffer.wrap(out).order(ByteOrder.BIG_ENDIAN);
+        encodeInto(entry.operation(), entry.timestamp(), key, value,
+                entry.ttlMillis(), entry.version(), buffer);
+        return out;
     }
 
     /** 校验 magic/version/checksum 并解析为逻辑条目。 */

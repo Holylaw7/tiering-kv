@@ -1,15 +1,20 @@
 package io.tieringkv.command;
 
+import io.tieringkv.execution.BatchableShardTask;
 import io.tieringkv.execution.KeyShardExecutor;
 import io.tieringkv.observability.SlowLog;
 import io.tieringkv.protocol.RespError;
+import io.tieringkv.protocol.RespInteger;
 import io.tieringkv.protocol.RespValue;
 import io.tieringkv.protocol.RespSimpleString;
 import io.tieringkv.security.AclPolicy;
 import io.tieringkv.session.ConnectionContext;
 import io.tieringkv.storage.StorageEngine;
+import io.tieringkv.storage.WriteOp;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,6 +36,9 @@ public final class CommandEngine {
     public static final String OOM_ERROR =
             "OOM command not allowed when used memory > 'maxmemory'.";
     private static final RespSimpleString QUEUED = new RespSimpleString("QUEUED");
+    private static final RespSimpleString OK = new RespSimpleString("OK");
+    private static final RespInteger INT_ONE = new RespInteger(1);
+    private static final RespInteger INT_ZERO = new RespInteger(0);
 
     private final CommandRegistry registry;
     private final StorageEngine storage;
@@ -38,6 +46,8 @@ public final class CommandEngine {
     private final java.util.function.BooleanSupplier memoryPressure;
     private final AclPolicy aclPolicy;
     private final SlowLog slowLog;
+    private final boolean standardSet;
+    private final boolean standardDel;
 
     public CommandEngine(CommandRegistry registry, StorageEngine storage) {
         this(registry, storage, null, null, null, null);
@@ -78,6 +88,8 @@ public final class CommandEngine {
         this.memoryPressure = memoryPressure;
         this.aclPolicy = aclPolicy;
         this.slowLog = slowLog;
+        this.standardSet = registry.find("set") instanceof SetCommand;
+        this.standardDel = registry.find("del") instanceof DelCommand;
     }
 
     public RespValue execute(RespCommand command) {
@@ -200,7 +212,163 @@ public final class CommandEngine {
                         command.name(),
                         name -> name.getBytes(StandardCharsets.UTF_8))
                 : command.args().get(0);
-        boolean submitted = executor.submit(key, () -> {
+        WriteOp batchOp = (captured == null || !captured.inMulti())
+                ? tryParseBatchableWrite(command)
+                : null;
+        boolean submitted;
+        if (batchOp != null) {
+            submitted = executor.submit(key, new BatchWriteCommandTask(batchOp, command, captured, callback));
+        } else {
+            submitted = executor.submit(key, () -> {
+                ConnectionContext previous = ConnectionContext.current();
+                try {
+                    if (captured != null) {
+                        ConnectionContext.attach(captured);
+                    } else {
+                        ConnectionContext.detach();
+                    }
+                    callback.accept(execute(command), null);
+                } catch (Throwable t) {
+                    callback.accept(null, t);
+                } finally {
+                    ConnectionContext.restore(previous);
+                }
+            });
+        }
+        if (!submitted) {
+            callback.accept(new RespError("ERR server busy or shutting down"), null);
+        }
+    }
+
+    /**
+     * 尝试把标准单键纯写命令（SET k v [EX|PX t] / 单键 DEL k）解析为零拷贝 {@link WriteOp}；
+     * 语法错误、非标准命令覆写或其他命令均返回 null，走常规 {@link #execute} 路径保持错误语义 100% 一致。
+     */
+    private WriteOp tryParseBatchableWrite(RespCommand command) {
+        String raw = command.name();
+        String name = isLowerAscii(raw) ? raw : raw.toLowerCase(Locale.ROOT);
+        List<byte[]> args = command.args();
+        if (standardSet && "set".equals(name)) {
+            if (args.size() == 2) {
+                return WriteOp.put(args.get(0), args.get(1));
+            }
+            if (args.size() == 4) {
+                String option = new String(args.get(2), StandardCharsets.UTF_8).toLowerCase(Locale.ROOT);
+                try {
+                    long parsed = Long.parseLong(new String(args.get(3), StandardCharsets.UTF_8).trim());
+                    if ("ex".equals(option)) {
+                        return WriteOp.put(args.get(0), args.get(1), Math.multiplyExact(parsed, 1000L));
+                    }
+                    if ("px".equals(option)) {
+                        return WriteOp.put(args.get(0), args.get(1), parsed);
+                    }
+                } catch (NumberFormatException | ArithmeticException ignored) {
+                    return null;
+                }
+            }
+            return null;
+        }
+        if (standardDel && "del".equals(name) && args.size() == 1) {
+            return WriteOp.delete(args.get(0));
+        }
+        return null;
+    }
+
+    private static final ThreadLocal<BatchScratch> TL_BATCH_SCRATCH =
+            ThreadLocal.withInitial(BatchScratch::new);
+
+    private static final class BatchScratch {
+        final List<BatchWriteCommandTask> validTasks = new ArrayList<>(64);
+        final List<WriteOp> validOps = new ArrayList<>(64);
+    }
+
+    private void executeWriteBatch(int shardId, List<BatchableShardTask> rawTasks) {
+        int total = rawTasks.size();
+        BatchScratch scratch = TL_BATCH_SCRATCH.get();
+        List<BatchWriteCommandTask> validTasks = scratch.validTasks;
+        List<WriteOp> validOps = scratch.validOps;
+        validTasks.clear();
+        validOps.clear();
+        boolean oom = memoryPressure != null && memoryPressure.getAsBoolean();
+
+        try {
+            for (int i = 0; i < total; i++) {
+                BatchWriteCommandTask task = (BatchWriteCommandTask) rawTasks.get(i);
+                if (aclPolicy != null) {
+                    String user = task.captured == null ? null : task.captured.authenticatedUser();
+                    String denied = aclPolicy.authorize(user, task.command.name(), task.command.args());
+                    if (denied != null) {
+                        task.callback.accept(new RespError(denied), null);
+                        continue;
+                    }
+                }
+                if (oom && !task.op.delete()) {
+                    task.callback.accept(new RespError(OOM_ERROR), null);
+                    continue;
+                }
+                validTasks.add(task);
+                validOps.add(task.op);
+            }
+            if (validTasks.isEmpty()) {
+                return;
+            }
+            long startNanos = slowLog != null ? System.nanoTime() : 0L;
+            long deletedMask;
+            try {
+                deletedMask = storage.applyWriteBatch(shardId, validOps);
+            } catch (Throwable t) {
+                for (int i = 0; i < validTasks.size(); i++) {
+                    validTasks.get(i).callback.accept(null, t);
+                }
+                return;
+            }
+            if (slowLog != null) {
+                long elapsed = System.nanoTime() - startNanos;
+                long perOp = elapsed / validTasks.size();
+                for (int i = 0; i < validTasks.size(); i++) {
+                    BatchWriteCommandTask task = validTasks.get(i);
+                    slowLog.record(task.command.name(), task.command.args(), perOp);
+                }
+            }
+            for (int i = 0; i < validTasks.size(); i++) {
+                BatchWriteCommandTask task = validTasks.get(i);
+                RespValue response;
+                if (task.op.delete()) {
+                    response = (i < 64 && (deletedMask & (1L << i)) != 0L) ? INT_ONE : INT_ZERO;
+                } else {
+                    response = OK;
+                }
+                task.callback.accept(response, null);
+            }
+        } finally {
+            validTasks.clear();
+            validOps.clear();
+        }
+    }
+
+    private final class BatchWriteCommandTask implements BatchableShardTask {
+        final WriteOp op;
+        final RespCommand command;
+        final ConnectionContext captured;
+        final BiConsumer<RespValue, Throwable> callback;
+
+        BatchWriteCommandTask(WriteOp op,
+                              RespCommand command,
+                              ConnectionContext captured,
+                              BiConsumer<RespValue, Throwable> callback) {
+            this.op = op;
+            this.command = command;
+            this.captured = captured;
+            this.callback = callback;
+        }
+
+        @Override
+        public Object batchKey() {
+            return CommandEngine.this;
+        }
+
+        @Override
+        public void run() {
             ConnectionContext previous = ConnectionContext.current();
             try {
                 if (captured != null) {
@@ -214,9 +382,11 @@ public final class CommandEngine {
             } finally {
                 ConnectionContext.restore(previous);
             }
-        });
-        if (!submitted) {
-            callback.accept(new RespError("ERR server busy or shutting down"), null);
+        }
+
+        @Override
+        public void runBatch(int shardId, List<BatchableShardTask> tasks) {
+            executeWriteBatch(shardId, tasks);
         }
     }
 

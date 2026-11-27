@@ -84,6 +84,11 @@ public abstract class AbstractStorageDecorator
         delegate.clear();
     }
 
+    @Override
+    public long applyWriteBatch(int shardHint, java.util.List<WriteOp> ops) {
+        return delegate.applyWriteBatch(shardHint, ops);
+    }
+
     // ---------- AtomicStringOps 委托（ADR-0351） ----------
 
     @Override

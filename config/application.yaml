@@ -23,6 +23,11 @@ memory:
 wal:
   fsync-policy: EVERY_SEC
   max-segment-bytes: 67108864
+  # v6.5.0 Sharded WAL + 批聚合 + 预分配/fdatasync/O_DIRECT 配置
+  shards: 16
+  io-mode: auto        # auto | nio | direct（auto 走预分配+fdatasync 最优均衡；direct 启用 Linux O_DIRECT 4KB 对齐写）
+  preallocate: true    # 预分配段文件以消除追加写变更 inode.i_size 引发的元数据刷盘
+  batch-max-entries: 64
 
 cache:
   block-size: 1024

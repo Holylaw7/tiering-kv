@@ -45,6 +45,28 @@ public final class TieringReadStorageEngine extends AbstractStorageDecorator {
     }
 
     @Override
+    public long applyWriteBatch(int shardHint, java.util.List<io.tieringkv.storage.WriteOp> ops) {
+        long coldDeletedMask = 0L;
+        for (int i = 0; i < ops.size(); i++) {
+            io.tieringkv.storage.WriteOp op = ops.get(i);
+            if (!op.delete() && op.ttlMillis() != NO_TTL && cold.entry(op.key()) != null) {
+                cold.delete(op.key());
+            }
+        }
+        long hotDeletedMask = delegate.applyWriteBatch(shardHint, ops);
+        for (int i = 0; i < ops.size(); i++) {
+            io.tieringkv.storage.WriteOp op = ops.get(i);
+            if (op.delete() && cold.entry(op.key()) != null) {
+                cold.delete(op.key());
+                if (i < 64) {
+                    coldDeletedMask |= (1L << i);
+                }
+            }
+        }
+        return hotDeletedMask | coldDeletedMask;
+    }
+
+    @Override
     public byte[] get(byte[] key) {
         byte[] value = delegate.get(key);
         if (value != null) {

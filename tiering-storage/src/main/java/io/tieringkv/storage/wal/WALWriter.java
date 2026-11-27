@@ -2,10 +2,14 @@ package io.tieringkv.storage.wal;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
 
 /**
- * WAL 写入器（ADR-0014 / B3 Group Commit 优化）：负责记录编码、批量段追加与 fsync 策略执行。
+ * WAL 写入器（ADR-0014 / B3 Group Commit / v6.5.0 堆外直写与 fsync 耗时观测）：
+ * 负责记录编码、零拷贝整批段追加与 fsync 策略执行。
  */
 public final class WALWriter implements AutoCloseable {
 
@@ -14,6 +18,10 @@ public final class WALWriter implements AutoCloseable {
     private long lastForceMillis;
     /** 自上次 force 以来是否有新写入（TD-106）：空闲时跳过无意义的 fsync。 */
     private volatile boolean dirty;
+    private final LongAdder bytesWritten = new LongAdder();
+    private final LongAdder fsyncCount = new LongAdder();
+    private final LongAdder fsyncTotalNanos = new LongAdder();
+    private final AtomicLong fsyncMaxNanos = new AtomicLong();
 
     public WALWriter(SegmentManager segments, WALConfig.FsyncPolicy fsyncPolicy) {
         this.segments = segments;
@@ -49,23 +57,52 @@ public final class WALWriter implements AutoCloseable {
     }
 
     /**
-     * 预编码帧批量追加（B3 Group Commit 专用）：调用方已在锁外并行完成序列化与 CRC32C，
-     * 此处连续追加全部帧并仅执行单次 fsync 决策（ALWAYS 下整批共享 1 次 FileChannel.force）。
+     * 预编码帧批量追加（B3 Group Commit 专用）：合并全部帧连续追加并仅执行单次 fsync 决策。
      */
     void appendEncodedBatch(List<byte[]> encodedRecords) throws IOException {
         if (encodedRecords.isEmpty()) {
             return;
         }
         LogSegment segment = segments.current();
-        for (int i = 0; i < encodedRecords.size(); i++) {
-            segment.append(encodedRecords.get(i));
+        if (encodedRecords.size() == 1) {
+            byte[] only = encodedRecords.get(0);
+            segment.append(only);
+            bytesWritten.add(only.length);
+        } else {
+            int total = 0;
+            for (int i = 0; i < encodedRecords.size(); i++) {
+                total += encodedRecords.get(i).length;
+            }
+            ByteBuffer merged = ByteBuffer.allocate(total);
+            for (int i = 0; i < encodedRecords.size(); i++) {
+                merged.put(encodedRecords.get(i));
+            }
+            merged.flip();
+            segment.append(merged);
+            bytesWritten.add(total);
         }
+        applyFsyncAfterAppend(segment);
+    }
+
+    /**
+     * 零拷贝堆外缓冲区整批追加（v6.5.0 Phase 1/2 核心热路径）：
+     * 直接将 [position, limit) 写入当前段文件（1 次 write 系统调用 + ≤1 次 fdatasync）。
+     */
+    void appendBuffer(ByteBuffer encodedBatch) throws IOException {
+        int bytes = encodedBatch.remaining();
+        if (bytes == 0) {
+            return;
+        }
+        LogSegment segment = segments.current();
+        segment.append(encodedBatch);
+        bytesWritten.add(bytes);
         applyFsyncAfterAppend(segment);
     }
 
     private void appendRecord(byte[] record) throws IOException {
         LogSegment segment = segments.current();
         segment.append(record);
+        bytesWritten.add(record.length);
         applyFsyncAfterAppend(segment);
     }
 
@@ -73,16 +110,25 @@ public final class WALWriter implements AutoCloseable {
         dirty = true;
         WALConfig.FsyncPolicy policy = this.fsyncPolicy;
         if (policy == WALConfig.FsyncPolicy.ALWAYS) {
-            segment.force();
+            forceSegment(segment);
             dirty = false;
         } else if (policy == WALConfig.FsyncPolicy.EVERY_SEC) {
             long now = System.currentTimeMillis();
             if (now - lastForceMillis >= 1000) {
-                segment.force();
+                forceSegment(segment);
                 dirty = false;
                 lastForceMillis = now;
             }
         }
+    }
+
+    private void forceSegment(LogSegment segment) throws IOException {
+        long start = System.nanoTime();
+        segment.force();
+        long elapsed = System.nanoTime() - start;
+        fsyncCount.increment();
+        fsyncTotalNanos.add(elapsed);
+        fsyncMaxNanos.accumulateAndGet(elapsed, Math::max);
     }
 
     /** 是否有未落盘的写入（供后台调度判断是否需要 force）。 */
@@ -94,7 +140,7 @@ public final class WALWriter implements AutoCloseable {
         if (!dirty) {
             return; // 空闲期不做无意义的 flush + fsync
         }
-        segments.current().force();
+        forceSegment(segments.current());
         dirty = false;
         lastForceMillis = System.currentTimeMillis();
     }
@@ -111,6 +157,22 @@ public final class WALWriter implements AutoCloseable {
 
     public long currentSequence() {
         return segments.current().sequence();
+    }
+
+    public long bytesWritten() {
+        return bytesWritten.sum();
+    }
+
+    public long fsyncCount() {
+        return fsyncCount.sum();
+    }
+
+    public long fsyncTotalNanos() {
+        return fsyncTotalNanos.sum();
+    }
+
+    public long fsyncMaxNanos() {
+        return fsyncMaxNanos.get();
     }
 
     @Override

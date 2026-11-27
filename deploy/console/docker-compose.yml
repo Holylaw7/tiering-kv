@@ -38,6 +38,7 @@ services:
     volumes:
       - ../../config:/app/config:ro
       - core-data:/app/data
+      - core-wal:/app/data/wal
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:9100/healthz || exit 1"]
       interval: 5s
@@ -125,6 +126,7 @@ services:
 volumes:
   mysql-data:
   core-data:
+  core-wal:
   console-backups:
   minio-data:
 

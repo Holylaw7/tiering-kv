@@ -95,18 +95,24 @@ public final class Main {
                 srv.host(), srv.port(), srv.maxClients(), srv.timeoutSeconds(), srv.password(), tlsConfig);
         MemoryManager memoryManager = new MemoryManager(config.memory().maxBytes());
         MemTable memTable = MemTable.create(memoryManager);
-        WALManager walManager = new WALManager(new WALConfig(
-                Path.of(config.storage().walDir()), config.wal().maxSegmentBytes(),
-                WALConfig.FsyncPolicy.valueOf(config.wal().fsyncPolicy())));
+        WALConfig walConfig = new WALConfig(
+                Path.of(config.storage().walDir()),
+                config.wal().maxSegmentBytes(),
+                WALConfig.FsyncPolicy.valueOf(config.wal().fsyncPolicy().trim().toUpperCase(java.util.Locale.ROOT)),
+                config.wal().shardCount(),
+                WALConfig.IoMode.valueOf(config.wal().ioMode().trim().toUpperCase(java.util.Locale.ROOT)),
+                config.wal().preallocate());
+        WALManager walManager = new WALManager(walConfig);
         CheckpointManager.Checkpoint checkpoint = walManager.loadCheckpoint();
         RecoveryManager.RecoveryStats stats;
         if (checkpoint != null) {
             CheckpointManager.restore(memTable, checkpoint);
-            stats = walManager.recoverFrom(memTable, checkpoint.segmentSequence(), checkpoint.offset());
+            stats = walManager.recoverFrom(memTable, checkpoint);
         } else {
             stats = walManager.recover(memTable);
         }
-        System.out.printf("WAL recovery: scanned=%d applied=%d segments=%d%n",
+        System.out.printf("WAL recovery: shards=%d backend=%s preallocate=%s scanned=%d applied=%d segments=%d%n",
+                walManager.shardCount(), walManager.activeIoBackend(), walManager.preallocateEnabled(),
                 stats.recordsScanned(), stats.recordsApplied(), stats.segmentsReplayed());
         MemoryPool memoryPool = new MemoryPool();
         BlockCache blockCache = new BlockCache(
@@ -159,7 +165,7 @@ public final class Main {
                 evictionManager);
         int shards = Math.min(config.workers().shardCount(),
                 Math.max(1, Runtime.getRuntime().availableProcessors()));
-        KeyShardExecutor executor = new KeyShardExecutor(shards, "command-shard");
+        KeyShardExecutor executor = new KeyShardExecutor(shards, "command-shard", config.wal().batchMaxEntries());
         MetricsRegistry metrics = new MetricsRegistry();
         // M3-B1：向量索引加载 checkpoint 并在 WAL/冷存恢复后补齐缺失项，停机时原子落盘
         Path vectorDir = Path.of(config.vector().indexDir());
@@ -187,7 +193,7 @@ public final class Main {
                 metrics, memoryManager, syncStorage::size,
                 config.server().port(), ServerVersion.current(),
                 tiering.metrics(), blockCache.statistics()::snapshot,
-                null, snapshotCoordinator); // F3：INFO 不触发刷新、不等待刷新，只读最近一次快照
+                null, snapshotCoordinator, walManager); // F3：INFO 不触发刷新、不等待刷新，只读最近一次快照
         Map<String, Supplier<String>> infoSections =
                 new HashMap<>(observability.infoSections());
         infoSections.putAll(serverInfo.sections());
@@ -235,7 +241,8 @@ public final class Main {
                     tiering.metrics(),
                     blockCache.statistics()::snapshot,
                     observability,
-                    slowLog);
+                    slowLog,
+                    walManager);
             managementHttp.start();
             System.out.println("Tiering-KV management HTTP listening on " + managementHttp.boundPort()
                     + " (/healthz, /readyz, /metrics)");

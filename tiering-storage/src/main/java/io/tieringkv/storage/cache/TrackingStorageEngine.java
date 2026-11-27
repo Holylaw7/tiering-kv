@@ -38,6 +38,27 @@ public final class TrackingStorageEngine extends AbstractStorageDecorator {
     }
 
     @Override
+    public long applyWriteBatch(int shardHint, java.util.List<io.tieringkv.storage.WriteOp> ops) {
+        long deletedMask = delegate.applyWriteBatch(shardHint, ops);
+        boolean hasPut = false;
+        for (int i = 0; i < ops.size(); i++) {
+            io.tieringkv.storage.WriteOp op = ops.get(i);
+            if (op.delete()) {
+                if (i < 64 && (deletedMask & (1L << i)) != 0L) {
+                    record(AccessEvent.AccessOperation.DELETE, op.key(), 0);
+                }
+            } else {
+                hasPut = true;
+                record(AccessEvent.AccessOperation.PUT, op.key(), KeyValueEntry.sizeOf(op.key(), op.value()));
+            }
+        }
+        if (hasPut) {
+            evictionManager.maybeEvict();
+        }
+        return deletedMask;
+    }
+
+    @Override
     public byte[] get(byte[] key) {
         byte[] value = delegate.get(key);
         if (value != null) {
