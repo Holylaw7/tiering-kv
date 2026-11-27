@@ -188,6 +188,7 @@ export interface WebhookTestResult {
 }
 
 export type RestoreStatus = 'NONE' | 'RESTORING' | 'SUCCEEDED' | 'FAILED'
+export type BackupVerifyStatus = 'UNVERIFIED' | 'VERIFIED' | 'CORRUPTED'
 
 export interface BackupRecord {
   id: number
@@ -205,6 +206,40 @@ export interface BackupRecord {
   restoreFinishedAt?: string
   restoredKeys?: number
   restoreMessage?: string
+  sha256?: string
+  verifyStatus?: BackupVerifyStatus
+  verifiedAt?: string
+  preRestoreBackupId?: number
+}
+
+export interface BackupVerifyResult {
+  backupId: number
+  fileName: string
+  status: BackupVerifyStatus
+  expectedSha256?: string
+  actualSha256: string
+  validEntries: number
+  sizeBytes: number
+  verifiedAt: string
+  message: string
+}
+
+export interface RestorePreviewView {
+  backupId: number
+  fileName: string
+  verifyStatus?: BackupVerifyStatus
+  archiveReadable: boolean
+  totalKeys: number
+  conflictKeys: number
+  newKeys: number
+  expiredKeys: number
+  typeBreakdown: Record<string, number>
+  sampleConflicts: string[]
+  warning?: string
+}
+
+export interface RestoreRequest {
+  createSafetySnapshot: boolean
 }
 
 export interface CheckpointResult {

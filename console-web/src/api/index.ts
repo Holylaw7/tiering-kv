@@ -1,12 +1,12 @@
 import http from './http'
 import type {
   AlertChannelView, AlertEvent, AlertRule, BackupRecord,
-  BackupScheduleRequest, BackupScheduleRunResult, BackupScheduleView,
+  BackupScheduleRequest, BackupScheduleRunResult, BackupScheduleView, BackupVerifyResult,
   CheckpointResult, CheckpointStatusView, ClusterTopologyView,
   InstanceView, JsonKeysView, JsonQueryView,
   K8sBackupTriggerResult, K8sClusterListView, K8sClusterSummary,
   KeyDetail, KeyScanPage,
-  LoginResponse, OpLog, OverviewView, PageResult, SlowLogView,
+  LoginResponse, OpLog, OverviewView, PageResult, RestorePreviewView, RestoreRequest, SlowLogView,
   SstableTableView, SystemInfo, TerminalHistory,
   TerminalResult, TimeSeriesKeysView, TimeSeriesPoint, TimeSeriesRangeView,
   TrendPoint, UserView, VectorCollectionsView, VectorSearchResultView, WebhookTestResult
@@ -98,7 +98,11 @@ export const backupApi = {
     http.get<unknown, BackupRecord[]>('/backups', { params: { instanceId } }),
   create: (instanceId: number) =>
     http.post<unknown, BackupRecord>('/backups', null, { params: { instanceId } }),
-  restore: (id: number) => http.post<unknown, BackupRecord>(`/backups/${id}/restore`),
+  restore: (id: number, payload?: RestoreRequest) =>
+    http.post<unknown, BackupRecord>(`/backups/${id}/restore`, payload ?? null),
+  verify: (id: number) => http.post<unknown, BackupVerifyResult>(`/backups/${id}/verify`),
+  previewRestore: (id: number) =>
+    http.post<unknown, RestorePreviewView>(`/backups/${id}/restore/preview`),
   remove: (id: number) => http.delete<unknown, void>(`/backups/${id}`),
   checkpoint: (instanceId: number) =>
     http.post<unknown, CheckpointResult>('/backups/checkpoint', null, { params: { instanceId } }),

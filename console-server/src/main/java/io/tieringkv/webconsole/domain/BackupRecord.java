@@ -74,6 +74,55 @@ public class BackupRecord {
     @Column(name = "delete_claimed_at")
     private LocalDateTime deleteClaimedAt;
 
+    /** 归档字节流 SHA-256 十六进制摘要（v6.4.0 D1）。 */
+    @Column(name = "sha256", length = 64)
+    private String sha256;
+
+    /** 归档完整性校验状态（v6.4.0 D1）。 */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "verify_status", nullable = false, length = 16)
+    private BackupVerifyStatus verifyStatus = BackupVerifyStatus.UNVERIFIED;
+
+    /** 最近一次完整性校验时间（v6.4.0 D1）。 */
+    @Column(name = "verified_at")
+    private LocalDateTime verifiedAt;
+
+    /** 恢复前自动生成的安全保护快照 ID（v6.4.0 D1）。 */
+    @Column(name = "pre_restore_backup_id")
+    private Long preRestoreBackupId;
+
+    public String getSha256() {
+        return sha256;
+    }
+
+    public void setSha256(String sha256) {
+        this.sha256 = sha256;
+    }
+
+    public BackupVerifyStatus getVerifyStatus() {
+        return verifyStatus;
+    }
+
+    public void setVerifyStatus(BackupVerifyStatus verifyStatus) {
+        this.verifyStatus = verifyStatus;
+    }
+
+    public LocalDateTime getVerifiedAt() {
+        return verifiedAt;
+    }
+
+    public void setVerifiedAt(LocalDateTime verifiedAt) {
+        this.verifiedAt = verifiedAt;
+    }
+
+    public Long getPreRestoreBackupId() {
+        return preRestoreBackupId;
+    }
+
+    public void setPreRestoreBackupId(Long preRestoreBackupId) {
+        this.preRestoreBackupId = preRestoreBackupId;
+    }
+
     public String getDeleteState() {
         return deleteState;
     }

@@ -5,8 +5,10 @@ import io.tieringkv.webconsole.domain.BackupRecord;
 import io.tieringkv.webconsole.domain.BackupStatus;
 import io.tieringkv.webconsole.domain.DbInstance;
 import io.tieringkv.webconsole.repository.BackupRecordRepository;
+import io.tieringkv.webconsole.repository.ConsoleLeaseRepository;
 import io.tieringkv.webconsole.repository.DbInstanceRepository;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -41,8 +43,16 @@ class BackupRetentionIntegrationTest {
     @Autowired
     private ConsoleProperties properties;
 
+    @Autowired
+    private ConsoleLeaseRepository leaseRepository;
+
     private Long createdInstanceId;
     private Long keptRecordId;
+
+    @BeforeEach
+    void resetRetentionLease() {
+        leaseRepository.deleteById(BackupRetentionService.BACKUP_RETENTION_LEASE_KEY);
+    }
 
     @AfterEach
     void cleanUp() {

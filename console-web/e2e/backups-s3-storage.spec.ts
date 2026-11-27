@@ -142,8 +142,16 @@ test.describe('S3 / RustFS Object Storage Backup E2E', () => {
       await page.getByRole('button', { name: '刷新列表' }).click()
       const targetRow = page.locator('.el-table__row', { hasText: createdFileName }).first()
       await expect(targetRow).toBeVisible()
+      await targetRow.getByRole('button', { name: '校验', exact: true }).click()
+      await expect(targetRow).toContainText('已校验', { timeout: 15_000 })
+
       await targetRow.getByRole('button', { name: '恢复', exact: true }).click()
-      await page.locator('.el-message-box__btns .el-button--primary').click()
+      const wizard = page.getByRole('dialog', { name: /安全恢复向导/ })
+      await expect(wizard).toBeVisible()
+      await expect(wizard).toContainText('归档总键数', { timeout: 15_000 })
+      const confirmBtn = wizard.getByRole('button', { name: '确认执行恢复' })
+      await expect(confirmBtn).toBeEnabled({ timeout: 15_000 })
+      await confirmBtn.click()
       await expect(targetRow).toContainText(/已恢复 \d+ 键/, { timeout: 30_000 })
 
       // 6. 验证全部 5 种数据类型均从 S3 对象精确复原

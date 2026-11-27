@@ -7,7 +7,8 @@ import type {
   BackupRecord,
   BackupScheduleMode,
   BackupScheduleView,
-  CheckpointStatusView
+  CheckpointStatusView,
+  RestorePreviewView
 } from '@/api/types'
 import { useInstanceStore } from '@/stores/instance'
 import { useAuthStore } from '@/stores/auth'
@@ -349,22 +350,85 @@ async function create() {
   }
 }
 
-async function restore(row: BackupRecord) {
-  await ElMessageBox.confirm(
-    `将用备份 ${row.fileName} 覆盖恢复实例数据，确认继续？`,
-    '恢复数据',
-    { type: 'warning' }
-  )
-  const record = await backupApi.restore(row.id)
-  await load()
-  if (record.restoreStatus === 'RESTORING') {
-    ElMessage.info('恢复任务已提交，页面会自动刷新进度')
-    startRestorePolling(record.id)
-  } else if (record.restoreStatus === 'SUCCEEDED') {
-    ElMessage.success(`已恢复 ${record.restoredKeys ?? 0} 个键`)
-  } else if (record.restoreStatus === 'FAILED') {
-    ElMessage.error(`恢复失败：${record.restoreMessage ?? '未知原因'}`)
+const verifyingId = ref<number | null>(null)
+const restoreDialogVisible = ref(false)
+const restorePreviewLoading = ref(false)
+const restoreSubmitting = ref(false)
+const restoreTarget = ref<BackupRecord | null>(null)
+const restorePreview = ref<RestorePreviewView | null>(null)
+const restoreCreateSafetySnapshot = ref(true)
+
+async function verifyBackup(row: BackupRecord) {
+  verifyingId.value = row.id
+  try {
+    const result = await backupApi.verify(row.id)
+    if (result.status === 'VERIFIED') {
+      ElMessage.success(result.message || `校验通过（${result.validEntries} 条记录）`)
+    } else {
+      ElMessage.error(result.message || '归档校验异常，可能已损坏')
+    }
+    await load()
+  } finally {
+    verifyingId.value = null
   }
+}
+
+async function openRestoreWizard(row: BackupRecord) {
+  restoreTarget.value = row
+  restorePreview.value = null
+  restoreCreateSafetySnapshot.value = false
+  restoreDialogVisible.value = true
+  restorePreviewLoading.value = true
+  try {
+    const preview = await backupApi.previewRestore(row.id)
+    restorePreview.value = preview
+    restoreCreateSafetySnapshot.value = preview.conflictKeys > 0
+  } finally {
+    restorePreviewLoading.value = false
+  }
+}
+
+async function confirmRestore() {
+  const target = restoreTarget.value
+  if (!target) return
+  restoreSubmitting.value = true
+  try {
+    const record = await backupApi.restore(target.id, {
+      createSafetySnapshot: restoreCreateSafetySnapshot.value
+    })
+    restoreDialogVisible.value = false
+    await load()
+    if (record.restoreStatus === 'RESTORING') {
+      const hint = record.preRestoreBackupId
+        ? `已创建保护快照 #${record.preRestoreBackupId}，恢复任务在后台执行中`
+        : '恢复任务已提交，页面会自动刷新进度'
+      ElMessage.info(hint)
+      startRestorePolling(record.id)
+    } else if (record.restoreStatus === 'SUCCEEDED') {
+      ElMessage.success(`已恢复 ${record.restoredKeys ?? 0} 个键`)
+    } else if (record.restoreStatus === 'FAILED') {
+      ElMessage.error(`恢复失败：${record.restoreMessage ?? '未知原因'}`)
+    }
+  } finally {
+    restoreSubmitting.value = false
+  }
+}
+
+function verifyBadgeLabel(status?: string): string {
+  if (status === 'VERIFIED') return '已校验'
+  if (status === 'CORRUPTED') return '已损坏'
+  return '未校验'
+}
+
+function verifyBadgeTone(status?: string): 'success' | 'danger' | 'neutral' {
+  if (status === 'VERIFIED') return 'success'
+  if (status === 'CORRUPTED') return 'danger'
+  return 'neutral'
+}
+
+function shortHash(hash?: string): string {
+  if (!hash) return '—'
+  return hash.length > 10 ? `${hash.slice(0, 10)}…` : hash
 }
 
 async function remove(row: BackupRecord) {
@@ -632,18 +696,46 @@ onUnmounted(stopPolling)
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="恢复进度" width="168">
+        <el-table-column label="完整性" width="136">
+          <template #default="{ row }">
+            <el-tooltip
+              v-if="row.sha256"
+              :content="`SHA-256: ${row.sha256}${row.verifiedAt ? ' · 校验于 ' + row.verifiedAt : ''}`"
+              placement="top"
+            >
+              <div>
+                <StatusBadge
+                  :label="verifyBadgeLabel(row.verifyStatus)"
+                  :tone="verifyBadgeTone(row.verifyStatus)"
+                  dot
+                />
+                <div class="progress-hint mono">{{ shortHash(row.sha256) }}</div>
+              </div>
+            </el-tooltip>
+            <StatusBadge
+              v-else
+              :label="verifyBadgeLabel(row.verifyStatus)"
+              :tone="verifyBadgeTone(row.verifyStatus)"
+              dot
+            />
+          </template>
+        </el-table-column>
+        <el-table-column label="恢复进度" width="176">
           <template #default="{ row }">
             <div v-if="row.restoreStatus === 'RESTORING'" class="restore-progress">
               <el-progress :percentage="restorePercent(row as BackupRecord)" :stroke-width="6" />
               <span class="progress-hint mono">{{ row.restoredKeys ?? 0 }} / {{ row.keyCount }}</span>
             </div>
-            <StatusBadge
-              v-else-if="row.restoreStatus === 'SUCCEEDED'"
-              :label="`已恢复 ${row.restoredKeys ?? 0} 键`"
-              tone="success"
-              dot
-            />
+            <div v-else-if="row.restoreStatus === 'SUCCEEDED'">
+              <StatusBadge
+                :label="`已恢复 ${row.restoredKeys ?? 0} 键`"
+                tone="success"
+                dot
+              />
+              <div v-if="row.preRestoreBackupId" class="progress-hint mono">
+                保护快照 #{{ row.preRestoreBackupId }}
+              </div>
+            </div>
             <el-tooltip
               v-else-if="row.restoreStatus === 'FAILED'"
               :content="row.restoreMessage || '恢复中断'"
@@ -658,9 +750,20 @@ onUnmounted(stopPolling)
             <span v-else class="muted">—</span>
           </template>
         </el-table-column>
-        <el-table-column prop="createdAt" label="创建时间" width="180" />
-        <el-table-column label="操作" width="210">
+        <el-table-column prop="createdAt" label="创建时间" width="176" />
+        <el-table-column label="操作" width="236">
           <template #default="{ row }">
+            <el-button
+              v-if="auth.canOperate"
+              link
+              type="primary"
+              size="small"
+              :loading="verifyingId === row.id"
+              :disabled="row.status !== 'SUCCESS'"
+              @click="verifyBackup(row as BackupRecord)"
+            >
+              校验
+            </el-button>
             <el-button v-if="auth.canOperate" link type="primary" size="small" :disabled="row.status !== 'SUCCESS'" @click="download(row as BackupRecord)">
               下载
             </el-button>
@@ -670,7 +773,7 @@ onUnmounted(stopPolling)
               type="warning"
               size="small"
               :disabled="row.status !== 'SUCCESS' || row.restoreStatus === 'RESTORING'"
-              @click="restore(row as BackupRecord)"
+              @click="openRestoreWizard(row as BackupRecord)"
             >
               恢复
             </el-button>
@@ -742,6 +845,89 @@ onUnmounted(stopPolling)
         <el-button type="primary" :loading="scheduleSaving" @click="saveSchedule">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="restoreDialogVisible"
+      title="安全恢复向导（Dry-Run 冲突预览）"
+      width="560px"
+    >
+      <div v-loading="restorePreviewLoading" class="restore-wizard">
+        <div v-if="restoreTarget" class="wizard-meta">
+          <span>目标归档：</span>
+          <span class="mono">{{ restoreTarget.fileName }}</span>
+          <StatusBadge
+            :label="verifyBadgeLabel(restorePreview?.verifyStatus ?? restoreTarget.verifyStatus)"
+            :tone="verifyBadgeTone(restorePreview?.verifyStatus ?? restoreTarget.verifyStatus)"
+            dot
+          />
+        </div>
+
+        <el-alert
+          v-if="restorePreview?.warning"
+          :type="restorePreview.verifyStatus === 'CORRUPTED' || !restorePreview.archiveReadable ? 'error' : 'warning'"
+          :title="restorePreview.warning"
+          :closable="false"
+          show-icon
+          style="margin: 12px 0"
+        />
+
+        <div v-if="restorePreview" class="preview-grid">
+          <div class="preview-stat">
+            <span class="preview-label">归档总键数</span>
+            <strong class="num">{{ restorePreview.totalKeys }}</strong>
+          </div>
+          <div class="preview-stat preview-conflict">
+            <span class="preview-label">覆盖冲突键</span>
+            <strong class="num">{{ restorePreview.conflictKeys }}</strong>
+          </div>
+          <div class="preview-stat preview-new">
+            <span class="preview-label">预计新增键</span>
+            <strong class="num">{{ restorePreview.newKeys }}</strong>
+          </div>
+          <div class="preview-stat">
+            <span class="preview-label">已过期跳过</span>
+            <strong class="num">{{ restorePreview.expiredKeys }}</strong>
+          </div>
+        </div>
+
+        <div v-if="restorePreview && Object.keys(restorePreview.typeBreakdown).length > 0" class="preview-section">
+          <div class="preview-section-title">数据类型分布</div>
+          <div class="chip-row">
+            <StatusBadge
+              v-for="(cnt, typeName) in restorePreview.typeBreakdown"
+              :key="typeName"
+              :label="`${typeName}: ${cnt}`"
+              tone="neutral"
+              mono
+            />
+          </div>
+        </div>
+
+        <div v-if="restorePreview && restorePreview.sampleConflicts.length > 0" class="preview-section">
+          <div class="preview-section-title">将被覆盖的冲突键样例（最多展示 20 条）</div>
+          <div class="conflict-list mono">
+            <span v-for="k in restorePreview.sampleConflicts" :key="k" class="conflict-key">{{ k }}</span>
+          </div>
+        </div>
+
+        <div class="safety-option">
+          <el-checkbox v-model="restoreCreateSafetySnapshot">
+            恢复前自动创建安全保护快照（强烈推荐，失败或误覆盖时可回滚至保护点）
+          </el-checkbox>
+        </div>
+      </div>
+      <template #footer>
+        <el-button @click="restoreDialogVisible = false">取消</el-button>
+        <el-button
+          type="warning"
+          :loading="restoreSubmitting"
+          :disabled="restorePreviewLoading || !restorePreview?.archiveReadable"
+          @click="confirmRestore"
+        >
+          确认执行恢复
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -806,5 +992,86 @@ onUnmounted(stopPolling)
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.wizard-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: var(--text-sm);
+  color: var(--text-2);
+}
+
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.preview-stat {
+  padding: 10px 12px;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.preview-label {
+  font-size: var(--text-xs);
+  color: var(--text-3);
+}
+
+.preview-conflict strong {
+  color: var(--warn);
+}
+
+.preview-new strong {
+  color: var(--success);
+}
+
+.preview-section {
+  margin-top: 12px;
+}
+
+.preview-section-title {
+  font-size: var(--text-xs);
+  color: var(--text-3);
+  margin-bottom: 6px;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.conflict-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 110px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid var(--border-1);
+  border-radius: var(--radius-sm);
+  background: var(--bg-subtle);
+}
+
+.conflict-key {
+  font-size: var(--text-xs);
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-1);
+}
+
+.safety-option {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-1);
 }
 </style>

@@ -404,6 +404,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/backups/{id}/restore/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewRestore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/backups/{id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cluster/k8s/clusters": {
         parameters: {
             query?: never;
@@ -1159,6 +1191,12 @@ export interface components {
             data?: components["schemas"]["BackupScheduleView"];
             message?: string;
         };
+        ApiResponseBackupVerifyResult: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["BackupVerifyResult"];
+            message?: string;
+        };
         ApiResponseBoolean: {
             /** Format: int32 */
             code?: number;
@@ -1322,6 +1360,12 @@ export interface components {
             data?: components["schemas"]["PurgeReport"];
             message?: string;
         };
+        ApiResponseRestorePreviewView: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["RestorePreviewView"];
+            message?: string;
+        };
         ApiResponseRetentionView: {
             /** Format: int32 */
             code?: number;
@@ -1423,6 +1467,8 @@ export interface components {
             keyCount?: number;
             message?: string;
             /** Format: int64 */
+            preRestoreBackupId?: number;
+            /** Format: int64 */
             processedKeys?: number;
             /** Format: date-time */
             restoreFinishedAt?: string;
@@ -1433,10 +1479,15 @@ export interface components {
             restoreStatus?: "NONE" | "RESTORING" | "SUCCEEDED" | "FAILED";
             /** Format: int64 */
             restoredKeys?: number;
+            sha256?: string;
             /** Format: int64 */
             sizeBytes?: number;
             /** @enum {string} */
             status?: "RUNNING" | "SUCCESS" | "FAILED";
+            /** Format: date-time */
+            verifiedAt?: string;
+            /** @enum {string} */
+            verifyStatus?: "UNVERIFIED" | "VERIFIED" | "CORRUPTED";
         };
         BackupScheduleRequest: {
             cronExpression: string;
@@ -1484,6 +1535,22 @@ export interface components {
             retentionCount?: number;
             /** Format: date-time */
             updatedAt?: string;
+        };
+        BackupVerifyResult: {
+            actualSha256?: string;
+            /** Format: int64 */
+            backupId?: number;
+            expectedSha256?: string;
+            fileName?: string;
+            message?: string;
+            /** Format: int64 */
+            sizeBytes?: number;
+            /** @enum {string} */
+            status?: "UNVERIFIED" | "VERIFIED" | "CORRUPTED";
+            /** Format: int64 */
+            validEntries?: number;
+            /** Format: date-time */
+            verifiedAt?: string;
         };
         CapacityView: {
             /** Format: int32 */
@@ -1826,6 +1893,7 @@ export interface components {
             /** Format: int64 */
             id?: number;
             ip?: string;
+            requestId?: string;
             success?: boolean;
             target?: string;
             /** Format: int64 */
@@ -1922,6 +1990,30 @@ export interface components {
             slotCount?: number;
             /** Format: double */
             slotPercent?: number;
+        };
+        RestorePreviewView: {
+            archiveReadable?: boolean;
+            /** Format: int64 */
+            backupId?: number;
+            /** Format: int64 */
+            conflictKeys?: number;
+            /** Format: int64 */
+            expiredKeys?: number;
+            fileName?: string;
+            /** Format: int64 */
+            newKeys?: number;
+            sampleConflicts?: string[];
+            /** Format: int64 */
+            totalKeys?: number;
+            typeBreakdown?: {
+                [key: string]: number;
+            };
+            /** @enum {string} */
+            verifyStatus?: "UNVERIFIED" | "VERIFIED" | "CORRUPTED";
+            warning?: string;
+        };
+        RestoreRequest: {
+            createSafetySnapshot?: boolean;
         };
         RetentionView: {
             /** Format: int32 */
@@ -2942,7 +3034,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RestoreRequest"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -2951,6 +3047,50 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseBackupRecord"];
+                };
+            };
+        };
+    };
+    previewRestore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseRestorePreviewView"];
+                };
+            };
+        };
+    };
+    verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseBackupVerifyResult"];
                 };
             };
         };

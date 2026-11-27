@@ -99,14 +99,23 @@ test.describe('Backups Async Pipeline & Restore E2E', () => {
       const deletedBody = (await deletedCheck.json()).data as { replyType: string; payload?: unknown }
       expect(deletedBody.payload ?? null).toBeNull()
 
-      // 5. 在 UI 上点击该备份行的“恢复”并确认异步轮询完成
+      // 5. 在 UI 上先校验归档完整性，再通过“安全恢复向导”预览冲突并确认异步轮询完成
       await page.getByRole('button', { name: '刷新列表' }).click()
       const targetRow = page.locator('.el-table__row', { hasText: createdFileName }).first()
       await expect(targetRow).toBeVisible()
+      await targetRow.getByRole('button', { name: '校验', exact: true }).click()
+      await expect(targetRow).toContainText('已校验', { timeout: 15_000 })
+
       await targetRow.getByRole('button', { name: '恢复', exact: true }).click()
-      await page.locator('.el-message-box__btns .el-button--primary').click()
+      const wizard = page.getByRole('dialog', { name: /安全恢复向导/ })
+      await expect(wizard).toBeVisible()
+      await expect(wizard).toContainText('覆盖冲突键', { timeout: 15_000 })
+      const confirmBtn = wizard.getByRole('button', { name: '确认执行恢复' })
+      await expect(confirmBtn).toBeEnabled({ timeout: 15_000 })
+      await confirmBtn.click()
 
       await expect(targetRow).toContainText(/已恢复 \d+ 键/, { timeout: 25_000 })
+      await expect(targetRow).toContainText(/保护快照 #\d+/, { timeout: 10_000 })
 
       // 6. 验证被删除的键已精确复原
       for (const idx of [0, 4, 9]) {
@@ -120,6 +129,19 @@ test.describe('Backups Async Pipeline & Restore E2E', () => {
     } finally {
       try {
         if (createdBackupId !== undefined) {
+          const afterListRes = await request.get(`${baseURL}/api/v1/backups?instanceId=${instanceId}`, {
+            headers: authHeaders
+          })
+          const allRecords = ((await afterListRes.json()).data ?? []) as Array<{
+            id: number
+            preRestoreBackupId?: number
+          }>
+          const targetRec = allRecords.find((r) => r.id === createdBackupId)
+          if (targetRec?.preRestoreBackupId) {
+            await request.delete(`${baseURL}/api/v1/backups/${targetRec.preRestoreBackupId}`, {
+              headers: authHeaders
+            })
+          }
           await request.delete(`${baseURL}/api/v1/backups/${createdBackupId}`, { headers: authHeaders })
         }
         for (let i = 0; i < totalKeys; i++) {
