@@ -175,7 +175,38 @@
                                 <limit>
                                     <counter>LINE</counter>
                                     <value>COVEREDRATIO</value>
-                                    <minimum>0.75</minimum>
+                                    <minimum>0.82</minimum>
+                                </limit>
+                                <limit>
+                                    <counter>BRANCH</counter>
+                                    <value>COVEREDRATIO</value>
+                                    <minimum>0.70</minimum>
+                                </limit>
+                            </limits>
+                        </rule>
+                        <rule>
+                            <element>PACKAGE</element>
+                            <includes>
+                                <include>io.tieringkv.webconsole.web</include>
+                            </includes>
+                            <limits>
+                                <limit>
+                                    <counter>LINE</counter>
+                                    <value>COVEREDRATIO</value>
+                                    <minimum>0.80</minimum>
+                                </limit>
+                            </limits>
+                        </rule>
+                        <rule>
+                            <element>PACKAGE</element>
+                            <includes>
+                                <include>io.tieringkv.webconsole.service</include>
+                            </includes>
+                            <limits>
+                                <limit>
+                                    <counter>BRANCH</counter>
+                                    <value>COVEREDRATIO</value>
+                                    <minimum>0.72</minimum>
                                 </limit>
                             </limits>
                         </rule>

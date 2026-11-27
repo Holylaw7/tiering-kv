@@ -38,7 +38,7 @@
         <spotbugs.version>4.8.6.6</spotbugs.version>
         <spotbugs.effort>Default</spotbugs.effort>
         <spotbugs.threshold>High</spotbugs.threshold>
-        <spotbugs.failOnError>false</spotbugs.failOnError>
+        <spotbugs.failOnError>true</spotbugs.failOnError>
         <!-- 6.13.4：okhttp 4.x 原生配套，兼容 dependencyManagement 漏洞覆盖 -->
         <fabric8.version>6.13.4</fabric8.version>
         <jackson.version>2.18.11</jackson.version>
@@ -296,6 +296,23 @@
                              统一落到系统临时目录（ASCII） -->
                         <destFile>${java.io.tmpdir}/tiering-kv-jacoco.exec</destFile>
                         <dataFile>${java.io.tmpdir}/tiering-kv-jacoco.exec</dataFile>
+                        <rules>
+                            <rule>
+                                <element>BUNDLE</element>
+                                <limits>
+                                    <limit>
+                                        <counter>LINE</counter>
+                                        <value>COVEREDRATIO</value>
+                                        <minimum>0.80</minimum>
+                                    </limit>
+                                    <limit>
+                                        <counter>BRANCH</counter>
+                                        <value>COVEREDRATIO</value>
+                                        <minimum>0.70</minimum>
+                                    </limit>
+                                </limits>
+                            </rule>
+                        </rules>
                     </configuration>
                     <executions>
                         <execution>
@@ -309,6 +326,13 @@
                             <phase>test</phase>
                             <goals>
                                 <goal>report</goal>
+                            </goals>
+                        </execution>
+                        <execution>
+                            <id>jacoco-check</id>
+                            <phase>verify</phase>
+                            <goals>
+                                <goal>check</goal>
                             </goals>
                         </execution>
                     </executions>
@@ -366,4 +390,30 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- CI 分片测试后合并 3 份 JaCoCo exec 再执行内核 5 模块覆盖率硬门禁（Wave 2B T3） -->
+        <profile>
+            <id>merge-jacoco</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.jacoco</groupId>
+                        <artifactId>jacoco-maven-plugin</artifactId>
+                        <configuration>
+                            <destFile>${java.io.tmpdir}/tiering-kv-jacoco.exec</destFile>
+                            <fileSets>
+                                <fileSet>
+                                    <directory>${maven.multiModuleProjectDirectory}/target/jacoco-shards</directory>
+                                    <includes>
+                                        <include>**/*.exec</include>
+                                    </includes>
+                                </fileSet>
+                            </fileSets>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
