@@ -39,7 +39,7 @@ groups:
           description: "实例 {{ $labels.instance_name }} 命令 P99 延迟超过 50ms 持续 5 分钟。"
 
       - alert: TieringKVRespPoolBorrowTimeout
-        expr: increase(tieringkv_console_pool_borrow_timeouts_total[5m]) > 0
+        expr: increase(tieringkv_console_pool_borrow_timeouts[5m]) > 0
         for: 1m
         labels:
           severity: warning
