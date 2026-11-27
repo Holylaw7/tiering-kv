@@ -116,9 +116,9 @@ const ElSelectStub = defineComponent({
 
 const ElDialogStub = defineComponent({
   name: 'ElDialog',
-  props: { modelValue: Boolean, title: { type: String, default: '' } },
+  props: { modelValue: Boolean, title: { type: String, default: '' }, appendToBody: Boolean },
   emits: ['update:modelValue'],
-  template: `<div v-if="modelValue" class="el-dialog-stub" :data-title="title"><slot /><div class="dialog-footer"><slot name="footer" /></div></div>`
+  template: `<div v-if="modelValue" class="el-dialog-stub" :data-title="title" :data-append-to-body="String(appendToBody)"><slot /><div class="dialog-footer"><slot name="footer" /></div></div>`
 })
 
 const ChartPanelStub = defineComponent({
@@ -194,6 +194,7 @@ describe('MultiModel tabs', () => {
     // Add vector dialog validation + submit
     await wrapper.findAll('button.el-btn-stub').find((b) => b.text().includes('写入向量'))!.trigger('click')
     expect(wrapper.find('.el-dialog-stub').exists()).toBe(true)
+    expect(wrapper.find('.el-dialog-stub').attributes('data-append-to-body')).toBe('true')
     const dialogSubmit = wrapper.find('.dialog-footer').findAll('button.el-btn-stub').find((b) => b.text().trim() === '写入')!
     await dialogSubmit.trigger('click')
     expect(warningSpy).toHaveBeenCalledWith('请填写向量 ID')
@@ -345,6 +346,7 @@ describe('MultiModel tabs', () => {
     // Create new JSON doc dialog
     await wrapper.findAll('button.el-btn-stub').find((b) => b.text().includes('新建'))!.trigger('click')
     expect(wrapper.find('.el-dialog-stub').exists()).toBe(true)
+    expect(wrapper.find('.el-dialog-stub').attributes('data-append-to-body')).toBe('true')
     const saveCreateBtn = wrapper.find('.dialog-footer').findAll('button.el-btn-stub').find((b) => b.text().trim() === '保存')!
     await saveCreateBtn.trigger('click')
     expect(warningSpy).toHaveBeenCalledWith('请填写键名与 JSON 内容')

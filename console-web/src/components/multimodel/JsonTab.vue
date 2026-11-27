@@ -249,7 +249,7 @@ async function deleteJsonPath() {
       </div>
     </div>
 
-    <el-dialog v-model="jsonDialogVisible" title="新建 JSON 文档（JSON.SET）" width="520px">
+    <el-dialog v-model="jsonDialogVisible" title="新建 JSON 文档（JSON.SET）" width="520px" append-to-body>
       <el-form label-width="84px" @submit.prevent>
         <el-form-item label="键名">
           <el-input v-model="jsonCreateForm.key" placeholder="例如 doc:profile:1" />

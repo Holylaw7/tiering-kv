@@ -257,7 +257,7 @@ async function checkpointCollection() {
       </div>
     </div>
 
-    <el-dialog v-model="addVectorVisible" title="写入向量（VECTOR.ADD）" width="480px">
+    <el-dialog v-model="addVectorVisible" title="写入向量（VECTOR.ADD）" width="480px" append-to-body>
       <el-form label-width="92px" @submit.prevent>
         <el-form-item label="集合名称">
           <el-input v-model="addVectorForm.collection" placeholder="default" />
