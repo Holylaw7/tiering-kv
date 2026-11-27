@@ -2,6 +2,8 @@ package io.tieringkv.webconsole.service;
 
 import io.tieringkv.webconsole.common.BusinessException;
 import io.tieringkv.webconsole.domain.OpLog;
+import io.tieringkv.webconsole.observability.ConsoleMetricsBinder;
+import io.tieringkv.webconsole.observability.RequestCorrelationFilter;
 import io.tieringkv.webconsole.repository.OpLogRepository;
 import io.tieringkv.webconsole.security.SecurityUtils;
 import io.tieringkv.webconsole.security.UserPrincipal;
@@ -9,6 +11,7 @@ import jakarta.persistence.criteria.Predicate;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -36,9 +39,17 @@ public class AuditService {
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final OpLogRepository repository;
+    private final ConsoleMetricsBinder metricsBinder;
 
     public AuditService(OpLogRepository repository) {
+        this(repository, null);
+    }
+
+    @Autowired
+    public AuditService(OpLogRepository repository,
+                        @Autowired(required = false) ConsoleMetricsBinder metricsBinder) {
         this.repository = repository;
+        this.metricsBinder = metricsBinder;
     }
 
     /**
@@ -63,6 +74,10 @@ public class AuditService {
         entry.setDetail(detail);
         entry.setIp(clientIp());
         entry.setSuccess(success);
+        entry.setRequestId(RequestCorrelationFilter.currentRequestId());
+        if (metricsBinder != null) {
+            metricsBinder.recordAudit(action, success);
+        }
         try {
             repository.save(entry);
         } catch (RuntimeException ex) {
@@ -81,19 +96,32 @@ public class AuditService {
     /** 多条件查询（TD-090）：动作/用户模糊、结果、时间区间。 */
     public Page<OpLog> search(String action, String username, Boolean success,
                               LocalDateTime from, LocalDateTime to, int page, int size) {
-        PageRequest request = PageRequest.of(Math.max(0, page - 1), Math.min(200, Math.max(1, size)));
-        return repository.findAll(specification(action, username, success, from, to), request);
+        return search(action, username, success, null, from, to, page, size);
+    }
+
+    /** 多条件查询（v6.4.0 D2 扩展：支持按 requestId 精确/模糊追踪）。 */
+    public Page<OpLog> search(String action, String username, Boolean success, String requestId,
+                              LocalDateTime from, LocalDateTime to, int page, int size) {
+        PageRequest request = PageRequest.of(Math.max(0, page - 1), Math.min(200, Math.max(1, size)),
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+        return repository.findAll(specification(action, username, success, requestId, from, to), request);
     }
 
     /** 导出 CSV（TD-090）：最多导出最近 {@value #EXPORT_LIMIT} 条。 */
     public String exportCsv(String action, String username, Boolean success,
                             LocalDateTime from, LocalDateTime to) {
+        return exportCsv(action, username, success, null, from, to);
+    }
+
+    /** 导出 CSV（v6.4.0 D2：附带请求链路 ID 列）。 */
+    public String exportCsv(String action, String username, Boolean success, String requestId,
+                            LocalDateTime from, LocalDateTime to) {
         PageRequest first = PageRequest.of(0, EXPORT_LIMIT, Sort.by(Sort.Direction.DESC, "createdAt"));
         List<OpLog> rows = repository
-                .findAll(specification(action, username, success, from, to), first)
+                .findAll(specification(action, username, success, requestId, from, to), first)
                 .getContent();
         StringBuilder csv = new StringBuilder("\uFEFF");
-        csv.append("时间,用户,动作,对象,详情,IP,结果\n");
+        csv.append("时间,用户,动作,对象,详情,IP,结果,请求ID\n");
         for (OpLog row : rows) {
             csv.append(csvCell(format(row.getCreatedAt()))).append(',')
                     .append(csvCell(row.getUsername())).append(',')
@@ -101,14 +129,15 @@ public class AuditService {
                     .append(csvCell(row.getTarget())).append(',')
                     .append(csvCell(row.getDetail())).append(',')
                     .append(csvCell(row.getIp())).append(',')
-                    .append(row.isSuccess() ? "成功" : "失败").append('\n');
+                    .append(row.isSuccess() ? "成功" : "失败").append(',')
+                    .append(csvCell(row.getRequestId())).append('\n');
         }
         return csv.toString();
     }
 
     private Specification<OpLog> specification(String action, String username,
-                                               Boolean success, LocalDateTime from,
-                                               LocalDateTime to) {
+                                               Boolean success, String requestId,
+                                               LocalDateTime from, LocalDateTime to) {
         return (root, query, builder) -> {
             List<Predicate> predicates = new ArrayList<>();
             if (action != null && !action.isBlank()) {
@@ -121,6 +150,10 @@ public class AuditService {
             }
             if (success != null) {
                 predicates.add(builder.equal(root.get("success"), success));
+            }
+            if (requestId != null && !requestId.isBlank()) {
+                predicates.add(builder.like(builder.lower(root.get("requestId")),
+                        "%" + requestId.trim().toLowerCase() + "%"));
             }
             if (from != null) {
                 predicates.add(builder.greaterThanOrEqualTo(root.get("createdAt"), from));

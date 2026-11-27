@@ -1,6 +1,7 @@
 package io.tieringkv.webconsole.web;
 
 import io.tieringkv.webconsole.common.ApiResponse;
+import io.tieringkv.webconsole.service.KeyspaceAnalyzerService;
 import io.tieringkv.webconsole.service.KeyspaceService;
 import io.tieringkv.webconsole.web.dto.HashFieldRequest;
 import io.tieringkv.webconsole.web.dto.KeyDetail;
@@ -11,6 +12,7 @@ import jakarta.validation.Valid;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,9 +25,20 @@ import org.springframework.web.bind.annotation.RestController;
 public class KeyspaceController {
 
     private final KeyspaceService keyspaceService;
+    private final KeyspaceAnalyzerService analyzerService;
 
-    public KeyspaceController(KeyspaceService keyspaceService) {
+    public KeyspaceController(KeyspaceService keyspaceService,
+                              KeyspaceAnalyzerService analyzerService) {
         this.keyspaceService = keyspaceService;
+        this.analyzerService = analyzerService;
+    }
+
+    /** 只读键空间诊断分析（大键 / 前缀分布 / TTL 健康度，v6.4.0 D2）。 */
+    @PostMapping("/analyze")
+    public ApiResponse<KeyspaceAnalyzerService.KeyspaceAnalysisView> analyze(
+            @RequestParam Long instanceId,
+            @RequestBody(required = false) KeyspaceAnalyzerService.AnalyzeRequest request) {
+        return ApiResponse.ok(analyzerService.analyze(instanceId, request));
     }
 
     @GetMapping("/scan")

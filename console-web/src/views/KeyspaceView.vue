@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Search } from '@element-plus/icons-vue'
+import { DataAnalysis, Search } from '@element-plus/icons-vue'
 import { keyspaceApi } from '@/api'
-import type { KeyDetail, KeyEntry } from '@/api/types'
+import type { KeyDetail, KeyEntry, KeyspaceAnalysisView } from '@/api/types'
 import { useInstanceStore } from '@/stores/instance'
 import { useAuthStore } from '@/stores/auth'
 import { formatTtl } from '@/utils/format'
+import { buildPrefixChartOption, buildTtlChartOption, formatBigKeySize } from '@/utils/keyspaceAnalyzer'
+import ChartPanel from '@/components/ChartPanel.vue'
 import EmptyState from '@/components/EmptyState.vue'
+import StatCard from '@/components/StatCard.vue'
 import StatusBadge, { type BadgeTone } from '@/components/StatusBadge.vue'
 import PageToolbar from '@/components/PageToolbar.vue'
 
@@ -42,6 +45,38 @@ const ttlInput = ref<number>(-1)
 const hashRows = ref<Array<{ field: string; value: string }>>([])
 const newField = ref({ field: '', value: '' })
 const hashSaving = ref(false)
+
+// 键空间诊断（v6.4.0 D2）
+const activeTab = ref<'browse' | 'analyze'>('browse')
+const analyzing = ref(false)
+const analyzeMaxKeys = ref(2000)
+const analyzeDelimiter = ref(':')
+const analysis = ref<KeyspaceAnalysisView | null>(null)
+
+const prefixChartOption = computed(() =>
+  buildPrefixChartOption(analysis.value?.topPrefixes ?? [])
+)
+const ttlChartOption = computed(() =>
+  buildTtlChartOption(
+    analysis.value?.ttlDistribution ?? { noExpire: 0, under1h: 0, between1hAnd24h: 0, over24h: 0 }
+  )
+)
+
+async function runAnalysis() {
+  const id = store.selectedId
+  if (!id) return
+  analyzing.value = true
+  try {
+    analysis.value = await keyspaceApi.analyze(id, {
+      pattern: pattern.value || '*',
+      maxKeys: analyzeMaxKeys.value,
+      delimiter: analyzeDelimiter.value || ':',
+      topN: 20
+    })
+  } finally {
+    analyzing.value = false
+  }
+}
 
 async function scan(reset = true) {
   const id = store.selectedId
@@ -148,7 +183,13 @@ function renderValue(): string {
   return JSON.stringify(value, null, 2)
 }
 
-watch(() => store.selectedId, () => scan(true))
+watch(
+  () => store.selectedId,
+  () => {
+    analysis.value = null
+    scan(true)
+  }
+)
 onMounted(() => scan(true))
 </script>
 
@@ -157,56 +198,171 @@ onMounted(() => scan(true))
     <div class="page-header">
       <div>
         <h2 class="page-title">键空间浏览</h2>
-        <p class="page-subtitle">基于 SCAN 游标遍历，不阻塞内核事件循环；键按类型自动识别</p>
+        <p class="page-subtitle">基于 SCAN 游标遍历与批量 Pipeline 采样，不阻塞内核事件循环；支持大键、命名空间前缀与 TTL 健康度诊断</p>
       </div>
     </div>
 
-    <div class="panel" v-loading="loading">
-      <PageToolbar meta="SCAN 游标遍历，单次最多 200 条">
-        <el-input v-model="pattern" class="f-pattern mono" placeholder="匹配模式，如 user:*" clearable @keyup.enter="scan(true)">
-          <template #prefix><el-icon><Search /></el-icon></template>
-        </el-input>
-        <el-select v-model="count" class="f-count">
-          <el-option :value="20" label="20 条/页" />
-          <el-option :value="50" label="50 条/页" />
-          <el-option :value="100" label="100 条/页" />
-        </el-select>
-        <el-button type="primary" size="small" @click="scan(true)">扫描</el-button>
-      </PageToolbar>
-      <el-table :data="rows" size="small">
-        <template #empty>
-          <EmptyState title="没有扫描到键" description="调整匹配模式后重新扫描。" />
-        </template>
-        <el-table-column prop="key" label="键" min-width="260" show-overflow-tooltip>
-          <template #default="{ row }">
-            <span class="mono">{{ row.key }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="类型" width="110">
-          <template #default="{ row }">
-            <StatusBadge :label="row.type.toUpperCase()" :tone="typeTone(row.type)" mono />
-          </template>
-        </el-table-column>
-        <el-table-column label="过期" width="120">
-          <template #default="{ row }">
-            <span :class="{ mono: true, muted: row.ttl === -1 }">{{ formatTtl(row.ttl) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="170">
-          <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="openDetail(row as KeyEntry)">查看</el-button>
-            <el-button v-if="auth.canOperate" link type="danger" size="small" @click="remove(row as KeyEntry)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <div class="footer">
-        <span class="muted">已加载 {{ rows.length }} 个键{{ finished ? '（已扫描完成）' : '' }}</span>
-        <div>
-          <el-button size="small" :disabled="finished" @click="scan(false)">继续扫描</el-button>
-          <el-button size="small" @click="scan(true)">重新扫描</el-button>
+    <el-tabs v-model="activeTab" class="ks-tabs">
+      <el-tab-pane label="键浏览（SCAN）" name="browse">
+        <div class="panel" v-loading="loading">
+          <PageToolbar meta="SCAN 游标遍历，单次最多 200 条">
+            <el-input v-model="pattern" class="f-pattern mono" placeholder="匹配模式，如 user:*" clearable @keyup.enter="scan(true)">
+              <template #prefix><el-icon><Search /></el-icon></template>
+            </el-input>
+            <el-select v-model="count" class="f-count">
+              <el-option :value="20" label="20 条/页" />
+              <el-option :value="50" label="50 条/页" />
+              <el-option :value="100" label="100 条/页" />
+            </el-select>
+            <el-button type="primary" size="small" @click="scan(true)">扫描</el-button>
+          </PageToolbar>
+          <el-table :data="rows" size="small">
+            <template #empty>
+              <EmptyState title="没有扫描到键" description="调整匹配模式后重新扫描。" />
+            </template>
+            <el-table-column prop="key" label="键" min-width="260" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span class="mono">{{ row.key }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="类型" width="110">
+              <template #default="{ row }">
+                <StatusBadge :label="row.type.toUpperCase()" :tone="typeTone(row.type)" mono />
+              </template>
+            </el-table-column>
+            <el-table-column label="过期" width="120">
+              <template #default="{ row }">
+                <span :class="{ mono: true, muted: row.ttl === -1 }">{{ formatTtl(row.ttl) }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="170">
+              <template #default="{ row }">
+                <el-button link type="primary" size="small" @click="openDetail(row as KeyEntry)">查看</el-button>
+                <el-button v-if="auth.canOperate" link type="danger" size="small" @click="remove(row as KeyEntry)">删除</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <div class="footer">
+            <span class="muted">已加载 {{ rows.length }} 个键{{ finished ? '（已扫描完成）' : '' }}</span>
+            <div>
+              <el-button size="small" :disabled="finished" @click="scan(false)">继续扫描</el-button>
+              <el-button size="small" @click="scan(true)">重新扫描</el-button>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      </el-tab-pane>
+
+      <el-tab-pane label="大键 / 前缀 / TTL 诊断" name="analyze">
+        <div class="panel" v-loading="analyzing">
+          <PageToolbar meta="只读有界采样（100 键批量 Pipeline），对在线业务零阻塞">
+            <el-input v-model="pattern" class="f-pattern mono" placeholder="匹配模式，如 *" clearable />
+            <el-input v-model="analyzeDelimiter" style="width: 96px" class="mono" placeholder="分隔符 :" />
+            <el-select v-model="analyzeMaxKeys" style="width: 130px">
+              <el-option :value="500" label="采样 500 键" />
+              <el-option :value="2000" label="采样 2,000 键" />
+              <el-option :value="5000" label="采样 5,000 键" />
+              <el-option :value="10000" label="采样 10,000 键" />
+            </el-select>
+            <el-button type="primary" size="small" :loading="analyzing" @click="runAnalysis">
+              <el-icon><DataAnalysis /></el-icon> 运行诊断
+            </el-button>
+          </PageToolbar>
+
+          <EmptyState
+            v-if="!analysis"
+            title="尚未运行键空间诊断"
+            description="点击「运行诊断」分析当前实例的 Top-20 大键（BigKeys）、业务前缀占比与 TTL 健康度分布。"
+          />
+
+          <template v-else>
+            <div class="kpi-grid" style="margin-top: 12px">
+              <StatCard
+                label="本次采样键数"
+                :value="analysis.scannedKeys"
+                :hint="`DBSIZE 总计 ${analysis.totalDbSize}${analysis.truncated ? '（已达采样上限）' : ''}`"
+              />
+              <StatCard
+                label="永久未设 TTL"
+                :value="analysis.ttlDistribution.noExpire"
+                :tone="analysis.scannedKeys > 0 && analysis.ttlDistribution.noExpire / analysis.scannedKeys >= 0.7 ? 'warn' : 'default'"
+                :hint="analysis.scannedKeys > 0 ? `占比 ${((analysis.ttlDistribution.noExpire * 100) / analysis.scannedKeys).toFixed(1)}%` : '—'"
+              />
+              <StatCard
+                label="命名空间前缀"
+                :value="analysis.topPrefixes.length"
+                :hint="analysis.topPrefixes[0] ? `首位 ${analysis.topPrefixes[0].prefix} (${analysis.topPrefixes[0].sharePercent}%)` : '—'"
+              />
+              <StatCard
+                label="诊断耗时"
+                :value="`${analysis.durationMs} ms`"
+                :hint="`分隔符 '${analysis.delimiter}'`"
+              />
+            </div>
+
+            <div class="recommend-box" v-if="analysis.recommendations.length > 0">
+              <div class="section-label">诊断建议</div>
+              <ul class="recommend-list">
+                <li v-for="(tip, idx) in analysis.recommendations" :key="idx">{{ tip }}</li>
+              </ul>
+            </div>
+
+            <div class="type-strip" v-if="Object.keys(analysis.typeDistribution).length > 0">
+              <span class="section-label">数据类型分布：</span>
+              <StatusBadge
+                v-for="(cnt, typeName) in analysis.typeDistribution"
+                :key="typeName"
+                :label="`${String(typeName).toUpperCase()}: ${cnt}`"
+                :tone="typeTone(String(typeName))"
+                mono
+              />
+            </div>
+
+            <div class="chart-grid">
+              <ChartPanel title="Top 命名空间前缀分布" hint="按采样键数降序" :option="prefixChartOption" height="240px" />
+              <ChartPanel title="TTL 过期健康度分桶" hint="识别未设过期时间的永久键" :option="ttlChartOption" height="240px" />
+            </div>
+
+            <div class="bigkey-section">
+              <div class="section-label">Top-{{ analysis.bigKeys.length }} 大键（BigKeys）榜单</div>
+              <el-table :data="analysis.bigKeys" size="small">
+                <el-table-column prop="key" label="键名" min-width="260" show-overflow-tooltip>
+                  <template #default="{ row }">
+                    <span class="mono">{{ row.key }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="类型" width="108">
+                  <template #default="{ row }">
+                    <StatusBadge :label="row.type.toUpperCase()" :tone="typeTone(row.type)" mono />
+                  </template>
+                </el-table-column>
+                <el-table-column label="大小 / 元素基数" width="150" align="right">
+                  <template #default="{ row }">
+                    <span class="num mono">{{ formatBigKeySize(row.sizeUnits, row.unitLabel) }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="TTL" width="120">
+                  <template #default="{ row }">
+                    <span :class="{ mono: true, muted: row.ttl === -1 }">{{ formatTtl(row.ttl) }}</span>
+                  </template>
+                </el-table-column>
+                <el-table-column label="操作" width="100">
+                  <template #default="{ row }">
+                    <el-button
+                      link
+                      type="primary"
+                      size="small"
+                      @click="openDetail({ key: row.key, type: row.type, ttl: row.ttl })"
+                    >
+                      查看详情
+                    </el-button>
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+          </template>
+        </div>
+      </el-tab-pane>
+    </el-tabs>
 
     <el-drawer v-model="drawerVisible" size="560px" :title="detail?.key ?? '键详情'">
       <div v-loading="detailLoading" class="detail">
@@ -394,5 +550,55 @@ onMounted(() => scan(true))
   word-break: break-all;
   font-size: 12px;
   margin: 0;
+}
+
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.recommend-box {
+  margin-top: 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}
+
+.recommend-list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: var(--text-sm);
+  color: var(--text-2);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.type-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.bigkey-section {
+  margin-top: 16px;
+}
+
+.section-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--text-3);
+  margin-bottom: 6px;
+}
+
+@media (max-width: 960px) {
+  .chart-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

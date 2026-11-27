@@ -3,6 +3,7 @@ package io.tieringkv.webconsole.service;
 import io.tieringkv.webconsole.common.BusinessException;
 import io.tieringkv.webconsole.domain.DbInstance;
 import io.tieringkv.webconsole.domain.InstanceStatus;
+import io.tieringkv.webconsole.observability.ConsoleMetricsBinder;
 import io.tieringkv.webconsole.repository.DbInstanceRepository;
 import io.tieringkv.webconsole.resp.RespClient;
 import io.tieringkv.webconsole.security.InstanceCredentialCipher;
@@ -25,6 +26,7 @@ public class InstanceService {
     private final RespGateway gateway;
     private final AuditService auditService;
     private final InstanceCredentialCipher cipher;
+    private ConsoleMetricsBinder metricsBinder;
 
     public InstanceService(DbInstanceRepository repository, RespGateway gateway,
                            AuditService auditService) {
@@ -38,6 +40,11 @@ public class InstanceService {
         this.gateway = gateway;
         this.auditService = auditService;
         this.cipher = cipher;
+    }
+
+    @Autowired(required = false)
+    void setMetricsBinder(ConsoleMetricsBinder metricsBinder) {
+        this.metricsBinder = metricsBinder;
     }
 
     public List<InstanceView> list() {
@@ -143,6 +150,9 @@ public class InstanceService {
         DbInstance instance = require(id);
         repository.delete(instance);
         gateway.evict(id);
+        if (metricsBinder != null) {
+            metricsBinder.unregisterInstance(id);
+        }
         auditService.record("INSTANCE_DELETE", instance.getName(), null, true);
     }
 

@@ -4,6 +4,7 @@ import io.tieringkv.webconsole.config.ConsoleProperties;
 import io.tieringkv.webconsole.domain.DbInstance;
 import io.tieringkv.webconsole.domain.InstanceStatus;
 import io.tieringkv.webconsole.domain.MetricPoint;
+import io.tieringkv.webconsole.observability.ConsoleMetricsBinder;
 import io.tieringkv.webconsole.repository.DbInstanceRepository;
 import io.tieringkv.webconsole.repository.MetricPointRepository;
 import io.tieringkv.webconsole.support.InfoParser;
@@ -34,6 +35,7 @@ public class MonitorService {
     private final AlertService alertService;
     private final DbLeaseLockService leaseLockService;
     private final ConsoleProperties properties;
+    private ConsoleMetricsBinder metricsBinder;
     private static final long STATUS_PERSIST_INTERVAL_MS = 60_000L;
     private final Map<Long, Long> lastPersistedAt = new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -58,6 +60,11 @@ public class MonitorService {
         this.alertService = alertService;
         this.leaseLockService = leaseLockService;
         this.properties = properties;
+    }
+
+    @Autowired(required = false)
+    void setMetricsBinder(ConsoleMetricsBinder metricsBinder) {
+        this.metricsBinder = metricsBinder;
     }
 
     /** 定时采集：多副本部署通过数据库租约锁选主，确保单周期仅主副本采集落库。 */
@@ -91,6 +98,9 @@ public class MonitorService {
             infoText = gateway.info(instance);
         } catch (RuntimeException ex) {
             markStatus(instance, InstanceStatus.DOWN);
+            if (metricsBinder != null) {
+                metricsBinder.recordInstanceDown(instance);
+            }
             return null;
         }
         Map<String, Map<String, String>> sections = InfoParser.parse(infoText);
@@ -99,6 +109,12 @@ public class MonitorService {
         markStatus(instance, InstanceStatus.UP,
                 InfoParser.get(sections, "Server", "redis_version"));
         alertService.evaluate(instance.getId(), MetricMapper.metricDictionary(point), now);
+        if (metricsBinder != null) {
+            Map<String, String> flat = InfoParser.flatten(sections);
+            long coldTables = parseLong(flat.getOrDefault("cold_tables", flat.get("cold_table_count")));
+            double p99 = parseDouble(flat.get("p99_latency_ms"));
+            metricsBinder.recordInstanceUp(instance, point, coldTables, p99);
+        }
         return point;
     }
 

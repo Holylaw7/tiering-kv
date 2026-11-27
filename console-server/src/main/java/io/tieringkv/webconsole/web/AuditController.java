@@ -34,13 +34,14 @@ public class AuditController {
             @RequestParam(required = false) String action,
             @RequestParam(required = false) String username,
             @RequestParam(required = false) Boolean success,
+            @RequestParam(required = false) String requestId,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "20") int size) {
-        Page<OpLog> result = auditService.search(action, username, success, from, to, page, size);
+        Page<OpLog> result = auditService.search(action, username, success, requestId, from, to, page, size);
         return ApiResponse.ok(PageResult.of(result.getContent(),
                 result.getTotalElements(), page, size));
     }
@@ -51,11 +52,12 @@ public class AuditController {
             @RequestParam(required = false) String action,
             @RequestParam(required = false) String username,
             @RequestParam(required = false) Boolean success,
+            @RequestParam(required = false) String requestId,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
             @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to) {
-        String csv = auditService.exportCsv(action, username, success, from, to);
+        String csv = auditService.exportCsv(action, username, success, requestId, from, to);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=\"audit-logs.csv\"")

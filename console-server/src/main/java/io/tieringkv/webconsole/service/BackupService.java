@@ -8,6 +8,7 @@ import io.tieringkv.webconsole.domain.BackupStatus;
 import io.tieringkv.webconsole.domain.BackupVerifyStatus;
 import io.tieringkv.webconsole.domain.DbInstance;
 import io.tieringkv.webconsole.domain.RestoreStatus;
+import io.tieringkv.webconsole.observability.ConsoleMetricsBinder;
 import io.tieringkv.webconsole.repository.BackupRecordRepository;
 import io.tieringkv.webconsole.repository.BackupReservationRepository;
 import io.tieringkv.webconsole.resp.RespClient;
@@ -67,6 +68,7 @@ public class BackupService {
     private final AuditService auditService;
     private final BackupCapacityService capacityService;
     private final DbLeaseLockService leaseLockService;
+    private ConsoleMetricsBinder metricsBinder;
 
     public BackupService(BackupRecordRepository repository, InstanceService instanceService,
                          KeyspaceService keyspaceService, RespGateway gateway,
@@ -110,6 +112,11 @@ public class BackupService {
         this.auditService = auditService;
         this.capacityService = capacityService;
         this.leaseLockService = leaseLockService;
+    }
+
+    @Autowired(required = false)
+    void setMetricsBinder(ConsoleMetricsBinder metricsBinder) {
+        this.metricsBinder = metricsBinder;
     }
 
     /** 备份条目（JSONL 一行）。 */
@@ -317,6 +324,9 @@ public class BackupService {
         }
         record.setFinishedAt(LocalDateTime.now());
         repository.save(record);
+        if (metricsBinder != null && record.getStatus() != null) {
+            metricsBinder.recordBackup(record.getStatus().name());
+        }
     }
 
     private WriteSnapshotResult writeSnapshot(DbInstance instance, BackupRecord record, String fileName)
@@ -967,6 +977,9 @@ public class BackupService {
         record.setRestoredKeys(restored);
         record.setRestoreMessage(message);
         repository.save(record);
+        if (metricsBinder != null && status != null) {
+            metricsBinder.recordRestore(status.name());
+        }
     }
 
     private static boolean isFresh(LocalDateTime time, long minutes) {

@@ -103,6 +103,45 @@ public class RespGateway {
         }
     }
 
+    public int poolCount() {
+        return pools.size();
+    }
+
+    public int totalActiveConnections() {
+        int sum = 0;
+        for (RespClientPool pool : pools.values()) {
+            sum += pool.activeCount();
+        }
+        return sum;
+    }
+
+    public long totalIdleConnections() {
+        long sum = 0L;
+        for (RespClientPool pool : pools.values()) {
+            sum += pool.idleCount();
+        }
+        return sum;
+    }
+
+    public int totalMaxConnections() {
+        if (pools.isEmpty()) {
+            return properties.getPool().getMaxTotal();
+        }
+        int sum = 0;
+        for (RespClientPool pool : pools.values()) {
+            sum += pool.maxTotal();
+        }
+        return sum;
+    }
+
+    public long totalBorrowTimeouts() {
+        long sum = 0L;
+        for (RespClientPool pool : pools.values()) {
+            sum += pool.borrowTimeoutCount();
+        }
+        return sum;
+    }
+
     private RespClientPool pool(DbInstance instance) {
         ConsoleProperties.Pool cfg = properties.getPool();
         return pools.computeIfAbsent(instance.getId(), key -> new RespClientPool(

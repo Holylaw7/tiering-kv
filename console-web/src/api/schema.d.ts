@@ -612,6 +612,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/keys/analyze": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["analyze"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/keys/detail": {
         parameters: {
             query?: never;
@@ -1161,6 +1177,14 @@ export interface components {
             /** Format: double */
             threshold: number;
         };
+        AnalyzeRequest: {
+            delimiter?: string;
+            /** Format: int32 */
+            maxKeys?: number;
+            pattern?: string;
+            /** Format: int32 */
+            topN?: number;
+        };
         ApiResponseAlertChannelView: {
             /** Format: int32 */
             code?: number;
@@ -1273,6 +1297,12 @@ export interface components {
             /** Format: int32 */
             code?: number;
             data?: components["schemas"]["KeyScanPage"];
+            message?: string;
+        };
+        ApiResponseKeyspaceAnalysisView: {
+            /** Format: int32 */
+            code?: number;
+            data?: components["schemas"]["KeyspaceAnalysisView"];
             message?: string;
         };
         ApiResponseListAlertChannelView: {
@@ -1552,6 +1582,15 @@ export interface components {
             /** Format: date-time */
             verifiedAt?: string;
         };
+        BigKeyEntry: {
+            key?: string;
+            /** Format: int64 */
+            sizeUnits?: number;
+            /** Format: int64 */
+            ttl?: number;
+            type?: string;
+            unitLabel?: string;
+        };
         CapacityView: {
             /** Format: int32 */
             activeReservations?: number;
@@ -1779,6 +1818,26 @@ export interface components {
             /** Format: int64 */
             keys?: number;
         };
+        KeyspaceAnalysisView: {
+            bigKeys?: components["schemas"]["BigKeyEntry"][];
+            delimiter?: string;
+            /** Format: int64 */
+            durationMs?: number;
+            /** Format: int64 */
+            instanceId?: number;
+            pattern?: string;
+            recommendations?: string[];
+            /** Format: int64 */
+            scannedKeys?: number;
+            topPrefixes?: components["schemas"]["PrefixStat"][];
+            /** Format: int64 */
+            totalDbSize?: number;
+            truncated?: boolean;
+            ttlDistribution?: components["schemas"]["TtlDistribution"];
+            typeDistribution?: {
+                [key: string]: number;
+            };
+        };
         LiveMetrics: {
             /** Format: int32 */
             activeRequests?: number;
@@ -1960,6 +2019,15 @@ export interface components {
             /** Format: int64 */
             lastSaveTime?: number;
             lastStatus?: string;
+        };
+        PrefixStat: {
+            /** Format: int64 */
+            keyCount?: number;
+            prefix?: string;
+            /** Format: double */
+            sharePercent?: number;
+            /** Format: int64 */
+            totalSizeUnits?: number;
         };
         PurgeReport: {
             /** Format: int32 */
@@ -2220,6 +2288,16 @@ export interface components {
             totalKeys?: number;
             /** Format: int64 */
             usedMemory?: number;
+        };
+        TtlDistribution: {
+            /** Format: int64 */
+            between1hAnd24h?: number;
+            /** Format: int64 */
+            noExpire?: number;
+            /** Format: int64 */
+            over24h?: number;
+            /** Format: int64 */
+            under1h?: number;
         };
         UserCreateRequest: {
             /** Format: email */
@@ -2581,6 +2659,7 @@ export interface operations {
                 action?: string;
                 username?: string;
                 success?: boolean;
+                requestId?: string;
                 from?: string;
                 to?: string;
                 page?: number;
@@ -2609,6 +2688,7 @@ export interface operations {
                 action?: string;
                 username?: string;
                 success?: boolean;
+                requestId?: string;
                 from?: string;
                 to?: string;
             };
@@ -3415,6 +3495,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    analyze: {
+        parameters: {
+            query: {
+                instanceId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AnalyzeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseKeyspaceAnalysisView"];
                 };
             };
         };
