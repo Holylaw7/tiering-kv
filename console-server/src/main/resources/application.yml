@@ -8,6 +8,12 @@ server:
 spring:
   application:
     name: tiering-kv-console
+  task:
+    scheduling:
+      pool:
+        # 隔离 5 个 @Scheduled 定时任务，防止慢 S3 清理/大表 DELETE/对账 DB 超时阻塞监控选主续租
+        size: ${CONSOLE_SCHEDULING_POOL_SIZE:4}
+      thread-name-prefix: console-sched-
   datasource:
     url: ${CONSOLE_DB_URL:jdbc:mysql://127.0.0.1:3307/tiering_console?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false&rewriteBatchedStatements=true}
     username: ${CONSOLE_DB_USER:root}

@@ -87,7 +87,7 @@ public class MonitorService {
         this.collectExecutor = collectExecutor;
     }
 
-    /** 定时采集：多副本通过数据库租约锁选主，多实例并行采集并严控时间预算（≤ 70% 租约 TTL）防脑裂（Wave 2A H3）。 */
+    /** 定时采集：多副本通过数据库租约锁选主，多实例/单实例统一受预算上界与在途去重保护，并在慢轮次结束时原地续租防丢主（Wave 2A H3）。 */
     @Scheduled(fixedDelayString = "${console.metrics.interval-ms:5000}",
             initialDelayString = "${console.metrics.initial-delay-ms:3000}")
     public void scheduledCollect() {
@@ -99,74 +99,98 @@ public class MonitorService {
         if (leaseLockService != null && !leaseLockService.tryAcquire(MONITOR_LEASE_KEY, leaseTtl)) {
             return;
         }
-        List<DbInstance> enabled = instanceService.enabled();
-        if (enabled.isEmpty()) {
-            return;
-        }
-        if (enabled.size() == 1 || collectExecutor == null) {
+        long budgetMs = computeCollectBudgetMs(intervalMs, leaseTtl.toMillis());
+        long startedNs = System.nanoTime();
+        try {
+            List<DbInstance> enabled = instanceService.enabled();
+            if (enabled.isEmpty()) {
+                return;
+            }
+            if (collectExecutor == null) {
+                for (DbInstance instance : enabled) {
+                    collectSafely(instance);
+                }
+                return;
+            }
+            record SubmittedTask(Long instanceId, AtomicBoolean started, CompletableFuture<Void> future) {
+            }
+            List<SubmittedTask> submitted = new ArrayList<>(enabled.size());
             for (DbInstance instance : enabled) {
-                collectSafely(instance);
-            }
-            return;
-        }
-        long budgetMs = Math.max(2000L, (long) (leaseTtl.toMillis() * 0.7d));
-        record SubmittedTask(Long instanceId, AtomicBoolean started, CompletableFuture<Void> future) {
-        }
-        List<SubmittedTask> submitted = new ArrayList<>(enabled.size());
-        for (DbInstance instance : enabled) {
-            Long id = instance.getId();
-            if (id != null && !inFlightInstances.add(id)) {
-                log.debug("实例上一轮采集仍在执行，本轮跳过防止线程堆积 instance={}", instance.getName());
-                continue;
-            }
-            AtomicBoolean started = new AtomicBoolean(false);
-            try {
-                CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-                    if (!started.compareAndSet(false, true)) {
-                        return;
+                Long id = instance.getId();
+                if (id != null && !inFlightInstances.add(id)) {
+                    log.debug("实例上一轮采集仍在执行，本轮跳过防止线程堆积 instance={}", instance.getName());
+                    continue;
+                }
+                AtomicBoolean started = new AtomicBoolean(false);
+                try {
+                    CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                        if (!started.compareAndSet(false, true)) {
+                            return;
+                        }
+                        try {
+                            collectSafely(instance);
+                        } finally {
+                            if (id != null) {
+                                inFlightInstances.remove(id);
+                            }
+                        }
+                    }, collectExecutor);
+                    submitted.add(new SubmittedTask(id, started, future));
+                } catch (RejectedExecutionException ex) {
+                    if (id != null) {
+                        inFlightInstances.remove(id);
                     }
-                    try {
-                        collectSafely(instance);
-                    } finally {
-                        if (id != null) {
-                            inFlightInstances.remove(id);
+                    log.warn("监控采集线程池队列已满，跳过本轮实例采样 instance={}", instance.getName());
+                }
+            }
+            if (submitted.isEmpty()) {
+                return;
+            }
+            CompletableFuture<?> all = CompletableFuture.allOf(
+                    submitted.stream().map(SubmittedTask::future).toArray(CompletableFuture[]::new));
+            try {
+                all.get(budgetMs, TimeUnit.MILLISECONDS);
+            } catch (TimeoutException ex) {
+                // 取消尚未开始的任务并释放其占位；已在阻塞读取 Socket 的线程保留占位直至 connectTimeoutMs+readTimeoutMs 有界退出
+                int unfinished = 0;
+                for (SubmittedTask task : submitted) {
+                    if (!task.future().isDone()) {
+                        unfinished++;
+                        task.future().cancel(true);
+                        if (task.instanceId() != null && task.started().compareAndSet(false, true)) {
+                            inFlightInstances.remove(task.instanceId());
                         }
                     }
-                }, collectExecutor);
-                submitted.add(new SubmittedTask(id, started, future));
-            } catch (RejectedExecutionException ex) {
-                if (id != null) {
-                    inFlightInstances.remove(id);
                 }
-                log.warn("监控采集线程池队列已满，跳过本轮实例采样 instance={}", instance.getName());
+                log.warn("本轮监控并发采集达到租约预算 {} ms（总实例={}，未完成={}），提前结束等待以保障租约按期续期",
+                        budgetMs, enabled.size(), unfinished);
+            } catch (InterruptedException ex) {
+                Thread.currentThread().interrupt();
+            } catch (ExecutionException ex) {
+                log.debug("并发采集存在单实例异常：{}", ex.getMessage());
             }
-        }
-        if (submitted.isEmpty()) {
-            return;
-        }
-        CompletableFuture<?> all = CompletableFuture.allOf(
-                submitted.stream().map(SubmittedTask::future).toArray(CompletableFuture[]::new));
-        try {
-            all.get(budgetMs, TimeUnit.MILLISECONDS);
-        } catch (TimeoutException ex) {
-            // 取消尚未开始的任务并释放其占位；已在阻塞读取 Socket 的线程保留占位直至 connectTimeoutMs+readTimeoutMs 有界退出
-            int unfinished = 0;
-            for (SubmittedTask task : submitted) {
-                if (!task.future().isDone()) {
-                    unfinished++;
-                    task.future().cancel(true);
-                    if (task.instanceId() != null && task.started().compareAndSet(false, true)) {
-                        inFlightInstances.remove(task.instanceId());
-                    }
+        } finally {
+            long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNs);
+            // 若本轮采集耗时达到预算一半以上（如触发慢实例预算截断），退出前原地续刷一次租约，确保后续 fixedDelay 从完整 TTL 起步
+            if (leaseLockService != null && elapsedMs >= Math.max(500L, budgetMs / 2L)) {
+                try {
+                    leaseLockService.tryAcquire(MONITOR_LEASE_KEY, leaseTtl);
+                } catch (RuntimeException ex) {
+                    log.debug("慢采集结束后原地续租失败（等待下轮重获）：{}", ex.getMessage());
                 }
             }
-            log.warn("本轮监控并发采集达到租约预算 {} ms（总实例={}，未完成={}），提前结束等待以保障租约按期续期",
-                    budgetMs, enabled.size(), unfinished);
-        } catch (InterruptedException ex) {
-            Thread.currentThread().interrupt();
-        } catch (ExecutionException ex) {
-            log.debug("并发采集存在单实例异常：{}", ex.getMessage());
         }
+    }
+
+    /**
+     * 计算单轮采集预算上界：严格满足 {@code budgetMs + intervalMs < leaseTtlMs}，
+     * 避免 {@code @Scheduled(fixedDelay = intervalMs)} 在预算截断后再叠加上报间隔导致租约过期误丢主。
+     */
+    static long computeCollectBudgetMs(long intervalMs, long leaseTtlMs) {
+        long slack = leaseTtlMs - intervalMs - 1500L;
+        long byInterval = (long) (intervalMs * 0.7d);
+        long candidate = slack > 0 ? Math.min(byInterval, slack) : Math.max(500L, leaseTtlMs / 3L);
+        return Math.max(1000L, Math.min(candidate, Math.max(1000L, leaseTtlMs - intervalMs)));
     }
 
     int inFlightCount() {

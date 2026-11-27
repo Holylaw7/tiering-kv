@@ -26,6 +26,7 @@ import org.springframework.dao.DeadlockLoserDataAccessException;
 import org.springframework.dao.InvalidDataAccessApiUsageException;
 import org.springframework.dao.QueryTimeoutException;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.PlatformTransactionManager;
 
@@ -87,6 +88,9 @@ class Wave2AHaStateCoordinationTest {
 
     @Autowired
     private AuditService auditService;
+
+    @Autowired
+    private ThreadPoolTaskScheduler taskScheduler;
 
     private AtomicReference<Instant> clockRef;
     private Clock mutableClock;
@@ -323,9 +327,9 @@ class Wave2AHaStateCoordinationTest {
             fastInst.setEnabled(true);
 
             ConsoleProperties props = new ConsoleProperties();
-            props.getMetrics().setIntervalMs(2000L);     // leaseTtl=4000ms -> budgetMs=2800ms
+            props.getMetrics().setIntervalMs(2000L);     // leaseTtl=4000ms -> budgetMs=1000ms (< leaseTtl - intervalMs)
             props.getMetrics().setConnectTimeoutMs(200);
-            props.getMetrics().setReadTimeoutMs(3400);   // 刻意大于 budgetMs(2800ms)，触发真实 TimeoutException
+            props.getMetrics().setReadTimeoutMs(1600);   // 刻意大于 budgetMs(1000ms)，触发真实 TimeoutException
 
             RespGateway realGateway = new RespGateway(props);
             InstanceService instanceService = mock(InstanceService.class);
@@ -593,6 +597,69 @@ class Wave2AHaStateCoordinationTest {
             // 快实例不被慢实例阻塞且已落库，且整轮耗时在 70% 预算附近截断，远低于 6s 慢实例耗时
             verify(metricRepo, times(1)).save(any(MetricPoint.class));
             assertThat(elapsedMs).isLessThan(4_500L);
+        } finally {
+            exec.shutdownNow();
+        }
+    }
+
+    @Test
+    void h3SchedulingPoolIsIsolatedAndSlowCollectRenewsLeaseBeforeFixedDelay() {
+        // 1. 核验 Spring @Scheduled 调度线程池已脱离默认单线程，避免慢清理/对账任务挤压监控选主续租
+        assertThat(taskScheduler.getPoolSize()).isGreaterThanOrEqualTo(4);
+        assertThat(taskScheduler.getThreadNamePrefix()).isEqualTo("console-sched-");
+
+        // 2. 核验预算不变量：任何常见采集间隔下均严格满足 budgetMs + intervalMs < leaseTtlMs
+        for (long intervalMs : new long[]{1000L, 2000L, 5000L, 10000L}) {
+            long leaseTtlMs = Math.max(4000L, intervalMs * 2L);
+            long budgetMs = MonitorService.computeCollectBudgetMs(intervalMs, leaseTtlMs);
+            assertThat(budgetMs + intervalMs)
+                    .as("intervalMs=%d leaseTtlMs=%d budgetMs=%d must leave positive slack before fixedDelay",
+                            intervalMs, leaseTtlMs, budgetMs)
+                    .isLessThan(leaseTtlMs);
+        }
+        assertThat(MonitorService.computeCollectBudgetMs(5000L, 10000L)).isEqualTo(3500L);
+
+        // 3. 单实例慢超时（同样走 collectExecutor 与 budgetMs 预算）结束后原地续租一次，确保后续 fixedDelay 从完整 TTL 起步；
+        //    快速轮次不产生额外续租写库
+        DbInstance singleSlow = new DbInstance();
+        singleSlow.setId(901L);
+        singleSlow.setName("single-slow");
+        DbInstance singleFast = new DbInstance();
+        singleFast.setId(902L);
+        singleFast.setName("single-fast");
+
+        InstanceService instSvc = mock(InstanceService.class);
+        RespGateway gw = mock(RespGateway.class);
+        when(gw.info(singleSlow)).thenAnswer(inv -> {
+            Thread.sleep(4_000L);
+            return "# Server\r\nredis_version:6.5.0\r\n";
+        });
+        when(gw.info(singleFast)).thenReturn("# Server\r\nredis_version:6.5.0\r\n");
+
+        DbLeaseLockService leaseSvc = mock(DbLeaseLockService.class);
+        when(leaseSvc.tryAcquire(any(), any())).thenReturn(true);
+        MetricPointRepository metricRepo = mock(MetricPointRepository.class);
+        DbInstanceRepository instRepo = mock(DbInstanceRepository.class);
+        AlertService alertSvc = mock(AlertService.class);
+
+        ConsoleProperties props = new ConsoleProperties();
+        props.getMetrics().setIntervalMs(2000L); // leaseTtl=4000ms -> budgetMs=1000ms
+        MonitorService monitor = new MonitorService(instSvc, gw, metricRepo, instRepo, alertSvc, leaseSvc, props);
+        ExecutorService exec = Executors.newFixedThreadPool(2);
+        monitor.setCollectExecutor(exec);
+        try {
+            // 快速单实例轮次：仅入口续租 1 次
+            when(instSvc.enabled()).thenReturn(List.of(singleFast));
+            monitor.scheduledCollect();
+            verify(leaseSvc, times(1)).tryAcquire(MonitorService.MONITOR_LEASE_KEY, java.time.Duration.ofMillis(4000L));
+
+            // 慢单实例轮次：预算 1000ms 截断，且 finally 原地续租第 2 次（累计 3 次）
+            when(instSvc.enabled()).thenReturn(List.of(singleSlow));
+            long start = System.currentTimeMillis();
+            monitor.scheduledCollect();
+            long elapsed = System.currentTimeMillis() - start;
+            assertThat(elapsed).isLessThan(2_500L);
+            verify(leaseSvc, times(3)).tryAcquire(MonitorService.MONITOR_LEASE_KEY, java.time.Duration.ofMillis(4000L));
         } finally {
             exec.shutdownNow();
         }
