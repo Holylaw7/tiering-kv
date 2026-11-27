@@ -10,9 +10,11 @@
  *  6. 最后才做健康检查
  */
 import { execSync } from 'node:child_process'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { api, check, CONSOLE } from './lib.mjs'
 
-const REPO = 'E:\\学习\\Mini-redis项目\\tiering-kv'
+const REPO = process.env.TIERING_KV_REPO || path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..')
 const MYSQL_PORT = 3307
 
 function portOwner(port) {

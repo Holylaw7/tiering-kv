@@ -1,9 +1,12 @@
 
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const A = 'http://127.0.0.1:8080';
-const MYSQL = 'E:\\MySQL\\MySQL Server 8.0\\bin\\mysql.exe';
-const BACKUP_DIR = 'E:\\学习\\Mini-redis项目\\tiering-kv\\console-server\\backups';
+const MYSQL = process.env.MYSQL_BIN || 'mysql';
+const BACKUP_DIR = process.env.BACKUP_DIR || path.resolve(__dirname, '../../console-server/backups');
 const out = [];
 const note = (k, v) => { out.push({ k, v }); console.log(k, JSON.stringify(v)); };
 const sql = (q) => execFileSync(MYSQL, ['-h', '127.0.0.1', '-P', '3307', '--protocol=TCP', '-u', 'root', 'tiering_console', '-N', '-e', q], { encoding: 'utf8' }).trim();

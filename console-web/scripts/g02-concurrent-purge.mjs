@@ -2,9 +2,11 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const A='http://127.0.0.1:8080', B='http://127.0.0.1:8081';
-const MYSQL='E:\\MySQL\\MySQL Server 8.0\\bin\\mysql.exe';
-const DIR='E:\\学习\\Mini-redis项目\\tiering-kv\\console-server\\backups';
+const MYSQL=process.env.MYSQL_BIN || 'mysql';
+const DIR=process.env.BACKUP_DIR || path.resolve(__dirname, '../../console-server/backups');
 const sql=(q)=>execFileSync(MYSQL,['-h','127.0.0.1','-P','3307','--protocol=TCP','-u','root','tiering_console','-N','-e',q],{encoding:'utf8'}).trim();
 const login=async(b)=>(await(await fetch(b+'/api/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:'admin',password:'admin123'})})).json()).data.token;
 const api=async(b,t,p,i={})=>{const r=await fetch(b+p,{...i,headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'}});let x=null;try{x=await r.json();}catch{};return{status:r.status,body:x};};
