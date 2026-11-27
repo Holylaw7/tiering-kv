@@ -116,7 +116,7 @@ test.describe('Backup Integrity, Keyspace Analyzer & Request-ID Trace E2E (v6.4.
       const row = page.locator('.el-table__row', { hasText: createdFileName }).first()
       await expect(row).toBeVisible()
       await expect(row).toContainText('已校验')
-      await expect(row).toContainText(backupSha256.slice(0, 12))
+      await expect(row).toContainText(backupSha256.slice(0, 10))
 
       // 点击「校验」验证后端流式 SHA-256 + JSONL 校验接口
       const [verifyRes] = await Promise.all([
@@ -126,9 +126,13 @@ test.describe('Backup Integrity, Keyspace Analyzer & Request-ID Trace E2E (v6.4.
         row.getByRole('button', { name: '校验', exact: true }).click()
       ])
       expect(verifyRes.status()).toBe(200)
-      const verifyBody = (await verifyRes.json()).data as { valid: boolean; verifyStatus: string; validEntries: number }
-      expect(verifyBody.valid).toBe(true)
-      expect(verifyBody.verifyStatus).toBe('VERIFIED')
+      const verifyBody = (await verifyRes.json()).data as {
+        status: string
+        actualSha256: string
+        validEntries: number
+      }
+      expect(verifyBody.status).toBe('VERIFIED')
+      expect(verifyBody.actualSha256).toBe(backupSha256)
       expect(verifyBody.validEntries).toBeGreaterThanOrEqual(seededKeys.length)
 
       // 打开“安全恢复向导”并断言 Dry-Run 精确检出冲突与新增键，开启保护快照执行恢复
