@@ -146,6 +146,7 @@ kubectl apply -f deploy/operator/kind-cluster-sample.yaml
 | HNSW 检索（20K×64，v6.3.0） | P50 0.133ms / P99 0.322ms（v6.2.0 0.847ms；SQ8 向量内存 -69%~75%） |
 | 63 万键 × 64B 存活堆（v6.3.0） | 174.0 MB（Sampled-LFU，较旧 LFU 504.0 MB 下降 65.5%，8 线程并发读 9.13×） |
 | 流水线回环吞吐（c=50, P=16） | SET 651K / GET 681K rps（详见 [v6.3.0 压测报告](docs/benchmark/v6.3.0-kernel-optimization-report.md)） |
+| 全栈容器实测（v6.4.0，Docker Linux） | P=16 GET `643,087 rps`（Epoll 较 NIO `+17.7%`/P99 `-36.2%`）、630K 键调优 ZGC RSS `698.1 MiB`、冷热分层 350K 键 `100%` 命中；100K 逻辑备份/Pipeline 恢复 `3.52–3.66s` / `2.57–2.63s`（Local/S3）；双副本 HA 故障转移 `10.70s`（详见 [v6.4.0 全栈容器压测报告](docs/benchmark/v6.4.0-container-and-console-benchmark-report.md)） |
 | WAL Group Commit（fsync=ALWAYS） | 16 线程合并 avgBatch=12.31 writes/fsync，刷盘次数 -91.9% |
 | 并行迁移（100B） | 209MB/s |
 | 虚拟线程服务（JDK 21 POC） | 941K ops/s |

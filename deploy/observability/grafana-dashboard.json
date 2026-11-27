@@ -98,7 +98,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(tieringkv_instance_keys_total{instance_name=~\"$instance\"})",
+          "expr": "sum(tieringkv_instance_keys{instance_name=~\"$instance\"})",
           "legendFormat": "Keys"
         }
       ],
@@ -241,7 +241,7 @@
         },
         {
           "refId": "D",
-          "expr": "increase(tieringkv_console_pool_borrow_timeouts_total[5m])",
+          "expr": "increase(tieringkv_console_pool_borrow_timeouts[5m])",
           "legendFormat": "Borrow Timeouts (5m)"
         }
       ],

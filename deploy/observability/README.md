@@ -10,11 +10,11 @@
 | `tieringkv_instance_memory_used_bytes` | Console | `instance_id`, `instance_name` | 热层已用内存字节数 |
 | `tieringkv_instance_memory_ratio` | Console | `instance_id`, `instance_name` | 热层内存水位占比（`[0..1]`） |
 | `tieringkv_instance_ops_per_sec` | Console | `instance_id`, `instance_name` | 实例实时 QPS |
-| `tieringkv_instance_keys_total` | Console | `instance_id`, `instance_name` | 实例键总数 |
+| `tieringkv_instance_keys` | Console | `instance_id`, `instance_name` | 实例键总数 |
 | `tieringkv_instance_cold_tables` | Console | `instance_id`, `instance_name` | 冷层 SSTable 文件数 |
 | `tieringkv_instance_p99_latency_ms` | Console | `instance_id`, `instance_name` | 命令 P99 延迟（ms） |
 | `tieringkv_console_pool_{active,idle,max}` | Console | — | 控制面 RESP 连接池活跃/空闲/容量水位 |
-| `tieringkv_console_pool_borrow_timeouts_total` | Console | — | RESP 连接池累计借用超时次数 |
+| `tieringkv_console_pool_borrow_timeouts` | Console | — | RESP 连接池累计借用超时次数 |
 | `tieringkv_console_alerts_firing` | Console | — | 控制台当前触发中（`FIRING`）告警数 |
 | `tieringkv_console_backups_total` | Console | `status` | 逻辑备份执行计数（`SUCCESS`/`FAILED`） |
 | `tieringkv_console_restores_total` | Console | `status` | 逻辑恢复执行计数（`SUCCESS`/`FAILED`） |
