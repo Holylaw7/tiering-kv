@@ -19,10 +19,19 @@ spec:
         tier: metadata
     spec:
       terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
       containers:
         - name: metadata
           image: ghcr.io/holylaw7/tiering-kv:v6.4.0
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           command: ["/bin/sh", "/etc/tiering-kv/start.sh"]
           env:
             - name: POD_NAME
@@ -94,10 +103,19 @@ spec:
         tier: storage
     spec:
       terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
       containers:
         - name: storage
           image: ghcr.io/holylaw7/tiering-kv:v6.4.0
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           command: ["/bin/sh", "/etc/tiering-kv/start.sh"]
           env:
             - name: POD_NAME

@@ -74,10 +74,10 @@ spec:
     spec:
       serviceAccountName: {{ $full }}-operator
       terminationGracePeriodSeconds: 30
+      {{- with .Values.operator.podSecurityContext }}
       securityContext:
-        runAsNonRoot: true
-        runAsUser: 10001
-        runAsGroup: 10001
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -117,10 +117,17 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 5
           securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
+            {{- toYaml .Values.operator.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: logs
+              mountPath: /app/logs
           resources:
             {{- toYaml .Values.operator.resources | nindent 12 }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
 {{- end }}

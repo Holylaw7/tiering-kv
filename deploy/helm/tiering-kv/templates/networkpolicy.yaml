@@ -1,0 +1,191 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $full := include "tiering-kv.fullname" . }}
+{{- if .Values.consoleWeb.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $full }}-console-web
+  labels:
+    {{- include "tiering-kv.labels" . | nindent 4 }}
+    app.kubernetes.io/component: console-web
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "tiering-kv.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: console-web
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- if .Values.consoleServer.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "tiering-kv.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: console-server
+      ports:
+        - protocol: TCP
+          port: {{ .Values.consoleServer.service.port }}
+    {{- end }}
+---
+{{- end }}
+{{- if .Values.consoleServer.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $full }}-console-server
+  labels:
+    {{- include "tiering-kv.labels" . | nindent 4 }}
+    app.kubernetes.io/component: console-server
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "tiering-kv.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: console-server
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    {{- if .Values.consoleWeb.enabled }}
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "tiering-kv.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: console-web
+      ports:
+        - protocol: TCP
+          port: 8080
+    {{- end }}
+    {{- with .Values.networkPolicy.prometheusNamespaceSelector }}
+    - from:
+        - namespaceSelector:
+            {{- toYaml . | nindent 12 }}
+      ports:
+        - protocol: TCP
+          port: 8080
+    {{- end }}
+  egress:
+    # DNS resolution
+    - ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- if .Values.tieringKv.enabled }}
+    # Tiering-KV data plane RESP port
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "tiering-kv.selectorLabels" . | nindent 14 }}
+              {{- if eq .Values.tieringKv.mode "cluster" }}
+              app.kubernetes.io/component: gateway
+              {{- else }}
+              app.kubernetes.io/component: core
+              {{- end }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.tieringKv.ports.resp }}
+    {{- end }}
+    # MySQL control-plane database
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.mysqlPort }}
+      {{- if or .Values.networkPolicy.mysqlCidrs .Values.networkPolicy.mysqlPodSelector }}
+      to:
+        {{- range .Values.networkPolicy.mysqlCidrs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+        {{- with .Values.networkPolicy.mysqlPodSelector }}
+        - podSelector:
+            {{- toYaml . | nindent 12 }}
+        {{- end }}
+      {{- end }}
+    {{- if eq .Values.consoleServer.backup.storageType "s3" }}
+    # Object storage (S3 / MinIO / RustFS)
+    - ports:
+        - protocol: TCP
+          port: {{ .Values.networkPolicy.s3Port }}
+      {{- if .Values.networkPolicy.s3Cidrs }}
+      to:
+        {{- range .Values.networkPolicy.s3Cidrs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+    {{- if .Values.networkPolicy.allowPublicWebhooks }}
+    # Public Webhook egress only: explicitly blocks RFC1918 private nets, loopback,
+    # AWS/GCP/Azure IMDS (169.254.0.0/16) and Alibaba Cloud IMDS / CGNAT (100.64.0.0/10).
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 127.0.0.0/8
+              - 169.254.0.0/16
+              - 100.64.0.0/10
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+    {{- end }}
+    {{- if .Values.networkPolicy.webhookAllowedCidrs }}
+    # Explicitly approved internal Webhook relay CIDRs (server deployment config only)
+    - to:
+        {{- range .Values.networkPolicy.webhookAllowedCidrs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+    {{- end }}
+---
+{{- end }}
+{{- if .Values.tieringKv.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ $full }}-tiering-kv
+  labels:
+    {{- include "tiering-kv.labels" . | nindent 4 }}
+    app.kubernetes.io/component: data-plane
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "tiering-kv.selectorLabels" . | nindent 6 }}
+      {{- if eq .Values.tieringKv.mode "cluster" }}
+      app.kubernetes.io/component: gateway
+      {{- else }}
+      app.kubernetes.io/component: core
+      {{- end }}
+  policyTypes:
+    - Ingress
+  ingress:
+    {{- if .Values.consoleServer.enabled }}
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "tiering-kv.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: console-server
+      ports:
+        - protocol: TCP
+          port: {{ .Values.tieringKv.ports.resp }}
+    {{- end }}
+{{- end }}
+{{- end }}

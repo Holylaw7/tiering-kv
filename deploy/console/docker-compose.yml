@@ -53,7 +53,7 @@ services:
       context: ../../console-server
     container_name: tk-console
     environment:
-      CONSOLE_DB_URL: jdbc:mysql://mysql:3306/tiering_console?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+      CONSOLE_DB_URL: jdbc:mysql://mysql:3306/tiering_console?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&sslMode=${MYSQL_SSL_MODE:-PREFERRED}
       CONSOLE_DB_USER: ${CONSOLE_DB_USER:-root}
       CONSOLE_DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-tk_root_pwd}
       CONSOLE_JWT_SECRET: ${CONSOLE_JWT_SECRET:-change-me-in-production-0123456789abcdef}
@@ -98,7 +98,13 @@ services:
       context: ../../console-web
     container_name: tk-web
     ports:
-      - "8081:80"
+      - "8081:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
     depends_on:
       console-server:
         condition: service_healthy

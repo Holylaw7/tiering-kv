@@ -11,10 +11,17 @@ RUN --mount=type=cache,target=/root/.m2 \
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-RUN groupadd -r console && useradd -r -g console console
-COPY --from=build /build/target/tiering-kv-console-*.jar /app/console.jar
-RUN mkdir -p /app/backups && chown -R console:console /app
-USER console
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r -g 10001 console \
+    && useradd -r -u 10001 -g 10001 console \
+    && mkdir -p /app/backups \
+    && chown -R 10001:10001 /app
+COPY --from=build --chown=10001:10001 /build/target/tiering-kv-console-*.jar /app/console.jar
+USER 10001:10001
 EXPOSE 8080
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=75"
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/console.jar"]
+HEALTHCHECK --interval=15s --timeout=3s --start-period=30s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:8080/actuator/health/readiness || exit 1
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/console.jar"]

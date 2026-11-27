@@ -18,10 +18,19 @@ spec:
         tier: gateway
     spec:
       terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
       containers:
         - name: gateway
           image: ghcr.io/holylaw7/tiering-kv:v6.4.0
           imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           command: ["/bin/sh", "/etc/tiering-kv/start.sh"]
           env:
             - name: POD_NAME

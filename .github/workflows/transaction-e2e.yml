@@ -224,8 +224,8 @@ jobs:
       - name: Container disk-full injection
         run: |
           sudo scripts/block-device-chaos.sh disk-full
-          # 容器内以 root 视角补一轮填充，确保 /data 真正 0 可用
-          docker exec txn-meta sh -c \
+          # 容器内以 root 视角补一轮填充，确保 /data 真正 0 可用（主进程仍以非 root 运行）
+          docker exec -u 0 txn-meta sh -c \
             'dd if=/dev/zero of=/data/fill.bin bs=1K 2>/dev/null || true' \
             || true
           sudo df -h /mnt/tiering-kv-block
@@ -239,7 +239,7 @@ jobs:
             exit 1
           fi
           echo "CONTAINER_DISK_FULL_NEW_ALLOCATION_BLOCKED=true"
-          docker exec txn-meta sh -c \
+          docker exec -u 0 txn-meta sh -c \
             'rm -f /data/probe.bin /data/fill.bin' 2>/dev/null || true
           sudo rm -f /mnt/tiering-kv-block/fill.bin
       - name: Container recovery after disk-full

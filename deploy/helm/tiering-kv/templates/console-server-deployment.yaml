@@ -21,6 +21,10 @@ spec:
         app.kubernetes.io/component: console-server
     spec:
       terminationGracePeriodSeconds: 30
+      {{- with .Values.consoleServer.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -36,7 +40,7 @@ spec:
             - name: JAVA_OPTS
               value: {{ .Values.consoleServer.javaOpts | quote }}
             - name: CONSOLE_DB_URL
-              value: {{ .Values.consoleServer.database.url | quote }}
+              value: {{ include "tiering-kv.consoleDbUrl" . | quote }}
             - name: CONSOLE_DB_USER
               value: {{ .Values.consoleServer.database.username | quote }}
             - name: CONSOLE_DB_PASSWORD
@@ -69,6 +73,10 @@ spec:
               value: {{ .Values.consoleServer.security.trustedProxies | quote }}
             - name: CONSOLE_CORS
               value: {{ .Values.consoleServer.security.corsAllowedOrigins | quote }}
+            - name: CONSOLE_WEBHOOK_BLOCK_PRIVATE_URLS
+              value: {{ .Values.consoleServer.security.blockPrivateWebhookUrls | quote }}
+            - name: CONSOLE_WEBHOOK_ALLOWED_CIDRS
+              value: {{ .Values.consoleServer.security.webhookAllowedCidrs | quote }}
             - name: CONSOLE_BACKUP_STORAGE
               value: {{ .Values.consoleServer.backup.storageType | quote }}
             - name: CONSOLE_BACKUP_DIR
@@ -127,16 +135,17 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 3
           securityContext:
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop:
-                - ALL
+            {{- toYaml .Values.consoleServer.securityContext | nindent 12 }}
           volumeMounts:
             - name: backups
               mountPath: {{ .Values.consoleServer.backup.dir }}
+            - name: tmp
+              mountPath: /tmp
           resources:
             {{- toYaml .Values.consoleServer.resources | nindent 12 }}
       volumes:
         - name: backups
+          emptyDir: {}
+        - name: tmp
           emptyDir: {}
 {{- end }}

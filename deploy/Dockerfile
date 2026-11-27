@@ -24,10 +24,18 @@ RUN set -e; \
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-# tc netem 混沌注入（ADR-0343）：真实网络故障演练需要 iproute2。
+# tc netem 混沌注入（ADR-0343）：真实网络故障演练需要 iproute2；默认以非 root（10001:10001）运行。
 RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends iproute2 \
-    && rm -rf /var/lib/apt/lists/*
-COPY --from=build /tmp/tiering-kv.jar /app/tiering-kv.jar
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r -g 10001 tieringkv \
+    && useradd -r -u 10001 -g 10001 tieringkv \
+    && mkdir -p /app/data/wal /app/config /data \
+    && chown -R 10001:10001 /app /data
+COPY --from=build --chown=10001:10001 /tmp/tiering-kv.jar /app/tiering-kv.jar
+USER 10001:10001
 ENV JAVA_OPTS="-XX:+UseZGC -XX:+ZGenerational -Dio.netty.allocator.type=pooled -Xmx1g"
+HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=3 \
+  CMD /bin/bash -c 'if (exec 3<>/dev/tcp/127.0.0.1/9100) 2>/dev/null; then exec 3>&-; curl -fsS http://127.0.0.1:9100/healthz >/dev/null; exit $?; fi; for p in 6379 7000 7100 7200 7201 7300; do if (exec 3<>/dev/tcp/127.0.0.1/$p) 2>/dev/null; then exec 3>&-; exit 0; fi; done; exit 1'
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/tiering-kv.jar \"$@\"", "--"]

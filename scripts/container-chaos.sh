@@ -27,11 +27,11 @@ case "${1:-up}" in
     docker start txn-meta
     ;;
   partition)
-    # 在 coordinator 上隔离 metadata 2 秒（tc netem）
-    docker exec txn-coordinator sh -c \
+    # 在 coordinator 上隔离 metadata 2 秒（tc netem 需 root 能力，通过 exec -u 0 注入而保持主进程非 root）
+    docker exec -u 0 txn-coordinator sh -c \
       "tc qdisc add dev eth0 root netem loss 100% 2>/dev/null || true"
     sleep 2
-    docker exec txn-coordinator sh -c \
+    docker exec -u 0 txn-coordinator sh -c \
       "tc qdisc del dev eth0 root 2>/dev/null || true"
     ;;
   down)

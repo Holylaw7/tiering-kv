@@ -1,5 +1,6 @@
 package io.tieringkv.operator.k8s;
 
+import io.fabric8.kubernetes.api.model.CapabilitiesBuilder;
 import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.api.model.ConfigMapBuilder;
 import io.fabric8.kubernetes.api.model.ConfigMapVolumeSourceBuilder;
@@ -21,11 +22,15 @@ import io.fabric8.kubernetes.api.model.OwnerReferenceBuilder;
 import io.fabric8.kubernetes.api.model.PersistentVolumeClaim;
 import io.fabric8.kubernetes.api.model.PersistentVolumeClaimBuilder;
 import io.fabric8.kubernetes.api.model.PersistentVolumeClaimSpecBuilder;
+import io.fabric8.kubernetes.api.model.PodSecurityContext;
+import io.fabric8.kubernetes.api.model.PodSecurityContextBuilder;
 import io.fabric8.kubernetes.api.model.PodSpecBuilder;
 import io.fabric8.kubernetes.api.model.PodTemplateSpec;
 import io.fabric8.kubernetes.api.model.PodTemplateSpecBuilder;
 import io.fabric8.kubernetes.api.model.Probe;
 import io.fabric8.kubernetes.api.model.ProbeBuilder;
+import io.fabric8.kubernetes.api.model.SecurityContext;
+import io.fabric8.kubernetes.api.model.SecurityContextBuilder;
 import io.fabric8.kubernetes.api.model.Service;
 import io.fabric8.kubernetes.api.model.ServiceBuilder;
 import io.fabric8.kubernetes.api.model.ServicePortBuilder;
@@ -560,6 +565,7 @@ public final class K8sActionApplier implements ActionApplier {
                 .withName("backup")
                 .withImage(resource.getSpec().getImage())
                 .withImagePullPolicy("IfNotPresent")
+                .withSecurityContext(containerSecurityContext())
                 .withCommand("/bin/bash", "-euo", "pipefail", "-c")
                 .withArgs(backupScript())
                 .withEnv(
@@ -576,6 +582,7 @@ public final class K8sActionApplier implements ActionApplier {
                 .withMetadata(new ObjectMetaBuilder().withLabels(labels).build())
                 .withSpec(new PodSpecBuilder()
                         .withRestartPolicy("OnFailure")
+                        .withSecurityContext(podSecurityContext())
                         .withContainers(backupContainer)
                         .build())
                 .build();
@@ -647,6 +654,7 @@ public final class K8sActionApplier implements ActionApplier {
                 .withName(role)
                 .withImage(resource.getSpec().getImage())
                 .withImagePullPolicy("IfNotPresent")
+                .withSecurityContext(containerSecurityContext())
                 .withCommand("/bin/sh", CONFIG_MOUNT + "/start.sh")
                 .withEnv(env)
                 .withPorts(new ContainerPortBuilder()
@@ -669,8 +677,27 @@ public final class K8sActionApplier implements ActionApplier {
                         .build())
                 .withSpec(new PodSpecBuilder()
                         .withTerminationGracePeriodSeconds(gateway ? 30L : 60L)
+                        .withSecurityContext(podSecurityContext())
                         .withContainers(container)
                         .withVolumes(volumes)
+                        .build())
+                .build();
+    }
+
+    private static PodSecurityContext podSecurityContext() {
+        return new PodSecurityContextBuilder()
+                .withRunAsNonRoot(true)
+                .withRunAsUser(10001L)
+                .withRunAsGroup(10001L)
+                .withFsGroup(10001L)
+                .build();
+    }
+
+    private static SecurityContext containerSecurityContext() {
+        return new SecurityContextBuilder()
+                .withAllowPrivilegeEscalation(false)
+                .withCapabilities(new CapabilitiesBuilder()
+                        .withDrop("ALL")
                         .build())
                 .build();
     }

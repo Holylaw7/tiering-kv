@@ -140,13 +140,13 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: console-web/package-lock.json
-      - name: Frontend lint, typecheck, build, Vitest and security audit
+      - name: Frontend lint, typecheck, build, Vitest coverage gate and security audit
         working-directory: console-web
         run: |
           npm ci
           npm run lint
           npm run build
-          npm test
+          npm run test:coverage
           npm audit --audit-level=high
       - name: OpenAPI contract drift check
         working-directory: console-web
@@ -192,6 +192,7 @@ jobs:
             --set consoleServer.backup.storageType=s3 \
             --set consoleWeb.ingress.enabled=true \
             --set operator.enabled=true \
+            --set networkPolicy.enabled=true \
             --set observability.serviceMonitor.enabled=true \
             --set observability.prometheusRule.enabled=true > /tmp/helm-ha.yaml
           helm template tk-cluster deploy/helm/tiering-kv \
@@ -216,15 +217,41 @@ jobs:
           assert ("Deployment", "tk-standalone-tiering-kv-console-web") in standalone_kinds
 
           ha_kinds = {d["kind"] for d in ha}
-          for expected in ("PodDisruptionBudget", "Ingress", "ServiceMonitor", "PrometheusRule", "ClusterRole"):
+          for expected in ("PodDisruptionBudget", "Ingress", "ServiceMonitor", "PrometheusRule", "ClusterRole", "NetworkPolicy"):
               assert expected in ha_kinds, f"Missing {expected} in HA Helm output"
+
+          # Verify Wave 3A S2/S3 hardening across all workloads
+          for doc in ha:
+              if doc["kind"] in ("Deployment", "StatefulSet"):
+                  pod_spec = doc["spec"]["template"]["spec"]
+                  pod_sc = pod_spec.get("securityContext", {})
+                  assert pod_sc.get("runAsNonRoot") is True, f"{doc['metadata']['name']} missing runAsNonRoot"
+                  for c in pod_spec["containers"]:
+                      c_sc = c.get("securityContext", {})
+                      assert c_sc.get("allowPrivilegeEscalation") is False, f"{c['name']} missing allowPrivilegeEscalation=false"
+                      assert c_sc.get("readOnlyRootFilesystem") is True, f"{c['name']} missing readOnlyRootFilesystem=true"
+                      assert "ALL" in c_sc.get("capabilities", {}).get("drop", []), f"{c['name']} missing capabilities.drop ALL"
 
           console_dep = next(d for d in ha if d["kind"] == "Deployment" and d["metadata"]["name"].endswith("-console-server"))
           container = console_dep["spec"]["template"]["spec"]["containers"][0]
           envs = {e["name"]: e.get("value") for e in container["env"]}
           assert envs.get("CONSOLE_LOGIN_ATTEMPT_STORE") == "db", f"Expected db login store in HA, got {envs.get('CONSOLE_LOGIN_ATTEMPT_STORE')}"
+          assert "sslMode=PREFERRED" in (envs.get("CONSOLE_DB_URL") or ""), f"Expected sslMode in CONSOLE_DB_URL, got {envs.get('CONSOLE_DB_URL')}"
+          assert "useSSL=false" not in (envs.get("CONSOLE_DB_URL") or ""), "Hardcoded useSSL=false must not remain"
+          assert envs.get("CONSOLE_WEBHOOK_BLOCK_PRIVATE_URLS") == "true"
           assert container["livenessProbe"]["httpGet"]["path"] == "/actuator/health/liveness"
           assert container["readinessProbe"]["httpGet"]["path"] == "/actuator/health/readiness"
+
+          web_dep = next(d for d in ha if d["kind"] == "Deployment" and d["metadata"]["name"].endswith("-console-web"))
+          assert web_dep["spec"]["template"]["spec"]["containers"][0]["ports"][0]["containerPort"] == 8080
+          web_cm = next(d for d in ha if d["kind"] == "ConfigMap" and d["metadata"]["name"].endswith("-console-web-nginx"))
+          nginx_conf = web_cm["data"]["default.conf"]
+          assert "listen 8080;" in nginx_conf and "Content-Security-Policy" in nginx_conf
+          assert "default_type text/plain;" in nginx_conf
+
+          np_console = next(d for d in ha if d["kind"] == "NetworkPolicy" and d["metadata"]["name"].endswith("-console-server"))
+          excepts = [cidr for rule in np_console["spec"]["egress"] for to in rule.get("to", []) for cidr in to.get("ipBlock", {}).get("except", [])]
+          assert "169.254.0.0/16" in excepts and "100.64.0.0/10" in excepts and "10.0.0.0/8" in excepts
 
           cluster_names = {(d["kind"], d["metadata"]["name"]) for d in cluster}
           assert ("StatefulSet", "tk-cluster-tiering-kv-meta") in cluster_names
@@ -316,6 +343,68 @@ jobs:
         with:
           scan-type: fs
           scan-ref: .
+          exit-code: "1"
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          severity: "CRITICAL,HIGH"
+
+  container-image-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build all 4 runtime container images
+        run: |
+          set -euo pipefail
+          docker build -t tiering-kv:ci-scan -f deploy/Dockerfile .
+          docker build -t tiering-kv-operator:ci-scan -f deploy/Dockerfile.operator .
+          docker build -t tiering-kv-console-server:ci-scan -f console-server/Dockerfile console-server
+          docker build -t tiering-kv-console-web:ci-scan -f console-web/Dockerfile console-web
+      - name: Assert non-root USER, HEALTHCHECK, and exec ENTRYPOINT metadata
+        run: |
+          set -euo pipefail
+          for img in tiering-kv:ci-scan tiering-kv-operator:ci-scan tiering-kv-console-server:ci-scan tiering-kv-console-web:ci-scan; do
+            user=$(docker inspect -f '{{.Config.User}}' "$img")
+            hc=$(docker inspect -f '{{if .Config.Healthcheck}}present{{else}}missing{{end}}' "$img")
+            echo "image=$img user=$user healthcheck=$hc"
+            test -n "$user" && test "$user" != "0" && test "$user" != "root" && test "$user" != "0:0"
+            test "$hc" = "present"
+          done
+          ep=$(docker inspect -f '{{json .Config.Entrypoint}}' tiering-kv-console-server:ci-scan)
+          echo "console-server entrypoint=$ep"
+          grep -q 'exec java' <<< "$ep"
+      - name: Trivy OS & package scan - tiering-kv
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: tiering-kv:ci-scan
+          exit-code: "1"
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          severity: "CRITICAL,HIGH"
+      - name: Trivy OS & package scan - tiering-kv-operator
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: tiering-kv-operator:ci-scan
+          exit-code: "1"
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          severity: "CRITICAL,HIGH"
+      - name: Trivy OS & package scan - console-server
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: tiering-kv-console-server:ci-scan
+          exit-code: "1"
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          severity: "CRITICAL,HIGH"
+      - name: Trivy OS & package scan - console-web
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: tiering-kv-console-web:ci-scan
           exit-code: "1"
           ignore-unfixed: true
           trivyignores: .trivyignore
@@ -446,24 +535,28 @@ jobs:
         working-directory: deploy/console
         env:
           CONSOLE_BACKUP_STORAGE: s3
+          CONSOLE_WEBHOOK_BLOCK_PRIVATE_URLS: "true"
         run: docker compose -f docker-compose.yml -f docker-compose.ha.yml --profile s3 up -d --build
       - name: Wait for both replicas and Nginx HA readiness
         run: |
           for i in $(seq 1 60); do
             s1=$(docker inspect -f '{{.State.Health.Status}}' tk-console 2>/dev/null || echo "starting")
             s2=$(docker inspect -f '{{.State.Health.Status}}' tk-console-2 2>/dev/null || echo "starting")
-            if [ "$s1" = "healthy" ] && [ "$s2" = "healthy" ] && \
+            w1=$(docker inspect -f '{{.State.Health.Status}}' tk-web 2>/dev/null || echo "starting")
+            if [ "$s1" = "healthy" ] && [ "$s2" = "healthy" ] && [ "$w1" = "healthy" ] && \
                curl -fsS http://127.0.0.1:8081/healthz >/dev/null && \
                curl -fsS -X POST http://127.0.0.1:8081/api/v1/auth/login \
                  -H "Content-Type: application/json" \
                  -d '{"username":"admin","password":"admin123"}' >/dev/null; then
-              echo "HA stack ready (tk-console=$s1, tk-console-2=$s2)"
+              echo "HA stack ready (tk-console=$s1, tk-console-2=$s2, tk-web=$w1)"
               exit 0
             fi
             sleep 2
           done
           echo "Timed out waiting for HA stack readiness"
           exit 1
+      - name: Verify non-root containers, CSP headers, and 4-scenario egress isolation
+        run: bash scripts/verify-egress-isolation.sh --mode compose --base-url http://127.0.0.1:8081
       - name: Verify cross-replica DB login rate limit, single-leader sampling & failover
         run: |
           set -euo pipefail

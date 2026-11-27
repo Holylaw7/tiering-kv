@@ -18,6 +18,7 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       SPRINGDOC_API_DOCS_ENABLED: "false"
       SPRINGDOC_SWAGGER_UI_ENABLED: "false"
+      CONSOLE_DB_URL: jdbc:mysql://mysql:3306/tiering_console?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&sslMode=${MYSQL_SSL_MODE:-REQUIRED}
       CONSOLE_DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请先在 .env 中设置 MYSQL_ROOT_PASSWORD}
       CONSOLE_JWT_SECRET: ${CONSOLE_JWT_SECRET:?请先在 .env 中设置至少 32 字节的 CONSOLE_JWT_SECRET}
       CONSOLE_ADMIN_PASSWORD: ${CONSOLE_ADMIN_PASSWORD:?请先在 .env 中设置至少 12 位的 CONSOLE_ADMIN_PASSWORD}

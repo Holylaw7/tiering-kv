@@ -16,7 +16,7 @@ services:
     container_name: tk-console-2
     hostname: tk-console-2
     environment:
-      CONSOLE_DB_URL: jdbc:mysql://mysql:3306/tiering_console?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+      CONSOLE_DB_URL: jdbc:mysql://mysql:3306/tiering_console?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&sslMode=${MYSQL_SSL_MODE:-PREFERRED}
       CONSOLE_DB_USER: ${CONSOLE_DB_USER:-root}
       CONSOLE_DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:-tk_root_pwd}
       CONSOLE_JWT_SECRET: ${CONSOLE_JWT_SECRET:-change-me-in-production-0123456789abcdef}
@@ -24,6 +24,8 @@ services:
       CONSOLE_REQUIRE_ENCRYPTION_IN_PROD: ${CONSOLE_REQUIRE_ENCRYPTION_IN_PROD:-false}
       CONSOLE_LOGIN_ATTEMPT_STORE: db
       CONSOLE_TRUSTED_PROXIES: ${CONSOLE_TRUSTED_PROXIES:-127.0.0.1,::1,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16}
+      CONSOLE_WEBHOOK_BLOCK_PRIVATE_URLS: ${CONSOLE_WEBHOOK_BLOCK_PRIVATE_URLS:-false}
+      CONSOLE_WEBHOOK_ALLOWED_CIDRS: ${CONSOLE_WEBHOOK_ALLOWED_CIDRS:-}
       CONSOLE_BACKUP_DIR: /app/backups
       CONSOLE_BACKUP_STORAGE: ${CONSOLE_BACKUP_STORAGE:-s3}
       CONSOLE_BACKUP_S3_ENDPOINT: ${CONSOLE_BACKUP_S3_ENDPOINT:-http://minio:9000}

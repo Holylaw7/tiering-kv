@@ -22,6 +22,10 @@ spec:
         app.kubernetes.io/component: metadata
     spec:
       terminationGracePeriodSeconds: {{ .Values.tieringKv.terminationGracePeriodSeconds }}
+      {{- with .Values.tieringKv.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -47,12 +51,16 @@ spec:
           ports:
             - name: raft-rpc
               containerPort: {{ .Values.tieringKv.ports.raftMetadata }}
+          securityContext:
+            {{- toYaml .Values.tieringKv.securityContext | nindent 12 }}
           volumeMounts:
             - name: config
               mountPath: /etc/tiering-kv
               readOnly: true
             - name: data
               mountPath: /data
+            - name: tmp
+              mountPath: /tmp
           readinessProbe:
             tcpSocket:
               port: raft-rpc
@@ -69,6 +77,8 @@ spec:
         - name: config
           configMap:
             name: {{ $full }}-config
+        - name: tmp
+          emptyDir: {}
   volumeClaimTemplates:
     - metadata:
         name: data
@@ -103,6 +113,10 @@ spec:
         app.kubernetes.io/component: storage
     spec:
       terminationGracePeriodSeconds: {{ .Values.tieringKv.terminationGracePeriodSeconds }}
+      {{- with .Values.tieringKv.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -128,12 +142,16 @@ spec:
           ports:
             - name: raft-rpc
               containerPort: {{ .Values.tieringKv.ports.raftStorage }}
+          securityContext:
+            {{- toYaml .Values.tieringKv.securityContext | nindent 12 }}
           volumeMounts:
             - name: config
               mountPath: /etc/tiering-kv
               readOnly: true
             - name: data
               mountPath: /data
+            - name: tmp
+              mountPath: /tmp
           readinessProbe:
             tcpSocket:
               port: raft-rpc
@@ -150,6 +168,8 @@ spec:
         - name: config
           configMap:
             name: {{ $full }}-config
+        - name: tmp
+          emptyDir: {}
   volumeClaimTemplates:
     - metadata:
         name: data
@@ -183,6 +203,10 @@ spec:
         app.kubernetes.io/component: gateway
     spec:
       terminationGracePeriodSeconds: 30
+      {{- with .Values.tieringKv.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -224,16 +248,22 @@ spec:
               port: resp
             initialDelaySeconds: 15
             periodSeconds: 10
+          securityContext:
+            {{- toYaml .Values.tieringKv.securityContext | nindent 12 }}
           volumeMounts:
             - name: config
               mountPath: /etc/tiering-kv
               readOnly: true
+            - name: tmp
+              mountPath: /tmp
           resources:
             {{- toYaml .Values.tieringKv.resources | nindent 12 }}
       volumes:
         - name: config
           configMap:
             name: {{ $full }}-config
+        - name: tmp
+          emptyDir: {}
 {{- else }}
 apiVersion: apps/v1
 kind: StatefulSet
@@ -256,6 +286,10 @@ spec:
         app.kubernetes.io/component: core
     spec:
       terminationGracePeriodSeconds: {{ .Values.tieringKv.terminationGracePeriodSeconds }}
+      {{- with .Values.tieringKv.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with .Values.global.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -286,18 +320,24 @@ spec:
               port: management
             initialDelaySeconds: 20
             periodSeconds: 10
+          securityContext:
+            {{- toYaml .Values.tieringKv.securityContext | nindent 12 }}
           volumeMounts:
             - name: config
               mountPath: /app/config
               readOnly: true
             - name: data
               mountPath: /app/data
+            - name: tmp
+              mountPath: /tmp
           resources:
             {{- toYaml .Values.tieringKv.resources | nindent 12 }}
       volumes:
         - name: config
           configMap:
             name: {{ $full }}-config
+        - name: tmp
+          emptyDir: {}
         {{- if not .Values.tieringKv.persistence.enabled }}
         - name: data
           emptyDir: {}

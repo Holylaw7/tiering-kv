@@ -21,8 +21,9 @@ case "${1:-setup}" in
     mkfs.ext4 -q -m 0 "$LOOP_DEV"
     mkdir -p "$MOUNT_DIR"
     mount "$LOOP_DEV" "$MOUNT_DIR"
-    # sudo 下 chown 给调用者（runner），否则 Maven 非 root 无法写入
+    # sudo 下 chown 给调用者（runner），并开放 0777 供容器内非 root（UID 10001）挂载写入
     chown "${SUDO_UID:-$(id -u)}:${SUDO_GID:-$(id -g)}" "$MOUNT_DIR"
+    chmod 0777 "$MOUNT_DIR"
     echo "TIERINGKV_BLOCK_DEVICE_READY=true"
     ;;
   disk-full)

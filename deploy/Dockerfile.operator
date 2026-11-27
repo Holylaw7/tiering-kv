@@ -22,7 +22,10 @@ RUN set -e; \
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
-RUN groupadd -r -g 10001 tiering && useradd -r -u 10001 -g tiering tiering \
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r -g 10001 tiering && useradd -r -u 10001 -g tiering tiering \
     && mkdir -p /app/logs && chown -R 10001:10001 /app
 COPY --from=build --chown=10001:10001 /tmp/tiering-operator.jar /app/tiering-operator.jar
 USER 10001:10001

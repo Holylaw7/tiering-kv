@@ -12,20 +12,20 @@ BACKEND_CONTAINERS="txn-coordinator txn-participant-a txn-participant-b txn-meta
 tc_show() {
   for c in $BACKEND_CONTAINERS; do
     echo "[$c]"
-    docker exec "$c" sh -c "tc qdisc show dev eth0 2>/dev/null || true"
+    docker exec -u 0 "$c" sh -c "tc qdisc show dev eth0 2>/dev/null || true"
   done
 }
 
 apply_netem() {
   local rule=$1
   for c in $BACKEND_CONTAINERS; do
-    docker exec "$c" sh -c \
+    docker exec -u 0 "$c" sh -c \
       "tc qdisc del dev eth0 root 2>/dev/null || true; tc qdisc add dev eth0 root netem $rule"
   done
   # 校验：任一后端容器 qdisc 未生效即失败
   local verified=0
   for c in $BACKEND_CONTAINERS; do
-    if docker exec "$c" sh -c "tc qdisc show dev eth0" \
+    if docker exec -u 0 "$c" sh -c "tc qdisc show dev eth0" \
         | grep -q "netem"; then
       verified=$((verified + 1))
     fi
@@ -49,7 +49,7 @@ case "${1:-recover}" in
     ;;
   recover)
     for c in $BACKEND_CONTAINERS; do
-      docker exec "$c" sh -c "tc qdisc del dev eth0 root 2>/dev/null || true"
+      docker exec -u 0 "$c" sh -c "tc qdisc del dev eth0 root 2>/dev/null || true"
     done
     echo "TIERINGKV_NETEM_RECOVERED=true"
     ;;

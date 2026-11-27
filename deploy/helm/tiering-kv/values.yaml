@@ -51,6 +51,17 @@ tieringKv:
     metadataStorageSize: 10Gi
     storageSize: 100Gi
     pdbMinAvailable: 2
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
   resources:
     requests:
       cpu: 250m
@@ -71,7 +82,9 @@ consoleServer:
     type: ClusterIP
     port: 8080
   database:
-    url: "jdbc:mysql://tiering-kv-mysql:3306/tiering_console?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
+    url: "jdbc:mysql://tiering-kv-mysql:3306/tiering_console?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true"
+    # MySQL TLS 模式：PREFERRED | REQUIRED | VERIFY_CA | VERIFY_IDENTITY（生产推荐 REQUIRED 或 VERIFY_IDENTITY）
+    sslMode: "PREFERRED"
     username: "root"
     # 生产部署必须通过 --set 或 consoleServer.security.existingSecret 注入真实口令
     password: ""
@@ -89,6 +102,20 @@ consoleServer:
     loginAttemptStore: ""
     trustedProxies: "127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
     corsAllowedOrigins: "http://localhost:8081,http://127.0.0.1:8081"
+    # 应用层 SSRF 防护与允许的精确内网 Webhook 白名单（服务端部署配置，非 OPS 可改）
+    blockPrivateWebhookUrls: true
+    webhookAllowedCidrs: ""
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
   backup:
     # 多副本 HA 强烈建议使用 s3（兼容 RustFS / MinIO / AWS S3）
     storageType: local
@@ -137,6 +164,17 @@ consoleWeb:
           - path: /
             pathType: Prefix
     tls: []
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 101
+    runAsGroup: 101
+    fsGroup: 101
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
   resources:
     requests:
       cpu: 50m
@@ -156,6 +194,17 @@ operator:
   leaseName: tiering-kv-operator-leader
   rbac:
     create: true
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    fsGroup: 10001
+  securityContext:
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
   resources:
     requests:
       cpu: 100m
@@ -175,3 +224,20 @@ observability:
   prometheusRule:
     enabled: false
     labels: {}
+
+# 纵深网络隔离策略（Wave 3A S2）：启用后仅放行 console-web -> console-server -> mysql / tiering-kv / s3
+# 以及剔除了私网与云元数据段（169.254.0.0/16、100.64.0.0/10）的公网 Webhook 出口
+networkPolicy:
+  enabled: false
+  mysqlPort: 3306
+  # 可按需限定外部 MySQL 网段或同命名空间 Pod 标签选择器；均留空时仅放通 TCP mysqlPort
+  mysqlCidrs: []
+  mysqlPodSelector: {}
+  s3Port: 9000
+  s3Cidrs: []
+  # 允许控制面访问公网 Webhook（443/80），显式剔除 RFC1918/回环/云元数据地址段
+  allowPublicWebhooks: true
+  # 可选精确内网 Webhook 网关网段（如 ["10.20.30.40/32"]），严禁配置大网段
+  webhookAllowedCidrs: []
+  # 可选 Prometheus 抓取命名空间标签选择器
+  prometheusNamespaceSelector: {}

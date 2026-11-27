@@ -84,3 +84,17 @@ Default data-plane bootstrap instance address for console-server.
 {{- printf "local-6379@%s-core:%d" (include "tiering-kv.fullname" .) (int .Values.tieringKv.ports.resp) }}
 {{- end }}
 {{- end }}
+
+{{/*
+Effective console MySQL JDBC URL with configurable sslMode.
+*/}}
+{{- define "tiering-kv.consoleDbUrl" -}}
+{{- $url := .Values.consoleServer.database.url -}}
+{{- if or (contains "sslMode=" $url) (contains "useSSL=" $url) -}}
+{{- $url -}}
+{{- else -}}
+{{- $sep := "?" -}}
+{{- if contains "?" $url -}}{{- $sep = "&" -}}{{- end -}}
+{{- printf "%s%ssslMode=%s" $url $sep (default "PREFERRED" .Values.consoleServer.database.sslMode) -}}
+{{- end -}}
+{{- end }}
