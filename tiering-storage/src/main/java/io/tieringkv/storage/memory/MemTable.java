@@ -117,12 +117,12 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
         try {
             KeyValueEntry old = segment.list.putAndGetOld(entry);
             if (old != null) {
-                memoryManager.remove(old.size());
+                removeMemory(segment, old.size());
                 if (old.isLive(now)) {
                     liveSize.decrementAndGet();
                 }
             }
-            memoryManager.add(entry.size());
+            addMemory(segment, entry.size());
             liveSize.incrementAndGet();
             if (entry.expireTimestamp() >= 0) {
                 ttlManager.schedule(entry.expireTimestamp(), versionId, segmentIndex, key);
@@ -174,12 +174,12 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
                                     mutation.ttlMillis(), versionId);
                             KeyValueEntry old = segment.list.putAndGetOld(entry);
                             if (old != null) {
-                                memoryManager.remove(old.size());
+                                removeMemory(segment, old.size());
                                 if (old.isLive(now)) {
                                     liveSize.decrementAndGet();
                                 }
                             }
-                            memoryManager.add(entry.size());
+                            addMemory(segment, entry.size());
                             liveSize.incrementAndGet();
                             if (entry.expireTimestamp() >= 0) {
                                 ttlManager.schedule(entry.expireTimestamp(), versionId,
@@ -257,12 +257,12 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
                                 mutation.ttlMillis(), versions[i]);
                         KeyValueEntry old = segment.list.putAndGetOld(entry);
                         if (old != null) {
-                            memoryManager.remove(old.size());
+                            removeMemory(segment, old.size());
                             if (old.isLive(now)) {
                                 liveSize.decrementAndGet();
                             }
                         }
-                        memoryManager.add(entry.size());
+                        addMemory(segment, entry.size());
                         liveSize.incrementAndGet();
                         if (entry.expireTimestamp() >= 0) {
                             ttlManager.schedule(entry.expireTimestamp(), versions[i],
@@ -284,8 +284,8 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
         if (current != null && current.isLive(now)) {
             KeyValueEntry tombstone = KeyValueEntry.tombstone(key, now, versionId);
             segment.list.put(tombstone);
-            memoryManager.remove(current.size());
-            memoryManager.add(tombstone.size());
+            removeMemory(segment, current.size());
+            addMemory(segment, tombstone.size());
             liveSize.decrementAndGet();
         }
     }
@@ -335,9 +335,9 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
             KeyValueEntry tombstone = KeyValueEntry.tombstone(key, now, version.next());
             segment.list.put(tombstone);
             if (current != null) {
-                memoryManager.remove(current.size());
+                removeMemory(segment, current.size());
             }
-            memoryManager.add(tombstone.size());
+            addMemory(segment, tombstone.size());
             if (wasLive) {
                 liveSize.decrementAndGet();
             }
@@ -368,8 +368,8 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
             }
             KeyValueEntry tombstone = KeyValueEntry.tombstone(key, now, version.next());
             segment.list.put(tombstone);
-            memoryManager.remove(current.size());
-            memoryManager.add(tombstone.size());
+            removeMemory(segment, current.size());
+            addMemory(segment, tombstone.size());
             liveSize.decrementAndGet();
             return true;
         } finally {
@@ -392,7 +392,7 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
                 return false;
             }
             segment.list.remove(key);
-            memoryManager.remove(current.size());
+            removeMemory(segment, current.size());
             liveSize.decrementAndGet();
             return true;
         } finally {
@@ -420,7 +420,7 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
                         continue;
                     }
                     segment.list.remove(key);
-                    memoryManager.remove(current.size());
+                    removeMemory(segment, current.size());
                     liveSize.decrementAndGet();
                     removed++;
                 }
@@ -429,6 +429,45 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
             }
         }
         return removed;
+    }
+
+    /**
+     * O(SEGMENT_COUNT) 全量清空（Wave 3C K1）：
+     * 按严格升序锁住全部 256 个分段写锁，一次性重置跳表（含 tombstone）并精确归还内存账本；
+     * 单调 {@code version} 计数器保持不回退，确保 WATCH/EXEC 冲突检测与 TTLManager 版本守卫语义严格不变。
+     */
+    @Override
+    public void clear() {
+        int locked = 0;
+        try {
+            for (int i = 0; i < SEGMENT_COUNT; i++) {
+                lockSegmentWrite(segments[i]);
+                locked++;
+            }
+            long reclaimedBytes = 0L;
+            for (int i = 0; i < SEGMENT_COUNT; i++) {
+                Segment segment = segments[i];
+                segment.list.clear();
+                reclaimedBytes += segment.bytes;
+                segment.bytes = 0L;
+            }
+            if (reclaimedBytes > 0L) {
+                memoryManager.remove(reclaimedBytes);
+            }
+            liveSize.set(0L);
+        } finally {
+            for (int i = locked - 1; i >= 0; i--) {
+                unlockSegmentWrite(segments[i]);
+            }
+        }
+    }
+
+    private static void lockSegmentWrite(Segment segment) {
+        segment.lock.writeLock().lock();
+    }
+
+    private static void unlockSegmentWrite(Segment segment) {
+        segment.lock.writeLock().unlock();
     }
 
     /**
@@ -445,7 +484,7 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
                 return false;
             }
             segment.list.remove(key);
-            memoryManager.remove(current.size());
+            removeMemory(segment, current.size());
             liveSize.decrementAndGet();
             return true;
         } finally {
@@ -565,8 +604,8 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
             KeyValueEntry tombstone = KeyValueEntry.tombstone(key,
                     now, version.next());
             segment.list.put(tombstone);
-            memoryManager.remove(current.size());
-            memoryManager.add(tombstone.size());
+            removeMemory(segment, current.size());
+            addMemory(segment, tombstone.size());
             liveSize.decrementAndGet();
             return old;
         } finally {
@@ -699,12 +738,12 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
                                  KeyValueEntry entry, long now) {
         KeyValueEntry old = segment.list.putAndGetOld(entry);
         if (old != null) {
-            memoryManager.remove(old.size());
+            removeMemory(segment, old.size());
             if (old.isLive(now)) {
                 liveSize.decrementAndGet();
             }
         }
-        memoryManager.add(entry.size());
+        addMemory(segment, entry.size());
         liveSize.incrementAndGet();
         if (entry.expireTimestamp() >= 0) {
             ttlManager.schedule(entry.expireTimestamp(),
@@ -794,7 +833,7 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
                 return false;
             }
             segment.list.remove(key);
-            memoryManager.remove(current.size());
+            removeMemory(segment, current.size());
             liveSize.decrementAndGet();
             expiryHook.publishExpired(key);
             return true;
@@ -906,7 +945,7 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
             KeyValueEntry old = segment.list.get(key);
             if (old != null && old.isLive(now)) {
                 segment.list.remove(key);
-                memoryManager.remove(old.size());
+                removeMemory(segment, old.size());
                 liveSize.decrementAndGet();
                 expiryHook.publishExpired(key);
             }
@@ -914,6 +953,16 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
             segment.lock.writeLock().unlock();
         }
         notifyMemoryPressureIfNeeded();
+    }
+
+    private void addMemory(Segment segment, long bytes) {
+        segment.bytes += bytes;
+        memoryManager.add(bytes);
+    }
+
+    private void removeMemory(Segment segment, long bytes) {
+        segment.bytes -= bytes;
+        memoryManager.remove(bytes);
     }
 
     private void notifyMemoryPressureIfNeeded() {
@@ -942,6 +991,7 @@ public final class MemTable implements StorageEngine, AtomicStringOps, AutoClose
     private static final class Segment {
         private final SkipList list = new SkipList();
         private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
+        private long bytes;
     }
 
     /** 64 段有序列表的多路归并迭代器（弱一致快照，ADR-0008）。 */

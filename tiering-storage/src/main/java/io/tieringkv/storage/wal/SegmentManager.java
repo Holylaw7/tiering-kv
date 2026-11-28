@@ -73,6 +73,24 @@ public final class SegmentManager implements AutoCloseable {
         return directory.resolve(String.format(Locale.ROOT, "%06d.log", sequence));
     }
 
+    /**
+     * 安全清理严格早于 {@code keepFromSequence} 的历史封闭段文件（永不删除当前活跃段或目标段本身）。
+     * 调用方须持有对应分片的写锁且已确保 {@code keepFromSequence} 上的屏障记录完成 {@code fdatasync}。
+     */
+    public int deleteSegmentsBefore(long keepFromSequence) throws IOException {
+        long activeSeq = current == null ? Long.MAX_VALUE : current.sequence();
+        long boundary = Math.min(keepFromSequence, activeSeq);
+        int deleted = 0;
+        for (long seq : listSegments()) {
+            if (seq < boundary) {
+                if (Files.deleteIfExists(segmentPath(seq))) {
+                    deleted++;
+                }
+            }
+        }
+        return deleted;
+    }
+
     public String activeIoBackend() {
         return current == null ? "nio" : current.ioBackendName();
     }

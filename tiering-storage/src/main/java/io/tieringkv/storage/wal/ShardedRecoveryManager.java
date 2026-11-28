@@ -94,53 +94,128 @@ public final class ShardedRecoveryManager {
             int shardCount,
             List<WALManager.WALPosition> startPositions,
             MemTable memTable) throws IOException {
-        int threads = Math.min(shardCount, Math.max(1, Runtime.getRuntime().availableProcessors()));
-        if (threads <= 1) {
-            long scanned = 0, applied = 0, segments = 0, corrupted = 0;
-            Path lastGood = null;
-            for (int i = 0; i < shardCount; i++) {
-                Path dir = root.resolve(String.format(Locale.ROOT, "shard-%02d", i));
-                WALManager.WALPosition pos = startPositions.get(i);
-                RecoveryManager.RecoveryStats s = RecoveryManager.recoverDirectory(
-                        dir, memTable, pos.sequence(), pos.offset());
-                scanned += s.recordsScanned();
-                applied += s.recordsApplied();
-                segments += s.segmentsReplayed();
-                corrupted += s.corruptedRecordsDiscarded();
-                if (s.lastGoodPath() != null) {
-                    lastGood = s.lastGoodPath();
-                }
-            }
-            return new RecoveryManager.RecoveryStats(scanned, applied, segments, corrupted, lastGood);
+        List<Path> shardDirs = new ArrayList<>(shardCount);
+        for (int i = 0; i < shardCount; i++) {
+            shardDirs.add(root.resolve(String.format(Locale.ROOT, "shard-%02d", i)));
         }
 
+        int threads = Math.min(shardCount, Math.max(1, Runtime.getRuntime().availableProcessors()));
+        List<RecoveryManager.BarrierScanResult> scans = scanShards(shardDirs, startPositions, threads);
+        long committedEpoch = computeCommittedClearEpoch(scans);
+        long maxObservedEpoch = computeMaxObservedClearEpoch(scans);
+
+        if (committedEpoch > 0L) {
+            // 先在全局单线程清空 MemTable（作废旧 Checkpoint），再按各分片屏障偏移之后并行回放
+            memTable.clear();
+        }
+
+        List<WALManager.WALPosition> replayStarts = new ArrayList<>(shardCount);
+        for (int i = 0; i < shardCount; i++) {
+            replayStarts.add(committedEpoch > 0L
+                    ? scans.get(i).clearEndPositions().get(committedEpoch)
+                    : startPositions.get(i));
+        }
+
+        List<RecoveryManager.ReplayResult> replays = replayShards(shardDirs, replayStarts, memTable, threads);
+        long scanned = 0L;
+        long applied = 0L;
+        long segments = 0L;
+        long corrupted = 0L;
+        Path lastGood = null;
+        for (int i = 0; i < shardCount; i++) {
+            RecoveryManager.BarrierScanResult scan = scans.get(i);
+            RecoveryManager.ReplayResult replay = replays.get(i);
+            scanned += committedEpoch > 0L ? scan.recordsScanned() : replay.recordsScanned();
+            applied += replay.recordsApplied();
+            segments += scan.segmentsReplayed();
+            corrupted += scan.corruptedDiscarded();
+            if (scan.lastGoodPath() != null) {
+                lastGood = scan.lastGoodPath();
+            }
+        }
+        return new RecoveryManager.RecoveryStats(
+                scanned, applied, segments, corrupted, lastGood, committedEpoch, maxObservedEpoch);
+    }
+
+    private List<RecoveryManager.BarrierScanResult> scanShards(
+            List<Path> shardDirs,
+            List<WALManager.WALPosition> startPositions,
+            int threads) throws IOException {
+        int count = shardDirs.size();
+        if (threads <= 1) {
+            List<RecoveryManager.BarrierScanResult> results = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                WALManager.WALPosition pos = i < startPositions.size()
+                        ? startPositions.get(i) : new WALManager.WALPosition(0L, 0L);
+                results.add(RecoveryManager.scanDirectoryBarriers(shardDirs.get(i), pos.sequence(), pos.offset()));
+            }
+            return results;
+        }
+        ExecutorService pool = Executors.newFixedThreadPool(threads, r -> {
+            Thread t = new Thread(r, "wal-shard-scan");
+            t.setDaemon(true);
+            return t;
+        });
+        try {
+            List<Future<RecoveryManager.BarrierScanResult>> futures = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                final Path dir = shardDirs.get(i);
+                final WALManager.WALPosition pos = i < startPositions.size()
+                        ? startPositions.get(i) : new WALManager.WALPosition(0L, 0L);
+                futures.add(pool.submit(() -> RecoveryManager.scanDirectoryBarriers(
+                        dir, pos.sequence(), pos.offset())));
+            }
+            List<RecoveryManager.BarrierScanResult> results = new ArrayList<>(count);
+            for (Future<RecoveryManager.BarrierScanResult> future : futures) {
+                results.add(future.get());
+            }
+            return results;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("sharded WAL barrier scan interrupted", e);
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof IOException ioe) {
+                throw ioe;
+            }
+            throw new IOException("sharded WAL barrier scan failed", e.getCause());
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    private List<RecoveryManager.ReplayResult> replayShards(
+            List<Path> shardDirs,
+            List<WALManager.WALPosition> replayStarts,
+            MemTable memTable,
+            int threads) throws IOException {
+        int count = shardDirs.size();
+        if (threads <= 1) {
+            List<RecoveryManager.ReplayResult> results = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                WALManager.WALPosition pos = replayStarts.get(i);
+                results.add(RecoveryManager.replayDirectoryIgnoringClears(
+                        shardDirs.get(i), memTable, pos.sequence(), pos.offset()));
+            }
+            return results;
+        }
         ExecutorService pool = Executors.newFixedThreadPool(threads, r -> {
             Thread t = new Thread(r, "wal-shard-recover");
             t.setDaemon(true);
             return t;
         });
         try {
-            List<Future<RecoveryManager.RecoveryStats>> futures = new ArrayList<>(shardCount);
-            for (int i = 0; i < shardCount; i++) {
-                final int shardId = i;
-                Path dir = root.resolve(String.format(Locale.ROOT, "shard-%02d", shardId));
-                WALManager.WALPosition pos = startPositions.get(shardId);
-                futures.add(pool.submit(() -> RecoveryManager.recoverDirectory(
+            List<Future<RecoveryManager.ReplayResult>> futures = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                final Path dir = shardDirs.get(i);
+                final WALManager.WALPosition pos = replayStarts.get(i);
+                futures.add(pool.submit(() -> RecoveryManager.replayDirectoryIgnoringClears(
                         dir, memTable, pos.sequence(), pos.offset())));
             }
-            long scanned = 0, applied = 0, segments = 0, corrupted = 0;
-            Path lastGood = null;
-            for (Future<RecoveryManager.RecoveryStats> future : futures) {
-                RecoveryManager.RecoveryStats s = future.get();
-                scanned += s.recordsScanned();
-                applied += s.recordsApplied();
-                segments += s.segmentsReplayed();
-                corrupted += s.corruptedRecordsDiscarded();
-                if (s.lastGoodPath() != null) {
-                    lastGood = s.lastGoodPath();
-                }
+            List<RecoveryManager.ReplayResult> results = new ArrayList<>(count);
+            for (Future<RecoveryManager.ReplayResult> future : futures) {
+                results.add(future.get());
             }
-            return new RecoveryManager.RecoveryStats(scanned, applied, segments, corrupted, lastGood);
+            return results;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IOException("sharded WAL recovery interrupted", e);
@@ -154,22 +229,72 @@ public final class ShardedRecoveryManager {
         }
     }
 
-    /** 重分片归并恢复：对可能重叠的旧分片按 (timestamp, version) 选出每个 Key 的最新状态。 */
+    /**
+     * 精确求全部 S 个分片共同拥有的最高 clearEpoch（逻辑提交点）：
+     * 任一分片缺失的未提交撕裂纪元会被自动排除，避免半库清空。
+     */
+    static long computeCommittedClearEpoch(List<RecoveryManager.BarrierScanResult> scans) {
+        if (scans.isEmpty()) {
+            return 0L;
+        }
+        long committed = 0L;
+        for (Long candidate : scans.get(0).clearEndPositions().keySet()) {
+            if (candidate <= committed) {
+                continue;
+            }
+            boolean presentInAll = true;
+            for (int i = 1; i < scans.size(); i++) {
+                if (!scans.get(i).clearEndPositions().containsKey(candidate)) {
+                    presentInAll = false;
+                    break;
+                }
+            }
+            if (presentInAll) {
+                committed = candidate;
+            }
+        }
+        return committed;
+    }
+
+    static long computeMaxObservedClearEpoch(List<RecoveryManager.BarrierScanResult> scans) {
+        long max = 0L;
+        for (RecoveryManager.BarrierScanResult scan : scans) {
+            if (scan.maxClearEpoch() > max) {
+                max = scan.maxClearEpoch();
+            }
+        }
+        return max;
+    }
+
+    /** 重分片归并恢复：两阶段识别跨分片 CLEAR_ALL 屏障，仅归并屏障之后的记录并按 (timestamp, version) 选最新态。 */
     private RecoveryManager.RecoveryStats recoverResharded(
             List<Path> shardDirs,
             List<WALManager.WALPosition> startPositions,
             MemTable memTable) throws IOException {
+        List<RecoveryManager.BarrierScanResult> scans = scanShards(shardDirs, startPositions, 1);
+        long committedEpoch = computeCommittedClearEpoch(scans);
+        long maxObservedEpoch = computeMaxObservedClearEpoch(scans);
+        if (committedEpoch > 0L) {
+            memTable.clear();
+        }
+
         Map<ByteBuffer, WALEntry> merged = new HashMap<>();
-        long scanned = 0;
-        long segments = 0;
-        long corrupted = 0;
+        long scanned = 0L;
+        long segments = 0L;
+        long corrupted = 0L;
         Path lastGood = null;
 
         for (int i = 0; i < shardDirs.size(); i++) {
+            RecoveryManager.BarrierScanResult scan = scans.get(i);
+            corrupted += scan.corruptedDiscarded();
+            segments += scan.segmentsReplayed();
+            if (scan.lastGoodPath() != null) {
+                lastGood = scan.lastGoodPath();
+            }
             Path dir = shardDirs.get(i);
-            WALManager.WALPosition start = i < startPositions.size()
-                    ? startPositions.get(i)
-                    : new WALManager.WALPosition(0, 0);
+            WALManager.WALPosition start = committedEpoch > 0L
+                    ? scan.clearEndPositions().get(committedEpoch)
+                    : (i < startPositions.size() ? startPositions.get(i) : new WALManager.WALPosition(0L, 0L));
             for (long seq : RecoveryManager.listSegments(dir)) {
                 if (seq < start.sequence()) {
                     continue;
@@ -177,39 +302,39 @@ public final class ShardedRecoveryManager {
                 Path path = dir.resolve(String.format(Locale.ROOT, "%06d.log", seq));
                 long skip = seq == start.sequence() ? start.offset() : 0L;
                 try (WALReader reader = new WALReader(path, skip)) {
-                    segments++;
                     while (true) {
                         WALEntry entry;
                         try {
                             entry = reader.next();
                         } catch (WalCorruptionException e) {
-                            corrupted++;
-                            RecoveryManager.truncateTail(path, reader.offset());
                             break;
                         }
                         if (entry == null) {
-                            if (!reader.reachedZeroTail()) {
-                                RecoveryManager.truncateTail(path, reader.offset());
-                            }
                             break;
                         }
                         scanned++;
+                        if (entry.operation() == WALEntry.Operation.CLEAR_ALL) {
+                            continue; // 忽略未提交的跨分片撕裂屏障
+                        }
                         ByteBuffer keyWrap = ByteBuffer.wrap(entry.key());
                         WALEntry prev = merged.get(keyWrap);
                         if (prev == null || isNewer(entry, prev)) {
                             merged.put(keyWrap, entry);
                         }
                     }
-                    lastGood = path;
                 }
             }
         }
-        long applied = 0;
+        long applied = 0L;
         for (WALEntry entry : merged.values()) {
             RecoveryManager.apply(entry, memTable);
             applied++;
         }
-        return new RecoveryManager.RecoveryStats(scanned, applied, segments, corrupted, lastGood);
+        long totalScanned = committedEpoch > 0L
+                ? scans.stream().mapToLong(RecoveryManager.BarrierScanResult::recordsScanned).sum()
+                : scanned;
+        return new RecoveryManager.RecoveryStats(
+                totalScanned, applied, segments, corrupted, lastGood, committedEpoch, maxObservedEpoch);
     }
 
     private static boolean isNewer(WALEntry candidate, WALEntry existing) {

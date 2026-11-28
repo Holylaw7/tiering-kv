@@ -125,6 +125,11 @@ public final class Main {
         ColdStorageEngine cold = new ColdStorageEngine(
                 ColdStorageEngine.Config.defaults(Path.of(config.storage().coldDir())),
                 blockCache, ioStats, true);
+        boolean coldReconciled = cold.reconcileClearEpoch(walManager.committedClearEpoch());
+        walManager.advanceEpochFloor(cold.clearEpoch());
+        if (coldReconciled) {
+            log.info("Cold storage reconciled to WAL clearEpoch={}", cold.clearEpoch());
+        }
         WatermarkManager.Config watermarks = new WatermarkManager.Config(
                 config.tiering().lowWatermark(), config.tiering().highWatermark(),
                 config.tiering().criticalWatermark(),
@@ -139,6 +144,9 @@ public final class Main {
                         3, 0, config.tiering().backpressureTimeoutMillis(),
                         Path.of(config.storage().migrationDir())),
                 memoryManager, memTable, walManager, cold);
+        if (stats.clearedByBarrier() || coldReconciled) {
+            tiering.migrationScheduler().clearLog();
+        }
         tiering.recover();
         CacheConfig cacheConfig = new CacheConfig(
                 config.cache().evictionDecayIntervalMillis(),
@@ -171,10 +179,12 @@ public final class Main {
                 Math.max(1, Runtime.getRuntime().availableProcessors()));
         KeyShardExecutor executor = new KeyShardExecutor(shards, "command-shard", config.wal().batchMaxEntries());
         MetricsRegistry metrics = new MetricsRegistry();
-        // M3-B1：向量索引加载 checkpoint 并在 WAL/冷存恢复后补齐缺失项，停机时原子落盘
+        // M3-B1 + Wave 3C K1：向量索引加载 checkpoint（若本次恢复触发了 CLEAR_ALL 屏障，跳过陈旧快照由存储全量重建）
         Path vectorDir = Path.of(config.vector().indexDir());
         Path vectorCheckpointFile = vectorDir.resolve("default.vidx");
-        VectorIndexStore vectorStore = loadOrCreateVectorStore(vectorCheckpointFile, config.vector().maxLevel());
+        VectorIndexStore vectorStore = (stats.clearedByBarrier() || coldReconciled)
+                ? new VectorIndexStore(config.vector().maxLevel())
+                : loadOrCreateVectorStore(vectorCheckpointFile, config.vector().maxLevel());
         ObservabilityRegistry observability = new ObservabilityRegistry(
                 new VectorMetricsRegistry(vectorStore),
                 new ReplicationMetricsRegistry(),

@@ -5,6 +5,7 @@ import io.tieringkv.storage.StorageEngine;
 import io.tieringkv.storage.StorageIterator;
 import io.tieringkv.storage.cold.ColdStorageEngine;
 import io.tieringkv.storage.memory.KeyValueEntry;
+import io.tieringkv.storage.wal.WALStorageEngine;
 
 /**
  * 分层读路径装饰器（TD-086）：补齐"迁移后可读"。
@@ -26,6 +27,7 @@ import io.tieringkv.storage.memory.KeyValueEntry;
 public final class TieringReadStorageEngine extends AbstractStorageDecorator {
 
     private final ColdStorageEngine cold;
+    private final WALStorageEngine walStorage;
 
     public TieringReadStorageEngine(StorageEngine delegate, ColdStorageEngine cold) {
         super(delegate);
@@ -33,6 +35,22 @@ public final class TieringReadStorageEngine extends AbstractStorageDecorator {
             throw new IllegalArgumentException("cold storage required");
         }
         this.cold = cold;
+        this.walStorage = locateWalStorage(delegate);
+    }
+
+    private static WALStorageEngine locateWalStorage(StorageEngine engine) {
+        StorageEngine cursor = engine;
+        while (cursor != null) {
+            if (cursor instanceof WALStorageEngine wal) {
+                return wal;
+            }
+            if (cursor instanceof AbstractStorageDecorator decorator) {
+                cursor = decorator.unwrapDelegate();
+            } else {
+                return null;
+            }
+        }
+        return null;
     }
 
     @Override
@@ -103,8 +121,12 @@ public final class TieringReadStorageEngine extends AbstractStorageDecorator {
 
     @Override
     public void clear() {
-        delegate.clear();
-        cold.clear();
+        if (walStorage != null) {
+            walStorage.clearWithColdHook(cold::clearToEpoch, delegate::clear);
+        } else {
+            delegate.clear();
+            cold.clear();
+        }
     }
 
     @Override
@@ -123,24 +145,35 @@ public final class TieringReadStorageEngine extends AbstractStorageDecorator {
     private static final long KEEP_TTL = Long.MIN_VALUE;
 
     /**
-     * 把冷层条目的当前状态搬回热层，然后清掉冷层副本。
+     * 把冷层条目的当前状态搬回热层，然后清掉冷层副本（Wave 3C K1 加固）：
      *
-     * <p>顺序很关键：先写热层（可能触发背压异常），成功后再删冷层，
-     * 避免中途失败导致数据丢失。
+     * <p>有底层 WAL 时在 {@code wal.withKeyLock(key)}（L3）内执行，与 {@code clear()} 严格互斥，
+     * 同时双重校验 {@code cold.clearEpoch()}，彻底杜绝并发 {@code clear()} 导致的旧冷键幽灵回写；
+     * 先写热层（可能触发背压异常），成功后再删冷层，避免中途失败导致数据丢失。
      *
      * @return 是否发生了回填
      */
     private boolean copyUp(byte[] key, long ttlOverride) {
+        if (walStorage != null) {
+            return walStorage.walManager().withKeyLock(key, () -> copyUpGuarded(key, ttlOverride));
+        }
+        return copyUpGuarded(key, ttlOverride);
+    }
+
+    private boolean copyUpGuarded(byte[] key, long ttlOverride) {
         if (delegate.get(key) != null || delegate.hasTombstone(key)) {
             return false;
         }
+        long epochBefore = cold.clearEpoch();
         KeyValueEntry entry = cold.entry(key);
-        if (entry == null) {
+        if (entry == null || cold.clearEpoch() != epochBefore) {
             return false;
         }
         long ttl = ttlOverride == KEEP_TTL ? remainingTtl(entry) : ttlOverride;
         delegate.put(key, entry.value(), ttl);
-        cold.delete(key);
+        if (cold.clearEpoch() == epochBefore) {
+            cold.delete(key);
+        }
         return true;
     }
 

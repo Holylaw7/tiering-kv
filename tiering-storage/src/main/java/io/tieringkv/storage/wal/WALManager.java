@@ -5,13 +5,21 @@ import io.tieringkv.storage.memory.KeyValueEntry;
 import io.tieringkv.storage.memory.MemTable;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
@@ -30,13 +38,19 @@ import java.util.function.Supplier;
  */
 public final class WALManager implements AutoCloseable {
 
+    static final String CLEAR_EPOCH_FILE = "clear.epoch";
+
     private final WALConfig config;
     private final int shardCount;
     private final Object shardsLifecycleLock = new Object();
     private volatile WALShard[] shards;
+    /** L1 后台分层任务屏障：FlushManager / MigrationScheduler.runBatch 持读锁，clear() 持写锁；热写路径永不触碰。 */
+    private final ReentrantReadWriteLock backgroundTierLock = new ReentrantReadWriteLock();
     private final Object checkpointLock = new Object();
     private final ReentrantLock[] keyLocks = createKeyLocks();
     private final Object flusherLock = new Object();
+    private final AtomicLong committedClearEpoch = new AtomicLong(0L);
+    private final AtomicLong nextClearEpochFloor = new AtomicLong(0L);
     private volatile WALConfig.FsyncPolicy activeFsyncPolicy;
     private volatile boolean closed;
     /** EVERY_SEC 的后台落盘器（TD-103）：逐分片独立刷盘，互不阻塞。 */
@@ -47,6 +61,11 @@ public final class WALManager implements AutoCloseable {
         this.shardCount = config.shardCount();
         this.activeFsyncPolicy = config.fsyncPolicy();
         Files.createDirectories(config.directory());
+        long persistedEpoch = readClearEpochFile(config.directory());
+        if (persistedEpoch > 0L) {
+            committedClearEpoch.set(persistedEpoch);
+            nextClearEpochFloor.set(persistedEpoch);
+        }
         if (!hasPendingMigrationOrReshard()) {
             openShardsLocked();
         }
@@ -360,6 +379,191 @@ public final class WALManager implements AutoCloseable {
         return list;
     }
 
+    /** 已跨全部分片持久提交的最高 CLEAR_ALL 纪元（用于冷层 Manifest v2 对账）。 */
+    public long committedClearEpoch() {
+        return committedClearEpoch.get();
+    }
+
+    /** 下一次 clear() 分配纪元的单调下界（含恢复扫描到的撕裂未提交纪元与冷层纪元）。 */
+    public long nextClearEpochFloor() {
+        return nextClearEpochFloor.get();
+    }
+
+    /** 由冷层启动对账同步推进纪元下界，确保重启后绝不复用任何历史已提交或已落冷纪元。 */
+    public void advanceEpochFloor(long floor) {
+        if (floor > 0L) {
+            nextClearEpochFloor.accumulateAndGet(floor, Math::max);
+        }
+    }
+
+    @FunctionalInterface
+    public interface IoSupplier<T> {
+        T get() throws IOException;
+    }
+
+    /** L1 后台读锁：供 FlushManager.flush() 使用，与 clear() 互斥且不影响热路径吞吐。 */
+    public <T> T withBackgroundTierReadLock(IoSupplier<T> action) throws IOException {
+        backgroundTierLock.readLock().lock();
+        try {
+            return action.get();
+        } finally {
+            backgroundTierLock.readLock().unlock();
+        }
+    }
+
+    /** L1 后台读锁：供 MigrationScheduler.runBatch() 使用。 */
+    public void withBackgroundTierReadLock(Runnable action) {
+        backgroundTierLock.readLock().lock();
+        try {
+            action.run();
+        } finally {
+            backgroundTierLock.readLock().unlock();
+        }
+    }
+
+    /**
+     * 独占清空屏障（严格遵循 7 层无环锁序 L1.writeLock -> L2(checkpointLock) -> L3(keyLocks[0..255])）：
+     * 全部三层锁均支持可重入，供 TieringReadStorageEngine 与 WALStorageEngine 共用同一屏障。
+     */
+    public void runUnderClearBarrier(Runnable action) {
+        backgroundTierLock.writeLock().lock();
+        try {
+            synchronized (checkpointLock) {
+                int locked = 0;
+                try {
+                    for (int i = 0; i < keyLocks.length; i++) {
+                        lockKeyStripe(i);
+                        locked++;
+                    }
+                    action.run();
+                } finally {
+                    for (int i = locked - 1; i >= 0; i--) {
+                        unlockKeyStripe(i);
+                    }
+                }
+            }
+        } finally {
+            backgroundTierLock.writeLock().unlock();
+        }
+    }
+
+    private void lockKeyStripe(int index) {
+        keyLocks[index].lock();
+    }
+
+    private void unlockKeyStripe(int index) {
+        keyLocks[index].unlock();
+    }
+
+    /**
+     * 向全部 S 个 WAL 分片严格升序持有 L5(shardLock[0..S-1]) 写入 46B {@code CLEAR_ALL(epoch)} 并强制 {@code fdatasync}。
+     * 若任一分片失败立即抛异常且不更新 {@code committedClearEpoch} / {@code clear.epoch}。
+     */
+    ClearBarrierCommit appendClearBarrierAllShards(long timestamp) {
+        if (closed) {
+            throw new WalWriteException("WAL is closed", null);
+        }
+        WALShard[] current = ensureShardsOpen();
+        int lockedCount = 0;
+        long epoch;
+        long[] clearSeqs = new long[current.length];
+        List<WALPosition> postPositions = new ArrayList<>(current.length);
+        try {
+            for (int i = 0; i < current.length; i++) {
+                current[i].lockShard();
+                lockedCount++;
+            }
+            if (closed) {
+                throw new WalWriteException("WAL is closed", null);
+            }
+            epoch = nextClearEpochFloor.incrementAndGet();
+            for (int i = 0; i < current.length; i++) {
+                WALShard.ShardClearPosition pos = current[i].appendClearBarrierLocked(epoch, timestamp);
+                clearSeqs[i] = pos.clearSegmentSequence();
+                postPositions.add(pos.postPosition());
+            }
+        } finally {
+            for (int i = lockedCount - 1; i >= 0; i--) {
+                current[i].unlockShard();
+            }
+        }
+        committedClearEpoch.accumulateAndGet(epoch, Math::max);
+        try {
+            writeClearEpochFile(config.directory(), epoch);
+        } catch (IOException e) {
+            throw new WalWriteException("WAL clear.epoch persist failed", e);
+        }
+        return new ClearBarrierCommit(epoch, clearSeqs, List.copyOf(postPositions));
+    }
+
+    /**
+     * 在冷层与热层均已完成清空后，收尾更新既有 checkpoint.bin（若已存在）并安全清理严格早于 clearSeq[i] 的封闭旧段。
+     */
+    void finalizeClearPostStorage(ClearBarrierCommit commit) {
+        Path cpFile = config.directory().resolve("checkpoint.bin");
+        if (Files.exists(cpFile)) {
+            try {
+                if (shardCount == 1) {
+                    CheckpointManager.write(config.directory(), commit.postPositions().get(0), List.of());
+                } else {
+                    CheckpointManager.writeSharded(config.directory(), commit.postPositions(), List.of());
+                    ShardedRecoveryManager.writeMeta(config.directory(), shardCount);
+                }
+            } catch (IOException ignored) {
+                // CLEAR_ALL(epoch) 已全分片 fdatasync 落盘，旧 checkpoint 恢复时会被屏障自动作废
+            }
+        }
+        WALShard[] current = this.shards;
+        if (current != null) {
+            long[] clearSeqs = commit.clearSegmentSequences();
+            for (int i = 0; i < current.length && i < clearSeqs.length; i++) {
+                current[i].pruneSegmentsBefore(clearSeqs[i]);
+            }
+        }
+    }
+
+    record ClearBarrierCommit(long epoch, long[] clearSegmentSequences, List<WALPosition> postPositions) {
+    }
+
+    static long readClearEpochFile(Path directory) {
+        Path file = directory.resolve(CLEAR_EPOCH_FILE);
+        if (!Files.exists(file)) {
+            return 0L;
+        }
+        try {
+            for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+                String trimmed = line.trim();
+                if (trimmed.startsWith("clearEpoch=")) {
+                    long parsed = Long.parseLong(trimmed.substring("clearEpoch=".length()).trim());
+                    return Math.max(0L, parsed);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return 0L;
+    }
+
+    static void writeClearEpochFile(Path directory, long epoch) throws IOException {
+        Files.createDirectories(directory);
+        Path tmp = directory.resolve(CLEAR_EPOCH_FILE + ".tmp");
+        byte[] bytes = ("clearEpoch=" + epoch + "\n").getBytes(StandardCharsets.UTF_8);
+        try (FileChannel ch = FileChannel.open(tmp,
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)) {
+            ByteBuffer src = ByteBuffer.wrap(bytes);
+            while (src.hasRemaining()) {
+                ch.write(src);
+            }
+            ch.force(true);
+        }
+        Path target = directory.resolve(CLEAR_EPOCH_FILE);
+        try {
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+        }
+        CheckpointManager.fsyncDirectory(directory);
+    }
+
     public RecoveryManager.RecoveryStats recover(MemTable memTable) throws IOException {
         return recoverFrom(memTable, null);
     }
@@ -390,6 +594,23 @@ public final class WALManager implements AutoCloseable {
                 stats = new RecoveryManager(config).recoverFrom(memTable, seq, off);
             } else {
                 stats = new ShardedRecoveryManager(config).recoverFrom(memTable, checkpoint);
+            }
+            long recoveredCommitted = stats.committedClearEpoch();
+            long recoveredMaxObserved = stats.maxObservedClearEpoch();
+            long prevCommitted = committedClearEpoch.get();
+            if (recoveredCommitted > 0L) {
+                committedClearEpoch.accumulateAndGet(recoveredCommitted, Math::max);
+            }
+            long observedFloor = Math.max(recoveredCommitted, recoveredMaxObserved);
+            if (observedFloor > 0L) {
+                nextClearEpochFloor.accumulateAndGet(observedFloor, Math::max);
+            }
+            if (recoveredCommitted > prevCommitted) {
+                try {
+                    writeClearEpochFile(config.directory(), committedClearEpoch.get());
+                } catch (IOException ignored) {
+                    // 只读文件系统恢复演练下容忍元文件跳过
+                }
             }
             openShardsLocked();
         }

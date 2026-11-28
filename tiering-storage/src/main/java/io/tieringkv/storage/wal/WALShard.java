@@ -65,6 +65,14 @@ final class WALShard implements AutoCloseable {
         return shardId;
     }
 
+    void lockShard() {
+        shardLock.lock();
+    }
+
+    void unlockShard() {
+        shardLock.unlock();
+    }
+
     WALConfig.FsyncPolicy fsyncPolicy() {
         return writer.fsyncPolicy();
     }
@@ -95,6 +103,15 @@ final class WALShard implements AutoCloseable {
 
     /** 兼容传统 WALEntry 追加（无 MemTable 跟踪令牌，供直接 WAL 调用方与单测使用）。 */
     void append(WALEntry entry) {
+        if (entry.operation() == WALEntry.Operation.CLEAR_ALL) {
+            shardLock.lock();
+            try {
+                appendClearBarrierLocked(entry.version(), entry.timestamp());
+            } finally {
+                shardLock.unlock();
+            }
+            return;
+        }
         long token = appendSingleAndTrack(
                 entry.operation(), entry.timestamp(),
                 entry.key(), entry.value(), entry.ttlMillis(), false);
@@ -497,6 +514,57 @@ final class WALShard implements AutoCloseable {
         } finally {
             shardLock.unlock();
         }
+    }
+
+    /**
+     * 在已持有 {@link #shardLock} 时直写 46B {@code CLEAR_ALL} 屏障并强制执行 {@code fdatasync}（Wave 3C K1）。
+     *
+     * <p>无论当前 {@link WALConfig.FsyncPolicy} 为 {@code ALWAYS}、{@code EVERY_SEC} 还是 {@code NO}，
+     * 均先冲刷 {@code stageBuffer} 再直写 {@code CLEAR_ALL} 并强制 {@code writer.force()}，
+     * 确保 WAL 逻辑提交点的持久化强度始终不弱于冷层 {@code Manifest} v2。
+     */
+    ShardClearPosition appendClearBarrierLocked(long clearEpoch, long timestamp) {
+        if (closed) {
+            throw new WalWriteException("WAL is closed", null);
+        }
+        try {
+            flushStageBufferLocked(false);
+            ByteBuffer buf = acquireLargeBuffer(WALRecord.CLEAR_ALL_RECORD_SIZE);
+            buf.clear();
+            WALRecord.encodeInto(WALEntry.Operation.CLEAR_ALL, timestamp, null, null, -1L, clearEpoch, buf);
+            buf.flip();
+            long clearSegmentSeq = writer.currentSequence();
+            writer.appendBuffer(buf);
+            writer.force();
+            writer.rotateIfNeeded(config.maxSegmentBytes());
+            writeBatches.increment();
+            writeRecords.increment();
+            WALManager.WALPosition postPos = new WALManager.WALPosition(
+                    writer.currentSequence(), writer.currentSize());
+            return new ShardClearPosition(clearSegmentSeq, postPos);
+        } catch (IOException e) {
+            throw new WalWriteException("WAL clear_all barrier append failed on shard " + shardId, e);
+        }
+    }
+
+    /** 安全删除严格早于 {@code keepFromSequence} 的历史封闭段文件（永不删含屏障的段）。 */
+    int pruneSegmentsBefore(long keepFromSequence) {
+        shardLock.lock();
+        try {
+            if (closed) {
+                return 0;
+            }
+            try {
+                return segments.deleteSegmentsBefore(keepFromSequence);
+            } catch (IOException ignored) {
+                return 0;
+            }
+        } finally {
+            shardLock.unlock();
+        }
+    }
+
+    record ShardClearPosition(long clearSegmentSequence, WALManager.WALPosition postPosition) {
     }
 
     WALManager.WALPosition position() {

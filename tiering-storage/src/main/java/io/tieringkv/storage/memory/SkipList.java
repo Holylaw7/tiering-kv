@@ -150,6 +150,14 @@ public final class SkipList {
         return size;
     }
 
+    /** O(1) 清空跳表全部节点（含 tombstone），需在 Segment 写锁保护下调用。 */
+    public void clear() {
+        Arrays.fill(head.forward, null);
+        Arrays.fill(updateBuffer, null);
+        currentMaxLevel = 1;
+        size = 0;
+    }
+
     private Node findPredecessor(byte[] key) {
         Node current = head;
         for (int level = currentMaxLevel - 1; level >= 0; level--) {

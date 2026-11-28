@@ -85,6 +85,10 @@ public final class VectorIndexSyncStorageEngine extends AbstractStorageDecorator
 
     @Override
     public void clear() {
+        if (vectorStore.size() == 0) {
+            delegate.clear();
+            return;
+        }
         java.util.List<String> vectorKeys = new java.util.ArrayList<>();
         try (StorageIterator iterator = delegate.iterator()) {
             while (iterator.hasNext()) {

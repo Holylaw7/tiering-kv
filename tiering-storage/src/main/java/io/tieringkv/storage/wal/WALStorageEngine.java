@@ -8,10 +8,11 @@ import io.tieringkv.storage.WriteOp;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
+import java.util.function.LongConsumer;
 import java.util.function.UnaryOperator;
 
 /**
- * WAL 写路径装饰器（ADR-0016 + v6.5.0 Sharded WAL 零分配直写与同分片批量路径）：
+ * WAL 写路径装饰器（ADR-0016 + v6.5.0 Sharded WAL 零分配直写与同分片批量路径 + Wave 3C K1 O(1) CLEAR_ALL 屏障）：
  * 先 append WAL，后应用 MemTable；命令层无感知。TTL 过期不落盘（可由 PUT 记录推导）。
  */
 public final class WALStorageEngine
@@ -19,10 +20,16 @@ public final class WALStorageEngine
 
     private final WALManager wal;
     private final StorageEngine delegate;
+    private final ThreadLocal<LongConsumer> pendingColdClear = new ThreadLocal<>();
 
     public WALStorageEngine(WALManager wal, StorageEngine delegate) {
         this.wal = wal;
         this.delegate = delegate;
+    }
+
+    /** 供外层分层装饰器（如 TieringReadStorageEngine）共享同一 WAL 键锁与清空屏障。 */
+    public WALManager walManager() {
+        return wal;
     }
 
     @Override
@@ -136,27 +143,33 @@ public final class WALStorageEngine
         return delegate.hasTombstone(key);
     }
 
+    /**
+     * 供外层分层装饰器在单一独占屏障（L1 -> L2 -> L3）内完成
+     * 「全分片 WAL CLEAR_ALL + fdatasync -> 冷层 clearToEpoch -> 热层与外层缓存清空 -> 收尾」全流程。
+     */
+    public void clearWithColdHook(LongConsumer coldClearAction, Runnable fullDecoratorClear) {
+        wal.runUnderClearBarrier(() -> {
+            pendingColdClear.set(coldClearAction);
+            try {
+                fullDecoratorClear.run();
+            } finally {
+                pendingColdClear.remove();
+            }
+        });
+    }
+
     @Override
     public void clear() {
-        java.util.List<byte[]> keys = new java.util.ArrayList<>();
-        try (StorageIterator iterator = delegate.iterator()) {
-            while (iterator.hasNext()) {
-                keys.add(iterator.next().key());
+        wal.runUnderClearBarrier(() -> {
+            long now = System.currentTimeMillis();
+            WALManager.ClearBarrierCommit commit = wal.appendClearBarrierAllShards(now);
+            LongConsumer coldClear = pendingColdClear.get();
+            if (coldClear != null) {
+                coldClear.accept(commit.epoch());
             }
-        }
-        long now = System.currentTimeMillis();
-        for (byte[] key : keys) {
-            int shardId = wal.routeShard(key);
-            wal.withKeyLock(key, () -> {
-                long token = wal.appendSingleAndTrack(
-                        shardId, WALEntry.Operation.DELETE, now, key, null, NO_TTL);
-                try {
-                    delegate.removePhysical(key);
-                } finally {
-                    wal.completeApply(shardId, token);
-                }
-            });
-        }
+            delegate.clear();
+            wal.finalizeClearPostStorage(commit);
+        });
     }
 
     @Override

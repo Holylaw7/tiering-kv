@@ -23,6 +23,14 @@ public final class FlushManager {
 
     public static FlushStats flush(MemTable memTable, WALManager wal, ColdStorageEngine cold)
             throws IOException {
+        if (wal != null) {
+            return wal.withBackgroundTierReadLock(() -> flushInternal(memTable, wal, cold));
+        }
+        return flushInternal(memTable, null, cold);
+    }
+
+    private static FlushStats flushInternal(MemTable memTable, WALManager wal, ColdStorageEngine cold)
+            throws IOException {
         List<KeyValueEntry> snapshot = new ArrayList<>();
         try (StorageIterator iterator = memTable.iterator()) {
             while (iterator.hasNext()) {
@@ -49,7 +57,9 @@ public final class FlushManager {
                 }
             }
         }
-        wal.checkpoint(memTable);
+        if (wal != null) {
+            wal.checkpoint(memTable);
+        }
         return new FlushStats(snapshot.size(), bytesFlushed, memTable.size());
     }
 }

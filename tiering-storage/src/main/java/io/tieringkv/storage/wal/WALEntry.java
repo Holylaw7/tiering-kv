@@ -4,8 +4,12 @@ import java.util.Arrays;
 import java.util.Objects;
 
 /**
- * WAL 逻辑记录（ADR-0015）：PUT 携带 value 与 ttl（相对毫秒）；
- * DELETE 携带 tombstone 语义（value 为 null）。
+ * WAL 逻辑记录（ADR-0015 + Wave 3C K1）：
+ * <ul>
+ *   <li>{@code PUT} 携带 value 与 ttl（相对毫秒）；</li>
+ *   <li>{@code DELETE} 携带 tombstone 语义（value 为 null）；</li>
+ *   <li>{@code CLEAR_ALL} 为全局 $O(1)$ 清空屏障（空 key、value 为 null、version 承载单调 clearEpoch）。</li>
+ * </ul>
  */
 public record WALEntry(
         Operation operation,
@@ -15,8 +19,10 @@ public record WALEntry(
         long ttlMillis,
         long version) {
 
+    private static final byte[] EMPTY = new byte[0];
+
     public WALEntry {
-        key = key.clone();
+        key = key == null ? EMPTY : key.clone();
         if (value != null) {
             value = value.clone();
         }
@@ -30,9 +36,17 @@ public record WALEntry(
         return new WALEntry(Operation.DELETE, timestamp, key, null, -1, version);
     }
 
+    public static WALEntry clearAll(long timestamp, long clearEpoch) {
+        if (clearEpoch <= 0) {
+            throw new IllegalArgumentException("clearEpoch must be positive: " + clearEpoch);
+        }
+        return new WALEntry(Operation.CLEAR_ALL, timestamp, EMPTY, null, -1, clearEpoch);
+    }
+
     public enum Operation {
         PUT,
-        DELETE
+        DELETE,
+        CLEAR_ALL
     }
 
     @Override

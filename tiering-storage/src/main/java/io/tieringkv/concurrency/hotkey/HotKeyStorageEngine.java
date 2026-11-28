@@ -130,5 +130,6 @@ public final class HotKeyStorageEngine extends AbstractStorageDecorator {
     public void clear() {
         cache.clear();
         super.clear();
+        cache.clear();
     }
 }

@@ -31,6 +31,11 @@ public abstract class AbstractStorageDecorator
         this.delegate = delegate;
     }
 
+    /** 返回下一层被装饰的存储引擎，供外层协调器（如 TieringReadStorageEngine）发现底层 WALStorageEngine。 */
+    public final StorageEngine unwrapDelegate() {
+        return delegate;
+    }
+
     // ---------- StorageEngine 委托 ----------
 
     @Override

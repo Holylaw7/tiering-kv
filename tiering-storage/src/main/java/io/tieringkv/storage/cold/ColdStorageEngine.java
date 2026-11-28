@@ -49,6 +49,7 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
     private final BlockCache blockCache;
     private final IOStatistics ioStats;
     private final boolean useMmap;
+    private long clearEpoch;
     private long nextTableId = 1;
     private long pendingBytes;
     /** 存活键计数缓存（TD-086）：写入置脏，查询时惰性重算。 */
@@ -97,7 +98,9 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
         this.ioStats = ioStats;
         this.useMmap = useMmap;
         Files.createDirectories(config.directory());
-        List<SSTableMeta> loaded = Manifest.read(config.directory());
+        Manifest.ManifestState manifestState = Manifest.readState(config.directory());
+        this.clearEpoch = manifestState.clearEpoch();
+        List<SSTableMeta> loaded = manifestState.tables();
         tables.addAll(loaded);
         nextTableId = loaded.stream().mapToLong(SSTableMeta::id).max().orElse(0) + 1;
         this.compactionManager = new CompactionManager(this);
@@ -288,7 +291,7 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
             }
             nextTableId++;
             tables.add(meta);
-            Manifest.write(config.directory(), tables);
+            Manifest.write(config.directory(), clearEpoch, tables);
             invalidateLiveCount();
             compactIfNeededLocked();
             return meta;
@@ -431,7 +434,7 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
         tables.clear();
         tables.addAll(nextTables);
         nextTableId = Math.max(nextTableId, output.id() + 1);
-        Manifest.write(config.directory(), tables);
+        Manifest.write(config.directory(), clearEpoch, tables);
         for (SSTableMeta input : inputs) {
             if (blockCache != null) {
                 blockCache.invalidate(input.id());
@@ -517,7 +520,7 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
             tables.add(meta);
             pending.clear();
             pendingBytes = 0;
-            Manifest.write(config.directory(), tables);
+            Manifest.write(config.directory(), clearEpoch, tables);
             compactIfNeededLocked();
         } catch (IOException e) {
             throw new ColdCorruptionException("pending flush failed: " + e.getMessage());
@@ -634,37 +637,84 @@ public final class ColdStorageEngine implements TierStorage, AutoCloseable {
         }
     }
 
+    /** 当前冷层 Manifest v2 已持久收敛的 clearEpoch。 */
+    public long clearEpoch() {
+        rwLock.readLock().lock();
+        try {
+            return clearEpoch;
+        } finally {
+            rwLock.readLock().unlock();
+        }
+    }
+
+    /**
+     * 启动恢复对账（Wave 3C K1）：仅当 WAL 已提交的 {@code walCommittedClearEpoch} 严格大于冷层当前
+     * {@code clearEpoch} 时，补清陈旧冷层 SSTable 并推进 Manifest v2；若冷层已处于或高于该纪元（含清空后新落冷表），
+     * 严格保留不误删。
+     *
+     * @return 若实际执行了补清返回 {@code true}
+     */
+    public boolean reconcileClearEpoch(long walCommittedClearEpoch) {
+        rwLock.writeLock().lock();
+        try {
+            ensureOpen();
+            if (walCommittedClearEpoch <= this.clearEpoch) {
+                return false;
+            }
+            clearToEpochLocked(walCommittedClearEpoch);
+            return true;
+        } finally {
+            rwLock.writeLock().unlock();
+        }
+    }
+
+    /** 运行期清空冷层并推进 Manifest v2 clearEpoch（已包含 force + ATOMIC_MOVE + 父目录 fsync）。 */
+    public void clearToEpoch(long targetEpoch) {
+        rwLock.writeLock().lock();
+        try {
+            ensureOpen();
+            clearToEpochLocked(Math.max(this.clearEpoch, targetEpoch));
+        } finally {
+            rwLock.writeLock().unlock();
+        }
+    }
+
     public void clear() {
         rwLock.writeLock().lock();
         try {
             ensureOpen();
-            pending.clear();
-            pendingBytes = 0;
-            for (SSTableMeta table : tables) {
-                if (blockCache != null) {
-                    blockCache.invalidate(table.id());
-                }
-                SSTableReader reader = readers.remove(table.id());
-                Path path = table.path(config.directory());
-                if (readerPins.getOrDefault(table.id(), 0) > 0) {
-                    retiredReaders.add(new RetiredReader(table.id(), reader, path));
-                } else {
-                    closeAndDeleteQuietly(reader, path, table.id());
-                }
-            }
-            tables.clear();
-            try {
-                Manifest.write(config.directory(), tables);
-            } catch (IOException e) {
-                throw new ColdCorruptionException("clear manifest failed: " + e.getMessage());
-            }
-            liveCountCache = 0;
-            liveCountDirty = false;
-            liveCountKnown = true;
-            cleanupRetiredLocked();
+            clearToEpochLocked(this.clearEpoch);
         } finally {
             rwLock.writeLock().unlock();
         }
+    }
+
+    private void clearToEpochLocked(long targetEpoch) {
+        pending.clear();
+        pendingBytes = 0;
+        for (SSTableMeta table : tables) {
+            if (blockCache != null) {
+                blockCache.invalidate(table.id());
+            }
+            SSTableReader reader = readers.remove(table.id());
+            Path path = table.path(config.directory());
+            if (readerPins.getOrDefault(table.id(), 0) > 0) {
+                retiredReaders.add(new RetiredReader(table.id(), reader, path));
+            } else {
+                closeAndDeleteQuietly(reader, path, table.id());
+            }
+        }
+        tables.clear();
+        this.clearEpoch = targetEpoch;
+        try {
+            Manifest.write(config.directory(), this.clearEpoch, tables);
+        } catch (IOException e) {
+            throw new ColdCorruptionException("clear manifest failed: " + e.getMessage());
+        }
+        liveCountCache = 0;
+        liveCountDirty = false;
+        liveCountKnown = true;
+        cleanupRetiredLocked();
     }
 
     private void ensureOpen() {

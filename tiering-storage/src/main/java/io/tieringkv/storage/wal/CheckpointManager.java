@@ -120,6 +120,25 @@ public final class CheckpointManager {
         } catch (java.nio.file.AtomicMoveNotSupportedException e) {
             Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
         }
+        fsyncDirectory(walDirectory);
+    }
+
+    /**
+     * 对父目录执行 {@code fsync} 以持久化原子重命名目录项（Linux/POSIX 生效；Windows NTFS 优雅跳过）。
+     */
+    public static void fsyncDirectory(Path directory) throws IOException {
+        if (directory == null || !Files.isDirectory(directory)) {
+            return;
+        }
+        String os = System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT);
+        if (os.contains("win")) {
+            return;
+        }
+        try (FileChannel dirChannel = FileChannel.open(directory, StandardOpenOption.READ)) {
+            dirChannel.force(true);
+        } catch (UnsupportedOperationException ignored) {
+            // 部分虚拟文件系统不支持目录 fsync，降级放行
+        }
     }
 
     /** 读取 checkpoint（兼容 v1 与 v2）；缺失、截断或校验失败返回 null（触发全量重放）。 */

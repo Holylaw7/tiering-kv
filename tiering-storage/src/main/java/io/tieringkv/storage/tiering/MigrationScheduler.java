@@ -170,6 +170,11 @@ public final class MigrationScheduler implements AutoCloseable {
         this.completionListener = listener;
     }
 
+    /** 清空残留未完成迁移日志（Wave 3C K1：启动阶段由 CLEAR_ALL 屏障触发清空时防止旧任务误匹配）。 */
+    public void clearLog() throws IOException {
+        log.compact(List.of());
+    }
+
     /** 启动恢复：重放未完成任务（幂等）；返回已恢复（重新入队）的任务。 */
     public List<MigrationTask> recoverAndResume() throws IOException {
         List<MigrationTask> unfinished = log.recover();
@@ -275,6 +280,14 @@ public final class MigrationScheduler implements AutoCloseable {
     }
 
     private void runBatch(List<MigrationTask> tasks) {
+        if (wal != null) {
+            wal.withBackgroundTierReadLock(() -> runBatchInternal(tasks));
+        } else {
+            runBatchInternal(tasks);
+        }
+    }
+
+    private void runBatchInternal(List<MigrationTask> tasks) {
         long startNanos = System.nanoTime();
         List<MigrationTask> activeTasks = new ArrayList<>(tasks.size());
         int processed = 0;

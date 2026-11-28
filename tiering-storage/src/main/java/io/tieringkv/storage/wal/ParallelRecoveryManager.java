@@ -57,7 +57,11 @@ public final class ParallelRecoveryManager {
             long applied = 0;
             long segmentsReplayed = 0;
             long corruptedDiscarded = 0;
+            long committedClearEpoch = 0L;
             Path lastGoodPath = null;
+            List<SegmentResult> ordered = new ArrayList<>(sequences.size());
+            int lastClearSegmentIdx = -1;
+            int lastClearEntryIdx = -1;
             for (Long sequence : sequences) {
                 SegmentResult result;
                 try {
@@ -71,10 +75,19 @@ public final class ParallelRecoveryManager {
                             "parallel segment parse failed",
                             e.getCause());
                 }
-                for (WALEntry entry : result.entries()) {
+                int segIdx = ordered.size();
+                ordered.add(result);
+                List<WALEntry> segEntries = result.entries();
+                for (int i = 0; i < segEntries.size(); i++) {
+                    WALEntry entry = segEntries.get(i);
                     scanned++;
-                    RecoveryManager.apply(entry, memTable);
-                    applied++;
+                    if (entry.operation() == WALEntry.Operation.CLEAR_ALL) {
+                        if (entry.version() >= committedClearEpoch) {
+                            committedClearEpoch = entry.version();
+                            lastClearSegmentIdx = segIdx;
+                            lastClearEntryIdx = i;
+                        }
+                    }
                 }
                 Path path = pathOf(sequence);
                 if (result.corrupted()) {
@@ -86,8 +99,25 @@ public final class ParallelRecoveryManager {
                 segmentsReplayed++;
                 lastGoodPath = path;
             }
+            if (committedClearEpoch > 0L) {
+                memTable.clear();
+            }
+            int startSeg = lastClearSegmentIdx >= 0 ? lastClearSegmentIdx : 0;
+            for (int s = startSeg; s < ordered.size(); s++) {
+                List<WALEntry> segEntries = ordered.get(s).entries();
+                int startEntry = (s == lastClearSegmentIdx) ? (lastClearEntryIdx + 1) : 0;
+                for (int i = startEntry; i < segEntries.size(); i++) {
+                    WALEntry entry = segEntries.get(i);
+                    if (entry.operation() == WALEntry.Operation.CLEAR_ALL) {
+                        continue;
+                    }
+                    RecoveryManager.apply(entry, memTable);
+                    applied++;
+                }
+            }
             return new RecoveryManager.RecoveryStats(scanned, applied,
-                    segmentsReplayed, corruptedDiscarded, lastGoodPath);
+                    segmentsReplayed, corruptedDiscarded, lastGoodPath,
+                    committedClearEpoch, committedClearEpoch);
         } finally {
             pool.shutdownNow();
         }

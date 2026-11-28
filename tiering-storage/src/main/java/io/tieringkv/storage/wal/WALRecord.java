@@ -18,8 +18,10 @@ public final class WALRecord {
     public static final byte VERSION = 1;
     public static final byte TYPE_PUT = 1;
     public static final byte TYPE_DELETE = 2;
+    public static final byte TYPE_CLEAR_ALL = 3;
     public static final int HEADER_SIZE = 38;
     public static final int CHECKSUM_SIZE = 8;
+    public static final int CLEAR_ALL_RECORD_SIZE = HEADER_SIZE + CHECKSUM_SIZE;
 
     private static final byte[] EMPTY = new byte[0];
 
@@ -28,8 +30,9 @@ public final class WALRecord {
 
     /** 计算一条记录编码后的精确字节长度。 */
     public static int encodedSize(byte[] key, byte[] value) {
+        int keyLen = key == null ? 0 : key.length;
         int valLen = value == null ? 0 : value.length;
-        return HEADER_SIZE + key.length + valLen + CHECKSUM_SIZE;
+        return HEADER_SIZE + keyLen + valLen + CHECKSUM_SIZE;
     }
 
     /**
@@ -46,18 +49,26 @@ public final class WALRecord {
             long ttlMillis,
             long version,
             ByteBuffer dst) {
+        byte[] effectiveKey = operation == WALEntry.Operation.CLEAR_ALL ? EMPTY : (key == null ? EMPTY : key);
         byte[] val = (operation == WALEntry.Operation.PUT && value != null) ? value : EMPTY;
+        byte type = switch (operation) {
+            case PUT -> TYPE_PUT;
+            case DELETE -> TYPE_DELETE;
+            case CLEAR_ALL -> TYPE_CLEAR_ALL;
+        };
         int startPos = dst.position();
-        int payloadLength = HEADER_SIZE + key.length + val.length;
+        int payloadLength = HEADER_SIZE + effectiveKey.length + val.length;
         dst.putInt(MAGIC);
         dst.put(VERSION);
-        dst.put(operation == WALEntry.Operation.PUT ? TYPE_PUT : TYPE_DELETE);
+        dst.put(type);
         dst.putLong(timestamp);
-        dst.putInt(key.length);
+        dst.putInt(effectiveKey.length);
         dst.putInt(val.length);
         dst.putLong(version);
-        dst.putLong(ttlMillis);
-        dst.put(key);
+        dst.putLong(operation == WALEntry.Operation.CLEAR_ALL ? -1L : ttlMillis);
+        if (effectiveKey.length > 0) {
+            dst.put(effectiveKey);
+        }
         if (val.length > 0) {
             dst.put(val);
         }
@@ -113,16 +124,25 @@ public final class WALRecord {
         byte[] key = new byte[keyLength];
         buffer.get(key);
         byte[] value = null;
+        WALEntry.Operation operation;
         if (type == TYPE_PUT) {
             value = new byte[valueLength];
             buffer.get(value);
-        } else if (type != TYPE_DELETE || valueLength != 0) {
+            operation = WALEntry.Operation.PUT;
+        } else if (type == TYPE_DELETE) {
+            if (valueLength != 0) {
+                throw new WalCorruptionException("bad delete record");
+            }
+            operation = WALEntry.Operation.DELETE;
+        } else if (type == TYPE_CLEAR_ALL) {
+            if (keyLength != 0 || valueLength != 0 || recordVersion <= 0) {
+                throw new WalCorruptionException("bad clear_all record");
+            }
+            operation = WALEntry.Operation.CLEAR_ALL;
+        } else {
             throw new WalCorruptionException("bad type");
         }
 
-        WALEntry.Operation operation = type == TYPE_PUT
-                ? WALEntry.Operation.PUT
-                : WALEntry.Operation.DELETE;
         return new WALEntry(operation, timestamp, key, value, ttlMillis, recordVersion);
     }
 }
