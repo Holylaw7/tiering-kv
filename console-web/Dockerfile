@@ -6,7 +6,7 @@ RUN npm ci || npm install
 COPY . .
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+FROM nginxinc/nginx-unprivileged:1.30-alpine-slim
 USER root
 RUN apk upgrade --no-cache
 COPY --from=build --chown=101:101 /build/dist /usr/share/nginx/html
